@@ -1,0 +1,56 @@
+name: baton-go
+
+services:
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: baton_go
+      MYSQL_USER: ${BATON_GO_DB_USERNAME:-baton_go}
+      MYSQL_PASSWORD: ${BATON_GO_DB_PASSWORD:?BATON_GO_DB_PASSWORD is required}
+      MYSQL_ROOT_PASSWORD: ${BATON_GO_DB_ROOT_PASSWORD:?BATON_GO_DB_ROOT_PASSWORD is required}
+      TZ: UTC
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --default-time-zone=+00:00
+    ports:
+      - "127.0.0.1:${BATON_GO_MYSQL_PORT:-3307}:3306"
+    volumes:
+      - baton_go_mysql_data:/var/lib/mysql
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          MYSQL_PWD="$${MYSQL_PASSWORD}"
+          mysql --protocol=TCP -h 127.0.0.1 -u"$${MYSQL_USER}"
+          "$${MYSQL_DATABASE}" -e 'SELECT 1' >/dev/null 2>&1
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      BATON_GO_MANAGEMENT_TOKEN: ${BATON_GO_MANAGEMENT_TOKEN:?BATON_GO_MANAGEMENT_TOKEN is required}
+      BATON_GO_PUBLIC_BASE_URL: ${BATON_GO_PUBLIC_BASE_URL:-http://localhost:8080}
+      BATON_GO_BATON_BASE_URL: ${BATON_GO_BATON_BASE_URL:-http://localhost:5173}
+      BATON_GO_ROUND_BASE_URL: ${BATON_GO_ROUND_BASE_URL:-http://localhost:5174}
+      BATON_GO_DB_URL: jdbc:mysql://mysql:3306/baton_go?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      BATON_GO_DB_USERNAME: ${BATON_GO_DB_USERNAME:-baton_go}
+      BATON_GO_DB_PASSWORD: ${BATON_GO_DB_PASSWORD:?BATON_GO_DB_PASSWORD is required}
+      TZ: UTC
+    depends_on:
+      mysql:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${BATON_GO_HTTP_PORT:-8080}:8080"
+      - "127.0.0.1:${BATON_GO_MANAGEMENT_PORT:-8081}:8081"
+    stop_grace_period: 40s
+
+volumes:
+  baton_go_mysql_data:

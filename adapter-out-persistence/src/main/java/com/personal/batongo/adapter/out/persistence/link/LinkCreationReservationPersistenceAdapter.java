@@ -1,0 +1,47 @@
+package com.personal.batongo.adapter.out.persistence.link;
+
+import com.personal.batongo.application.link.port.out.LinkCreationReservationPort;
+import java.nio.ByteBuffer;
+import java.time.Instant;
+import java.util.UUID;
+import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+
+@Repository
+public class LinkCreationReservationPersistenceAdapter
+        implements LinkCreationReservationPort {
+
+    private final SpringDataLinkCreationRequestRepository repository;
+
+    public LinkCreationReservationPersistenceAdapter(
+            SpringDataLinkCreationRequestRepository repository
+    ) {
+        this.repository = repository;
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Reservation reserve(
+            String idempotencyKeyHash,
+            UUID proposedLinkId,
+            Instant createdAt
+    ) {
+        int inserted = repository.insertIfAbsent(
+                idempotencyKeyHash,
+                toBytes(proposedLinkId),
+                createdAt
+        );
+        LinkCreationRequestEntity request = repository
+                .findByIdempotencyKeyHash(idempotencyKeyHash)
+                .orElseThrow(() -> new IllegalStateException("링크 생성 예약을 찾을 수 없습니다"));
+        return new Reservation(request.getLinkId(), inserted == 1);
+    }
+
+    private byte[] toBytes(UUID value) {
+        return ByteBuffer.allocate(16)
+                .putLong(value.getMostSignificantBits())
+                .putLong(value.getLeastSignificantBits())
+                .array();
+    }
+}

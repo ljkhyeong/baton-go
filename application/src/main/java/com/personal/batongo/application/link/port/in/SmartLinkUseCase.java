@@ -1,5 +1,6 @@
 package com.personal.batongo.application.link.port.in;
 
+import com.personal.batongo.application.link.CreationIdempotencyKey;
 import com.personal.batongo.domain.link.LinkPurpose;
 import com.personal.batongo.domain.link.TargetSystem;
 import java.net.URI;
@@ -17,6 +18,7 @@ public interface SmartLinkUseCase {
     LinkResult revokeLink(UUID linkId);
 
     record CreateLinkCommand(
+            CreationIdempotencyKey idempotencyKey,
             TargetSystem targetSystem,
             String targetPath,
             LinkPurpose purpose,
@@ -27,7 +29,8 @@ public interface SmartLinkUseCase {
 
     record CreatedLinkResult(
             LinkResult link,
-            String rawCode
+            String rawCode,
+            boolean replayed
     ) {
     }
 

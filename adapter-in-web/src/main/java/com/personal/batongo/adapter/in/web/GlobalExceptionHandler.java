@@ -1,6 +1,8 @@
 package com.personal.batongo.adapter.in.web;
 
 import com.personal.batongo.application.link.error.InvalidLinkCodeException;
+import com.personal.batongo.application.link.error.InvalidIdempotencyKeyException;
+import com.personal.batongo.application.link.error.IdempotencyKeyConflictException;
 import com.personal.batongo.application.link.error.LinkNotFoundException;
 import com.personal.batongo.domain.link.LinkUnavailableException;
 import com.personal.batongo.domain.link.LinkValidationException;
@@ -63,6 +65,32 @@ public class GlobalExceptionHandler {
             HttpServletRequest request
     ) {
         return error(HttpStatus.BAD_REQUEST, "INVALID_LINK", exception.getMessage(), request);
+    }
+
+    @ExceptionHandler(InvalidIdempotencyKeyException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidIdempotencyKey(
+            InvalidIdempotencyKeyException exception,
+            HttpServletRequest request
+    ) {
+        return error(
+                HttpStatus.BAD_REQUEST,
+                "INVALID_IDEMPOTENCY_KEY",
+                exception.getMessage(),
+                request
+        );
+    }
+
+    @ExceptionHandler(IdempotencyKeyConflictException.class)
+    public ResponseEntity<ErrorResponse> handleIdempotencyConflict(
+            IdempotencyKeyConflictException exception,
+            HttpServletRequest request
+    ) {
+        return error(
+                HttpStatus.CONFLICT,
+                "IDEMPOTENCY_KEY_REUSED",
+                exception.getMessage(),
+                request
+        );
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

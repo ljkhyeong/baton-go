@@ -36,6 +36,8 @@ management:
 
 baton-go:
   public-base-url: ${BATON_GO_PUBLIC_BASE_URL:http://localhost:8080}
+  link-code:
+    secret: ${BATON_GO_LINK_CODE_SECRET:}
   management:
     token: ${BATON_GO_MANAGEMENT_TOKEN:}
   targets:

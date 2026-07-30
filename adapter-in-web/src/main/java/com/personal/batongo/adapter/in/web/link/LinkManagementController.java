@@ -1,24 +1,30 @@
 package com.personal.batongo.adapter.in.web.link;
 
 import com.personal.batongo.adapter.in.web.PublicLinkProperties;
+import com.personal.batongo.application.link.CreationIdempotencyKey;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.CreateLinkCommand;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.CreatedLinkResult;
 import jakarta.validation.Valid;
 import java.net.URI;
 import java.util.UUID;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/v1/links")
 public class LinkManagementController {
+
+    public static final String IDEMPOTENCY_KEY_HEADER = "Idempotency-Key";
+    public static final String IDEMPOTENCY_REPLAYED_HEADER = "Idempotency-Replayed";
 
     private final SmartLinkUseCase smartLinkUseCase;
     private final PublicLinkProperties publicLinkProperties;
@@ -33,9 +39,12 @@ public class LinkManagementController {
 
     @PostMapping
     public ResponseEntity<CreateLinkResponse> createLink(
+            @RequestHeader(value = IDEMPOTENCY_KEY_HEADER, required = false)
+            String idempotencyKey,
             @Valid @RequestBody CreateLinkRequest request
     ) {
         CreatedLinkResult result = smartLinkUseCase.createLink(new CreateLinkCommand(
+                new CreationIdempotencyKey(idempotencyKey),
                 request.targetSystem(),
                 request.targetPath(),
                 request.purpose(),
@@ -43,10 +52,14 @@ public class LinkManagementController {
                 request.expiresAt()
         ));
         URI location = URI.create("/api/v1/links/" + result.link().id());
-        return ResponseEntity.created(location).body(CreateLinkResponse.from(
-                result,
-                publicLinkProperties.shortUrl(result.rawCode())
-        ));
+        HttpStatus status = result.replayed() ? HttpStatus.OK : HttpStatus.CREATED;
+        return ResponseEntity.status(status)
+                .location(location)
+                .header(IDEMPOTENCY_REPLAYED_HEADER, Boolean.toString(result.replayed()))
+                .body(CreateLinkResponse.from(
+                        result,
+                        publicLinkProperties.shortUrl(result.rawCode())
+                ));
     }
 
     @GetMapping("/{linkId}")

@@ -12,6 +12,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.personal.batongo.adapter.in.web.GlobalExceptionHandler;
 import com.personal.batongo.adapter.in.web.PublicLinkProperties;
 import com.personal.batongo.adapter.in.web.RequestIdFilter;
+import com.personal.batongo.application.link.error.IdempotencyKeyConflictException;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.CreatedLinkResult;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.LinkResult;
@@ -32,6 +33,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 class LinkHttpContractTest {
 
     private static final UUID LINK_ID = UUID.fromString("83a430c4-5c5d-4eb4-a815-7a5ba1fd4aae");
+    private static final String IDEMPOTENCY_KEY = "8e448211-66ae-44ab-9888-c4960648c22b";
     private static final Instant CREATED_AT = Instant.parse("2026-07-29T10:00:00Z");
 
     private SmartLinkUseCase useCase;
@@ -52,15 +54,17 @@ class LinkHttpContractTest {
     }
 
     @Test
-    @DisplayName("링크 생성 응답은 원문 코드 대신 한 번 사용할 short URL과 안정된 필드를 반환한다")
+    @DisplayName("링크 생성 응답은 공개 코드가 포함된 short URL과 안정된 필드를 반환한다")
     void createsLinkContract() throws Exception {
         LinkResult link = linkResult();
         when(useCase.createLink(any())).thenReturn(new CreatedLinkResult(
                 link,
-                "VOvLShvx93kQpj8x7w2HYQ"
+                "VOvLShvx93kQpj8x7w2HYQ",
+                false
         ));
 
         mockMvc.perform(post("/api/v1/links")
+                        .header(LinkManagementController.IDEMPOTENCY_KEY_HEADER, IDEMPOTENCY_KEY)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -72,6 +76,10 @@ class LinkHttpContractTest {
                                 """))
                 .andExpect(status().isCreated())
                 .andExpect(header().string("Location", "/api/v1/links/" + LINK_ID))
+                .andExpect(header().string(
+                        LinkManagementController.IDEMPOTENCY_REPLAYED_HEADER,
+                        "false"
+                ))
                 .andExpect(header().exists(RequestIdFilter.HEADER_NAME))
                 .andExpect(jsonPath("$.id").value(LINK_ID.toString()))
                 .andExpect(jsonPath("$.shortUrl")
@@ -80,6 +88,73 @@ class LinkHttpContractTest {
                 .andExpect(jsonPath("$.targetPath").value("/teams/team-1"))
                 .andExpect(jsonPath("$.purpose").value("NAVIGATION"))
                 .andExpect(jsonPath("$.createdAt").value("2026-07-29T10:00:00Z"));
+    }
+
+    @Test
+    @DisplayName("같은 링크 생성 요청의 재시도는 동일한 short URL과 200으로 응답한다")
+    void replaysLinkCreationContract() throws Exception {
+        when(useCase.createLink(any())).thenReturn(new CreatedLinkResult(
+                linkResult(),
+                "VOvLShvx93kQpj8x7w2HYQ",
+                true
+        ));
+
+        mockMvc.perform(post("/api/v1/links")
+                        .header(LinkManagementController.IDEMPOTENCY_KEY_HEADER, IDEMPOTENCY_KEY)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "targetSystem": "BATON",
+                                  "targetPath": "/teams/team-1",
+                                  "purpose": "NAVIGATION",
+                                  "expiresAt": "2026-07-30T10:00:00Z"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Location", "/api/v1/links/" + LINK_ID))
+                .andExpect(header().string(
+                        LinkManagementController.IDEMPOTENCY_REPLAYED_HEADER,
+                        "true"
+                ))
+                .andExpect(jsonPath("$.shortUrl")
+                        .value("https://go.example/l/VOvLShvx93kQpj8x7w2HYQ"));
+    }
+
+    @Test
+    @DisplayName("링크 생성 요청에 canonical UUID 멱등성 키가 없으면 400으로 응답한다")
+    void requiresIdempotencyKey() throws Exception {
+        mockMvc.perform(post("/api/v1/links")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "targetSystem": "BATON",
+                                  "targetPath": "/teams/team-1",
+                                  "purpose": "NAVIGATION"
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_IDEMPOTENCY_KEY"))
+                .andExpect(jsonPath("$.requestId").isNotEmpty());
+    }
+
+    @Test
+    @DisplayName("같은 멱등성 키의 다른 생성 요청은 안정된 409 오류로 응답한다")
+    void rejectsIdempotencyKeyReuse() throws Exception {
+        when(useCase.createLink(any())).thenThrow(new IdempotencyKeyConflictException());
+
+        mockMvc.perform(post("/api/v1/links")
+                        .header(LinkManagementController.IDEMPOTENCY_KEY_HEADER, IDEMPOTENCY_KEY)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "targetSystem": "BATON",
+                                  "targetPath": "/teams/team-2",
+                                  "purpose": "NAVIGATION"
+                                }
+                                """))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("IDEMPOTENCY_KEY_REUSED"))
+                .andExpect(jsonPath("$.requestId").isNotEmpty());
     }
 
     @Test

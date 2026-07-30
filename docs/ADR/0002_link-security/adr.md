@@ -5,8 +5,10 @@
 
 ## 결정
 
-- 공개 코드는 `SecureRandom`으로 16 byte를 만들고 Base64 URL-safe no-padding으로 표현한다.
+- 공개 코드는 별도 32자 이상 비밀과 canonical UUID 멱등성 키를 HMAC-SHA-256으로
+  결합하고 앞 16 byte를 Base64 URL-safe no-padding으로 표현한다.
 - DB에는 원문 코드가 아니라 SHA-256 lowercase hex 해시만 저장한다.
+- DB에는 원문 멱등성 키도 저장하지 않고 SHA-256 lowercase hex 해시만 저장한다.
 - 코드 입력은 정확한 URL-safe 형식과 길이를 검증한 뒤 해시한다.
 - 대상은 `BATON`, `ROUND` enum과 안전한 target path로 나눈다.
 - target path에는 scheme, authority, query, fragment, backslash, 제어문자와 `//` prefix를
@@ -16,6 +18,7 @@
 - 관리 API는 최소 32자의 환경 변수 Bearer credential로 보호한다. 이 자격은 파일럿용
   서비스 인증이며 최종 사용자 신원 모델이 아니다.
 - token, access key와 전체 Authorization 값을 로그에 기록하지 않는다.
+- 멱등성 키, 링크 코드 파생 비밀과 전체 short URL을 로그에 기록하지 않는다.
 
 ## 시간 경계
 

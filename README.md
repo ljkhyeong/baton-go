@@ -6,7 +6,7 @@ BATON GO는 단순 URL 축약기가 아니라 BATON과 ROUND를 위한 정책형
 
 ## 첫 구현 범위
 
-- CSPRNG 기반 128-bit 공개 코드 발급
+- canonical UUID 멱등성 키와 HMAC 기반 128-bit 공개 코드 발급
 - 원문 코드 대신 SHA-256 해시 저장
 - `BATON`, `ROUND` 신뢰 대상과 상대 경로만 허용
 - 시작 시각, 만료 시각과 즉시 폐기
@@ -54,6 +54,10 @@ BATON의 `#accessKey`나 향후 ROUND 입장 토큰을 GO의 URL, DB 또는 로�
 cp .env.example .env
 ```
 
+관리 credential과 링크 코드 파생 비밀은 서로 다른 값으로 교체한다. 링크 코드 파생
+비밀은 재시작과 복구 뒤에도 같은 값을 유지해야 기존 생성 요청을 동일 URL로 재생할 수
+있다.
+
 MySQL을 실행한 뒤 환경 변수를 로드하고 다음 명령을 사용한다.
 
 ```bash
@@ -61,6 +65,21 @@ MySQL을 실행한 뒤 환경 변수를 로드하고 다음 명령을 사용한�
 ```
 
 기본 애플리케이션 포트는 `8080`, 관리 포트는 `8081`이다.
+
+## MVP 링크 생성
+
+생성 intent마다 UUID를 한 번 만들고 재시도에도 같은 `Idempotency-Key`를 사용한다.
+
+```bash
+curl -i http://localhost:8080/api/v1/links \
+  -H 'Authorization: Bearer <management-token>' \
+  -H 'Idempotency-Key: 8e448211-66ae-44ab-9888-c4960648c22b' \
+  -H 'Content-Type: application/json' \
+  --data '{"targetSystem":"ROUND","targetPath":"/room/abcd-efgh-jkmn","purpose":"MEETING_ENTRY"}'
+```
+
+최초 요청은 `201`, 같은 키와 payload의 재시도는 동일한 short URL과 `200`을 반환한다.
+같은 키를 다른 payload에 사용하면 `409`로 거부한다.
 
 ## 문서
 

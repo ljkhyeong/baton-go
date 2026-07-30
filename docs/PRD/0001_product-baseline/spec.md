@@ -37,6 +37,12 @@ BATON access key, 세션, Bearer token과 ROUND join ticket을 대상 경로에 
 `notBefore`는 해당 시각부터 허용하고 `expiresAt`은 해당 시각부터 만료로 본다. 모든 판정은
 주입된 `Clock`과 UTC `Instant`를 사용한다.
 
+### 원격 생성은 재시도 가능하다
+
+호출자는 생성 intent마다 canonical UUID 멱등성 키를 영속화한다. 응답을 받지 못해도 같은
+키와 payload로 재시도하면 같은 링크와 공개 URL을 돌려받는다. 같은 키의 다른 payload는
+호출자 오류로 거부한다.
+
 ## 4. 핵심 개념
 
 | 개념 | 의미 |
@@ -50,12 +56,15 @@ BATON access key, 세션, Bearer token과 ROUND join ticket을 대상 경로에 
 
 ## 5. 첫 세로 흐름
 
-1. 신뢰된 관리 호출자가 대상 시스템, 경로, 목적과 선택적 활성 기간으로 링크를 만든다.
-2. 서버는 128-bit 이상 CSPRNG 코드를 한 번 반환하고 SHA-256 해시만 저장한다.
+1. 신뢰된 관리 호출자가 생성 intent UUID, 대상 시스템, 경로, 목적과 선택적 활성 기간으로
+   링크를 만든다.
+2. 서버는 별도 비밀과 intent UUID를 HMAC-SHA-256으로 결합해 128-bit 공개 코드를 만들고,
+   공개 코드와 intent UUID의 SHA-256 해시만 저장한다.
 3. 사용자가 `/l/{code}`를 열면 서버는 현재 시각에 활성인지 확인한다.
 4. 활성 링크는 신뢰된 base URL과 상대 경로를 결합해 리다이렉트한다.
 5. 만료되거나 폐기된 링크는 안정적인 오류로 거부한다.
 6. 관리 호출자는 링크를 즉시 폐기할 수 있다.
+7. 동일 intent UUID와 payload의 재시도는 같은 공개 URL을 재생한다.
 
 ## 6. BATON·ROUND 통합 경계
 

@@ -18,11 +18,26 @@
 - 링크 없음: `404`
 - 아직 활성화되지 않음: `404`
 - 만료·폐기: `410`
+- 같은 멱등성 키를 다른 payload에 재사용: `409`
 - 예상하지 못한 오류: `500`
 
 ## POST `/api/v1/links`
 
 관리용 Bearer credential이 필요하다.
+
+필수 헤더:
+
+```http
+Idempotency-Key: 8e448211-66ae-44ab-9888-c4960648c22b
+```
+
+- 값은 canonical UUID 형식이다.
+- 호출자는 하나의 생성 intent에 같은 키를 사용하고 원본 도메인 상태와 함께 영속화한다.
+- 최초 성공은 `201 Created`와 `Idempotency-Replayed: false`를 반환한다.
+- 같은 키와 같은 payload의 재시도는 동일한 `id`, `shortUrl`, `Location`을
+  `200 OK`와 `Idempotency-Replayed: true`로 반환한다.
+- 같은 키와 다른 payload는 `409 IDEMPOTENCY_KEY_REUSED`로 거부한다.
+- 키 누락·형식 오류는 `400 INVALID_IDEMPOTENCY_KEY`로 거부한다.
 
 요청:
 
@@ -36,7 +51,7 @@
 }
 ```
 
-응답 `201`:
+최초 응답 `201`, 재생 응답 `200`:
 
 ```json
 {
@@ -52,7 +67,8 @@
 }
 ```
 
-원문 공개 코드를 포함한 `shortUrl`은 생성 성공 응답에서만 반환한다.
+원문 공개 코드를 포함한 `shortUrl`은 최초 생성과 동일 생성 요청 재생에서만 반환한다.
+재생 시 링크의 현재 `revokedAt`을 반환한다.
 
 ## GET `/api/v1/links/{linkId}`
 

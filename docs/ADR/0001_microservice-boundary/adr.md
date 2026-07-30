@@ -59,7 +59,7 @@ GO가 소유하지 않는 상태:
 비용:
 
 - 별도 MySQL, 백업·복구, 비밀과 모니터링이 필요하다.
-- 원격 생성의 응답 유실을 다룰 idempotency 계약이 필요하다.
+- 원격 생성 idempotency 예약 상태와 별도 링크 코드 파생 비밀을 운영해야 한다.
 - BATON Caddy와 CSP, production Compose와 smoke/restore 절차를 확장해야 한다.
 
 초기 구현은 독립 서비스를 세우되 BATON·ROUND 저장소에는 아직 동기 의존성을 추가하지 않는다.

@@ -31,7 +31,9 @@
 - Java 21과 주입된 `Clock`을 사용한다. 업무 코드에서 `Instant.now()`를 직접 호출하지 않는다.
 - 절대 시각은 `Instant`와 UTC DB timestamp로 저장한다. 달력 의미가 생길 때만 명시적
   `ZoneId` 정책을 추가한다.
-- 공개 코드는 CSPRNG로 만들고 DB에는 SHA-256 해시만 저장한다.
+- 링크 생성은 canonical UUID `Idempotency-Key`를 요구한다. 공개 코드는 별도 32자 이상
+  비밀을 사용한 HMAC-SHA-256에서 128-bit로 파생하고 DB에는 공개 코드와 멱등성 키의
+  SHA-256 해시만 저장한다.
 - 대상은 승인된 시스템과 `/`로 시작하는 상대 경로로 제한한다. scheme, host, fragment,
   query와 `//` 경로를 받지 않는다.
 - 공개 `GET`은 사용 횟수를 소비하거나 상태를 바꾸지 않는다. 일회성 교환은 인증 후
@@ -39,11 +41,12 @@
 - 오류는 안정적인 `UPPER_SNAKE_CASE` code와 사용자용 message, 선택적 requestId를 사용한다.
 - Flyway migration은 적용된 파일을 수정하지 않고 다음 버전을 추가한다.
 - 비밀값과 환경별 주소는 환경 변수로 주입한다.
+- `Idempotency-Key`, 링크 코드 파생 비밀과 전체 short URL을 로그에 기록하지 않는다.
 
 ## 검증
 
 - 도메인 정책: `./gradlew :domain:test`
 - application 흐름: `./gradlew :application:test`
 - 전체 정적·단위 검증: `./gradlew test`
-- Spring/Flyway/MySQL 통합은 Testcontainers 기반으로 추가하고 `--no-daemon`으로 실행한다.
+- Spring/Flyway/MySQL 통합: `./gradlew --no-daemon :bootstrap:mysqlTest`
 - 모든 테스트 메서드에는 한국어 문장형 `@DisplayName`을 사용한다.

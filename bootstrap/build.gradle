@@ -19,8 +19,28 @@ dependencies {
 	annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
 
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
+	testImplementation 'org.springframework.boot:spring-boot-testcontainers'
+	testImplementation 'org.testcontainers:testcontainers-junit-jupiter'
+	testImplementation 'org.testcontainers:testcontainers-mysql'
 }
 
 tasks.named('bootJar') {
 	archiveFileName = 'baton-go.jar'
+}
+
+tasks.named('test') {
+	useJUnitPlatform {
+		excludeTags 'mysql'
+	}
+}
+
+tasks.register('mysqlTest', Test) {
+	group = 'verification'
+	description = 'Runs MySQL Testcontainers integration tests.'
+	testClassesDirs = sourceSets.test.output.classesDirs
+	classpath = sourceSets.test.runtimeClasspath
+	useJUnitPlatform {
+		includeTags 'mysql'
+	}
+	shouldRunAfter tasks.named('test')
 }

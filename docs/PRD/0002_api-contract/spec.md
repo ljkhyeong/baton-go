@@ -19,6 +19,9 @@
 - 아직 활성화되지 않음: `404`
 - 만료·폐기: `410`
 - 같은 멱등성 키를 다른 payload에 재사용: `409`
+- 존재하지 않는 API 경로: `404 RESOURCE_NOT_FOUND`
+- 지원하지 않는 HTTP 메서드: `405 METHOD_NOT_ALLOWED`
+- 지원하지 않는 요청 본문 형식: `415 UNSUPPORTED_MEDIA_TYPE`
 - 예상하지 못한 오류: `500`
 
 ## POST `/api/v1/links`

@@ -158,6 +158,39 @@ class LinkHttpContractTest {
     }
 
     @Test
+    @DisplayName("지원하지 않는 링크 API 메서드는 안정된 405 오류로 응답한다")
+    void rejectsUnsupportedMethod() throws Exception {
+        mockMvc.perform(post("/l/VOvLShvx93kQpj8x7w2HYQ"))
+                .andExpect(status().isMethodNotAllowed())
+                .andExpect(header().string("Cache-Control", "no-store"))
+                .andExpect(jsonPath("$.code").value("METHOD_NOT_ALLOWED"))
+                .andExpect(jsonPath("$.requestId").isNotEmpty());
+    }
+
+    @Test
+    @DisplayName("지원하지 않는 링크 생성 본문 형식은 안정된 415 오류로 응답한다")
+    void rejectsUnsupportedMediaType() throws Exception {
+        mockMvc.perform(post("/api/v1/links")
+                        .header(LinkManagementController.IDEMPOTENCY_KEY_HEADER, IDEMPOTENCY_KEY)
+                        .contentType(MediaType.TEXT_PLAIN)
+                        .content("unsupported"))
+                .andExpect(status().isUnsupportedMediaType())
+                .andExpect(header().string("Cache-Control", "no-store"))
+                .andExpect(jsonPath("$.code").value("UNSUPPORTED_MEDIA_TYPE"))
+                .andExpect(jsonPath("$.requestId").isNotEmpty());
+    }
+
+    @Test
+    @DisplayName("존재하지 않는 링크 API 경로는 안정된 404 오류로 응답한다")
+    void returnsNotFoundForUnknownRoute() throws Exception {
+        mockMvc.perform(get("/unknown"))
+                .andExpect(status().isNotFound())
+                .andExpect(header().string("Cache-Control", "no-store"))
+                .andExpect(jsonPath("$.code").value("RESOURCE_NOT_FOUND"))
+                .andExpect(jsonPath("$.requestId").isNotEmpty());
+    }
+
+    @Test
     @DisplayName("활성 공개 링크는 no-store와 no-referrer를 포함해 신뢰 대상에 302로 응답한다")
     void resolvesLinkContract() throws Exception {
         when(useCase.resolveLink("VOvLShvx93kQpj8x7w2HYQ"))

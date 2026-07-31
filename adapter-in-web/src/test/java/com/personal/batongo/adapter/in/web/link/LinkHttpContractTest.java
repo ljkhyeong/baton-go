@@ -1,5 +1,6 @@
 package com.personal.batongo.adapter.in.web.link;
 
+import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -26,6 +27,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -163,6 +165,7 @@ class LinkHttpContractTest {
         mockMvc.perform(post("/l/VOvLShvx93kQpj8x7w2HYQ"))
                 .andExpect(status().isMethodNotAllowed())
                 .andExpect(header().string("Cache-Control", "no-store"))
+                .andExpect(header().string(HttpHeaders.ALLOW, containsString("GET")))
                 .andExpect(jsonPath("$.code").value("METHOD_NOT_ALLOWED"))
                 .andExpect(jsonPath("$.requestId").isNotEmpty());
     }

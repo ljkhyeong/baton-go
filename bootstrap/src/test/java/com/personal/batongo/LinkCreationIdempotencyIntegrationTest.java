@@ -8,10 +8,15 @@ import com.personal.batongo.application.link.error.IdempotencyKeyConflictExcepti
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.CreateLinkCommand;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.CreatedLinkResult;
+import com.personal.batongo.application.link.port.out.SmartLinkRepository;
 import com.personal.batongo.domain.link.LinkPurpose;
+import com.personal.batongo.domain.link.SmartLink;
 import com.personal.batongo.domain.link.TargetSystem;
+import jakarta.persistence.EntityManager;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -24,6 +29,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.annotation.Transactional;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.mysql.MySQLContainer;
@@ -52,6 +58,34 @@ class LinkCreationIdempotencyIntegrationTest {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    private SmartLinkRepository smartLinkRepository;
+
+    @Autowired
+    private EntityManager entityManager;
+
+    @Test
+    @Transactional
+    @DisplayName("할당 UUID와 null 버전의 새 링크는 persist 대상으로 저장된다")
+    void persistsNewLinkWithAssignedId() {
+        SmartLink candidate = SmartLink.create(
+                UUID.fromString("7f7386b7-8a34-46c9-ae20-606d95a63bb2"),
+                "a".repeat(64),
+                TargetSystem.BATON,
+                "/teams/persist-check",
+                LinkPurpose.RESOURCE_OPEN,
+                null,
+                null,
+                Instant.parse("2026-07-31T00:00:00Z")
+        );
+
+        SmartLink saved = smartLinkRepository.save(candidate);
+        entityManager.flush();
+
+        assertThat(saved).isSameAs(candidate);
+        assertThat(entityManager.contains(candidate)).isTrue();
+    }
 
     @Test
     @DisplayName("동시에 같은 생성 요청을 보내도 MySQL에는 링크와 예약이 한 건만 남는다")

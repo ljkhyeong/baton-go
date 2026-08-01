@@ -3,6 +3,7 @@ package com.personal.batongo.adapter.in.web;
 import com.personal.batongo.application.link.error.InvalidLinkCodeException;
 import com.personal.batongo.application.link.error.InvalidIdempotencyKeyException;
 import com.personal.batongo.application.link.error.IdempotencyKeyConflictException;
+import com.personal.batongo.application.link.error.LinkCodeReplayMismatchException;
 import com.personal.batongo.application.link.error.LinkNotFoundException;
 import com.personal.batongo.domain.link.LinkUnavailableException;
 import com.personal.batongo.domain.link.LinkValidationException;
@@ -92,6 +93,20 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return error(
                 HttpStatus.CONFLICT,
                 "IDEMPOTENCY_KEY_REUSED",
+                exception.getMessage(),
+                request
+        );
+    }
+
+    @ExceptionHandler(LinkCodeReplayMismatchException.class)
+    public ResponseEntity<ErrorResponse> handleLinkCodeReplayMismatch(
+            LinkCodeReplayMismatchException exception,
+            HttpServletRequest request
+    ) {
+        logUnexpected(exception, request);
+        return error(
+                HttpStatus.INTERNAL_SERVER_ERROR,
+                "LINK_CODE_REPLAY_UNAVAILABLE",
                 exception.getMessage(),
                 request
         );

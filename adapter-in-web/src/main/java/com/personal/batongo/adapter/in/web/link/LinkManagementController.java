@@ -8,6 +8,7 @@ import com.personal.batongo.application.link.port.in.SmartLinkUseCase.CreatedLin
 import jakarta.validation.Valid;
 import java.net.URI;
 import java.util.UUID;
+import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -55,6 +56,7 @@ public class LinkManagementController {
         HttpStatus status = result.replayed() ? HttpStatus.OK : HttpStatus.CREATED;
         return ResponseEntity.status(status)
                 .location(location)
+                .cacheControl(CacheControl.noStore())
                 .header(IDEMPOTENCY_REPLAYED_HEADER, Boolean.toString(result.replayed()))
                 .body(CreateLinkResponse.from(
                         result,

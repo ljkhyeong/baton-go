@@ -24,6 +24,7 @@
 - 존재하지 않는 API 경로: `404 RESOURCE_NOT_FOUND`
 - 지원하지 않는 HTTP 메서드: `405 METHOD_NOT_ALLOWED`
 - 지원하지 않는 요청 본문 형식: `415 UNSUPPORTED_MEDIA_TYPE`
+- 공개 resolver 처리 한도 초과: `429 RATE_LIMIT_EXCEEDED`
 - 예상하지 못한 오류: `500`
 
 관리 인증 `401` 응답에는
@@ -124,3 +125,22 @@ Idempotency-Key: 8e448211-66ae-44ab-9888-c4960648c22b
 - `X-Request-Id`
 
 이 요청은 링크 소비 횟수나 권한 상태를 변경하지 않는다.
+
+### 공개 resolver 과부하 backstop
+
+`GET·HEAD /l/{code}`는 데이터베이스 조회 전에 인스턴스 단위 aggregate rate limit을
+적용한다. 존재 여부와 코드 형식에 관계없이 이 경로의 모든 `GET`과 `HEAD`가 하나의
+고정 용량 버킷을 공유한다. 클라이언트 IP나 `X-Forwarded-For`는 식별자 또는 신뢰
+경계로 사용하지 않는다.
+
+용량과 window는 배포 환경이 명시적으로 설정하는 운영 안전값이며 사용자별 제품 quota가
+아니다. 한도를 초과하면 `429 RATE_LIMIT_EXCEEDED`와 다음 헤더를 반환한다.
+
+- `Retry-After`: 현재 window가 갱신될 때까지의 초 단위 대기 시간
+- `Cache-Control: no-store`
+- `X-Request-Id`
+
+`HEAD`의 `429`도 같은 상태와 헤더를 반환하지만 응답 본문은 없다. 이 backstop은
+인스턴스 메모리만 사용하므로 여러 replica의 합산 요청량을 제한하지 않는다. 운영 공개
+경로에는 별도의 edge 또는 distributed rate limiting과 access-log 코드 마스킹을 반드시
+적용한다.

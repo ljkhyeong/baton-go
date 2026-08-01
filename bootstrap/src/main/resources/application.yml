@@ -48,6 +48,9 @@ baton-go:
     secret: ${BATON_GO_LINK_CODE_SECRET:}
   management:
     token: ${BATON_GO_MANAGEMENT_TOKEN:}
+  public-resolver-rate-limit:
+    capacity: ${BATON_GO_PUBLIC_RESOLVER_RATE_LIMIT_CAPACITY:300}
+    window: ${BATON_GO_PUBLIC_RESOLVER_RATE_LIMIT_WINDOW:1m}
   targets:
     baton-base-url: ${BATON_GO_BATON_BASE_URL:http://localhost:5173}
     round-base-url: ${BATON_GO_ROUND_BASE_URL:http://localhost:5174}

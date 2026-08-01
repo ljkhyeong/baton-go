@@ -26,6 +26,7 @@ public class SmartLinkService implements SmartLinkUseCase {
     private final SmartLinkRepository repository;
     private final LinkCreationReservationPort reservationPort;
     private final LinkCodePort linkCodePort;
+    private final LinkCodeKeyGuard linkCodeKeyGuard;
     private final TargetUrlPort targetUrlPort;
     private final Clock clock;
 
@@ -33,18 +34,21 @@ public class SmartLinkService implements SmartLinkUseCase {
             SmartLinkRepository repository,
             LinkCreationReservationPort reservationPort,
             LinkCodePort linkCodePort,
+            LinkCodeKeyGuard linkCodeKeyGuard,
             TargetUrlPort targetUrlPort,
             Clock clock
     ) {
         this.repository = repository;
         this.reservationPort = reservationPort;
         this.linkCodePort = linkCodePort;
+        this.linkCodeKeyGuard = linkCodeKeyGuard;
         this.targetUrlPort = targetUrlPort;
         this.clock = clock;
     }
 
     @Override
     public CreatedLinkResult createLink(CreateLinkCommand command) {
+        linkCodeKeyGuard.verifyBound();
         Instant now = databaseTime();
         Instant notBefore = databaseTime(command.notBefore());
         Instant expiresAt = databaseTime(command.expiresAt());

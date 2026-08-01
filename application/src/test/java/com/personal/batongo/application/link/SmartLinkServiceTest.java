@@ -4,10 +4,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.personal.batongo.application.link.error.IdempotencyKeyConflictException;
+import com.personal.batongo.application.link.error.LinkCodeKeyBindingException;
 import com.personal.batongo.application.link.error.LinkCodeReplayMismatchException;
 import com.personal.batongo.application.link.error.LinkNotFoundException;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.CreateLinkCommand;
 import com.personal.batongo.application.link.port.out.IssuedLinkCode;
+import com.personal.batongo.application.link.port.out.LinkCodeKeyGuardPort;
 import com.personal.batongo.application.link.port.out.LinkCodePort;
 import com.personal.batongo.application.link.port.out.LinkCreationReservationPort;
 import com.personal.batongo.application.link.port.out.SmartLinkRepository;
@@ -33,18 +35,28 @@ class SmartLinkServiceTest {
     private static final Instant NOW = Instant.parse("2026-07-29T10:00:00Z");
     private static final String RAW_CODE = "abcdefghijklmnopqrstuv";
     private static final String CODE_HASH = "b".repeat(64);
+    private static final LinkCodeDerivationIdentity DERIVATION_IDENTITY =
+            new LinkCodeDerivationIdentity(
+                    "hmac-sha256-link-code-v1",
+                    "a".repeat(64)
+            );
     private static final CreationIdempotencyKey IDEMPOTENCY_KEY =
             new CreationIdempotencyKey("8e448211-66ae-44ab-9888-c4960648c22b");
 
     private final InMemoryRepository repository = new InMemoryRepository();
     private final InMemoryReservationPort reservationPort = new InMemoryReservationPort();
     private final LinkCodePort linkCodePort = new FixedLinkCodePort();
+    private final InMemoryLinkCodeKeyGuardPort keyGuardPort =
+            new InMemoryLinkCodeKeyGuardPort(DERIVATION_IDENTITY);
+    private final LinkCodeKeyGuard linkCodeKeyGuard =
+            new LinkCodeKeyGuard(linkCodePort, keyGuardPort);
     private final TargetUrlPort targetUrlPort =
             (targetSystem, targetPath) -> URI.create("https://baton.example" + targetPath);
     private final SmartLinkService service = new SmartLinkService(
             repository,
             reservationPort,
             linkCodePort,
+            linkCodeKeyGuard,
             targetUrlPort,
             Clock.fixed(NOW, ZoneOffset.UTC)
     );
@@ -101,10 +113,13 @@ class SmartLinkServiceTest {
                 NOW.plusSeconds(300)
         );
         var first = service.createLink(command);
+        LinkCodePort changedDerivationPort =
+                new FixedLinkCodePort("differentRawCodeValue1", "d".repeat(64));
         SmartLinkService changedSecretService = new SmartLinkService(
                 repository,
                 reservationPort,
-                new FixedLinkCodePort("differentRawCodeValue1", "d".repeat(64)),
+                changedDerivationPort,
+                new LinkCodeKeyGuard(changedDerivationPort, keyGuardPort),
                 targetUrlPort,
                 Clock.fixed(NOW, ZoneOffset.UTC)
         );
@@ -116,6 +131,38 @@ class SmartLinkServiceTest {
         SmartLink stored = repository.findById(first.link().id()).orElseThrow();
         assertThat(stored.getCodeHash()).isEqualTo(CODE_HASH);
         assertThat(repository.links).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("미결합 HMAC 키는 생성 중 자동 결합하지 않고 예약 전에 요청을 차단한다")
+    void rejectsUnboundKeyBeforeReservation() {
+        LinkCodeKeyGuard failingGuard = new LinkCodeKeyGuard(
+                linkCodePort,
+                new InMemoryLinkCodeKeyGuardPort(null)
+        );
+        SmartLinkService guardedService = new SmartLinkService(
+                repository,
+                reservationPort,
+                linkCodePort,
+                failingGuard,
+                targetUrlPort,
+                Clock.fixed(NOW, ZoneOffset.UTC)
+        );
+
+        assertThatThrownBy(() -> guardedService.createLink(new CreateLinkCommand(
+                IDEMPOTENCY_KEY,
+                TargetSystem.BATON,
+                "/teams/team-1",
+                LinkPurpose.NAVIGATION,
+                null,
+                null
+        )))
+                .isInstanceOf(LinkCodeKeyBindingException.class)
+                .hasMessage("링크 코드 파생 키를 현재 데이터베이스에 안전하게 결합할 수 없습니다")
+                .hasMessageNotContaining(DERIVATION_IDENTITY.hmacFingerprint());
+
+        assertThat(reservationPort.reservations).isEmpty();
+        assertThat(repository.links).isEmpty();
     }
 
     @Test
@@ -134,6 +181,7 @@ class SmartLinkServiceTest {
                 repository,
                 reservationPort,
                 linkCodePort,
+                linkCodeKeyGuard,
                 targetUrlPort,
                 Clock.fixed(NOW.plusSeconds(120), ZoneOffset.UTC)
         );
@@ -213,6 +261,7 @@ class SmartLinkServiceTest {
                 repository,
                 reservationPort,
                 linkCodePort,
+                linkCodeKeyGuard,
                 targetUrlPort,
                 Clock.fixed(NOW.plusSeconds(60), ZoneOffset.UTC)
         );
@@ -251,6 +300,11 @@ class SmartLinkServiceTest {
         }
 
         @Override
+        public LinkCodeDerivationIdentity derivationIdentity() {
+            return DERIVATION_IDENTITY;
+        }
+
+        @Override
         public IssuedLinkCode issue(String idempotencyKey) {
             return new IssuedLinkCode(rawCode, codeHash);
         }
@@ -263,6 +317,36 @@ class SmartLinkServiceTest {
         @Override
         public String hashIdempotencyKey(String idempotencyKey) {
             return "c".repeat(64);
+        }
+    }
+
+    private static final class InMemoryLinkCodeKeyGuardPort
+            implements LinkCodeKeyGuardPort {
+
+        private LinkCodeDerivationIdentity storedIdentity;
+
+        private InMemoryLinkCodeKeyGuardPort(
+                LinkCodeDerivationIdentity storedIdentity
+        ) {
+            this.storedIdentity = storedIdentity;
+        }
+
+        @Override
+        public void verifyOrBind(LinkCodeDerivationIdentity identity) {
+            if (storedIdentity == null) {
+                storedIdentity = identity;
+                return;
+            }
+            if (!storedIdentity.matches(identity)) {
+                throw new LinkCodeKeyBindingException();
+            }
+        }
+
+        @Override
+        public void verifyBound(LinkCodeDerivationIdentity identity) {
+            if (storedIdentity == null || !storedIdentity.matches(identity)) {
+                throw new LinkCodeKeyBindingException();
+            }
         }
     }
 

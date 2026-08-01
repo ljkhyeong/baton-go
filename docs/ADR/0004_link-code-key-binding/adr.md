@@ -1,0 +1,78 @@
+# ADR-0004: 링크 코드 HMAC 키와 데이터베이스 결합
+
+- 상태: 채택
+- 결정일: 2026-08-02
+
+## 배경
+
+공개 코드는 멱등성 키와 `BATON_GO_LINK_CODE_SECRET`의 HMAC으로 결정된다. 다른 secret으로
+기존 생성 요청을 재생하면 다른 공개 코드가 만들어지므로 ADR-0003은 저장된 code hash와
+현재 파생 결과를 비교해 잘못된 URL 반환을 막았다.
+
+하지만 재생 요청이 오기 전에는 설정 오류를 발견하지 못한다. 잘못된 secret으로 시작한
+replica가 새 생성 intent를 먼저 처리하면 한 데이터베이스에 서로 다른 키로 파생된 링크가
+섞이고, 어느 secret으로도 전체 데이터를 재생할 수 없게 된다.
+
+## 결정
+
+- Flyway가 `link_code_key_guard` singleton 행 `guard_id=1`을 만든다.
+- singleton은 링크 코드 파생 규약 version과 HMAC key fingerprint를 함께 저장한다.
+- identity는 다음 값으로 고정한다.
+  - version: `hmac-sha256-link-code-v1`
+  - fingerprint:
+    `hex(HMAC-SHA-256(secret, "baton-go-link-code-key-fingerprint:v1\0"))`
+- fingerprint는 secret 자체가 아니지만 로그, 오류 응답과 운영 티켓에 기록하지 않는다.
+- 애플리케이션 시작의 `ApplicationRunner`가 현재 identity와 DB identity를 검증한다.
+- 링크 생성 transaction은 예약 행을 만들기 전에 같은 검증을 다시 수행한다.
+- DB identity가 이미 결합되어 있으면 version과 fingerprint가 모두 일치해야 한다.
+- 미결합 상태에서는 `smart_links`와 `link_creation_requests`가 모두 비어 있을 때만 현재
+  identity에 자동 결합한다.
+- 불일치, 부분 결합, singleton 유실 또는 기존 데이터가 있는 미결합 상태는 하나의 안전한
+  오류로 실패하며 secret과 fingerprint를 메시지에 포함하지 않는다.
+- ADR-0003의 재생 code hash 검증은 손상과 구현 실수를 막는 방어 계층으로 유지한다.
+
+## 동시성과 transaction 경계
+
+시작 검증은 singleton 행을 `SELECT ... FOR UPDATE`로 잠그고 identity와 업무 테이블의 빈
+상태를 확인해 필요하면 결합한다. 같은 identity를 가진 replica는 최초 결합 뒤 모두 통과한다.
+서로 다른 identity의 replica가 빈 DB에 동시에 시작하면 먼저 잠근 하나만 결합하고 나머지는
+불일치로 실패한다.
+
+생성 경로는 자동 결합하지 않고 `SELECT ... FOR SHARE` current read로 이미 결합된 identity만
+검증한다. 공유 잠금은 정상 생성끼리 호환되므로 singleton 때문에 전역 직렬화되지 않고,
+MySQL repeatable-read의 과거 snapshot을 만들지 않아 멱등 예약 승자의 commit 관찰도 방해하지
+않는다. 시작 runner보다 요청이 먼저 도착해 singleton이 미결합이면 저장 전에 실패한다.
+
+시작 검증과 웹 서버 초기화 사이에 생성 요청이 들어올 수 있으므로 시작 검증만 신뢰하지
+않는다. `SmartLinkService.createLink`가 같은 guard를 생성 예약보다 먼저 확인해, 검증 실패
+시 링크와 예약이 한 건도 저장되지 않게 한다.
+
+## 배포와 복구
+
+신규 DB는 Flyway가 미결합 singleton을 만든 뒤 시작 검증이 자동 결합한다.
+
+기존 링크나 생성 예약이 있는 DB는 현재 secret을 증명할 원문 멱등성 키가 없으므로 자동
+결합하지 않는다. 최초 도입은 다음 순서를 따른다.
+
+1. 모든 구버전 writer와 생성 트래픽을 중지한다.
+2. secret manager에서 기존 배포에 사용한 불변 secret version을 복구한다.
+3. 안전하게 보관한 canary 생성 intent가 있다면 현재 파생 code hash와 DB의 예약-링크
+   code hash가 같은지 오프라인으로 검증한다.
+4. 검증된 배포 도구가 singleton의 version과 fingerprint를 한 transaction에서 결합한다.
+5. 새 버전을 시작하고 readiness가 열리기 전에 guard 검증이 통과하는지 확인한다.
+
+canary나 검증된 secret version이 없다면 임의 secret에 DB를 결합하지 않는다. 링크 데이터가
+필요 없다면 새 DB로 시작하고, 필요하다면 올바른 secret을 복구할 때까지 배포를 중단한다.
+우회 환경 변수나 자동 강제 결합 옵션은 제공하지 않는다.
+
+DB backup과 해당 시점의 HMAC secret version은 하나의 복구 단위다. 복구 훈련은 둘을 함께
+복원하고 시작 검증과 canary 재생을 확인해야 한다. 구버전과 신버전의 혼합 배포 중 secret을
+변경하지 않는다.
+
+## 결과
+
+- 잘못된 secret이나 파생 규약으로 신규 링크가 섞이기 전에 프로세스가 fail-closed 한다.
+- secret 회전은 허용하지 않는다. 회전이 필요하면 생성 요청별 key version, 복수 key 설정과
+  단계적 배포를 포함한 versioned key ring을 별도 ADR로 설계한다.
+- 공개 링크 해석은 원문 코드의 SHA-256 조회이므로 HMAC guard를 사용하지 않지만, 키
+  불일치 프로세스는 시작 단계에서 종료된다.

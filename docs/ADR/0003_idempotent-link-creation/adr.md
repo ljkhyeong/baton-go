@@ -40,8 +40,11 @@ victim으로 선택될 수 있다. 이 실패는 transaction 전체를 rollback�
 
 - 서비스 재시작, replica 변경과 DB 복구 뒤에도 같은 비밀을 사용해야 같은 URL을 재생한다.
 - key ring과 key version을 도입하기 전에는 링크 코드 파생 비밀을 회전하지 않는다.
+- ADR-0004에 따라 시작 시점과 신규 생성 예약 전에 HMAC 파생 version·fingerprint를 DB의
+  singleton identity와 대조한다. 빈 DB만 자동 결합하며 기존 데이터가 있는 미결합 DB와
+  identity 불일치는 fail-closed 한다.
 - 재생 시 현재 파생한 코드 해시가 저장값과 다르면 동작하지 않는 URL을 반환하지 않고
-  설정 불일치로 실패한다.
+  설정 불일치로 실패한다. 이 검증은 DB-key 결합 이후에도 방어 계층으로 유지한다.
 - BATON과 ROUND는 원본 aggregate commit 뒤 GO를 호출하고 생성 intent UUID를 outbox 또는
   소유 상태에 보존한다.
 - 관리 credential과 파생 비밀을 공유하지 않고 둘 다 로그와 URL에 넣지 않는다.

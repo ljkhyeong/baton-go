@@ -60,6 +60,24 @@ vim .env
 설정하면 애플리케이션은 시작하지 않는다. 링크 코드 파생 비밀은 재시작과 복구 뒤에도
 같은 값을 유지해야 기존 생성 요청을 동일 URL로 재생할 수 있다.
 
+### HMAC 키와 데이터베이스 결합
+
+애플리케이션은 시작할 때 링크 코드 HMAC 파생 version과 key fingerprint를 DB의 singleton
+identity와 대조한다. 신규 DB처럼 링크와 생성 예약이 모두 비어 있으면 현재 secret에 자동
+결합한다. 이미 결합된 DB와 identity가 다르거나 기존 데이터가 있는데 identity가 비어 있으면
+readiness를 열지 않고 시작에 실패한다. 생성 API도 예약 행을 쓰기 전에 같은 검증을 수행한다.
+
+DB backup과 그 시점의 `BATON_GO_LINK_CODE_SECRET` secret-manager version은 하나의 복구
+단위로 보관한다. DB만 또는 secret만 따로 복구하지 않는다. 복구 뒤에는 시작 검증과 보관된
+canary 생성 intent의 동일 URL 재생을 확인한다. key ring을 도입하기 전에는 secret을 회전하지
+않으며 fingerprint를 로그나 운영 티켓에 기록하지 않는다.
+
+기존 링크가 있는 DB에 이 guard를 처음 도입할 때는 자동 결합하지 않는다. 모든 writer를
+중지하고 기존 secret version 및 canary code hash를 오프라인으로 검증한 뒤, 검증된 배포
+절차로 singleton identity를 한 번 결합한다. canary나 검증된 secret을 복구할 수 없으면 임의
+secret으로 강제 결합하지 않는다. 자세한 결정은
+[ADR-0004](docs/ADR/0004_link-code-key-binding/adr.md)를 따른다.
+
 호스트에서 Gradle로 애플리케이션을 실행할 때는 `.env`의 값을 자식 프로세스에 export하고
 MySQL만 Compose로 먼저 실행한다. JDBC URL은 zsh에서 `source`할 수 있도록 예시 파일에서
 따옴표로 감싸져 있다.
@@ -86,6 +104,12 @@ docker compose --env-file .env ps
 Docker는 관리 포트의 aggregate `/actuator/health`를 계속 사용한다. 오케스트레이터 probe는
 `/actuator/health/liveness`와 `/actuator/health/readiness`를 사용하며, readiness는 DB
 연결 상태를 포함하지만 liveness는 포함하지 않는다.
+
+공개 `GET·HEAD /l/{code}`에는 DB 조회 전 인스턴스 aggregate rate-limit backstop이
+적용된다. `BATON_GO_PUBLIC_RESOLVER_RATE_LIMIT_CAPACITY`와
+`BATON_GO_PUBLIC_RESOLVER_RATE_LIMIT_WINDOW`는 배포 트래픽에 맞춰 명시적으로 설정한다.
+이 제한은 client IP나 전달 헤더를 신뢰하지 않는 로컬 안전장치이므로, 여러 replica를
+공개할 때는 ingress에서 별도의 분산 rate limit과 `/l/{code}` access-log 마스킹을 적용한다.
 
 ## 검증
 
@@ -125,3 +149,5 @@ curl -i http://localhost:8080/api/v1/links \
 - [API 계약](docs/PRD/0002_api-contract/spec.md)
 - [마이크로서비스 경계](docs/ADR/0001_microservice-boundary/adr.md)
 - [링크 보안 모델](docs/ADR/0002_link-security/adr.md)
+- [멱등한 링크 생성](docs/ADR/0003_idempotent-link-creation/adr.md)
+- [링크 코드 HMAC 키와 DB 결합](docs/ADR/0004_link-code-key-binding/adr.md)

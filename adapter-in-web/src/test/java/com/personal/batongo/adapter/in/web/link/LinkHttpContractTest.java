@@ -20,6 +20,7 @@ import com.personal.batongo.adapter.in.web.GlobalExceptionHandler;
 import com.personal.batongo.adapter.in.web.PublicLinkProperties;
 import com.personal.batongo.adapter.in.web.RequestIdFilter;
 import com.personal.batongo.application.link.error.IdempotencyKeyConflictException;
+import com.personal.batongo.application.link.error.LinkCodeKeyBindingException;
 import com.personal.batongo.application.link.error.LinkCodeReplayMismatchException;
 import com.personal.batongo.application.link.error.LinkNotFoundException;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase;
@@ -153,6 +154,30 @@ class LinkHttpContractTest {
                 .andExpect(jsonPath("$.code").value("LINK_CODE_REPLAY_UNAVAILABLE"))
                 .andExpect(jsonPath("$.message")
                         .value("현재 링크 코드 파생 설정으로 기존 링크를 재생할 수 없습니다"))
+                .andExpect(jsonPath("$.requestId").isNotEmpty());
+    }
+
+    @Test
+    @DisplayName("링크 코드 키가 데이터베이스 결합과 다르면 운영 오류 코드로 응답한다")
+    void returnsOperationalErrorWhenLinkCodeKeyBindingIsUnavailable() throws Exception {
+        when(useCase.createLink(any())).thenThrow(new LinkCodeKeyBindingException());
+
+        mockMvc.perform(post("/api/v1/links")
+                        .header(LinkManagementController.IDEMPOTENCY_KEY_HEADER, IDEMPOTENCY_KEY)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "targetSystem": "BATON",
+                                  "targetPath": "/teams/team-1",
+                                  "purpose": "NAVIGATION"
+                                }
+                                """))
+                .andExpect(status().isInternalServerError())
+                .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
+                .andExpect(jsonPath("$.code").value("LINK_CODE_CONFIGURATION_MISMATCH"))
+                .andExpect(jsonPath("$.message").value(
+                        "링크 코드 파생 키를 현재 데이터베이스에 안전하게 결합할 수 없습니다"
+                ))
                 .andExpect(jsonPath("$.requestId").isNotEmpty());
     }
 

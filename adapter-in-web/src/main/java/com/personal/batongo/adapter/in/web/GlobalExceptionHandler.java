@@ -3,6 +3,7 @@ package com.personal.batongo.adapter.in.web;
 import com.personal.batongo.application.link.error.InvalidLinkCodeException;
 import com.personal.batongo.application.link.error.InvalidIdempotencyKeyException;
 import com.personal.batongo.application.link.error.IdempotencyKeyConflictException;
+import com.personal.batongo.application.link.error.LinkCodeKeyBindingException;
 import com.personal.batongo.application.link.error.LinkCodeReplayMismatchException;
 import com.personal.batongo.application.link.error.LinkNotFoundException;
 import com.personal.batongo.domain.link.LinkUnavailableException;
@@ -107,6 +108,20 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return error(
                 HttpStatus.INTERNAL_SERVER_ERROR,
                 "LINK_CODE_REPLAY_UNAVAILABLE",
+                exception.getMessage(),
+                request
+        );
+    }
+
+    @ExceptionHandler(LinkCodeKeyBindingException.class)
+    public ResponseEntity<ErrorResponse> handleLinkCodeKeyBinding(
+            LinkCodeKeyBindingException exception,
+            HttpServletRequest request
+    ) {
+        logUnexpected(exception, request);
+        return error(
+                HttpStatus.INTERNAL_SERVER_ERROR,
+                "LINK_CODE_CONFIGURATION_MISMATCH",
                 exception.getMessage(),
                 request
         );

@@ -33,6 +33,8 @@ class SecureLinkCodeAdapterTest {
 
         assertThat(restarted.issue(IDEMPOTENCY_KEY))
                 .isEqualTo(adapter.issue(IDEMPOTENCY_KEY));
+        assertThat(restarted.derivationIdentity())
+                .isEqualTo(adapter.derivationIdentity());
         assertThat(adapter.issue("7606bb52-2837-4359-bca4-d7f295b64fe4"))
                 .isNotEqualTo(adapter.issue(IDEMPOTENCY_KEY));
         assertThat(adapter.hashIdempotencyKey(IDEMPOTENCY_KEY))
@@ -47,6 +49,31 @@ class SecureLinkCodeAdapterTest {
         assertThat(issued.rawCode()).isEqualTo("WgRX_ulMUrIGxM0IYBOpqA");
         assertThat(issued.codeHash())
                 .isEqualTo("cc1d2daca7a315a27cbccb3eac92571648228f5975376bca32da45b2f33af247");
+    }
+
+    @Test
+    @DisplayName("HMAC 키 identity는 파생 버전과 별도 context의 고정 fingerprint를 사용한다")
+    void createsStableDerivationIdentity() {
+        var identity = adapter.derivationIdentity();
+
+        assertThat(identity.version()).isEqualTo("hmac-sha256-link-code-v1");
+        assertThat(identity.hmacFingerprint())
+                .isEqualTo("11dd631d8939f29fdaea9662caead21123dc1fa154068d8be607f3add28e4daa")
+                .doesNotContain(SECRET);
+        assertThat(identity.toString()).doesNotContain(identity.hmacFingerprint());
+    }
+
+    @Test
+    @DisplayName("다른 HMAC 비밀은 다른 키 identity를 만든다")
+    void distinguishesDifferentSecrets() {
+        var different = new SecureLinkCodeAdapter(new LinkCodeProperties(
+                "another-test-link-code-secret-that-is-long-enough"
+        ));
+
+        assertThat(different.derivationIdentity())
+                .isNotEqualTo(adapter.derivationIdentity());
+        assertThat(different.derivationIdentity().matches(adapter.derivationIdentity()))
+                .isFalse();
     }
 
     @Test

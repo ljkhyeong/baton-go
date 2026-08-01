@@ -21,6 +21,8 @@
 - 같은 멱등성 키를 다른 payload에 재사용: `409`
 - 링크 코드 파생 설정 불일치로 기존 생성 요청을 재생할 수 없음:
   `500 LINK_CODE_REPLAY_UNAVAILABLE`
+- 링크 코드 파생 키와 데이터베이스 바인딩 불일치:
+  `500 LINK_CODE_CONFIGURATION_MISMATCH`
 - 존재하지 않는 API 경로: `404 RESOURCE_NOT_FOUND`
 - 지원하지 않는 HTTP 메서드: `405 METHOD_NOT_ALLOWED`
 - 지원하지 않는 요청 본문 형식: `415 UNSUPPORTED_MEDIA_TYPE`

@@ -10,7 +10,7 @@ BATON GO는 단순 URL 축약기가 아니라 BATON과 ROUND를 위한 정책형
 - 원문 코드 대신 SHA-256 해시 저장
 - `BATON`, `ROUND` 신뢰 대상과 상대 경로만 허용
 - 시작 시각, 만료 시각과 즉시 폐기
-- 공개 `GET /l/{code}` 리다이렉트
+- 공개 `GET·HEAD /l/{code}` 리다이렉트
 - 관리용 `/api/v1/links` 생성·조회·폐기 API
 - MySQL/Flyway 영속화, health와 Prometheus endpoint
 
@@ -48,23 +48,61 @@ BATON의 `#accessKey`나 향후 ROUND 입장 토큰을 GO의 URL, DB 또는 로�
 
 ## 로컬 실행
 
-필수 환경 변수를 준비한다.
+저장소의 공개 예시 파일을 복사하고 실제 운영 값을 입력한다.
 
 ```bash
 cp .env.example .env
+vim .env
 ```
 
-관리 credential과 링크 코드 파생 비밀은 서로 다른 값으로 교체한다. 링크 코드 파생
-비밀은 재시작과 복구 뒤에도 같은 값을 유지해야 기존 생성 요청을 동일 URL로 재생할 수
-있다.
+`BATON_GO_MANAGEMENT_TOKEN`과 `BATON_GO_LINK_CODE_SECRET`은 각각 32자 이상의 서로 다른
+무작위 값이어야 한다. 공개된 `replace-with-...` 예시값을 그대로 사용하거나 두 값을 같게
+설정하면 애플리케이션은 시작하지 않는다. 링크 코드 파생 비밀은 재시작과 복구 뒤에도
+같은 값을 유지해야 기존 생성 요청을 동일 URL로 재생할 수 있다.
 
-MySQL을 실행한 뒤 환경 변수를 로드하고 다음 명령을 사용한다.
+호스트에서 Gradle로 애플리케이션을 실행할 때는 `.env`의 값을 자식 프로세스에 export하고
+MySQL만 Compose로 먼저 실행한다. JDBC URL은 zsh에서 `source`할 수 있도록 예시 파일에서
+따옴표로 감싸져 있다.
 
 ```bash
+docker compose --env-file .env up -d mysql
+
+set -a
+source ./.env
+set +a
+
 ./gradlew :bootstrap:bootRun
 ```
 
+애플리케이션과 MySQL을 모두 Compose로 실행하려면 다음 명령을 사용한다. 이 경로에서는
+Compose가 `.env`를 각 컨테이너에 주입하므로 별도의 `source`가 필요하지 않다.
+
+```bash
+docker compose --env-file .env up --build -d
+docker compose --env-file .env ps
+```
+
 기본 애플리케이션 포트는 `8080`, 관리 포트는 `8081`이다.
+Docker는 관리 포트의 aggregate `/actuator/health`를 계속 사용한다. 오케스트레이터 probe는
+`/actuator/health/liveness`와 `/actuator/health/readiness`를 사용하며, readiness는 DB
+연결 상태를 포함하지만 liveness는 포함하지 않는다.
+
+## 검증
+
+일반 빌드와 단위 테스트는 로컬 MySQL이나 Docker를 자동으로 요구하지 않는다.
+
+```bash
+./gradlew --no-daemon build
+```
+
+Flyway/JPA와 동시 생성 동작을 포함한 MySQL 통합 검증은 Docker가 실행 중인 환경에서
+별도로 수행한다.
+
+```bash
+./gradlew --no-daemon :bootstrap:mysqlTest
+```
+
+CI의 필수 검증 job은 일반 테스트와 MySQL 통합 테스트를 모두 실행한다.
 
 ## MVP 링크 생성
 

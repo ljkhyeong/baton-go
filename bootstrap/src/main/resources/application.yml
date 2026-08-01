@@ -32,6 +32,11 @@ management:
     health:
       probes:
         enabled: true
+      group:
+        readiness:
+          include: readinessState,db
+        liveness:
+          include: livenessState
       show-details: never
 
 baton-go:

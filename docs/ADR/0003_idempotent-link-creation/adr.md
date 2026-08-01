@@ -27,6 +27,11 @@ BATON과 ROUND가 링크를 원격 생성할 때 서버는 저장을 완료했�
 예약 생성, 링크 생성과 저장은 하나의 transaction에서 수행한다. 승자 transaction이
 rollback되면 예약 행도 함께 사라져 대기 중인 요청 하나가 새 승자가 된다.
 
+승자 rollback 시 동일 unique key를 기다리던 나머지 transaction 일부는 MySQL의 deadlock
+victim으로 선택될 수 있다. 이 실패는 transaction 전체를 rollback한 뒤 호출자가 동일한
+멱등성 키와 payload로 재시도한다. 새 승자가 저장한 링크가 있으면 재시도는 그 링크를
+재생한다.
+
 `INSERT IGNORE` 뒤에 패자들이 `SELECT ... FOR UPDATE`로 잠금을 승격하면 교착이 발생할 수
 있으므로 후속 조회에는 비관 잠금을 사용하지 않는다. 이 동작은 MySQL Testcontainers의
 동시 요청 테스트로 고정한다.
@@ -35,6 +40,8 @@ rollback되면 예약 행도 함께 사라져 대기 중인 요청 하나가 새
 
 - 서비스 재시작, replica 변경과 DB 복구 뒤에도 같은 비밀을 사용해야 같은 URL을 재생한다.
 - key ring과 key version을 도입하기 전에는 링크 코드 파생 비밀을 회전하지 않는다.
+- 재생 시 현재 파생한 코드 해시가 저장값과 다르면 동작하지 않는 URL을 반환하지 않고
+  설정 불일치로 실패한다.
 - BATON과 ROUND는 원본 aggregate commit 뒤 GO를 호출하고 생성 intent UUID를 outbox 또는
   소유 상태에 보존한다.
 - 관리 credential과 파생 비밀을 공유하지 않고 둘 다 로그와 URL에 넣지 않는다.

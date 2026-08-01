@@ -40,6 +40,16 @@ class SecureLinkCodeAdapterTest {
     }
 
     @Test
+    @DisplayName("HMAC SHA-256 v1 파생 규약은 고정 벡터와 일치한다")
+    void matchesVersionOneFixedVector() {
+        var issued = adapter.issue(IDEMPOTENCY_KEY);
+
+        assertThat(issued.rawCode()).isEqualTo("WgRX_ulMUrIGxM0IYBOpqA");
+        assertThat(issued.codeHash())
+                .isEqualTo("cc1d2daca7a315a27cbccb3eac92571648228f5975376bca32da45b2f33af247");
+    }
+
+    @Test
     @DisplayName("정확한 형식이 아닌 공개 코드는 해시하지 않는다")
     void rejectsMalformedCode() {
         assertThatThrownBy(() -> adapter.hash("short"))

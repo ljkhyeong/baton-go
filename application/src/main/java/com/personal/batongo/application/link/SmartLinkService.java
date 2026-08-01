@@ -1,6 +1,7 @@
 package com.personal.batongo.application.link;
 
 import com.personal.batongo.application.link.error.IdempotencyKeyConflictException;
+import com.personal.batongo.application.link.error.LinkCodeReplayMismatchException;
 import com.personal.batongo.application.link.error.LinkNotFoundException;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase;
 import com.personal.batongo.application.link.port.out.IssuedLinkCode;
@@ -66,6 +67,7 @@ public class SmartLinkService implements SmartLinkUseCase {
                     notBefore,
                     expiresAt
             );
+            requireReplayableCode(existing, issuedCode);
             return new CreatedLinkResult(toResult(existing), issuedCode.rawCode(), true);
         }
 
@@ -128,6 +130,12 @@ public class SmartLinkService implements SmartLinkUseCase {
                 && Objects.equals(existing.getExpiresAt(), expiresAt);
         if (!sameRequest) {
             throw new IdempotencyKeyConflictException();
+        }
+    }
+
+    private void requireReplayableCode(SmartLink existing, IssuedLinkCode issuedCode) {
+        if (!existing.getCodeHash().equals(issuedCode.codeHash())) {
+            throw new LinkCodeReplayMismatchException();
         }
     }
 

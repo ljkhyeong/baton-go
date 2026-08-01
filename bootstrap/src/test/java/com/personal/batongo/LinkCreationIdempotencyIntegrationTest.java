@@ -3,6 +3,7 @@ package com.personal.batongo;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -43,6 +44,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
 import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
@@ -134,6 +136,41 @@ class LinkCreationIdempotencyIntegrationTest {
                         ))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("LINK_NOT_FOUND"));
+    }
+
+    @Test
+    @DisplayName("정의되지 않은 링크 생성 필드는 저장 전에 400으로 거부한다")
+    void rejectsUnknownCreationFieldBeforePersistence() throws Exception {
+        String targetPath = "/room/unknown-json-field";
+
+        mockMvc.perform(post("/api/v1/links")
+                        .header(
+                                HttpHeaders.AUTHORIZATION,
+                                "Bearer test-management-token-that-is-long-enough"
+                        )
+                        .header(
+                                "Idempotency-Key",
+                                "09ef0b69-9004-47ed-a056-5f6b720dce23"
+                        )
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "targetSystem": "ROUND",
+                                  "targetPath": "%s",
+                                  "purpose": "MEETING_ENTRY",
+                                  "expireAt": "2026-08-01T00:00:00Z"
+                                }
+                                """.formatted(targetPath)))
+                .andExpect(status().isBadRequest())
+                .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
+                .andExpect(jsonPath("$.requestId").isNotEmpty());
+
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM smart_links WHERE target_path = ?",
+                Long.class,
+                targetPath
+        )).isZero();
     }
 
     @Test

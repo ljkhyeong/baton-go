@@ -5,6 +5,9 @@ server:
 spring:
   application:
     name: baton-go
+  jackson:
+    deserialization:
+      fail-on-unknown-properties: true
   datasource:
     url: ${BATON_GO_DB_URL:jdbc:mysql://localhost:3307/baton_go?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC}
     username: ${BATON_GO_DB_USERNAME:baton_go}

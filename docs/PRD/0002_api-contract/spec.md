@@ -47,6 +47,8 @@ Idempotency-Key: 8e448211-66ae-44ab-9888-c4960648c22b
   `200 OK`와 `Idempotency-Replayed: true`로 반환한다.
 - 같은 키와 다른 payload는 `409 IDEMPOTENCY_KEY_REUSED`로 거부한다.
 - 키 누락·형식 오류는 `400 INVALID_IDEMPOTENCY_KEY`로 거부한다.
+- 요청 본문에 정의되지 않은 필드가 있으면 저장하지 않고
+  `400 INVALID_REQUEST`로 거부한다.
 - timeout이나 일시적인 `5xx` 뒤에는 동일한 키와 payload로 재시도할 수 있다.
 - 재생 시 현재 링크 코드 파생 설정이 생성 당시와 다르면
   `500 LINK_CODE_REPLAY_UNAVAILABLE`로 실패한다. 이 오류는 같은 설정에서 반복해도

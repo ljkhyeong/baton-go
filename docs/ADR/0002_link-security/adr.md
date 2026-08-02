@@ -27,8 +27,13 @@
 - `expiresAt`은 생성 시각과 `notBefore`보다 뒤여야 한다.
 - 폐기는 멱등이며 최초 폐기 시각을 보존한다.
 
-## 향후 redemption
+## 인증된 admission과 향후 redemption
 
-일회성 초대·회의 입장은 공개 `GET` 리다이렉트와 분리한다. `GET`은 landing 또는
-resolution만 수행하고, 인증·권한 확인 후 `POST`가 원자적으로 redemption을 소비한다.
-최종 BATON session 또는 ROUND join ticket은 각 대상 서비스가 발급한다.
+초대·회의 입장은 공개 `GET` 리다이렉트와 분리한다. `GET`은 landing 또는 resolution만
+수행한다. BATON v1 navigation은 기존 access key를 보유한 브라우저의 복귀만 지원하며
+session이나 claim을 새로 발급하지 않는다. ROUND participation grant만 BATON의 인증된
+`POST`에서 발급한다. 선행 `GET /api/v1/auth/session`은 기존 session과 CSRF 상태 조회다.
+
+PRD-0003의 현재 ROUND 계약은 BATON session·CSRF 뒤 갱신하는 짧은 수명의 participation
+grant이며 one-time 사용을 보장하지 않는다. 진정한 일회성 redemption이 필요하면 원자적
+소비 저장소와 별도 인증 `POST` 계약을 추가한다.

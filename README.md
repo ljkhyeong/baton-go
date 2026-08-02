@@ -8,7 +8,7 @@ BATON GO는 단순 URL 축약기가 아니라 BATON과 ROUND를 위한 정책형
 
 - canonical UUID 멱등성 키와 HMAC 기반 128-bit 공개 코드 발급
 - 원문 코드 대신 SHA-256 해시 저장
-- `BATON`, `ROUND` 신뢰 대상과 상대 경로만 허용
+- `BATON`, `ROUND` 신뢰 대상과 안전한 origin-relative path만 허용
 - 시작 시각, 만료 시각과 즉시 폐기
 - 공개 `GET·HEAD /l/{code}` 리다이렉트
 - 관리용 `/api/v1/links` 생성·조회·폐기 API
@@ -17,7 +17,7 @@ BATON GO는 단순 URL 축약기가 아니라 BATON과 ROUND를 위한 정책형
 다음은 아직 구현 범위가 아니다.
 
 - BATON access key를 대체하는 계정·초대 권한
-- ROUND WebSocket 입장용 one-time ticket
+- ROUND WebSocket admission용 BATON participation-grant 발급 endpoint
 - 임의 외부 URL 축약
 - custom alias, 클릭 분석, Redis rate limit
 - 링크 소비 횟수와 일회성 redemption
@@ -30,9 +30,28 @@ BATON         workspace·역할·회차·자료 권한
 ROUND         room 입장·peer identity·TURN 발급 권한
 ```
 
-BATON의 `#accessKey`나 향후 ROUND 입장 토큰을 GO의 URL, DB 또는 로그에 넣지 않는다.
-현재 BATON 공유 링크는 신규 브라우저 접근에 계속 사용하고, GO는 검증된 workspace 안에서
-링크를 열거나 향후 계정 기반 초대 교환을 시작하는 진입점으로 사용한다.
+BATON의 `#accessKey`나 ROUND participation grant를 GO의 URL, DB 또는 로그에 넣지 않는다.
+현재 GO의 BATON locator는 해당 team의 검증된 access key를 이미 저장한 브라우저가
+workspace로 복귀할 때만 사용한다. 신규 브라우저는 기존 BATON 공유 링크를 계속 사용하며,
+향후 계정 기반 초대·claim 계약이 생기기 전에는 GO 링크만으로 권한을 부여하지 않는다.
+
+교차 서비스 계약 v1은 정확히 두 locator만 승인한다.
+
+```text
+BATON + NAVIGATION    /teams/{teamId}/seasons/{seasonId}
+ROUND + MEETING_ENTRY /room/{roomId}
+```
+
+ROUND 경로는 pre-join landing일 뿐 입장 권한이 아니다. BATON session과 CSRF 확인 뒤 발급되는
+짧은 수명의 participation grant가 실제 admission을 통제한다. 정확한 식별자 문법, endpoint,
+cookie와 현재 운영 차단 조건은 [교차 서비스 링크 계약](docs/PRD/0003_cross-service-link-contract/spec.md)을
+따른다. 현재 코드는 아직 이 exact 조합을 강제하지 않으므로 공개 production 준비 완료로
+간주하지 않는다.
+
+BATON mode 운영에서는 `BATON_GO_BATON_BASE_URL`과 `BATON_GO_ROUND_BASE_URL`을 같은 BATON
+public HTTPS origin으로 설정한다. edge가 `/room/**`·`/round-ui/**`는 ROUND web으로,
+participation-grant refresh는 BATON으로, signaling·TURN만 ROUND 내부 서비스로 라우팅한다.
+로컬의 서로 다른 `5173`·`5174` 기본값은 이 end-to-end 운영 계약을 만족하지 않는다.
 
 ## 기술 스택
 
@@ -147,7 +166,9 @@ curl -i http://localhost:8080/api/v1/links \
 
 - [제품 기준선](docs/PRD/0001_product-baseline/spec.md)
 - [API 계약](docs/PRD/0002_api-contract/spec.md)
+- [BATON·ROUND 교차 서비스 링크 계약](docs/PRD/0003_cross-service-link-contract/spec.md)
 - [마이크로서비스 경계](docs/ADR/0001_microservice-boundary/adr.md)
 - [링크 보안 모델](docs/ADR/0002_link-security/adr.md)
 - [멱등한 링크 생성](docs/ADR/0003_idempotent-link-creation/adr.md)
 - [링크 코드 HMAC 키와 DB 결합](docs/ADR/0004_link-code-key-binding/adr.md)
+- [Typed target locator](docs/ADR/0005_trusted-target-locator/adr.md)

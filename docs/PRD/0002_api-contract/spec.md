@@ -15,7 +15,8 @@
 
 - 입력 형식 오류: `400`
 - 관리 인증 누락·실패: `401`
-- 링크 없음: `404`
+- 링크 없음: `404 LINK_NOT_FOUND`
+- 저장된 target이 현재 신뢰 계약을 위반함: 존재를 숨기는 `404 LINK_NOT_FOUND`
 - 아직 활성화되지 않음: `404`
 - 만료·폐기: `410`
 - 같은 멱등성 키를 다른 payload에 재사용: `409`
@@ -27,6 +28,7 @@
 - 지원하지 않는 HTTP 메서드: `405 METHOD_NOT_ALLOWED`
 - 지원하지 않는 요청 본문 형식: `415 UNSUPPORTED_MEDIA_TYPE`
 - 공개 resolver 처리 한도 초과: `429 RATE_LIMIT_EXCEEDED`
+- 허용되지 않은 target system·purpose·locator 조합: `400 INVALID_LINK`
 - 예상하지 못한 오류: `500`
 
 관리 인증 `401` 응답에는
@@ -64,7 +66,7 @@ Idempotency-Key: 8e448211-66ae-44ab-9888-c4960648c22b
 ```json
 {
   "targetSystem": "BATON",
-  "targetPath": "/teams/00000000-0000-0000-0000-000000000000",
+  "targetPath": "/teams/8e448211-66ae-44ab-9888-c4960648c22b/seasons/713d9cb7-2842-4f9f-b3cc-e31d98c6238a",
   "purpose": "NAVIGATION",
   "notBefore": "2026-07-29T12:00:00Z",
   "expiresAt": "2026-07-30T12:00:00Z"
@@ -78,7 +80,7 @@ Idempotency-Key: 8e448211-66ae-44ab-9888-c4960648c22b
   "id": "00000000-0000-0000-0000-000000000000",
   "shortUrl": "https://go.example/l/opaque-code",
   "targetSystem": "BATON",
-  "targetPath": "/teams/00000000-0000-0000-0000-000000000000",
+  "targetPath": "/teams/8e448211-66ae-44ab-9888-c4960648c22b/seasons/713d9cb7-2842-4f9f-b3cc-e31d98c6238a",
   "purpose": "NAVIGATION",
   "notBefore": "2026-07-29T12:00:00Z",
   "expiresAt": "2026-07-30T12:00:00Z",
@@ -90,6 +92,17 @@ Idempotency-Key: 8e448211-66ae-44ab-9888-c4960648c22b
 원문 공개 코드를 포함한 `shortUrl`은 최초 생성과 동일 생성 요청 재생에서만 반환한다.
 재생 시 링크의 현재 `revokedAt`을 반환한다.
 
+### v1 신뢰 target 계약
+
+생성 가능한 조합은 다음 두 개뿐이다.
+
+- `BATON + NAVIGATION + /teams/{canonical-team-uuid}/seasons/{canonical-season-uuid}`
+- `ROUND + MEETING_ENTRY + /room/{canonical-room-id}`
+
+`RESOURCE_OPEN`과 표 밖 조합, 비canonical 식별자, trailing slash와 추가 segment는
+`400 INVALID_LINK`로 거부하며 링크와 생성 예약을 저장하지 않는다. 정확한 정규식, 클릭
+시점 권한과 rollout gate는 PRD-0003을 따른다.
+
 ## GET `/api/v1/links/{linkId}`
 
 관리용 Bearer credential이 필요하다. 원문 공개 코드나 `shortUrl`은 반환하지 않는다.
@@ -99,7 +112,7 @@ Idempotency-Key: 8e448211-66ae-44ab-9888-c4960648c22b
 {
   "id": "00000000-0000-0000-0000-000000000000",
   "targetSystem": "BATON",
-  "targetPath": "/teams/00000000-0000-0000-0000-000000000000",
+  "targetPath": "/teams/8e448211-66ae-44ab-9888-c4960648c22b/seasons/713d9cb7-2842-4f9f-b3cc-e31d98c6238a",
   "purpose": "NAVIGATION",
   "notBefore": "2026-07-29T12:00:00Z",
   "expiresAt": "2026-07-30T12:00:00Z",
@@ -127,6 +140,12 @@ Idempotency-Key: 8e448211-66ae-44ab-9888-c4960648c22b
 - `X-Request-Id`
 
 이 요청은 링크 소비 횟수나 권한 상태를 변경하지 않는다.
+
+DB에 저장된 target이 현재 PRD-0003 계약을 위반하면 존재 여부를 공개하지 않고
+`404 LINK_NOT_FOUND`로 응답한다. `GET`과 `HEAD` 모두 `Location`을 포함하지 않으며
+`Cache-Control: no-store`, `Referrer-Policy: no-referrer`, `X-Request-Id`를 반환한다.
+`HEAD`에는 본문이 없다. 내부 metric과 안전한 로그로 운영 경보를 남기되 공개 코드,
+target path와 전체 short URL은 기록하지 않는다.
 
 ### 공개 resolver 과부하 backstop
 

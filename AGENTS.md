@@ -11,7 +11,7 @@
 
 - BATON GO는 링크 코드, 활성 시간, 만료, 폐기와 신뢰된 대상 라우팅을 소유한다.
 - BATON의 workspace·역할·회차 권한과 ROUND의 room 입장 권한을 복제하지 않는다.
-- BATON access key, ROUND join ticket, Bearer token과 세션 식별자를 링크 대상이나 로그에 넣지 않는다.
+- BATON access key, ROUND participation grant, Bearer token과 세션 식별자를 링크 대상이나 로그에 넣지 않는다.
 - BATON 저장 트랜잭션이나 workspace projection 조회 안에서 원격 링크를 생성하지 않는다.
 
 ## 모듈과 의존 방향

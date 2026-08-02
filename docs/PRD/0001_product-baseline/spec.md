@@ -25,7 +25,7 @@ GO는 신뢰 대상과 정책을 해석하지만 BATON workspace 권한이나 RO
 
 ### 비밀을 목적지에 저장하지 않는다
 
-BATON access key, 세션, Bearer token과 ROUND join ticket을 대상 경로에 넣지 않는다.
+BATON access key, 세션, Bearer token과 ROUND participation grant를 대상 경로에 넣지 않는다.
 
 ### 공개 GET은 안전하다
 
@@ -49,8 +49,8 @@ BATON access key, 세션, Bearer token과 ROUND join ticket을 대상 경로에 
 | --- | --- |
 | Smart Link | 코드, 대상, 목적, 활성 기간과 폐기 상태를 가진 링크 |
 | Target System | 승인된 목적지 시스템. 첫 버전은 `BATON`, `ROUND` |
-| Target Path | 대상 시스템 base URL 아래의 안전한 절대 경로 |
-| Purpose | `NAVIGATION`, `MEETING_ENTRY`, `RESOURCE_OPEN` 중 링크의 의도 |
+| Target Path | 대상 시스템의 신뢰 origin 아래에서 승인된 origin-relative absolute path |
+| Purpose | `NAVIGATION`, `MEETING_ENTRY`, `RESOURCE_OPEN` 중 링크의 의도. v1 허용 조합은 PRD-0003에서 제한 |
 | Resolution | 공개 코드를 찾아 상태를 확인하고 신뢰 목적지로 안내하는 읽기 작업 |
 | Redemption | 인증 후 일회용 권한을 소비하는 향후 작업. Resolution과 분리한다. |
 
@@ -68,12 +68,17 @@ BATON access key, 세션, Bearer token과 ROUND join ticket을 대상 경로에 
 
 ## 6. BATON·ROUND 통합 경계
 
+- v1 target 조합과 canonical 식별자 문법은 PRD-0003을 따른다.
 - BATON `RoleResource` 원본 목적지는 BATON이 계속 소유한다.
 - BATON은 workspace 조회나 자료 저장 transaction에서 GO를 호출하지 않는다.
-- 클릭 시점 use case가 현재 workspace 접근과 자료 소유권을 먼저 검증한다.
+- BATON locator는 access key를 이미 보유한 브라우저의 workspace 복귀만 지원하며 신규
+  브라우저 초대나 권한 부여를 대신하지 않는다.
+- BATON navigation 클릭 시점에는 현재 team·season workspace 접근을 검증한다.
+- ROUND grant refresh는 별도 resource-room 매핑과 meeting 참여 권한을 검증한다.
 - GO 장애는 링크 열기에만 영향을 주며 BATON 조회·편집을 막지 않는다.
-- ROUND 연동 전에는 room ID를 locator로만 취급한다.
-- 실제 meeting join은 BATON 신원·멤버십 확인과 ROUND one-time ticket 계약이 생긴 뒤 추가한다.
+- GO는 ROUND room ID를 입장 권한이 아닌 locator로만 취급한다.
+- 실제 meeting join은 BATON 신원·멤버십 확인 뒤 발급되는 짧은 수명의 ROUND participation
+  grant로 통제한다. 이 grant는 one-time ticket이 아니다.
 
 ## 7. 비범위
 

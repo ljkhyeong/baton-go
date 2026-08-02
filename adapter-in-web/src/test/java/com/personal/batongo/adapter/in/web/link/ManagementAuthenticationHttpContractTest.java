@@ -41,6 +41,9 @@ class ManagementAuthenticationHttpContractTest {
     private static final String BEARER_CHALLENGE =
             "Bearer realm=\"baton-go-management\"";
     private static final String IDEMPOTENCY_KEY = "8e448211-66ae-44ab-9888-c4960648c22b";
+    private static final String BATON_TARGET_PATH =
+            "/teams/8e448211-66ae-44ab-9888-c4960648c22b"
+                    + "/seasons/713d9cb7-2842-4f9f-b3cc-e31d98c6238a";
 
     private SmartLinkUseCase useCase;
     private MockMvc mockMvc;
@@ -128,10 +131,10 @@ class ManagementAuthenticationHttpContractTest {
                         .content("""
                                 {
                                   "targetSystem": "BATON",
-                                  "targetPath": "/teams/team-1",
+                                  "targetPath": "%s",
                                   "purpose": "NAVIGATION"
                                 }
-                                """))
+                                """.formatted(BATON_TARGET_PATH)))
                 .andExpect(status().isUnauthorized())
                 .andExpect(header().string(HttpHeaders.WWW_AUTHENTICATE, BEARER_CHALLENGE))
                 .andExpect(jsonPath("$.code")
@@ -144,10 +147,10 @@ class ManagementAuthenticationHttpContractTest {
         return """
                 {
                   "targetSystem": "BATON",
-                  "targetPath": "/teams/team-1",
+                  "targetPath": "%s",
                   "purpose": "NAVIGATION"
                 }
-                """;
+                """.formatted(BATON_TARGET_PATH);
     }
 
     private CreatedLinkResult createdLink() {
@@ -155,7 +158,7 @@ class ManagementAuthenticationHttpContractTest {
                 new LinkResult(
                         UUID.fromString("83a430c4-5c5d-4eb4-a815-7a5ba1fd4aae"),
                         TargetSystem.BATON,
-                        "/teams/team-1",
+                        BATON_TARGET_PATH,
                         LinkPurpose.NAVIGATION,
                         null,
                         Instant.parse("2026-07-30T10:00:00Z"),

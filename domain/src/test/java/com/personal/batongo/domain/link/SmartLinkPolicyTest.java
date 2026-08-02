@@ -12,6 +12,9 @@ class SmartLinkPolicyTest {
 
     private static final Instant CREATED_AT = Instant.parse("2026-07-29T10:00:00Z");
     private static final String CODE_HASH = "a".repeat(64);
+    private static final String BATON_PATH =
+            "/teams/8e448211-66ae-44ab-9888-c4960648c22b"
+                    + "/seasons/713d9cb7-2842-4f9f-b3cc-e31d98c6238a";
 
     @Test
     @DisplayName("활성 시작 시각과 정확히 같으면 링크를 해석할 수 있다")
@@ -80,7 +83,7 @@ class SmartLinkPolicyTest {
                 UUID.randomUUID(),
                 CODE_HASH,
                 TargetSystem.BATON,
-                "/teams/00000000-0000-0000-0000-000000000000",
+                BATON_PATH,
                 LinkPurpose.NAVIGATION,
                 notBefore,
                 expiresAt,

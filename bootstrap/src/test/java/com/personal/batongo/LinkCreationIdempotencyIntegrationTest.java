@@ -3,7 +3,9 @@ package com.personal.batongo;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.head;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -13,6 +15,7 @@ import com.personal.batongo.application.link.error.IdempotencyKeyConflictExcepti
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.CreateLinkCommand;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.CreatedLinkResult;
+import com.personal.batongo.application.link.port.out.LinkCodePort;
 import com.personal.batongo.application.link.port.out.LinkCreationReservationPort;
 import com.personal.batongo.application.link.port.out.SmartLinkRepository;
 import com.personal.batongo.domain.link.LinkPurpose;
@@ -70,6 +73,9 @@ class LinkCreationIdempotencyIntegrationTest {
             "8e448211-66ae-44ab-9888-c4960648c22b";
     private static final String ROLLBACK_IDEMPOTENCY_KEY =
             "7606bb52-2837-4359-bca4-d7f295b64fe4";
+    private static final String CANONICAL_BATON_TARGET =
+            "/teams/8e448211-66ae-44ab-9888-c4960648c22b"
+                    + "/seasons/713d9cb7-2842-4f9f-b3cc-e31d98c6238a";
 
     @Container
     @ServiceConnection
@@ -83,6 +89,9 @@ class LinkCreationIdempotencyIntegrationTest {
 
     @Autowired
     private SmartLinkRepository smartLinkRepository;
+
+    @Autowired
+    private LinkCodePort linkCodePort;
 
     @Autowired
     private EntityManager entityManager;
@@ -101,8 +110,8 @@ class LinkCreationIdempotencyIntegrationTest {
                 UUID.fromString("7f7386b7-8a34-46c9-ae20-606d95a63bb2"),
                 "a".repeat(64),
                 TargetSystem.BATON,
-                "/teams/persist-check",
-                LinkPurpose.RESOURCE_OPEN,
+                CANONICAL_BATON_TARGET,
+                LinkPurpose.NAVIGATION,
                 null,
                 null,
                 Instant.parse("2026-07-31T00:00:00Z")
@@ -141,7 +150,7 @@ class LinkCreationIdempotencyIntegrationTest {
     @Test
     @DisplayName("정의되지 않은 링크 생성 필드는 저장 전에 400으로 거부한다")
     void rejectsUnknownCreationFieldBeforePersistence() throws Exception {
-        String targetPath = "/room/unknown-json-field";
+        String targetPath = "/room/2345-6789-abcd";
 
         mockMvc.perform(post("/api/v1/links")
                         .header(
@@ -171,6 +180,82 @@ class LinkCreationIdempotencyIntegrationTest {
                 Long.class,
                 targetPath
         )).isZero();
+    }
+
+    @Test
+    @DisplayName("알려진 값으로 만든 비허용 target은 링크와 예약을 남기지 않고 400으로 거부한다")
+    void rejectsKnownInvalidTargetBeforePersistence() throws Exception {
+        String idempotencyKey = "64fd6ee4-2559-4623-b1d9-b89167a7307f";
+
+        mockMvc.perform(post("/api/v1/links")
+                        .header(
+                                HttpHeaders.AUTHORIZATION,
+                                "Bearer test-management-token-that-is-long-enough"
+                        )
+                        .header("Idempotency-Key", idempotencyKey)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "targetSystem": "BATON",
+                                  "targetPath": "%s",
+                                  "purpose": "MEETING_ENTRY"
+                                }
+                                """.formatted(CANONICAL_BATON_TARGET)))
+                .andExpect(status().isBadRequest())
+                .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
+                .andExpect(jsonPath("$.code").value("INVALID_LINK"))
+                .andExpect(jsonPath("$.requestId").isNotEmpty());
+
+        assertThat(jdbcTemplate.queryForObject(
+                """
+                        SELECT COUNT(*)
+                        FROM smart_links
+                        WHERE target_system = 'BATON'
+                          AND target_path = ?
+                          AND purpose = 'MEETING_ENTRY'
+                        """,
+                Long.class,
+                CANONICAL_BATON_TARGET
+        )).isZero();
+        assertThat(jdbcTemplate.queryForObject(
+                """
+                        SELECT COUNT(*)
+                        FROM link_creation_requests
+                        WHERE idempotency_key_hash = ?
+                        """,
+                Long.class,
+                linkCodePort.hashIdempotencyKey(idempotencyKey)
+        )).isZero();
+    }
+
+    @Test
+    @DisplayName("저장된 비허용 target은 GET과 HEAD에서 존재를 숨기고 리다이렉트하지 않는다")
+    void hidesStoredTargetPolicyViolationFromGetAndHead() throws Exception {
+        String rawCode = "A".repeat(22);
+        insertStoredLink(
+                "ae1e4899-d73f-42f6-82cf-43cc1723939f",
+                rawCode,
+                "BATON",
+                "/teams/legacy-target",
+                "NAVIGATION"
+        );
+
+        assertStoredTargetIsHidden(rawCode);
+    }
+
+    @Test
+    @DisplayName("저장된 알 수 없는 enum은 GET과 HEAD에서 존재를 숨기고 리다이렉트하지 않는다")
+    void hidesUnknownStoredEnumFromGetAndHead() throws Exception {
+        String rawCode = "B".repeat(22);
+        insertStoredLink(
+                "70f147f2-b02a-4a63-bc27-bf60e44db591",
+                rawCode,
+                "LEGACY",
+                CANONICAL_BATON_TARGET,
+                "NAVIGATION"
+        );
+
+        assertStoredTargetIsHidden(rawCode);
     }
 
     @Test
@@ -267,7 +352,7 @@ class LinkCreationIdempotencyIntegrationTest {
         CreateLinkCommand command = new CreateLinkCommand(
                 new CreationIdempotencyKey(ROLLBACK_IDEMPOTENCY_KEY),
                 TargetSystem.ROUND,
-                "/room/rollback-owner",
+                "/room/mnpq-rstu-vwxy",
                 LinkPurpose.MEETING_ENTRY,
                 null,
                 null
@@ -344,6 +429,57 @@ class LinkCreationIdempotencyIntegrationTest {
             controllableReservationPort.reset();
             executor.shutdownNow();
         }
+    }
+
+    private void insertStoredLink(
+            String linkId,
+            String rawCode,
+            String targetSystem,
+            String targetPath,
+            String purpose
+    ) {
+        jdbcTemplate.update(
+                """
+                        INSERT INTO smart_links (
+                            id,
+                            code_hash,
+                            target_system,
+                            target_path,
+                            purpose,
+                            created_at,
+                            version
+                        ) VALUES (UUID_TO_BIN(?), ?, ?, ?, ?, UTC_TIMESTAMP(6), 0)
+                        """,
+                linkId,
+                linkCodePort.hash(rawCode),
+                targetSystem,
+                targetPath,
+                purpose
+        );
+    }
+
+    private void assertStoredTargetIsHidden(String rawCode) throws Exception {
+        String requestId = "stored-target-policy-test";
+
+        mockMvc.perform(get("/l/{code}", rawCode)
+                        .header("X-Request-Id", requestId))
+                .andExpect(status().isNotFound())
+                .andExpect(header().doesNotExist(HttpHeaders.LOCATION))
+                .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
+                .andExpect(header().string("Referrer-Policy", "no-referrer"))
+                .andExpect(header().string("X-Request-Id", requestId))
+                .andExpect(jsonPath("$.code").value("LINK_NOT_FOUND"))
+                .andExpect(jsonPath("$.message").value("링크를 찾을 수 없습니다"))
+                .andExpect(jsonPath("$.requestId").value(requestId));
+
+        mockMvc.perform(head("/l/{code}", rawCode)
+                        .header("X-Request-Id", requestId))
+                .andExpect(status().isNotFound())
+                .andExpect(header().doesNotExist(HttpHeaders.LOCATION))
+                .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
+                .andExpect(header().string("Referrer-Policy", "no-referrer"))
+                .andExpect(header().string("X-Request-Id", requestId))
+                .andExpect(content().string(""));
     }
 
     private List<Future<CreatedLinkResult>> submitConcurrentCreations(

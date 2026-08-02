@@ -7,14 +7,17 @@ import com.personal.batongo.application.link.error.IdempotencyKeyConflictExcepti
 import com.personal.batongo.application.link.error.LinkCodeKeyBindingException;
 import com.personal.batongo.application.link.error.LinkCodeReplayMismatchException;
 import com.personal.batongo.application.link.error.LinkNotFoundException;
+import com.personal.batongo.application.link.error.StoredTargetPolicyViolationException;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.CreateLinkCommand;
 import com.personal.batongo.application.link.port.out.IssuedLinkCode;
 import com.personal.batongo.application.link.port.out.LinkCodeKeyGuardPort;
 import com.personal.batongo.application.link.port.out.LinkCodePort;
 import com.personal.batongo.application.link.port.out.LinkCreationReservationPort;
 import com.personal.batongo.application.link.port.out.SmartLinkRepository;
+import com.personal.batongo.application.link.port.out.SmartLinkRepository.StoredLinkResolution;
 import com.personal.batongo.application.link.port.out.TargetUrlPort;
 import com.personal.batongo.domain.link.LinkPurpose;
+import com.personal.batongo.domain.link.LinkValidationException;
 import com.personal.batongo.domain.link.SmartLink;
 import com.personal.batongo.domain.link.TargetSystem;
 import java.net.URI;
@@ -35,6 +38,13 @@ class SmartLinkServiceTest {
     private static final Instant NOW = Instant.parse("2026-07-29T10:00:00Z");
     private static final String RAW_CODE = "abcdefghijklmnopqrstuv";
     private static final String CODE_HASH = "b".repeat(64);
+    private static final String BATON_PATH =
+            "/teams/8e448211-66ae-44ab-9888-c4960648c22b"
+                    + "/seasons/713d9cb7-2842-4f9f-b3cc-e31d98c6238a";
+    private static final String OTHER_BATON_PATH =
+            "/teams/8e448211-66ae-44ab-9888-c4960648c22b"
+                    + "/seasons/27e436c8-e696-4477-9fa2-45e4cf37a942";
+    private static final String ROUND_PATH = "/room/abcd-efgh-jkmn";
     private static final LinkCodeDerivationIdentity DERIVATION_IDENTITY =
             new LinkCodeDerivationIdentity(
                     "hmac-sha256-link-code-v1",
@@ -50,8 +60,7 @@ class SmartLinkServiceTest {
             new InMemoryLinkCodeKeyGuardPort(DERIVATION_IDENTITY);
     private final LinkCodeKeyGuard linkCodeKeyGuard =
             new LinkCodeKeyGuard(linkCodePort, keyGuardPort);
-    private final TargetUrlPort targetUrlPort =
-            (targetSystem, targetPath) -> URI.create("https://baton.example" + targetPath);
+    private final RecordingTargetUrlPort targetUrlPort = new RecordingTargetUrlPort();
     private final SmartLinkService service = new SmartLinkService(
             repository,
             reservationPort,
@@ -67,7 +76,7 @@ class SmartLinkServiceTest {
         var created = service.createLink(new CreateLinkCommand(
                 IDEMPOTENCY_KEY,
                 TargetSystem.BATON,
-                "/teams/team-1",
+                BATON_PATH,
                 LinkPurpose.NAVIGATION,
                 null,
                 NOW.plusSeconds(300)
@@ -81,12 +90,32 @@ class SmartLinkServiceTest {
     }
 
     @Test
+    @DisplayName("비허용 대상 생성은 예약과 저장소 접근 전에 거부한다")
+    void rejectsInvalidTargetBeforeReservationAndRepository() {
+        assertThatThrownBy(() -> service.createLink(new CreateLinkCommand(
+                IDEMPOTENCY_KEY,
+                TargetSystem.BATON,
+                ROUND_PATH,
+                LinkPurpose.NAVIGATION,
+                null,
+                null
+        )))
+                .isInstanceOf(LinkValidationException.class);
+
+        assertThat(reservationPort.reservations).isEmpty();
+        assertThat(repository.links).isEmpty();
+        assertThat(repository.saveCalls).isZero();
+        assertThat(repository.findByIdCalls).isZero();
+        assertThat(repository.resolutionLookupCalls).isZero();
+    }
+
+    @Test
     @DisplayName("같은 멱등성 키와 요청은 동일한 링크와 공개 코드를 다시 반환한다")
     void replaysSameCreation() {
         CreateLinkCommand command = new CreateLinkCommand(
                 IDEMPOTENCY_KEY,
                 TargetSystem.ROUND,
-                "/room/abcd-efgh-jkmn",
+                ROUND_PATH,
                 LinkPurpose.MEETING_ENTRY,
                 null,
                 NOW.plusSeconds(300)
@@ -107,7 +136,7 @@ class SmartLinkServiceTest {
         CreateLinkCommand command = new CreateLinkCommand(
                 IDEMPOTENCY_KEY,
                 TargetSystem.ROUND,
-                "/room/abcd-efgh-jkmn",
+                ROUND_PATH,
                 LinkPurpose.MEETING_ENTRY,
                 null,
                 NOW.plusSeconds(300)
@@ -152,7 +181,7 @@ class SmartLinkServiceTest {
         assertThatThrownBy(() -> guardedService.createLink(new CreateLinkCommand(
                 IDEMPOTENCY_KEY,
                 TargetSystem.BATON,
-                "/teams/team-1",
+                BATON_PATH,
                 LinkPurpose.NAVIGATION,
                 null,
                 null
@@ -171,7 +200,7 @@ class SmartLinkServiceTest {
         CreateLinkCommand command = new CreateLinkCommand(
                 IDEMPOTENCY_KEY,
                 TargetSystem.BATON,
-                "/teams/team-1",
+                BATON_PATH,
                 LinkPurpose.NAVIGATION,
                 null,
                 NOW.plusSeconds(60)
@@ -199,7 +228,7 @@ class SmartLinkServiceTest {
         service.createLink(new CreateLinkCommand(
                 IDEMPOTENCY_KEY,
                 TargetSystem.BATON,
-                "/teams/team-1",
+                BATON_PATH,
                 LinkPurpose.NAVIGATION,
                 null,
                 NOW.plusSeconds(300)
@@ -208,7 +237,7 @@ class SmartLinkServiceTest {
         assertThatThrownBy(() -> service.createLink(new CreateLinkCommand(
                 IDEMPOTENCY_KEY,
                 TargetSystem.BATON,
-                "/teams/team-2",
+                OTHER_BATON_PATH,
                 LinkPurpose.NAVIGATION,
                 null,
                 NOW.plusSeconds(300)
@@ -223,8 +252,8 @@ class SmartLinkServiceTest {
         var created = service.createLink(new CreateLinkCommand(
                 IDEMPOTENCY_KEY,
                 TargetSystem.BATON,
-                "/roles/role-1",
-                LinkPurpose.RESOURCE_OPEN,
+                BATON_PATH,
+                LinkPurpose.NAVIGATION,
                 null,
                 null
         ));
@@ -232,7 +261,58 @@ class SmartLinkServiceTest {
         var resolved = service.resolveLink(created.rawCode());
 
         assertThat(resolved.id()).isEqualTo(created.link().id());
-        assertThat(resolved.destination()).isEqualTo(URI.create("https://baton.example/roles/role-1"));
+        assertThat(resolved.destination()).isEqualTo(URI.create("https://baton.example" + BATON_PATH));
+        assertThat(targetUrlPort.calls).isEqualTo(1);
+        assertThat(targetUrlPort.lastTargetSystem).isEqualTo(TargetSystem.BATON);
+        assertThat(targetUrlPort.lastTargetPath).isEqualTo(BATON_PATH);
+    }
+
+    @Test
+    @DisplayName("저장된 known enum 대상이 정책을 위반하면 수명주기보다 먼저 숨긴다")
+    void hidesKnownStoredPolicyViolationBeforeLifecycleCheck() {
+        UUID storedLinkId = UUID.fromString("de76ea51-f895-49bc-b345-30f429ebf4cc");
+        repository.storeResolution(CODE_HASH, new StoredLinkResolution(
+                storedLinkId,
+                TargetSystem.BATON.name(),
+                ROUND_PATH,
+                LinkPurpose.NAVIGATION.name(),
+                NOW.plusSeconds(60),
+                NOW.plusSeconds(120),
+                null
+        ));
+
+        assertThatThrownBy(() -> service.resolveLink(RAW_CODE))
+                .isExactlyInstanceOf(StoredTargetPolicyViolationException.class)
+                .extracting(exception ->
+                        ((StoredTargetPolicyViolationException) exception).linkId())
+                .isEqualTo(storedLinkId);
+
+        assertThat(repository.resolutionLookupCalls).isEqualTo(1);
+        assertThat(targetUrlPort.calls).isZero();
+    }
+
+    @Test
+    @DisplayName("저장된 unknown enum 표식은 수명주기보다 먼저 존재를 숨긴다")
+    void hidesUnknownStoredEnumBeforeLifecycleCheck() {
+        UUID storedLinkId = UUID.fromString("922280cf-58fb-44d7-bb71-46c894878e3f");
+        repository.storeResolution(CODE_HASH, new StoredLinkResolution(
+                storedLinkId,
+                "BATON_LEGACY",
+                BATON_PATH,
+                LinkPurpose.NAVIGATION.name(),
+                NOW.plusSeconds(60),
+                NOW.plusSeconds(120),
+                null
+        ));
+
+        assertThatThrownBy(() -> service.resolveLink(RAW_CODE))
+                .isExactlyInstanceOf(StoredTargetPolicyViolationException.class)
+                .extracting(exception ->
+                        ((StoredTargetPolicyViolationException) exception).linkId())
+                .isEqualTo(storedLinkId);
+
+        assertThat(repository.resolutionLookupCalls).isEqualTo(1);
+        assertThat(targetUrlPort.calls).isZero();
     }
 
     @Test
@@ -249,7 +329,7 @@ class SmartLinkServiceTest {
         var created = service.createLink(new CreateLinkCommand(
                 IDEMPOTENCY_KEY,
                 TargetSystem.BATON,
-                "/teams/team-1",
+                BATON_PATH,
                 LinkPurpose.NAVIGATION,
                 null,
                 null
@@ -368,19 +448,40 @@ class SmartLinkServiceTest {
         }
     }
 
+    private static final class RecordingTargetUrlPort implements TargetUrlPort {
+
+        private int calls;
+        private TargetSystem lastTargetSystem;
+        private String lastTargetPath;
+
+        @Override
+        public URI resolve(TargetSystem targetSystem, String targetPath) {
+            calls++;
+            lastTargetSystem = targetSystem;
+            lastTargetPath = targetPath;
+            return URI.create("https://baton.example" + targetPath);
+        }
+    }
+
     private static final class InMemoryRepository implements SmartLinkRepository {
 
         private final Map<UUID, SmartLink> links = new HashMap<>();
+        private final Map<String, StoredLinkResolution> storedResolutions = new HashMap<>();
         private final Set<UUID> lockedLinkIds = new HashSet<>();
+        private int saveCalls;
+        private int findByIdCalls;
+        private int resolutionLookupCalls;
 
         @Override
         public SmartLink save(SmartLink smartLink) {
+            saveCalls++;
             links.put(smartLink.getId(), smartLink);
             return smartLink;
         }
 
         @Override
         public Optional<SmartLink> findById(UUID id) {
+            findByIdCalls++;
             return Optional.ofNullable(links.get(id));
         }
 
@@ -391,10 +492,31 @@ class SmartLinkServiceTest {
         }
 
         @Override
-        public Optional<SmartLink> findByCodeHash(String codeHash) {
+        public Optional<StoredLinkResolution> findResolutionByCodeHash(String codeHash) {
+            resolutionLookupCalls++;
+            StoredLinkResolution storedResolution = storedResolutions.get(codeHash);
+            if (storedResolution != null) {
+                return Optional.of(storedResolution);
+            }
             return links.values().stream()
                     .filter(link -> link.getCodeHash().equals(codeHash))
+                    .map(link -> new StoredLinkResolution(
+                            link.getId(),
+                            link.getTargetSystem().name(),
+                            link.getTargetPath(),
+                            link.getPurpose().name(),
+                            link.getNotBefore(),
+                            link.getExpiresAt(),
+                            link.getRevokedAt()
+                    ))
                     .findFirst();
+        }
+
+        private void storeResolution(
+                String codeHash,
+                StoredLinkResolution storedResolution
+        ) {
+            storedResolutions.put(codeHash, storedResolution);
         }
     }
 }

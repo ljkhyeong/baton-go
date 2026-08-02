@@ -1,5 +1,6 @@
 package com.personal.batongo.adapter.in.web.link;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -23,13 +24,16 @@ import com.personal.batongo.application.link.error.IdempotencyKeyConflictExcepti
 import com.personal.batongo.application.link.error.LinkCodeKeyBindingException;
 import com.personal.batongo.application.link.error.LinkCodeReplayMismatchException;
 import com.personal.batongo.application.link.error.LinkNotFoundException;
+import com.personal.batongo.application.link.error.StoredTargetPolicyViolationException;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.CreatedLinkResult;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.LinkResult;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.ResolvedLinkResult;
 import com.personal.batongo.domain.link.LinkPurpose;
 import com.personal.batongo.domain.link.LinkUnavailableException;
+import com.personal.batongo.domain.link.LinkValidationException;
 import com.personal.batongo.domain.link.TargetSystem;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.net.URI;
 import java.time.Instant;
 import java.util.UUID;
@@ -46,20 +50,29 @@ class LinkHttpContractTest {
     private static final UUID LINK_ID = UUID.fromString("83a430c4-5c5d-4eb4-a815-7a5ba1fd4aae");
     private static final String IDEMPOTENCY_KEY = "8e448211-66ae-44ab-9888-c4960648c22b";
     private static final Instant CREATED_AT = Instant.parse("2026-07-29T10:00:00Z");
+    private static final String BATON_TARGET_PATH =
+            "/teams/8e448211-66ae-44ab-9888-c4960648c22b"
+                    + "/seasons/713d9cb7-2842-4f9f-b3cc-e31d98c6238a";
+    private static final String BATON_DESTINATION = "https://baton.example" + BATON_TARGET_PATH;
+    private static final String TARGET_POLICY_VIOLATION_METRIC =
+            "baton.go.public.resolver.target.contract.violations";
+    private static final String PUBLIC_NOT_FOUND_REQUEST_ID = "public-not-found-contract";
 
     private SmartLinkUseCase useCase;
+    private SimpleMeterRegistry meterRegistry;
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
         useCase = mock(SmartLinkUseCase.class);
+        meterRegistry = new SimpleMeterRegistry();
         LinkManagementController managementController = new LinkManagementController(
                 useCase,
                 new PublicLinkProperties(URI.create("https://go.example"))
         );
         LinkResolverController resolverController = new LinkResolverController(useCase);
         mockMvc = MockMvcBuilders.standaloneSetup(managementController, resolverController)
-                .setControllerAdvice(new GlobalExceptionHandler())
+                .setControllerAdvice(new GlobalExceptionHandler(meterRegistry))
                 .addFilters(new RequestIdFilter())
                 .build();
     }
@@ -80,11 +93,11 @@ class LinkHttpContractTest {
                         .content("""
                                 {
                                   "targetSystem": "BATON",
-                                  "targetPath": "/teams/team-1",
+                                  "targetPath": "%s",
                                   "purpose": "NAVIGATION",
                                   "expiresAt": "2026-07-30T10:00:00Z"
                                 }
-                                """))
+                                """.formatted(BATON_TARGET_PATH)))
                 .andExpect(status().isCreated())
                 .andExpect(header().string("Location", "/api/v1/links/" + LINK_ID))
                 .andExpect(header().string(
@@ -97,7 +110,7 @@ class LinkHttpContractTest {
                 .andExpect(jsonPath("$.shortUrl")
                         .value("https://go.example/l/VOvLShvx93kQpj8x7w2HYQ"))
                 .andExpect(jsonPath("$.targetSystem").value("BATON"))
-                .andExpect(jsonPath("$.targetPath").value("/teams/team-1"))
+                .andExpect(jsonPath("$.targetPath").value(BATON_TARGET_PATH))
                 .andExpect(jsonPath("$.purpose").value("NAVIGATION"))
                 .andExpect(jsonPath("$.createdAt").value("2026-07-29T10:00:00Z"));
     }
@@ -117,11 +130,11 @@ class LinkHttpContractTest {
                         .content("""
                                 {
                                   "targetSystem": "BATON",
-                                  "targetPath": "/teams/team-1",
+                                  "targetPath": "%s",
                                   "purpose": "NAVIGATION",
                                   "expiresAt": "2026-07-30T10:00:00Z"
                                 }
-                                """))
+                                """.formatted(BATON_TARGET_PATH)))
                 .andExpect(status().isOk())
                 .andExpect(header().string("Location", "/api/v1/links/" + LINK_ID))
                 .andExpect(header().string(
@@ -144,11 +157,11 @@ class LinkHttpContractTest {
                         .content("""
                                 {
                                   "targetSystem": "BATON",
-                                  "targetPath": "/teams/team-1",
+                                  "targetPath": "%s",
                                   "purpose": "NAVIGATION",
                                   "expiresAt": "2026-07-30T10:00:00Z"
                                 }
-                                """))
+                                """.formatted(BATON_TARGET_PATH)))
                 .andExpect(status().isInternalServerError())
                 .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
                 .andExpect(jsonPath("$.code").value("LINK_CODE_REPLAY_UNAVAILABLE"))
@@ -168,10 +181,10 @@ class LinkHttpContractTest {
                         .content("""
                                 {
                                   "targetSystem": "BATON",
-                                  "targetPath": "/teams/team-1",
+                                  "targetPath": "%s",
                                   "purpose": "NAVIGATION"
                                 }
-                                """))
+                                """.formatted(BATON_TARGET_PATH)))
                 .andExpect(status().isInternalServerError())
                 .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
                 .andExpect(jsonPath("$.code").value("LINK_CODE_CONFIGURATION_MISMATCH"))
@@ -191,7 +204,7 @@ class LinkHttpContractTest {
                 .andExpect(header().exists(RequestIdFilter.HEADER_NAME))
                 .andExpect(jsonPath("$.id").value(LINK_ID.toString()))
                 .andExpect(jsonPath("$.targetSystem").value("BATON"))
-                .andExpect(jsonPath("$.targetPath").value("/teams/team-1"))
+                .andExpect(jsonPath("$.targetPath").value(BATON_TARGET_PATH))
                 .andExpect(jsonPath("$.purpose").value("NAVIGATION"))
                 .andExpect(jsonPath("$.shortUrl").doesNotExist());
     }
@@ -246,10 +259,10 @@ class LinkHttpContractTest {
                         .content("""
                                 {
                                   "targetSystem": "BATON",
-                                  "targetPath": "/teams/team-1",
+                                  "targetPath": "%s",
                                   "purpose": "NAVIGATION"
                                 }
-                                """))
+                                """.formatted(BATON_TARGET_PATH)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_IDEMPOTENCY_KEY"))
                 .andExpect(jsonPath("$.requestId").isNotEmpty());
@@ -265,9 +278,9 @@ class LinkHttpContractTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
-                                  "targetSystem": "BATON",
-                                  "targetPath": "/teams/team-2",
-                                  "purpose": "NAVIGATION"
+                                  "targetSystem": "ROUND",
+                                  "targetPath": "/room/abcd-efgh-jkmn",
+                                  "purpose": "MEETING_ENTRY"
                                 }
                                 """))
                 .andExpect(status().isConflict())
@@ -315,12 +328,12 @@ class LinkHttpContractTest {
         when(useCase.resolveLink("VOvLShvx93kQpj8x7w2HYQ"))
                 .thenReturn(new ResolvedLinkResult(
                         LINK_ID,
-                        URI.create("https://baton.example/teams/team-1")
+                        URI.create(BATON_DESTINATION)
                 ));
 
         mockMvc.perform(get("/l/VOvLShvx93kQpj8x7w2HYQ"))
                 .andExpect(status().isFound())
-                .andExpect(header().string("Location", "https://baton.example/teams/team-1"))
+                .andExpect(header().string("Location", BATON_DESTINATION))
                 .andExpect(header().string("Cache-Control", "no-store"))
                 .andExpect(header().string("Referrer-Policy", "no-referrer"))
                 .andExpect(header().exists(RequestIdFilter.HEADER_NAME));
@@ -332,12 +345,12 @@ class LinkHttpContractTest {
         String rawCode = "VOvLShvx93kQpj8x7w2HYQ";
         when(useCase.resolveLink(rawCode)).thenReturn(new ResolvedLinkResult(
                 LINK_ID,
-                URI.create("https://baton.example/teams/team-1")
+                URI.create(BATON_DESTINATION)
         ));
 
         mockMvc.perform(head("/l/{code}", rawCode))
                 .andExpect(status().isFound())
-                .andExpect(header().string("Location", "https://baton.example/teams/team-1"))
+                .andExpect(header().string("Location", BATON_DESTINATION))
                 .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
                 .andExpect(header().string("Referrer-Policy", "no-referrer"))
                 .andExpect(header().exists(RequestIdFilter.HEADER_NAME))
@@ -364,6 +377,129 @@ class LinkHttpContractTest {
                 .andExpect(jsonPath("$.requestId").isNotEmpty());
     }
 
+    @Test
+    @DisplayName("일반 미존재와 저장 target 계약 위반 GET은 같은 공개 404이며 위반만 기록한다")
+    void hidesStoredTargetPolicyViolationLikeMissingLinkForGet() throws Exception {
+        String missingCode = "missing-link-code";
+        when(useCase.resolveLink(missingCode)).thenThrow(new LinkNotFoundException());
+
+        String missingBody = performPublicNotFoundGet(missingCode);
+
+        assertThat(storedTargetPolicyViolationCount()).isZero();
+
+        String violatingCode = "stored-policy-violation";
+        when(useCase.resolveLink(violatingCode))
+                .thenThrow(new StoredTargetPolicyViolationException(LINK_ID));
+
+        String violationBody = performPublicNotFoundGet(violatingCode);
+
+        assertThat(violationBody).isEqualTo(missingBody);
+        assertThat(storedTargetPolicyViolationCount()).isEqualTo(1.0d);
+    }
+
+    @Test
+    @DisplayName("일반 미존재와 저장 target 계약 위반 HEAD는 같은 본문 없는 404이며 위반만 기록한다")
+    void hidesStoredTargetPolicyViolationLikeMissingLinkForHead() throws Exception {
+        String missingCode = "missing-link-code";
+        when(useCase.resolveLink(missingCode)).thenThrow(new LinkNotFoundException());
+
+        performPublicNotFoundHead(missingCode);
+
+        assertThat(storedTargetPolicyViolationCount()).isZero();
+
+        String violatingCode = "stored-policy-violation";
+        when(useCase.resolveLink(violatingCode))
+                .thenThrow(new StoredTargetPolicyViolationException(LINK_ID));
+
+        performPublicNotFoundHead(violatingCode);
+
+        assertThat(storedTargetPolicyViolationCount()).isEqualTo(1.0d);
+    }
+
+    @Test
+    @DisplayName("알려진 값의 비허용 target 조합은 안정된 400 INVALID_LINK로 응답한다")
+    void rejectsKnownDisallowedTargetCombinationAsInvalidLink() throws Exception {
+        String message = "대상 시스템, 목적과 경로가 v1 신뢰 대상 계약에 맞지 않습니다";
+        when(useCase.createLink(any())).thenThrow(new LinkValidationException(message));
+
+        mockMvc.perform(post("/api/v1/links")
+                        .header(LinkManagementController.IDEMPOTENCY_KEY_HEADER, IDEMPOTENCY_KEY)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "targetSystem": "BATON",
+                                  "targetPath": "%s",
+                                  "purpose": "MEETING_ENTRY"
+                                }
+                                """.formatted(BATON_TARGET_PATH)))
+                .andExpect(status().isBadRequest())
+                .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
+                .andExpect(header().string("Referrer-Policy", "no-referrer"))
+                .andExpect(jsonPath("$.code").value("INVALID_LINK"))
+                .andExpect(jsonPath("$.message").value(message))
+                .andExpect(jsonPath("$.requestId").isNotEmpty());
+    }
+
+    @Test
+    @DisplayName("알려지지 않은 target enum 문자열은 400 INVALID_REQUEST로 응답한다")
+    void rejectsUnknownTargetEnumAsInvalidRequest() throws Exception {
+        mockMvc.perform(post("/api/v1/links")
+                        .header(LinkManagementController.IDEMPOTENCY_KEY_HEADER, IDEMPOTENCY_KEY)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "targetSystem": "UNKNOWN_SYSTEM",
+                                  "targetPath": "%s",
+                                  "purpose": "NAVIGATION"
+                                }
+                                """.formatted(BATON_TARGET_PATH)))
+                .andExpect(status().isBadRequest())
+                .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
+                .andExpect(header().string("Referrer-Policy", "no-referrer"))
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
+                .andExpect(jsonPath("$.message").value("요청 형식이 올바르지 않습니다"))
+                .andExpect(jsonPath("$.requestId").isNotEmpty());
+
+        verifyNoMoreInteractions(useCase);
+    }
+
+    private String performPublicNotFoundGet(String rawCode) throws Exception {
+        return mockMvc.perform(get("/l/{code}", rawCode)
+                        .header(RequestIdFilter.HEADER_NAME, PUBLIC_NOT_FOUND_REQUEST_ID))
+                .andExpect(status().isNotFound())
+                .andExpect(header().doesNotExist(HttpHeaders.LOCATION))
+                .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
+                .andExpect(header().string("Referrer-Policy", "no-referrer"))
+                .andExpect(header().string(
+                        RequestIdFilter.HEADER_NAME,
+                        PUBLIC_NOT_FOUND_REQUEST_ID
+                ))
+                .andExpect(jsonPath("$.code").value("LINK_NOT_FOUND"))
+                .andExpect(jsonPath("$.message").value("링크를 찾을 수 없습니다"))
+                .andExpect(jsonPath("$.requestId").value(PUBLIC_NOT_FOUND_REQUEST_ID))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+    }
+
+    private void performPublicNotFoundHead(String rawCode) throws Exception {
+        mockMvc.perform(head("/l/{code}", rawCode)
+                        .header(RequestIdFilter.HEADER_NAME, PUBLIC_NOT_FOUND_REQUEST_ID))
+                .andExpect(status().isNotFound())
+                .andExpect(header().doesNotExist(HttpHeaders.LOCATION))
+                .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
+                .andExpect(header().string("Referrer-Policy", "no-referrer"))
+                .andExpect(header().string(
+                        RequestIdFilter.HEADER_NAME,
+                        PUBLIC_NOT_FOUND_REQUEST_ID
+                ))
+                .andExpect(content().string(""));
+    }
+
+    private double storedTargetPolicyViolationCount() {
+        return meterRegistry.counter(TARGET_POLICY_VIOLATION_METRIC).count();
+    }
+
     private LinkResult linkResult() {
         return linkResult(null);
     }
@@ -372,7 +508,7 @@ class LinkHttpContractTest {
         return new LinkResult(
                 LINK_ID,
                 TargetSystem.BATON,
-                "/teams/team-1",
+                BATON_TARGET_PATH,
                 LinkPurpose.NAVIGATION,
                 null,
                 Instant.parse("2026-07-30T10:00:00Z"),

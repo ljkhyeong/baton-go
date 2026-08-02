@@ -50,6 +50,9 @@ class LinkCodeKeyGuardIntegrationTest {
 
     private static final String SAFE_MESSAGE =
             "링크 코드 파생 키를 현재 데이터베이스에 안전하게 결합할 수 없습니다";
+    private static final String CANONICAL_BATON_TARGET =
+            "/teams/8e448211-66ae-44ab-9888-c4960648c22b"
+                    + "/seasons/713d9cb7-2842-4f9f-b3cc-e31d98c6238a";
 
     @Container
     @ServiceConnection
@@ -104,8 +107,7 @@ class LinkCodeKeyGuardIntegrationTest {
         unbind();
 
         assertThatThrownBy(() -> smartLinkUseCase.createLink(command(
-                "40743730-ea7e-4d9d-a490-df10726c4926",
-                "/teams/unbound-create"
+                "40743730-ea7e-4d9d-a490-df10726c4926"
         )))
                 .isInstanceOf(LinkCodeKeyBindingException.class)
                 .hasMessage(SAFE_MESSAGE);
@@ -133,8 +135,7 @@ class LinkCodeKeyGuardIntegrationTest {
                 .hasMessageNotContaining(current.hmacFingerprint())
                 .hasMessageNotContaining(different.hmacFingerprint());
         assertThatThrownBy(() -> smartLinkUseCase.createLink(command(
-                "4ab8831d-78c6-47c2-b984-e2723e818245",
-                "/teams/mismatched-key"
+                "4ab8831d-78c6-47c2-b984-e2723e818245"
         )))
                 .isInstanceOf(LinkCodeKeyBindingException.class)
                 .hasMessage(SAFE_MESSAGE);
@@ -146,8 +147,7 @@ class LinkCodeKeyGuardIntegrationTest {
     @DisplayName("기존 링크가 있는 데이터베이스의 미결합 sentinel은 자동 결합하지 않는다")
     void rejectsUnboundDatabaseWithExistingLink() {
         smartLinkUseCase.createLink(command(
-                "0508cdd2-3b3d-4728-820a-36c135531574",
-                "/teams/existing-link"
+                "0508cdd2-3b3d-4728-820a-36c135531574"
         ));
         unbind();
 
@@ -237,11 +237,11 @@ class LinkCodeKeyGuardIntegrationTest {
         return identity;
     }
 
-    private CreateLinkCommand command(String idempotencyKey, String targetPath) {
+    private CreateLinkCommand command(String idempotencyKey) {
         return new CreateLinkCommand(
                 new CreationIdempotencyKey(idempotencyKey),
                 TargetSystem.BATON,
-                targetPath,
+                CANONICAL_BATON_TARGET,
                 LinkPurpose.NAVIGATION,
                 null,
                 null

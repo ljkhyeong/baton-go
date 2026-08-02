@@ -67,9 +67,14 @@ public class SmartLink {
     ) {
         this.id = Objects.requireNonNull(id, "링크 식별자는 필수입니다");
         this.codeHash = requireCodeHash(codeHash);
-        this.targetSystem = Objects.requireNonNull(targetSystem, "대상 시스템은 필수입니다");
-        this.targetPath = TargetPath.normalize(targetPath);
-        this.purpose = Objects.requireNonNull(purpose, "링크 목적은 필수입니다");
+        TrustedTarget trustedTarget = TrustedTargetPolicy.requireAllowed(
+                targetSystem,
+                purpose,
+                targetPath
+        );
+        this.targetSystem = trustedTarget.targetSystem();
+        this.purpose = trustedTarget.purpose();
+        this.targetPath = trustedTarget.targetPath();
         this.notBefore = notBefore;
         this.expiresAt = expiresAt;
         this.createdAt = Objects.requireNonNull(createdAt, "생성 시각은 필수입니다");
@@ -99,25 +104,12 @@ public class SmartLink {
     }
 
     public void requireResolvableAt(Instant now) {
-        Objects.requireNonNull(now, "판정 시각은 필수입니다");
-        if (revokedAt != null) {
-            throw new LinkUnavailableException(
-                    LinkUnavailableException.Reason.REVOKED,
-                    "폐기된 링크입니다"
-            );
-        }
-        if (notBefore != null && now.isBefore(notBefore)) {
-            throw new LinkUnavailableException(
-                    LinkUnavailableException.Reason.NOT_ACTIVE,
-                    "아직 사용할 수 없는 링크입니다"
-            );
-        }
-        if (expiresAt != null && !now.isBefore(expiresAt)) {
-            throw new LinkUnavailableException(
-                    LinkUnavailableException.Reason.EXPIRED,
-                    "만료된 링크입니다"
-            );
-        }
+        LinkAvailabilityPolicy.requireResolvableAt(
+                revokedAt,
+                notBefore,
+                expiresAt,
+                now
+        );
     }
 
     public void revoke(Instant now) {

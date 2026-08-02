@@ -56,13 +56,13 @@ public class PublicResolverRateLimitFilter extends OncePerRequestFilter {
             HttpServletResponse response,
             FilterChain filterChain
     ) throws ServletException, IOException {
+        response.setHeader("Referrer-Policy", "no-referrer");
         RateLimitDecision decision = rateLimiter.acquire();
         if (!decision.allowed()) {
             response.setHeader(
                     HttpHeaders.RETRY_AFTER,
                     Long.toString(decision.retryAfterSeconds())
             );
-            response.setHeader("Referrer-Policy", "no-referrer");
             errorResponseWriter.write(
                     request,
                     response,

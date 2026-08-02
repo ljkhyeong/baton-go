@@ -1,6 +1,7 @@
 package com.personal.batongo.application.link.port.out;
 
 import com.personal.batongo.domain.link.SmartLink;
+import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -12,5 +13,16 @@ public interface SmartLinkRepository {
 
     Optional<SmartLink> findByIdForUpdate(UUID id);
 
-    Optional<SmartLink> findByCodeHash(String codeHash);
+    Optional<StoredLinkResolution> findResolutionByCodeHash(String codeHash);
+
+    record StoredLinkResolution(
+            UUID id,
+            String targetSystem,
+            String targetPath,
+            String purpose,
+            Instant notBefore,
+            Instant expiresAt,
+            Instant revokedAt
+    ) {
+    }
 }

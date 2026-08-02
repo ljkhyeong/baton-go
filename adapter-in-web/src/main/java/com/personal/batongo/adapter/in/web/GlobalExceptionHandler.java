@@ -6,14 +6,17 @@ import com.personal.batongo.application.link.error.IdempotencyKeyConflictExcepti
 import com.personal.batongo.application.link.error.LinkCodeKeyBindingException;
 import com.personal.batongo.application.link.error.LinkCodeReplayMismatchException;
 import com.personal.batongo.application.link.error.LinkNotFoundException;
+import com.personal.batongo.application.link.error.StoredTargetPolicyViolationException;
 import com.personal.batongo.domain.link.LinkUnavailableException;
 import com.personal.batongo.domain.link.LinkValidationException;
+import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.Objects;
-import org.springframework.beans.TypeMismatchException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.TypeMismatchException;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
@@ -29,13 +32,35 @@ import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExcep
 public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     private static final Logger LOG = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+    private static final String TARGET_POLICY_VIOLATION_METRIC =
+            "baton.go.public.resolver.target.contract.violations";
+
+    private final MeterRegistry meterRegistry;
+
+    public GlobalExceptionHandler(MeterRegistry meterRegistry) {
+        this.meterRegistry = Objects.requireNonNull(meterRegistry, "meterRegistry");
+    }
+
+    @ExceptionHandler(StoredTargetPolicyViolationException.class)
+    public ResponseEntity<ErrorResponse> handleStoredTargetPolicyViolation(
+            StoredTargetPolicyViolationException exception,
+            HttpServletRequest request
+    ) {
+        recordStoredTargetPolicyViolation(exception, request);
+        return handleNotFound(exception, request);
+    }
 
     @ExceptionHandler({InvalidLinkCodeException.class, LinkNotFoundException.class})
     public ResponseEntity<ErrorResponse> handleNotFound(
             RuntimeException exception,
             HttpServletRequest request
     ) {
-        return error(HttpStatus.NOT_FOUND, "LINK_NOT_FOUND", exception.getMessage(), request);
+        return error(
+                HttpStatus.NOT_FOUND,
+                "LINK_NOT_FOUND",
+                "링크를 찾을 수 없습니다",
+                request
+        );
     }
 
     @ExceptionHandler(LinkUnavailableException.class)
@@ -191,6 +216,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         HttpHeaders responseHeaders = new HttpHeaders();
         responseHeaders.putAll(headers);
         responseHeaders.set(HttpHeaders.CACHE_CONTROL, "no-store");
+        responseHeaders.set("Referrer-Policy", "no-referrer");
         Object responseBody = body instanceof ErrorResponse
                 ? body
                 : frameworkError(status, request);
@@ -226,13 +252,17 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
             String message,
             HttpServletRequest request
     ) {
-        return ResponseEntity.status(status)
-                .header(HttpHeaders.CACHE_CONTROL, "no-store")
-                .body(new ErrorResponse(
+        ErrorResponse body = HttpMethod.HEAD.matches(request.getMethod())
+                ? null
+                : new ErrorResponse(
                         code,
                         message,
                         RequestIdFilter.requestId(request)
-                ));
+                );
+        return ResponseEntity.status(status)
+                .header(HttpHeaders.CACHE_CONTROL, "no-store")
+                .header("Referrer-Policy", "no-referrer")
+                .body(body);
     }
 
     private ErrorResponse frameworkError(HttpStatusCode status, WebRequest request) {
@@ -268,5 +298,17 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     private void logUnexpected(Exception exception, HttpServletRequest request) {
         String requestId = request == null ? null : RequestIdFilter.requestId(request);
         LOG.error("예상하지 못한 요청 처리 오류 requestId={}", requestId, exception);
+    }
+
+    private void recordStoredTargetPolicyViolation(
+            StoredTargetPolicyViolationException exception,
+            HttpServletRequest request
+    ) {
+        meterRegistry.counter(TARGET_POLICY_VIOLATION_METRIC).increment();
+        LOG.error(
+                "저장된 링크 대상 계약 위반 linkId={} requestId={}",
+                exception.linkId(),
+                RequestIdFilter.requestId(request)
+        );
     }
 }

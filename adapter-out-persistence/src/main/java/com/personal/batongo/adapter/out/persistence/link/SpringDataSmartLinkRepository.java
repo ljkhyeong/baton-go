@@ -15,5 +15,4 @@ public interface SpringDataSmartLinkRepository extends JpaRepository<SmartLink, 
     @Query("select smartLink from SmartLink smartLink where smartLink.id = :id")
     Optional<SmartLink> findByIdForUpdate(@Param("id") UUID id);
 
-    Optional<SmartLink> findByCodeHash(String codeHash);
 }

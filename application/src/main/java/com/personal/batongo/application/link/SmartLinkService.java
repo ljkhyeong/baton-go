@@ -3,14 +3,19 @@ package com.personal.batongo.application.link;
 import com.personal.batongo.application.link.error.IdempotencyKeyConflictException;
 import com.personal.batongo.application.link.error.LinkCodeReplayMismatchException;
 import com.personal.batongo.application.link.error.LinkNotFoundException;
+import com.personal.batongo.application.link.error.StoredTargetPolicyViolationException;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase;
 import com.personal.batongo.application.link.port.out.IssuedLinkCode;
 import com.personal.batongo.application.link.port.out.LinkCodePort;
 import com.personal.batongo.application.link.port.out.LinkCreationReservationPort;
 import com.personal.batongo.application.link.port.out.SmartLinkRepository;
+import com.personal.batongo.application.link.port.out.SmartLinkRepository.StoredLinkResolution;
 import com.personal.batongo.application.link.port.out.TargetUrlPort;
+import com.personal.batongo.domain.link.LinkAvailabilityPolicy;
+import com.personal.batongo.domain.link.LinkValidationException;
 import com.personal.batongo.domain.link.SmartLink;
-import com.personal.batongo.domain.link.TargetPath;
+import com.personal.batongo.domain.link.TrustedTarget;
+import com.personal.batongo.domain.link.TrustedTargetPolicy;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -48,11 +53,15 @@ public class SmartLinkService implements SmartLinkUseCase {
 
     @Override
     public CreatedLinkResult createLink(CreateLinkCommand command) {
+        String targetPath = TrustedTargetPolicy.requireAllowed(
+                command.targetSystem(),
+                command.purpose(),
+                command.targetPath()
+        ).targetPath();
         linkCodeKeyGuard.verifyBound();
         Instant now = databaseTime();
         Instant notBefore = databaseTime(command.notBefore());
         Instant expiresAt = databaseTime(command.expiresAt());
-        String targetPath = TargetPath.normalize(command.targetPath());
         String idempotencyKey = command.idempotencyKey().value();
         String idempotencyKeyHash = linkCodePort.hashIdempotencyKey(idempotencyKey);
         LinkCreationReservationPort.Reservation reservation = reservationPort.reserve(
@@ -99,12 +108,30 @@ public class SmartLinkService implements SmartLinkUseCase {
     @Transactional(readOnly = true)
     public ResolvedLinkResult resolveLink(String rawCode) {
         String codeHash = linkCodePort.hash(rawCode);
-        SmartLink smartLink = repository.findByCodeHash(codeHash)
+        StoredLinkResolution storedLink = repository.findResolutionByCodeHash(codeHash)
                 .orElseThrow(LinkNotFoundException::new);
-        smartLink.requireResolvableAt(databaseTime());
+        TrustedTarget trustedTarget;
+        try {
+            trustedTarget = TrustedTargetPolicy.requireAllowed(
+                    storedLink.targetSystem(),
+                    storedLink.purpose(),
+                    storedLink.targetPath()
+            );
+        } catch (LinkValidationException exception) {
+            throw new StoredTargetPolicyViolationException(storedLink.id());
+        }
+        LinkAvailabilityPolicy.requireResolvableAt(
+                storedLink.revokedAt(),
+                storedLink.notBefore(),
+                storedLink.expiresAt(),
+                databaseTime()
+        );
         return new ResolvedLinkResult(
-                smartLink.getId(),
-                targetUrlPort.resolve(smartLink.getTargetSystem(), smartLink.getTargetPath())
+                storedLink.id(),
+                targetUrlPort.resolve(
+                        trustedTarget.targetSystem(),
+                        trustedTarget.targetPath()
+                )
         );
     }
 

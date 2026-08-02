@@ -364,6 +364,13 @@ projection 조회에서 링크별로 GO를 호출하지 않는다.
 - resolver가 DB의 계약 위반 target을 발견하면 존재 여부를 드러내지 않도록
   `404 LINK_NOT_FOUND`로 응답하고 `Location`을 반환하지 않는다. 수동 DB 적재나 잘못된
   migration도 우회 경로가 되어서는 안 된다.
+- GO resolver는 저장된 enum을 raw 문자열로 읽은 뒤 같은 exact 정책을 적용한다. 따라서
+  알려진 값의 비허용 조합뿐 아니라 알 수 없는 enum도 `GET`과 `HEAD`에서 같은
+  `404 LINK_NOT_FOUND`로 숨기고 redirect하지 않는다.
+- 저장 target 계약 위반마다
+  `baton.go.public.resolver.target.contract.violations` metric을 증가시키고 linkId와 requestId만
+  포함한 안전한 로그를 남긴다. 공개 코드, target path와 전체 short URL은 metric tag나 로그에
+  넣지 않는다.
 - 새 target system, purpose 조합 또는 path template는 PRD·ADR·도메인 정책·HTTP 계약 테스트와
   대상 서비스 E2E를 함께 변경해야 한다. origin 설정만 추가해서 확장하지 않는다.
 
@@ -371,7 +378,7 @@ projection 조회에서 링크별로 GO를 호출하지 않는다.
 
 | 항목 | 현재 상태 | 공개 전 필수 조치 |
 | --- | --- | --- |
-| GO 일반 path 안전성 | 구현됨 | exact 조합·template를 생성과 resolution 양쪽에서 강제 |
+| GO exact target 계약 | 생성·resolution과 위반 metric·안전 로그 구현됨 | 계약 전 저장 데이터를 inventory하고 비허용 링크 폐기·재발급 |
 | BATON workspace route | 구현됨 | v1은 기존 access key 보유 브라우저 복귀로만 노출 |
 | BATON 신규 브라우저 진입 | 미구현 | 계정·초대·claim landing 계약 전에는 지원 표시 금지 |
 | ROUND landing·pre-join | 구현됨 | canonical path E2E 고정 |
@@ -383,7 +390,8 @@ projection 조회에서 링크별로 GO를 호출하지 않는다.
 | 호출자 원격 생성·폐기 | 미구현 | ordered outbox, idempotent worker, cancel tombstone과 create→revoke 수렴 구현 |
 | ROUND signaling 확장 | 단일 process 상태 | 외부 상태 저장 전에는 단일 signaling replica로 운영 |
 
-이 표의 미구현 항목 때문에 현재 공개 production rollout은 승인되지 않는다.
+이 표의 미구현·미연결 항목과 완료되지 않은 계약 전 데이터 inventory 때문에 현재 공개
+production rollout은 승인되지 않는다.
 
 ## 10. 계약 검증 시나리오
 

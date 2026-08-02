@@ -8,7 +8,7 @@ BATON GO는 단순 URL 축약기가 아니라 BATON과 ROUND를 위한 정책형
 
 - canonical UUID 멱등성 키와 HMAC 기반 128-bit 공개 코드 발급
 - 원문 코드 대신 SHA-256 해시 저장
-- `BATON`, `ROUND` 신뢰 대상과 안전한 origin-relative path만 허용
+- `BATON`, `ROUND`의 v1 exact target 조합과 canonical locator만 생성·해석
 - 시작 시각, 만료 시각과 즉시 폐기
 - 공개 `GET·HEAD /l/{code}` 리다이렉트
 - 관리용 `/api/v1/links` 생성·조회·폐기 API
@@ -45,8 +45,14 @@ ROUND + MEETING_ENTRY /room/{roomId}
 ROUND 경로는 pre-join landing일 뿐 입장 권한이 아니다. BATON session과 CSRF 확인 뒤 발급되는
 짧은 수명의 participation grant가 실제 admission을 통제한다. 정확한 식별자 문법, endpoint,
 cookie와 현재 운영 차단 조건은 [교차 서비스 링크 계약](docs/PRD/0003_cross-service-link-contract/spec.md)을
-따른다. 현재 코드는 아직 이 exact 조합을 강제하지 않으므로 공개 production 준비 완료로
-간주하지 않는다.
+따른다. GO는 생성과 공개 resolution 양쪽에서 이 exact 조합을 fail-closed로 강제한다. 저장된
+비허용 target이나 알 수 없는 enum도 redirect하지 않고 `404 LINK_NOT_FOUND`로 숨긴다. 이때
+`baton.go.public.resolver.target.contract.violations` metric을 증가시키고 linkId와 requestId만
+포함한 안전한 로그를 남기며 공개 코드, target path와 전체 short URL은 기록하지 않는다.
+
+exact target 정책 구현만으로 공개 production 준비가 끝난 것은 아니다. 계약 강화 전 저장
+데이터를 inventory해 비허용 링크를 폐기·재발급해야 하며, PRD-0003의 BATON session·grant,
+room mapping, 동일 origin edge, 호출자 outbox 등 나머지 gate도 모두 통과해야 한다.
 
 BATON mode 운영에서는 `BATON_GO_BATON_BASE_URL`과 `BATON_GO_ROUND_BASE_URL`을 같은 BATON
 public HTTPS origin으로 설정한다. edge가 `/room/**`·`/round-ui/**`는 ROUND web으로,

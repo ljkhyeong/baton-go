@@ -35,6 +35,7 @@ class ManagementAuthenticationFilterTest {
 
         assertThat(response.getStatus()).isEqualTo(401);
         assertThat(response.getHeader("Cache-Control")).isEqualTo("no-store");
+        assertThat(response.getHeader("Referrer-Policy")).isEqualTo("no-referrer");
         assertThat(response.getHeader(HttpHeaders.WWW_AUTHENTICATE))
                 .isEqualTo(BEARER_CHALLENGE);
         assertThat(response.getContentAsString())

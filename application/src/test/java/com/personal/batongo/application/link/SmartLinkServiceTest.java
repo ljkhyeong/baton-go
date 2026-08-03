@@ -15,6 +15,7 @@ import com.personal.batongo.application.link.port.out.LinkCodePort;
 import com.personal.batongo.application.link.port.out.LinkCreationReservationPort;
 import com.personal.batongo.application.link.port.out.SmartLinkRepository;
 import com.personal.batongo.application.link.port.out.SmartLinkRepository.StoredLinkResolution;
+import com.personal.batongo.application.link.port.out.SmartLinkRepository.StoredLinkSnapshot;
 import com.personal.batongo.application.link.port.out.TargetUrlPort;
 import com.personal.batongo.domain.link.LinkPurpose;
 import com.personal.batongo.domain.link.LinkValidationException;
@@ -24,8 +25,10 @@ import java.net.URI;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -365,6 +368,80 @@ class SmartLinkServiceTest {
         assertThat(repository.lockedLinkIds).containsOnly(missingLinkId);
     }
 
+    @Test
+    @DisplayName("관리 조회와 폐기는 저장된 비허용 대상을 찾을 수 없음으로 숨긴다")
+    void hidesStoredTargetPolicyViolationFromManagementOperations() {
+        UUID linkId = UUID.fromString("de76ea51-f895-49bc-b345-30f429ebf4cc");
+        repository.storeSnapshot(new StoredLinkSnapshot(
+                linkId,
+                TargetSystem.BATON.name(),
+                ROUND_PATH,
+                LinkPurpose.NAVIGATION.name(),
+                null,
+                null,
+                null,
+                NOW.minusSeconds(60),
+                3L,
+                false
+        ));
+
+        assertThatThrownBy(() -> service.getLink(linkId))
+                .isExactlyInstanceOf(LinkNotFoundException.class);
+        assertThatThrownBy(() -> service.revokeLink(linkId))
+                .isExactlyInstanceOf(LinkNotFoundException.class);
+
+        assertThat(repository.revokeStoredCalls).isZero();
+    }
+
+    @Test
+    @DisplayName("관리 조회와 폐기는 저장된 알 수 없는 enum을 찾을 수 없음으로 숨긴다")
+    void hidesUnknownStoredEnumFromManagementOperations() {
+        UUID linkId = UUID.fromString("922280cf-58fb-44d7-bb71-46c894878e3f");
+        repository.storeSnapshot(new StoredLinkSnapshot(
+                linkId,
+                "BATON_LEGACY",
+                BATON_PATH,
+                LinkPurpose.NAVIGATION.name(),
+                null,
+                null,
+                null,
+                NOW.minusSeconds(60),
+                4L,
+                true
+        ));
+
+        assertThatThrownBy(() -> service.getLink(linkId))
+                .isExactlyInstanceOf(LinkNotFoundException.class);
+        assertThatThrownBy(() -> service.revokeLink(linkId))
+                .isExactlyInstanceOf(LinkNotFoundException.class);
+
+        assertThat(repository.revokeStoredCalls).isZero();
+    }
+
+    @Test
+    @DisplayName("관리 폐기는 서버 시각이 생성 시각보다 빠르면 저장하지 않는다")
+    void rejectsManagedRevocationBeforeCreationTime() {
+        UUID linkId = UUID.fromString("7b9358c1-cb15-4b06-b21c-1d3e4ee889ea");
+        repository.storeSnapshot(new StoredLinkSnapshot(
+                linkId,
+                TargetSystem.BATON.name(),
+                BATON_PATH,
+                LinkPurpose.NAVIGATION.name(),
+                null,
+                null,
+                null,
+                NOW.plusSeconds(1),
+                0L,
+                true
+        ));
+
+        assertThatThrownBy(() -> service.revokeLink(linkId))
+                .isExactlyInstanceOf(IllegalStateException.class)
+                .hasMessage("폐기 시각은 생성 시각보다 빠를 수 없습니다");
+
+        assertThat(repository.revokeStoredCalls).isZero();
+    }
+
     private static final class FixedLinkCodePort implements LinkCodePort {
 
         private final String rawCode;
@@ -467,15 +544,19 @@ class SmartLinkServiceTest {
 
         private final Map<UUID, SmartLink> links = new HashMap<>();
         private final Map<String, StoredLinkResolution> storedResolutions = new HashMap<>();
+        private final Map<UUID, StoredLinkSnapshot> storedSnapshots = new HashMap<>();
+        private final Map<UUID, Long> versions = new HashMap<>();
         private final Set<UUID> lockedLinkIds = new HashSet<>();
         private int saveCalls;
         private int findByIdCalls;
         private int resolutionLookupCalls;
+        private int revokeStoredCalls;
 
         @Override
         public SmartLink save(SmartLink smartLink) {
             saveCalls++;
             links.put(smartLink.getId(), smartLink);
+            versions.putIfAbsent(smartLink.getId(), 0L);
             return smartLink;
         }
 
@@ -483,12 +564,6 @@ class SmartLinkServiceTest {
         public Optional<SmartLink> findById(UUID id) {
             findByIdCalls++;
             return Optional.ofNullable(links.get(id));
-        }
-
-        @Override
-        public Optional<SmartLink> findByIdForUpdate(UUID id) {
-            lockedLinkIds.add(id);
-            return findById(id);
         }
 
         @Override
@@ -512,11 +587,106 @@ class SmartLinkServiceTest {
                     .findFirst();
         }
 
+        @Override
+        public Optional<StoredLinkSnapshot> findStoredById(UUID id) {
+            StoredLinkSnapshot snapshot = storedSnapshots.get(id);
+            if (snapshot != null) {
+                return Optional.of(snapshot);
+            }
+            return Optional.ofNullable(links.get(id)).map(link -> new StoredLinkSnapshot(
+                    link.getId(),
+                    link.getTargetSystem().name(),
+                    link.getTargetPath(),
+                    link.getPurpose().name(),
+                    link.getNotBefore(),
+                    link.getExpiresAt(),
+                    link.getRevokedAt(),
+                    link.getCreatedAt(),
+                    versions.getOrDefault(link.getId(), 0L),
+                    true
+            ));
+        }
+
+        @Override
+        public Optional<StoredLinkSnapshot> findStoredByIdForUpdate(UUID id) {
+            lockedLinkIds.add(id);
+            return findStoredById(id);
+        }
+
+        @Override
+        public List<StoredLinkSnapshot> scanStoredAfter(UUID afterLinkId, int limit) {
+            return links.keySet().stream()
+                    .map(this::findStoredById)
+                    .flatMap(Optional::stream)
+                    .filter(snapshot -> afterLinkId == null
+                            || compareUnsigned(snapshot.id(), afterLinkId) > 0)
+                    .sorted(Comparator.comparing(
+                            StoredLinkSnapshot::id,
+                            InMemoryRepository::compareUnsigned
+                    ))
+                    .limit(limit)
+                    .toList();
+        }
+
+        @Override
+        public boolean revokeStoredIfVersion(
+                UUID id,
+                long expectedVersion,
+                Instant revokedAt
+        ) {
+            revokeStoredCalls++;
+            StoredLinkSnapshot snapshot = storedSnapshots.get(id);
+            if (snapshot != null) {
+                if (snapshot.version() != expectedVersion || snapshot.revokedAt() != null) {
+                    return false;
+                }
+                storedSnapshots.put(id, new StoredLinkSnapshot(
+                        snapshot.id(),
+                        snapshot.targetSystem(),
+                        snapshot.targetPath(),
+                        snapshot.purpose(),
+                        snapshot.notBefore(),
+                        snapshot.expiresAt(),
+                        revokedAt,
+                        snapshot.createdAt(),
+                        snapshot.version() + 1,
+                        snapshot.creationRequestPresent()
+                ));
+                return true;
+            }
+
+            SmartLink link = links.get(id);
+            long version = versions.getOrDefault(id, 0L);
+            if (link == null || link.getRevokedAt() != null || version != expectedVersion) {
+                return false;
+            }
+            link.revoke(revokedAt);
+            versions.put(id, version + 1);
+            return true;
+        }
+
         private void storeResolution(
                 String codeHash,
                 StoredLinkResolution storedResolution
         ) {
             storedResolutions.put(codeHash, storedResolution);
+        }
+
+        private void storeSnapshot(StoredLinkSnapshot storedLinkSnapshot) {
+            storedSnapshots.put(storedLinkSnapshot.id(), storedLinkSnapshot);
+        }
+
+        private static int compareUnsigned(UUID left, UUID right) {
+            int mostSignificant = Long.compareUnsigned(
+                    left.getMostSignificantBits(),
+                    right.getMostSignificantBits()
+            );
+            return mostSignificant != 0
+                    ? mostSignificant
+                    : Long.compareUnsigned(
+                            left.getLeastSignificantBits(),
+                            right.getLeastSignificantBits()
+                    );
         }
     }
 }

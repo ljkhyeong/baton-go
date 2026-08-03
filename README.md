@@ -54,6 +54,30 @@ exact target 정책 구현만으로 공개 production 준비가 끝난 것은 �
 데이터를 inventory해 비허용 링크를 폐기·재발급해야 하며, PRD-0003의 BATON session·grant,
 room mapping, 동일 origin edge, 호출자 outbox 등 나머지 gate도 모두 통과해야 한다.
 
+### 계약 전 데이터 inventory와 정리
+
+legacy target 정리는 자동 bulk 작업이 아니다. 기본 비활성화된 operations API로 raw 행을
+안전한 metadata만 포함해 inventory하고, 원본 domain owner가 승인한 link ID를 version과 함께
+한 건씩 재검증·폐기한다. API 응답에는 target path, raw enum, code hash, short URL과
+idempotency hash가 포함되지 않는다.
+
+maintenance window에는 private ingress에서만 다음 값을 잠시 활성화한다.
+
+```text
+BATON_GO_TARGET_CONTRACT_OPERATIONS_ENABLED=true
+BATON_GO_TARGET_CONTRACT_OPERATIONS_PRIVATE_INGRESS_CONFIRMED=true
+```
+
+두 번째 값은 public edge에서 해당 경로가 차단됐다는 preflight evidence를 확인한 뒤에만
+설정한다. 확인 flag 자체가 network boundary를 만들지는 않는다. 둘 중 하나라도 `false`이면
+operations controller는 등록되지 않는다.
+
+재발급은 GO가 legacy path를 교정해서 수행하지 않는다. BATON 또는 ROUND의 원본 aggregate
+소유자가 authoritative mapping과 새 canonical UUID intent로 정상 생성 API를 호출한다. 전체
+절차와 완료 조건은
+[target contract v1 정리 runbook](docs/RUNBOOK/target-contract-v1-remediation.md)을 따른다.
+operations 구현과 테스트 DB 검증만으로 배포 DB inventory gate를 완료 처리하지 않는다.
+
 BATON mode 운영에서는 `BATON_GO_BATON_BASE_URL`과 `BATON_GO_ROUND_BASE_URL`을 같은 BATON
 public HTTPS origin으로 설정한다. edge가 `/room/**`·`/round-ui/**`는 ROUND web으로,
 participation-grant refresh는 BATON으로, signaling·TURN만 ROUND 내부 서비스로 라우팅한다.
@@ -178,3 +202,5 @@ curl -i http://localhost:8080/api/v1/links \
 - [멱등한 링크 생성](docs/ADR/0003_idempotent-link-creation/adr.md)
 - [링크 코드 HMAC 키와 DB 결합](docs/ADR/0004_link-code-key-binding/adr.md)
 - [Typed target locator](docs/ADR/0005_trusted-target-locator/adr.md)
+- [계약 전 target 정리](docs/ADR/0006_target-contract-remediation/adr.md)
+- [Target contract v1 정리 runbook](docs/RUNBOOK/target-contract-v1-remediation.md)

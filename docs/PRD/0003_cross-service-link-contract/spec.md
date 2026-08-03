@@ -378,7 +378,7 @@ projection 조회에서 링크별로 GO를 호출하지 않는다.
 
 | 항목 | 현재 상태 | 공개 전 필수 조치 |
 | --- | --- | --- |
-| GO exact target 계약 | 생성·resolution과 위반 metric·안전 로그 구현됨 | 계약 전 저장 데이터를 inventory하고 비허용 링크 폐기·재발급 |
+| GO exact target 계약 | 생성·resolution, 안전한 inventory와 개별 remediation 구현됨 | 배포 DB 전체 inventory를 실행하고 비허용 링크 폐기·재발급 증거 확정 |
 | BATON workspace route | 구현됨 | v1은 기존 access key 보유 브라우저 복귀로만 노출 |
 | BATON 신규 브라우저 진입 | 미구현 | 계정·초대·claim landing 계약 전에는 지원 표시 금지 |
 | ROUND landing·pre-join | 구현됨 | canonical path E2E 고정 |
@@ -390,8 +390,9 @@ projection 조회에서 링크별로 GO를 호출하지 않는다.
 | 호출자 원격 생성·폐기 | 미구현 | ordered outbox, idempotent worker, cancel tombstone과 create→revoke 수렴 구현 |
 | ROUND signaling 확장 | 단일 process 상태 | 외부 상태 저장 전에는 단일 signaling replica로 운영 |
 
-이 표의 미구현·미연결 항목과 완료되지 않은 계약 전 데이터 inventory 때문에 현재 공개
-production rollout은 승인되지 않는다.
+operations API와 runbook 구현만으로 production 데이터 정리가 완료된 것은 아니다. 이 표의
+미구현·미연결 항목과 배포 DB에서 실행·확정되지 않은 계약 전 데이터 inventory 때문에 현재
+공개 production rollout은 승인되지 않는다.
 
 ## 10. 계약 검증 시나리오
 

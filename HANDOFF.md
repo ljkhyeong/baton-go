@@ -37,8 +37,18 @@
   BATON은 room별 one-to-one active resource mapping과 영구 tombstone을 소유하며 v1 grant는
   `study_id=teamId`, `role=participant`로 제한한다.
 - 공개 production rollout은 아직 승인되지 않았다. 다음 우선순위는 계약 전 저장 데이터를
-  inventory해 비허용 링크를 폐기·재발급하고, PRD-0003의 나머지 gate를 연결하는 것이다. 이후
-  REST Docs/OpenAPI, edge/distributed rate limit, access-log 코드 마스킹과 운영 배포를 연결한다.
+  배포 DB에서 inventory해 비허용 링크를 폐기·재발급하고, PRD-0003의 나머지 gate를 연결하는
+  것이다. 이후 REST Docs/OpenAPI, edge/distributed rate limit, access-log 코드 마스킹과 운영
+  배포를 연결한다.
+- 계약 전 데이터 정리는 ADR-0006의 승인형 흐름을 따른다. 기본 비활성화된 operations API는
+  raw target을 응답하지 않고 모든 행의 compliance, 폐기 상태, 예약 존재 여부와 DB version만
+  keyset pagination으로 제공한다. 자동 bulk revoke는 없으며 승인된 non-compliant link ID만
+  raw row lock과 version 재검증 뒤 멱등 폐기한다.
+- operations는 enable과 private-ingress-confirmed가 모두 true일 때만 등록한다. 두 번째 flag는
+  public edge 차단 preflight evidence 뒤에만 설정하며 실제 network boundary를 대신하지 않는다.
+- GO는 legacy target을 교정해 재발급하지 않는다. 원본 BATON/ROUND owner가 authoritative
+  mapping과 새 intent UUID로 정상 생성한 뒤 이전 링크를 폐기한다. 실제 배포 DB 전체 재스캔과
+  `unrevoked non-compliant=0`, 미승인 `HOLD=0` 증거 전에는 inventory gate를 완료 처리하지 않는다.
 - BATON과 ROUND 저장소에는 이번에도 통합 코드를 추가하지 않았다. 두 저장소는 실제 route와
   권한 경계를 읽기 전용으로 확인했다.
 - 계정 기반 사용자·역할 권한은 BATON P3 identity 이전에 구현된 것으로 주장하지 않는다.

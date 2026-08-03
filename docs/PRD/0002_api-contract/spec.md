@@ -29,6 +29,9 @@
 - 지원하지 않는 요청 본문 형식: `415 UNSUPPORTED_MEDIA_TYPE`
 - 공개 resolver 처리 한도 초과: `429 RATE_LIMIT_EXCEEDED`
 - 허용되지 않은 target system·purpose·locator 조합: `400 INVALID_LINK`
+- target contract operations의 inventory 요청 값 오류: `400 INVALID_REQUEST`
+- compliant 링크에 remediation 폐기를 요청함: `409 REMEDIATION_NOT_APPLICABLE`
+- inventory 뒤 변경된 링크에 remediation 폐기를 요청함: `409 REMEDIATION_STALE`
 - 예상하지 못한 오류: `500`
 
 관리 인증 `401` 응답에는
@@ -126,6 +129,92 @@ Idempotency-Key: 8e448211-66ae-44ab-9888-c4960648c22b
 관리용 Bearer credential이 필요하다. 폐기는 멱등이며 같은 링크를 다시 폐기해도 최초
 `revokedAt`을 유지한 현재 상태를 `200 OK`로 반환한다. 응답 형식은 관리 조회와 같고
 원문 공개 코드나 `shortUrl`은 포함하지 않는다.
+
+저장 target이 현재 v1 계약을 위반하면 일반 관리 조회와 폐기도 raw target을 응답하지 않고
+`404 LINK_NOT_FOUND`로 숨긴다. 계약 전 데이터 정리는 아래의 별도 operations 계약만 사용한다.
+
+## Target contract v1 operations
+
+이 API는 계약 전 저장 데이터의 일회성 inventory와 승인된 개별 폐기를 위한 관리 기능이다.
+기본값은 비활성화이며 maintenance window에 public edge 차단을 검증한 뒤
+`BATON_GO_TARGET_CONTRACT_OPERATIONS_ENABLED=true`와
+`BATON_GO_TARGET_CONTRACT_OPERATIONS_PRIVATE_INGRESS_CONFIRMED=true`를 모두 설정해야 등록한다.
+확인 flag는 네트워크 차단을 대신하지 않으며, 기존 관리 Bearer credential과 private ingress를
+모두 요구한다.
+
+모든 성공·실패 응답은 `Cache-Control: no-store`, `Referrer-Policy: no-referrer`와
+`X-Request-Id`를 반환한다. 비활성 상태에서는 일반 미등록 경로와 같은
+`404 RESOURCE_NOT_FOUND`다.
+
+### GET `/api/v1/operations/link-target-contract-v1/inventory`
+
+query parameter:
+
+- `afterLinkId`: 선택적 UUID cursor. 해당 ID 다음 행부터 읽는다.
+- `limit`: 기본 `100`, 최소 `1`, 최대 `500`이다.
+
+DB primary key 순서의 keyset pagination으로 모든 링크를 raw 문자열 projection으로 읽고,
+도메인의 v1 exact target 정책으로 분류한다. 성공 예시는 다음과 같다.
+
+```json
+{
+  "contractVersion": "v1",
+  "items": [
+    {
+      "linkId": "00000000-0000-0000-0000-000000000000",
+      "compliance": "NON_COMPLIANT",
+      "remediationState": "UNREVOKED",
+      "creationRequestState": "PRESENT",
+      "createdAt": "2026-07-29T11:00:00Z",
+      "expiresAt": null,
+      "revokedAt": null,
+      "version": 0
+    }
+  ],
+  "nextAfterLinkId": "00000000-0000-0000-0000-000000000000",
+  "hasMore": true
+}
+```
+
+- `compliance`: `COMPLIANT`, `NON_COMPLIANT`
+- `remediationState`: `NOT_REQUIRED`, `UNREVOKED`, `REVOKED`
+- `creationRequestState`: `PRESENT`, `MISSING`
+- `hasMore=true`일 때만 `nextAfterLinkId`를 다음 cursor로 사용한다.
+- 응답에는 target path, raw target system·purpose, code hash, short URL, idempotency hash와
+  그 digest를 포함하지 않는다.
+- SQL에 target 정규식을 복제하지 않고 application의 exact 정책으로 판정한다.
+
+### PUT `/api/v1/operations/link-target-contract-v1/links/{linkId}/revocation`
+
+승인한 inventory 항목 한 건만 폐기한다. 자동 bulk revoke는 제공하지 않는다.
+
+```json
+{
+  "expectedVersion": 0
+}
+```
+
+서버는 raw 행을 잠근 뒤 exact target 정책과 version을 다시 확인한다.
+
+- compliant 행: `409 REMEDIATION_NOT_APPLICABLE`, 변경 없음
+- inventory 뒤 변경된 non-compliant 미폐기 행: `409 REMEDIATION_STALE`, 변경 없음
+- 존재하지 않는 행: `404 LINK_NOT_FOUND`
+- non-compliant 행: 최초 `revokedAt`을 보존하는 멱등 폐기와 `200 OK`
+
+```json
+{
+  "linkId": "00000000-0000-0000-0000-000000000000",
+  "contractVersion": "v1",
+  "remediationState": "REVOKED",
+  "revokedAt": "2026-08-03T00:00:00Z",
+  "alreadyRevoked": false
+}
+```
+
+이미 폐기한 non-compliant 행의 반복 요청은 같은 `revokedAt`과
+`alreadyRevoked=true`를 반환한다. target과 생성 예약 행은 수정·삭제하지 않는다. 새 링크는
+원본 aggregate 소유자가 authoritative canonical target과 새 intent UUID로 정상 생성 API를
+호출해 재발급한다.
 
 ## GET·HEAD `/l/{code}`
 

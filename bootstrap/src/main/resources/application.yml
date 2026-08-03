@@ -48,6 +48,9 @@ baton-go:
     secret: ${BATON_GO_LINK_CODE_SECRET:}
   management:
     token: ${BATON_GO_MANAGEMENT_TOKEN:}
+  target-contract-operations:
+    enabled: ${BATON_GO_TARGET_CONTRACT_OPERATIONS_ENABLED:false}
+    private-ingress-confirmed: ${BATON_GO_TARGET_CONTRACT_OPERATIONS_PRIVATE_INGRESS_CONFIRMED:false}
   public-resolver-rate-limit:
     capacity: ${BATON_GO_PUBLIC_RESOLVER_RATE_LIMIT_CAPACITY:300}
     window: ${BATON_GO_PUBLIC_RESOLVER_RATE_LIMIT_WINDOW:1m}

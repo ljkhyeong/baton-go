@@ -10,6 +10,7 @@ import com.personal.batongo.application.link.port.out.LinkCodePort;
 import com.personal.batongo.application.link.port.out.LinkCreationReservationPort;
 import com.personal.batongo.application.link.port.out.SmartLinkRepository;
 import com.personal.batongo.application.link.port.out.SmartLinkRepository.StoredLinkResolution;
+import com.personal.batongo.application.link.port.out.SmartLinkRepository.StoredLinkSnapshot;
 import com.personal.batongo.application.link.port.out.TargetUrlPort;
 import com.personal.batongo.domain.link.LinkAvailabilityPolicy;
 import com.personal.batongo.domain.link.LinkValidationException;
@@ -101,7 +102,10 @@ public class SmartLinkService implements SmartLinkUseCase {
     @Override
     @Transactional(readOnly = true)
     public LinkResult getLink(UUID linkId) {
-        return toResult(findLink(linkId));
+        StoredLinkSnapshot storedLink = repository.findStoredById(linkId)
+                .orElseThrow(LinkNotFoundException::new);
+        TrustedTarget trustedTarget = requireManagedTrustedTarget(storedLink);
+        return toResult(storedLink, trustedTarget, storedLink.revokedAt());
     }
 
     @Override
@@ -137,10 +141,25 @@ public class SmartLinkService implements SmartLinkUseCase {
 
     @Override
     public LinkResult revokeLink(UUID linkId) {
-        SmartLink smartLink = repository.findByIdForUpdate(linkId)
+        StoredLinkSnapshot storedLink = repository.findStoredByIdForUpdate(linkId)
                 .orElseThrow(LinkNotFoundException::new);
-        smartLink.revoke(databaseTime());
-        return toResult(repository.save(smartLink));
+        TrustedTarget trustedTarget = requireManagedTrustedTarget(storedLink);
+        if (storedLink.revokedAt() != null) {
+            return toResult(storedLink, trustedTarget, storedLink.revokedAt());
+        }
+
+        Instant revokedAt = databaseTime();
+        if (revokedAt.isBefore(storedLink.createdAt())) {
+            throw new IllegalStateException("폐기 시각은 생성 시각보다 빠를 수 없습니다");
+        }
+        if (!repository.revokeStoredIfVersion(
+                storedLink.id(),
+                storedLink.version(),
+                revokedAt
+        )) {
+            throw new IllegalStateException("링크 폐기 상태를 저장할 수 없습니다");
+        }
+        return toResult(storedLink, trustedTarget, revokedAt);
     }
 
     private SmartLink findLink(UUID linkId) {
@@ -188,6 +207,35 @@ public class SmartLinkService implements SmartLinkUseCase {
                 smartLink.getExpiresAt(),
                 smartLink.getRevokedAt(),
                 smartLink.getCreatedAt()
+        );
+    }
+
+    private TrustedTarget requireManagedTrustedTarget(StoredLinkSnapshot storedLink) {
+        try {
+            return TrustedTargetPolicy.requireAllowed(
+                    storedLink.targetSystem(),
+                    storedLink.purpose(),
+                    storedLink.targetPath()
+            );
+        } catch (LinkValidationException exception) {
+            throw new LinkNotFoundException();
+        }
+    }
+
+    private LinkResult toResult(
+            StoredLinkSnapshot storedLink,
+            TrustedTarget trustedTarget,
+            Instant revokedAt
+    ) {
+        return new LinkResult(
+                storedLink.id(),
+                trustedTarget.targetSystem(),
+                trustedTarget.targetPath(),
+                trustedTarget.purpose(),
+                storedLink.notBefore(),
+                storedLink.expiresAt(),
+                revokedAt,
+                storedLink.createdAt()
         );
     }
 }

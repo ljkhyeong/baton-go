@@ -2,11 +2,15 @@ package com.personal.batongo.adapter.in.web;
 
 import com.personal.batongo.application.link.error.InvalidLinkCodeException;
 import com.personal.batongo.application.link.error.InvalidIdempotencyKeyException;
+import com.personal.batongo.application.link.error.InvalidTargetContractInventoryRequestException;
+import com.personal.batongo.application.link.error.InvalidTargetContractRemediationRequestException;
 import com.personal.batongo.application.link.error.IdempotencyKeyConflictException;
 import com.personal.batongo.application.link.error.LinkCodeKeyBindingException;
 import com.personal.batongo.application.link.error.LinkCodeReplayMismatchException;
 import com.personal.batongo.application.link.error.LinkNotFoundException;
 import com.personal.batongo.application.link.error.StoredTargetPolicyViolationException;
+import com.personal.batongo.application.link.error.TargetContractRemediationNotApplicableException;
+import com.personal.batongo.application.link.error.TargetContractRemediationStaleException;
 import com.personal.batongo.domain.link.LinkUnavailableException;
 import com.personal.batongo.domain.link.LinkValidationException;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -96,6 +100,48 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
             HttpServletRequest request
     ) {
         return error(HttpStatus.BAD_REQUEST, "INVALID_LINK", exception.getMessage(), request);
+    }
+
+    @ExceptionHandler(InvalidTargetContractInventoryRequestException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidTargetContractInventoryRequest(
+            InvalidTargetContractInventoryRequestException exception,
+            HttpServletRequest request
+    ) {
+        return error(HttpStatus.BAD_REQUEST, "INVALID_REQUEST", exception.getMessage(), request);
+    }
+
+    @ExceptionHandler(InvalidTargetContractRemediationRequestException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidTargetContractRemediationRequest(
+            InvalidTargetContractRemediationRequestException exception,
+            HttpServletRequest request
+    ) {
+        return error(HttpStatus.BAD_REQUEST, "INVALID_REQUEST", exception.getMessage(), request);
+    }
+
+    @ExceptionHandler(TargetContractRemediationNotApplicableException.class)
+    public ResponseEntity<ErrorResponse> handleTargetContractRemediationNotApplicable(
+            TargetContractRemediationNotApplicableException exception,
+            HttpServletRequest request
+    ) {
+        return error(
+                HttpStatus.CONFLICT,
+                "REMEDIATION_NOT_APPLICABLE",
+                exception.getMessage(),
+                request
+        );
+    }
+
+    @ExceptionHandler(TargetContractRemediationStaleException.class)
+    public ResponseEntity<ErrorResponse> handleTargetContractRemediationStale(
+            TargetContractRemediationStaleException exception,
+            HttpServletRequest request
+    ) {
+        return error(
+                HttpStatus.CONFLICT,
+                "REMEDIATION_STALE",
+                exception.getMessage(),
+                request
+        );
     }
 
     @ExceptionHandler(InvalidIdempotencyKeyException.class)

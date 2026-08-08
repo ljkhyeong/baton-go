@@ -16,4 +16,12 @@ class LinkCodePropertiesTest {
                 .doesNotContain(secret)
                 .contains("redacted");
     }
+
+    @Test
+    @DisplayName("기존 데이터베이스 복구를 위해 링크 코드 파생 키의 원문 문법을 바꾸지 않는다")
+    void preservesLegacySecretSyntax() {
+        String legacySecret = " ".repeat(31) + "\n";
+
+        assertThat(new LinkCodeProperties(legacySecret).secret()).isSameAs(legacySecret);
+    }
 }

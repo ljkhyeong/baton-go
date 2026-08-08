@@ -336,8 +336,8 @@ class LinkHttpContractTest {
 
     @ParameterizedTest
     @CsvSource({
-            "notBefore, 0999-12-31T23:59:59.999999Z",
-            "expiresAt, 0999-12-31T23:59:59.999999Z",
+            "notBefore, 1582-10-14T23:59:59.999999Z",
+            "expiresAt, 1582-10-14T23:59:59.999999Z",
             "notBefore, +10000-01-01T00:00:00Z",
             "expiresAt, +10000-01-01T00:00:00Z",
             "notBefore, 2026-07-30T10:00:00.123456001Z",
@@ -370,7 +370,7 @@ class LinkHttpContractTest {
                 .andExpect(header().string("Referrer-Policy", "no-referrer"))
                 .andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
                 .andExpect(jsonPath("$.message")
-                        .value("notBefore와 expiresAt은 1000-01-01T00:00:00Z 이상 "
+                        .value("notBefore와 expiresAt은 1582-10-15T00:00:00Z 이상 "
                                 + "9999-12-31T23:59:59.999999Z 이하의 마이크로초 단위여야 합니다"))
                 .andExpect(jsonPath("$.requestId").isNotEmpty());
 

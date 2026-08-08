@@ -11,6 +11,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.personal.batongo.application.link.CreationIdempotencyKey;
+import com.personal.batongo.application.link.CreationTimeStoragePolicy;
 import com.personal.batongo.application.link.error.IdempotencyKeyConflictException;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.CreateLinkCommand;
@@ -177,6 +178,86 @@ class LinkCreationIdempotencyIntegrationTest {
                 FAR_FUTURE_NOW,
                 FAR_FUTURE_NOW,
                 FAR_FUTURE_NOW
+        ));
+    }
+
+    @Test
+    @DisplayName("API 지원 시각의 양쪽 경계는 MySQL raw 날짜와 재생 응답에서 그대로 보존된다")
+    void preservesSupportedTimeBoundariesInMysqlRawValuesAndReplay() throws Exception {
+        String idempotencyKey = "5b2355cf-8647-464e-a633-0f8c50ec169c";
+        String targetPath = "/room/wxyz-abcd-2345";
+        String requestBody = """
+                {
+                  "targetSystem": "ROUND",
+                  "targetPath": "%s",
+                  "purpose": "MEETING_ENTRY",
+                  "notBefore": "%s",
+                  "expiresAt": "%s"
+                }
+                """.formatted(
+                targetPath,
+                CreationTimeStoragePolicy.MINIMUM,
+                CreationTimeStoragePolicy.MAXIMUM
+        );
+
+        var createdResponse = mockMvc.perform(post("/api/v1/links")
+                        .header(
+                                HttpHeaders.AUTHORIZATION,
+                                "Bearer test-management-token-that-is-long-enough"
+                        )
+                        .header("Idempotency-Key", idempotencyKey)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody))
+                .andExpect(status().isCreated())
+                .andExpect(header().string("Idempotency-Replayed", "false"))
+                .andExpect(jsonPath("$.notBefore")
+                        .value(CreationTimeStoragePolicy.MINIMUM.toString()))
+                .andExpect(jsonPath("$.expiresAt")
+                        .value(CreationTimeStoragePolicy.MAXIMUM.toString()))
+                .andReturn()
+                .getResponse();
+        String location = createdResponse.getHeader(HttpHeaders.LOCATION);
+        assertThat(location).isNotNull();
+        UUID linkId = UUID.fromString(location.substring(location.lastIndexOf('/') + 1));
+
+        mockMvc.perform(post("/api/v1/links")
+                        .header(
+                                HttpHeaders.AUTHORIZATION,
+                                "Bearer test-management-token-that-is-long-enough"
+                        )
+                        .header("Idempotency-Key", idempotencyKey)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Idempotency-Replayed", "true"))
+                .andExpect(jsonPath("$.id").value(linkId.toString()))
+                .andExpect(jsonPath("$.notBefore")
+                        .value(CreationTimeStoragePolicy.MINIMUM.toString()))
+                .andExpect(jsonPath("$.expiresAt")
+                        .value(CreationTimeStoragePolicy.MAXIMUM.toString()));
+
+        RawBoundaryTimes rawTimes = jdbcTemplate.queryForObject(
+                """
+                        SELECT DATE_FORMAT(
+                                   not_before,
+                                   '%Y-%m-%dT%H:%i:%s.%fZ'
+                               ) AS not_before,
+                               DATE_FORMAT(
+                                   expires_at,
+                                   '%Y-%m-%dT%H:%i:%s.%fZ'
+                               ) AS expires_at
+                        FROM smart_links
+                        WHERE id = UUID_TO_BIN(?)
+                        """,
+                (resultSet, rowNumber) -> new RawBoundaryTimes(
+                        resultSet.getString("not_before"),
+                        resultSet.getString("expires_at")
+                ),
+                linkId.toString()
+        );
+        assertThat(rawTimes).isEqualTo(new RawBoundaryTimes(
+                "1582-10-15T00:00:00.000000Z",
+                "9999-12-31T23:59:59.999999Z"
         ));
     }
 
@@ -1128,6 +1209,9 @@ class LinkCreationIdempotencyIntegrationTest {
             Instant createdAt,
             Instant requestCreatedAt
     ) {
+    }
+
+    private record RawBoundaryTimes(String notBefore, String expiresAt) {
     }
 
     private record TimeColumn(

@@ -25,11 +25,14 @@ MySQL `DATETIME`은 시간대를 자체 저장하거나 변환하지 않으므�
   `DATETIME(6)`로 변환한 뒤 이전 세션 시간대를 복원한다.
 - 기존 null 허용 여부, 만료 시각 check constraint, unique constraint와 만료 인덱스는
   변경하지 않는다.
+- MySQL 자체는 `1000-01-01`부터 저장할 수 있지만 Java/JDBC 기본 `GregorianCalendar`는
+  1582년 이전 날짜에 Julian cutover를 적용해 raw 날짜를 이동시킬 수 있다. API 지원
+  최소값은 raw SQL과 같은 proleptic Gregorian 날짜가 보존되는
+  `1582-10-15T00:00:00Z`로 제한한다.
 
 ## 결과
 
-- MySQL `DATETIME(6)` 범위 안에서 2038년 이후의 링크 수명주기 시각을 저장하고 재조회할
-  수 있다.
+- 지원 범위 안에서 2038년 이후의 링크 수명주기 시각을 저장하고 재조회할 수 있다.
 - DB 값에는 offset 정보가 없으므로 모든 새 persistence 경로와 운영 SQL은 UTC 의미를
   명시해야 한다.
 - 시간대가 있는 달력 의미가 필요해지면 이 저장 규칙을 재사용하지 않고 별도 `ZoneId`

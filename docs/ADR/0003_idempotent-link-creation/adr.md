@@ -27,12 +27,13 @@ BATON과 ROUND가 링크를 원격 생성할 때 서버는 저장을 완료했�
 - MySQL `INSERT IGNORE`의 unique-key 대기를 승자 선택 경계로 사용한다. 중복 insert가
   반환된 뒤에는 승자 transaction이 커밋되었으므로 일반 조회로 완성된 링크를 읽는다.
 - 같은 키와 payload는 동일 URL을 재생하고 같은 키의 다른 payload는 `409`로 거부한다.
-- 생성 payload의 `notBefore`와 `expiresAt`은 마이크로초 단위로 정확히 표현되고 MySQL
-  `DATETIME(6)`의 UTC 범위인 `1000-01-01T00:00:00Z` 이상
+- 생성 payload의 `notBefore`와 `expiresAt`은 마이크로초 단위로 정확히 표현되고 Java/JDBC가
+  proleptic Gregorian `Instant`를 MySQL `DATETIME(6)` raw 값과 동일하게 보존하는
+  `1582-10-15T00:00:00Z` 이상
   `9999-12-31T23:59:59.999999Z` 이하인 값만 받는다. 더 세밀하거나 범위 밖인 값을 DB
   정밀도·범위에 맞춰 절삭하거나 보정하면 서로 다른 요청이 같은 replay payload로 합쳐질 수
   있으므로 링크 생성 예약·저장 전에 `400 INVALID_REQUEST`로 거부한다.
-- 과거 배포가 `DATETIME(6)` 범위 안의 더 세밀한 입력을 마이크로초로 절삭해 이미 저장한
+- 과거 배포가 지원 저장 범위 안의 더 세밀한 입력을 마이크로초로 절삭해 이미 저장한
   intent만 replay-only로 호환한다. 기존 예약을 먼저 조회하고 같은 마이크로초 절삭 payload가
   저장값과 일치할 때만 재생한다. 예약이 없으면 새 행 없이 `400 INVALID_REQUEST`, 범위 밖이면
   예약 여부와 무관하게 `400 INVALID_REQUEST`다.

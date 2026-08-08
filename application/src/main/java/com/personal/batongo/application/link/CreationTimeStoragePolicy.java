@@ -5,7 +5,7 @@ import java.time.Instant;
 
 public final class CreationTimeStoragePolicy {
 
-    public static final Instant MINIMUM = Instant.parse("1000-01-01T00:00:00Z");
+    public static final Instant MINIMUM = Instant.parse("1582-10-15T00:00:00Z");
     public static final Instant MAXIMUM =
             Instant.parse("9999-12-31T23:59:59.999999Z");
 

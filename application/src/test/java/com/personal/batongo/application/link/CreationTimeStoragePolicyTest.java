@@ -16,11 +16,11 @@ import org.junit.jupiter.params.provider.MethodSource;
 class CreationTimeStoragePolicyTest {
 
     private static final String ERROR_MESSAGE =
-            "notBefore와 expiresAt은 1000-01-01T00:00:00Z 이상 "
+            "notBefore와 expiresAt은 1582-10-15T00:00:00Z 이상 "
                     + "9999-12-31T23:59:59.999999Z 이하의 마이크로초 단위여야 합니다";
 
     @Test
-    @DisplayName("생성 시각 정책은 null과 DATETIME(6)의 양쪽 UTC 경계를 허용한다")
+    @DisplayName("생성 시각 정책은 null과 지원 저장 범위의 양쪽 UTC 경계를 허용한다")
     void acceptsNullAndInclusiveDatetimeBoundaries() {
         assertThatCode(() -> CreationTimeStoragePolicy.requireStorable(null, null))
                 .doesNotThrowAnyException();
@@ -32,7 +32,7 @@ class CreationTimeStoragePolicyTest {
 
     @ParameterizedTest
     @MethodSource("unstorableTimes")
-    @DisplayName("생성 시각 정책은 DATETIME(6) 범위 밖이거나 마이크로초보다 세밀한 값을 거부한다")
+    @DisplayName("생성 시각 정책은 JDBC 안전 범위 밖이거나 마이크로초보다 세밀한 값을 거부한다")
     void rejectsOutOfRangeAndSubMicrosecondTimes(Instant unstorableTime) {
         assertThatThrownBy(() -> CreationTimeStoragePolicy.requireStorable(
                 unstorableTime,

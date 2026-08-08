@@ -23,6 +23,7 @@ import com.personal.batongo.application.link.port.out.SmartLinkRepository;
 import com.personal.batongo.domain.link.LinkPurpose;
 import com.personal.batongo.domain.link.SmartLink;
 import com.personal.batongo.domain.link.TargetSystem;
+import com.personal.batongo.domain.link.TrustedTargetPolicy;
 import jakarta.persistence.EntityManager;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -126,9 +127,11 @@ class LinkCreationIdempotencyIntegrationTest {
         SmartLink candidate = SmartLink.create(
                 UUID.fromString("7f7386b7-8a34-46c9-ae20-606d95a63bb2"),
                 "a".repeat(64),
-                TargetSystem.BATON,
-                CANONICAL_BATON_TARGET,
-                LinkPurpose.NAVIGATION,
+                TrustedTargetPolicy.requireAllowed(
+                        TargetSystem.BATON,
+                        LinkPurpose.NAVIGATION,
+                        CANONICAL_BATON_TARGET
+                ),
                 null,
                 null,
                 Instant.parse("2026-07-31T00:00:00Z")

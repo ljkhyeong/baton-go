@@ -1,7 +1,6 @@
 package com.personal.batongo.adapter.out.persistence.link;
 
 import java.time.Instant;
-import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -18,22 +17,13 @@ interface SpringDataLinkCreationRequestRepository
                 created_at
             ) VALUES (
                 :idempotencyKeyHash,
-                :linkId,
+                UUID_TO_BIN(:linkId),
                 :createdAt
             )
             """, nativeQuery = true)
     int insertIfAbsent(
             @Param("idempotencyKeyHash") String idempotencyKeyHash,
-            @Param("linkId") byte[] linkId,
+            @Param("linkId") String linkId,
             @Param("createdAt") Instant createdAt
-    );
-
-    @Query("""
-            select request
-            from LinkCreationRequestEntity request
-            where request.idempotencyKeyHash = :idempotencyKeyHash
-            """)
-    Optional<LinkCreationRequestEntity> findByIdempotencyKeyHash(
-            @Param("idempotencyKeyHash") String idempotencyKeyHash
     );
 }

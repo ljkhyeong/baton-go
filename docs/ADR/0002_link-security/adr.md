@@ -6,17 +6,32 @@
 ## 결정
 
 - 공개 코드는 별도 32자 이상 비밀과 canonical UUID 멱등성 키를 HMAC-SHA-256으로
-  결합하고 앞 16 byte를 Base64 URL-safe no-padding으로 표현한다.
+  결합하고 앞 16 byte를 Base64 URL-safe no-padding으로 표현한다. 기존 DB-key 결합과
+  복구 호환성을 위해 길이 외의 문법을 추가 제한하거나 trim·Unicode 정규화하지 않고
+  설정 문자열 그대로 사용한다.
 - DB에는 원문 코드가 아니라 SHA-256 lowercase hex 해시만 저장한다.
 - DB에는 원문 멱등성 키도 저장하지 않고 SHA-256 lowercase hex 해시만 저장한다.
 - 코드 입력은 정확한 URL-safe 형식과 길이를 검증한 뒤 해시한다.
 - 대상은 `BATON`, `ROUND` enum과 안전한 target path로 나눈다.
 - target path에는 scheme, authority, query, fragment, backslash, 제어문자와 `//` prefix를
   허용하지 않는다.
-- base URL은 환경 설정으로만 제공하고 HTTP 또는 HTTPS origin이어야 한다.
+- 공개 base URL과 target base URL은 환경 설정으로만 제공하고 경로·query·fragment·userinfo가
+  없는 HTTP 또는 HTTPS origin이어야 한다. HTTP는 `localhost`, canonical `127.0.0.0/8`
+  IPv4 literal과 IPv6 loopback literal에만 허용하며 비로컬 origin은 HTTPS를 강제한다.
 - 리다이렉트 응답은 `no-store`와 `no-referrer`를 사용한다.
-- 관리 API는 최소 32자의 환경 변수 Bearer credential로 보호한다. 이 자격은 파일럿용
-  서비스 인증이며 최종 사용자 신원 모델이 아니다.
+- 관리 API는 공백 없는 printable ASCII로 구성한 최소 32자의 환경 변수 Bearer credential로
+  보호한다. 이 자격은 파일럿용 서비스 인증이며 최종 사용자 신원 모델이 아니다.
+- credential이 담긴 Compose dotenv는 Compose parser가 읽는 데이터 파일로만 취급하고 셸에서
+  `source`하지 않는다. 호스트 실행은 secret manager나 IDE가 process environment에 직접
+  주입해 parser 변환이나 셸 확장 없이 설정 문자열을 보존한다.
+- HMAC 비밀, 관리 credential과 DB password는 Spring placeholder가 다시 해석하지 않는 raw
+  process environment 경계에서 읽는다. `${...}`, backslash와 공백을 포함한 값도 각 credential
+  자체의 문법 검증 전까지 원문 바이트를 보존하며 서버와 guard-tool이 같은 값을 사용한다.
+  해당 process environment 값이 존재하면 command line, JVM system property와
+  `SPRING_APPLICATION_JSON`의 동일 canonical property보다 우선한다.
+- raw 보존 경계는 Compose dotenv parsing 이후의 process environment다. dotenv 값 자체에
+  literal `${...}`가 필요하면 single-quoted value로 interpolation을 막고, server와 guard-tool에
+  동일한 parsing 결과를 주입한다.
 - token, access key와 전체 Authorization 값을 로그에 기록하지 않는다.
 - 멱등성 키, 링크 코드 파생 비밀과 전체 short URL을 로그에 기록하지 않는다.
 

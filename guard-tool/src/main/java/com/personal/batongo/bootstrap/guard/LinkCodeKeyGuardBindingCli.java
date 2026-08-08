@@ -14,13 +14,18 @@ import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.util.Arrays;
 import java.util.Map;
+import java.util.Set;
 
+/** 기존 데이터베이스 HMAC guard 최초 결합을 위한 one-shot CLI입니다. */
 public final class LinkCodeKeyGuardBindingCli {
 
     static final int EXIT_USAGE = 2;
     static final int EXIT_VERIFICATION_FAILED = 3;
     private static final String CONFIRMATION = "--confirm-writers-stopped";
-    private static final String PLACEHOLDER_PREFIX = "replace-with-";
+    private static final Set<String> PUBLISHED_CREDENTIALS = Set.of(
+            "replace-with-at-least-32-random-characters",
+            "replace-with-a-separate-at-least-32-character-secret"
+    );
 
     public static void main(String[] args) {
         LinkCodeKeyGuardBindingCli cli = new LinkCodeKeyGuardBindingCli();
@@ -58,7 +63,7 @@ public final class LinkCodeKeyGuardBindingCli {
                     LegacyCanaryIdempotencyKey.parse(canaryIdempotencyKey);
             RuntimeConfiguration configuration = RuntimeConfiguration.from(environment);
             LinkCodePort linkCodePort = new SecureLinkCodeAdapter(
-                    new LinkCodeProperties(configuration.linkCodeSecret())
+                    configuration.linkCodeProperties()
             );
             try (Connection connection = DriverManager.getConnection(
                     configuration.jdbcUrl(),
@@ -118,29 +123,38 @@ public final class LinkCodeKeyGuardBindingCli {
         }
     }
 
-    private record RuntimeConfiguration(
+    record RuntimeConfiguration(
             String jdbcUrl,
             String username,
             String password,
-            String linkCodeSecret
+            LinkCodeProperties linkCodeProperties
     ) {
 
-        private static RuntimeConfiguration from(Map<String, String> environment) {
-            String secret = require(environment, "BATON_GO_LINK_CODE_SECRET");
-            if (secret.startsWith(PLACEHOLDER_PREFIX)) {
+        static RuntimeConfiguration from(Map<String, String> environment) {
+            String secret = environment.get("BATON_GO_LINK_CODE_SECRET");
+            if (secret != null && PUBLISHED_CREDENTIALS.contains(secret)) {
                 throw new IllegalArgumentException("공개 예시 비밀은 사용할 수 없습니다");
             }
+            LinkCodeProperties linkCodeProperties = new LinkCodeProperties(secret);
             return new RuntimeConfiguration(
-                    require(environment, "BATON_GO_DB_URL"),
-                    require(environment, "BATON_GO_DB_USERNAME"),
-                    require(environment, "BATON_GO_DB_PASSWORD"),
-                    secret
+                    requireNonBlank(environment, "BATON_GO_DB_URL"),
+                    requireNonBlank(environment, "BATON_GO_DB_USERNAME"),
+                    requireNonBlank(environment, "BATON_GO_DB_PASSWORD"),
+                    linkCodeProperties
             );
         }
 
-        private static String require(Map<String, String> environment, String name) {
+        private static String requirePresent(Map<String, String> environment, String name) {
             String value = environment.get(name);
-            if (value == null || value.isBlank()) {
+            if (value == null) {
+                throw new IllegalArgumentException(name + " 설정은 필수입니다");
+            }
+            return value;
+        }
+
+        private static String requireNonBlank(Map<String, String> environment, String name) {
+            String value = requirePresent(environment, name);
+            if (value.isBlank()) {
                 throw new IllegalArgumentException(name + " 설정은 필수입니다");
             }
             return value;

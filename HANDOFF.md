@@ -8,20 +8,28 @@
   허용한다. 과거 배포가 허용했던 canonical 대문자·기타 UUID와 범위 안 나노초 payload는
   동일 키의 기존 예약과 저장 payload가 일치할 때만 replay-only로 처리한다. 기존 예약이
   없으면 안정된 `400`이며 예약·링크 행을 새로 만들지 않고, 범위 밖 시각은 항상 거부한다.
+- 신규 JSON wire 입력은 enum 이름과 UTC `Instant` 문자열 및 정수 `expectedVersion`을 exact
+  token으로 검증한다. enum ordinal·숫자 문자열, timestamp 숫자·leap second, version 문자열·
+  소수·지수 표기는 coercion하지 않고 저장·폐기 전에 `400`으로 거부한다.
 - 링크 코드 HMAC 파생 version·fingerprint를 `link_code_key_guard` singleton에 결합한다.
   시작 시점과 생성 예약 전에 검증하며, 링크와 예약이 모두 빈 DB만 자동 결합한다. 기존
   데이터가 있는 미결합 DB나 다른 identity는 secret·fingerprint를 노출하지 않고 fail-closed
   한다. 재생 code hash 검증은 방어 계층으로 유지한다.
 - DB backup과 해당 HMAC secret-manager version은 하나의 복구 단위다. 기존 데이터가 있는
   DB에 guard를 처음 도입할 때는 writer를 중지하고 기존 secret 및 canary를 검증한 뒤
-  별도 `baton-go-guard-binding.jar`로 singleton을 결합한다. 도구는 canary를 stdin으로만
-  받고 예약·링크 hash 일치를 확인한 뒤 한 transaction에서 결합한다. key ring 전에는
-  secret을 회전하지 않는다.
+  전용 `guard-tool` 모듈의 `baton-go-guard-binding.jar`로 singleton을 결합한다. 도구는
+  canary를 stdin으로만 받고 예약·링크 hash 일치를 확인한 뒤 한 transaction에서 결합한다.
+  서버의 웹 서버·Hibernate/Spring Data JPA·Actuator runtime과 분리되어 있으며 key ring
+  전에는 secret을 회전하지 않는다.
+- 서버와 guard-tool은 HMAC 비밀을 placeholder 해석 없는 process environment 원문으로 읽는다.
+  관리 credential과 DB password도 같은 raw 환경 경계를 사용하므로 `${...}`, backslash와
+  공백이 설정 계층에서 치환되지 않는다.
 - MySQL Testcontainers가 동시 동일 요청을 링크·예약 각 한 건으로 직렬화하고, 최초 owner
   rollback 때 발생할 수 있는 deadlock victim도 동일 키 재시도로 복구되는지 검증한다.
 - 관리 Bearer 인증은 scheme 대소문자를 구분하지 않으며, `401`에는
   `WWW-Authenticate: Bearer realm="baton-go-management"`를 반환한다. 생성·재생 응답은
-  `Cache-Control: no-store`다.
+  물론 관리 조회·폐기 성공도 `Cache-Control: no-store`와 `Referrer-Policy: no-referrer`를
+  반환한다.
 - 공개 resolver는 DB 조회 전에 인스턴스 aggregate rate-limit backstop을 적용한다.
   client IP와 전달 헤더를 신뢰하지 않으며, 다중 replica 합산 제한은 ingress가 소유한다.
 - PRD-0003과 ADR-0005에서 v1 교차 서비스 target을 typed locator로 확정했다. 허용 조합은

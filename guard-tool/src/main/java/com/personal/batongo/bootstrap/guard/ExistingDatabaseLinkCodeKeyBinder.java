@@ -10,6 +10,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 
+/** 기존 데이터베이스의 HMAC guard를 검증 후 한 번만 결합하는 JDBC 도구입니다. */
 public final class ExistingDatabaseLinkCodeKeyBinder {
 
     private static final int SINGLETON_GUARD_ID = 1;

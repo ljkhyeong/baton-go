@@ -19,6 +19,7 @@ import com.personal.batongo.adapter.in.web.GlobalExceptionHandler;
 import com.personal.batongo.adapter.in.web.ManagementAuthenticationFilter;
 import com.personal.batongo.adapter.in.web.ManagementProperties;
 import com.personal.batongo.adapter.in.web.RequestIdFilter;
+import com.personal.batongo.adapter.in.web.StrictHttpJsonConfiguration;
 import com.personal.batongo.application.link.error.InvalidTargetContractInventoryRequestException;
 import com.personal.batongo.application.link.error.InvalidTargetContractRemediationRequestException;
 import com.personal.batongo.application.link.error.LinkNotFoundException;
@@ -78,12 +79,16 @@ class TargetContractOperationsHttpContractTest {
                         new ManagementProperties(MANAGEMENT_TOKEN),
                         new FilterErrorResponseWriter(new ObjectMapper())
                 );
+        var jsonMapperBuilder = JsonMapper.builder()
+                .findAndAddModules()
+                .enable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
+        new StrictHttpJsonConfiguration()
+                .strictHttpJsonCustomizer()
+                .customize(jsonMapperBuilder);
         mockMvc = MockMvcBuilders.standaloneSetup(controller)
                 .setControllerAdvice(new GlobalExceptionHandler(new SimpleMeterRegistry()))
                 .setMessageConverters(new JacksonJsonHttpMessageConverter(
-                        JsonMapper.builder()
-                                .findAndAddModules()
-                                .enable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
+                        jsonMapperBuilder
                 ))
                 .addFilters(new RequestIdFilter(), authenticationFilter)
                 .build();
@@ -297,6 +302,25 @@ class TargetContractOperationsHttpContractTest {
                 .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
                 .andExpect(header().string("Referrer-Policy", "no-referrer"))
                 .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+
+        verifyNoInteractions(operationsUseCase);
+    }
+
+    @ParameterizedTest(name = "{index}: {0}")
+    @ValueSource(strings = {
+            "{\"expectedVersion\":7.9}",
+            "{\"expectedVersion\":7e0}",
+            "{\"expectedVersion\":\"7\"}",
+            "{\"expectedVersion\":\"7.0\"}"
+    })
+    @DisplayName("expectedVersion은 JSON 정수 token이 아니면 변경 없이 400으로 거부한다")
+    void rejectsCoercedExpectedVersionWithoutMutation(String body) throws Exception {
+        mockMvc.perform(remediationRequest(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
+                .andExpect(header().string("Referrer-Policy", "no-referrer"))
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
+                .andExpect(jsonPath("$.message").value("요청 형식이 올바르지 않습니다"));
 
         verifyNoInteractions(operationsUseCase);
     }

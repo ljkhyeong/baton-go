@@ -43,7 +43,7 @@ management:
       show-details: never
 
 baton-go:
-  public-base-url: ${BATON_GO_PUBLIC_BASE_URL:http://localhost:8080}
+  public-base-url: ${BATON_GO_PUBLIC_BASE_URL}
   link-code:
     secret: ${BATON_GO_LINK_CODE_SECRET:}
   management:

@@ -2,6 +2,11 @@
 .gradle
 **/build
 .idea
-.env
+.env*
+!.env.example
+*.key
+*.pem
+*.p12
+*.pfx
 *.iml
 .DS_Store

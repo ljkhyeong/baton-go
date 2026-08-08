@@ -1,6 +1,7 @@
 package com.personal.batongo.bootstrap.guard;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.io.ByteArrayOutputStream;
@@ -69,6 +70,92 @@ class LinkCodeKeyGuardBindingCliTest {
                 .doesNotContain("BATON_GO_DB_URL");
     }
 
+    @Test
+    @DisplayName("복구 CLI는 길이가 충분한 공백 링크 코드 비밀을 원문 그대로 허용한다")
+    void acceptsLegacyWhitespaceLinkCodeSecretWithoutNormalization() {
+        String legacySecret = " ".repeat(31) + "\n";
+
+        LinkCodeKeyGuardBindingCli.RuntimeConfiguration configuration =
+                LinkCodeKeyGuardBindingCli.RuntimeConfiguration.from(
+                        validEnvironment(legacySecret)
+                );
+
+        assertThat(configuration.linkCodeProperties().secret()).isSameAs(legacySecret);
+    }
+
+    @Test
+    @DisplayName("복구 CLI는 placeholder와 역슬래시가 포함된 credential을 원문 그대로 사용한다")
+    void preservesLiteralPlaceholdersAndBackslashesInCredentials() {
+        String rawSecret = " 링크-${random.uuid}-${HOME}\\비밀-원문을-그대로-보존한다 ";
+        String rawUrl = "jdbc:mysql://db:3306/baton_go?label=${HOME}\\raw";
+        String rawUsername = "user-${HOME}\\raw";
+        String rawPassword = " password-${random.uuid}\\${HOME} ";
+        Map<String, String> environment = validEnvironment(rawSecret);
+        environment.put("BATON_GO_DB_URL", rawUrl);
+        environment.put("BATON_GO_DB_USERNAME", rawUsername);
+        environment.put("BATON_GO_DB_PASSWORD", rawPassword);
+
+        LinkCodeKeyGuardBindingCli.RuntimeConfiguration configuration =
+                LinkCodeKeyGuardBindingCli.RuntimeConfiguration.from(
+                        environment
+                );
+
+        assertThat(configuration.linkCodeProperties().secret()).isSameAs(rawSecret);
+        assertThat(configuration.jdbcUrl()).isSameAs(rawUrl);
+        assertThat(configuration.username()).isSameAs(rawUsername);
+        assertThat(configuration.password()).isSameAs(rawPassword);
+    }
+
+    @Test
+    @DisplayName("복구 CLI는 공개 예시와 다른 replace-with 접두사의 링크 코드 비밀을 허용한다")
+    void acceptsNonPublishedSecretWithPlaceholderPrefix() {
+        assertThatCode(() -> LinkCodeKeyGuardBindingCli.RuntimeConfiguration.from(
+                validEnvironment("replace-with-a-real-link-code-secret-for-this-deployment")
+        )).doesNotThrowAnyException();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "replace-with-at-least-32-random-characters",
+            "replace-with-a-separate-at-least-32-character-secret"
+    })
+    @DisplayName("복구 CLI는 공개된 credential 예시값만 정확히 링크 코드 비밀에서 거부한다")
+    void rejectsPublishedLinkCodeSecret(String publishedCredential) {
+        assertThatThrownBy(() -> LinkCodeKeyGuardBindingCli.RuntimeConfiguration.from(
+                validEnvironment(publishedCredential)
+        ))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("공개 예시 비밀은 사용할 수 없습니다");
+    }
+
+    @ParameterizedTest
+    @NullSource
+    @ValueSource(strings = {"", "too-short"})
+    @DisplayName("복구 CLI의 링크 코드 비밀 null과 길이는 공용 링크 코드 설정 계약으로 검증한다")
+    void delegatesMissingAndShortLinkCodeSecretValidation(String invalidSecret) {
+        assertThatThrownBy(() -> LinkCodeKeyGuardBindingCli.RuntimeConfiguration.from(
+                validEnvironment(invalidSecret)
+        ))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("링크 코드 파생 키는 32자 이상이어야 합니다");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", " ", "\t\n"})
+    @DisplayName("복구 CLI의 데이터베이스 연결 설정은 공백 값을 거부한다")
+    void rejectsBlankDatabaseConnectionSettings(String blankValue) {
+        Map<String, String> environment = validEnvironment(
+                "actual-link-code-secret-with-more-than-32-characters"
+        );
+        environment.put("BATON_GO_DB_URL", blankValue);
+
+        assertThatThrownBy(() -> LinkCodeKeyGuardBindingCli.RuntimeConfiguration.from(
+                environment
+        ))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("BATON_GO_DB_URL 설정은 필수입니다");
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {
             "8E448211-66AE-44AB-9888-C4960648C22B",
@@ -103,6 +190,15 @@ class LinkCodeKeyGuardBindingCliTest {
 
     private CapturedOutput run(String[] args, Map<String, String> environment) {
         return run(args, environment, CANARY);
+    }
+
+    private Map<String, String> validEnvironment(String linkCodeSecret) {
+        Map<String, String> environment = new HashMap<>();
+        environment.put("BATON_GO_LINK_CODE_SECRET", linkCodeSecret);
+        environment.put("BATON_GO_DB_URL", "jdbc:mysql://localhost:3306/baton_go");
+        environment.put("BATON_GO_DB_USERNAME", "baton_go");
+        environment.put("BATON_GO_DB_PASSWORD", "database-password");
+        return environment;
     }
 
     private CapturedOutput run(

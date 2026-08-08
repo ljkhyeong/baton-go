@@ -26,7 +26,7 @@ class CredentialSeparationValidatorTest {
     @DisplayName("공개된 관리 credential 예시값은 실행 설정에서 거부한다")
     void rejectsPublishedManagementCredentialPlaceholder() {
         assertThatThrownBy(() -> validate(
-                "replace-with-a-deployment-specific-management-token",
+                "replace-with-at-least-32-random-characters",
                 LINK_CODE_SECRET
         ))
                 .isInstanceOf(IllegalStateException.class)
@@ -38,10 +38,19 @@ class CredentialSeparationValidatorTest {
     void rejectsPublishedLinkCodeSecretPlaceholder() {
         assertThatThrownBy(() -> validate(
                 MANAGEMENT_TOKEN,
-                "replace-with-an-independent-code-derivation-secret"
+                "replace-with-a-separate-at-least-32-character-secret"
         ))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("공개 예시 credential은 실행 환경에서 사용할 수 없습니다");
+    }
+
+    @Test
+    @DisplayName("공개 예시와 다른 replace-with 접두사의 실제 credential은 허용한다")
+    void acceptsNonPublishedCredentialWithPlaceholderPrefix() {
+        assertThatCode(() -> validate(
+                "replace-with-a-real-management-token-for-this-deployment",
+                "replace-with-a-real-link-code-secret-for-this-deployment"
+        )).doesNotThrowAnyException();
     }
 
     @Test

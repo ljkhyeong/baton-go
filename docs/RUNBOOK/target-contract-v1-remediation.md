@@ -25,14 +25,16 @@ BATON_GO_TARGET_CONTRACT_OPERATIONS_PRIVATE_INGRESS_CONFIRMED=true
 ## 2. Read-only inventory
 
 관리 credential을 shell history, process argument와 터미널 녹화에 남기지 않는다. token은
-secret manager에서 현재 shell의 비export 변수로 읽고, curl argument가 아니라 stdin config로
-전달한다. 다음 `read` 입력값은 화면에 표시되지 않는다.
+secret manager에서 현재 shell의 비export 변수로 읽고, curl argument가 아니라 stdin header로
+전달한다. header 파일 입력은 curl config 문자열 문법을 거치지 않으므로 허용된 printable
+ASCII의 따옴표와 백슬래시도 token 원문 그대로 보존한다. 다음 `read` 입력값은 화면에
+표시되지 않는다.
 
 ```bash
 read -r -s BATON_GO_OPS_TOKEN
 printf '\n'
-printf 'header = "Authorization: Bearer %s"\n' "$BATON_GO_OPS_TOKEN" | \
-  curl --config - -sS \
+printf 'Authorization: Bearer %s\n' "$BATON_GO_OPS_TOKEN" | \
+  curl --header @- -sS \
   'https://go.internal.example/api/v1/operations/link-target-contract-v1/inventory?limit=100'
 ```
 
@@ -73,8 +75,8 @@ owner나 mapping을 확정할 수 없으면 재발급하지 않는다.
 inventory 뒤 row가 변경되지 않았는지 확인하도록 승인 manifest의 `version`을 보낸다.
 
 ```bash
-printf 'header = "Authorization: Bearer %s"\n' "$BATON_GO_OPS_TOKEN" | \
-  curl --config - -sS -X PUT \
+printf 'Authorization: Bearer %s\n' "$BATON_GO_OPS_TOKEN" | \
+  curl --header @- -sS -X PUT \
   -H 'Content-Type: application/json' \
   'https://go.internal.example/api/v1/operations/link-target-contract-v1/links/<link-id>/revocation' \
   --data '{"expectedVersion":0}'

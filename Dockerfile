@@ -13,6 +13,7 @@ COPY application/build.gradle application/build.gradle
 COPY adapter-in-web/build.gradle adapter-in-web/build.gradle
 COPY adapter-out-persistence/build.gradle adapter-out-persistence/build.gradle
 COPY adapter-out-external/build.gradle adapter-out-external/build.gradle
+COPY guard-tool/build.gradle guard-tool/build.gradle
 COPY bootstrap/build.gradle bootstrap/build.gradle
 
 RUN chmod 0755 gradlew
@@ -34,7 +35,7 @@ RUN addgroup -S -g 10001 batongo \
     && adduser -S -D -H -u 10001 -G batongo batongo
 
 WORKDIR /opt/baton-go
-COPY --from=build --chown=10001:10001 /workspace/baton-go.jar ./baton-go.jar
+COPY --from=build --chown=0:0 --chmod=0444 /workspace/baton-go.jar ./baton-go.jar
 
 ENV JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=75.0 -XX:+ExitOnOutOfMemoryError -Djava.io.tmpdir=/tmp"
 USER 10001:10001

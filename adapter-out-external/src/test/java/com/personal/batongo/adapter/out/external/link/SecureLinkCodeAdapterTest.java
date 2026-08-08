@@ -77,6 +77,19 @@ class SecureLinkCodeAdapterTest {
     }
 
     @Test
+    @DisplayName("시각적으로 같은 Unicode 비밀도 정규화하지 않고 서로 다른 키로 취급한다")
+    void doesNotNormalizeUnicodeSecret() {
+        String composed = "é".repeat(32);
+        String decomposed = "e\u0301".repeat(32);
+
+        var composedAdapter = new SecureLinkCodeAdapter(new LinkCodeProperties(composed));
+        var decomposedAdapter = new SecureLinkCodeAdapter(new LinkCodeProperties(decomposed));
+
+        assertThat(composedAdapter.derivationIdentity())
+                .isNotEqualTo(decomposedAdapter.derivationIdentity());
+    }
+
+    @Test
     @DisplayName("정확한 형식이 아닌 공개 코드는 해시하지 않는다")
     void rejectsMalformedCode() {
         assertThatThrownBy(() -> adapter.hash("short"))

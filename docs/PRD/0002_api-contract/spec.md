@@ -70,12 +70,16 @@ Idempotency-Key: 8e448211-66ae-44ab-9888-c4960648c22b
   이 replay-only 예외는 신규 생성 문법을 확장하지 않는다.
 - 요청 본문에 정의되지 않은 필드가 있으면 저장하지 않고
   `400 INVALID_REQUEST`로 거부한다.
+- `targetSystem`과 `purpose`는 계약에 정의된 대문자 enum 이름의 JSON 문자열만 허용한다.
+  숫자 token, 숫자 문자열, 앞뒤 공백과 Jackson ordinal·trim coercion은 링크나 생성 예약을
+  저장하지 않고 `400 INVALID_REQUEST`로 거부한다.
 - timeout이나 일시적인 `5xx` 뒤에는 동일한 키와 payload로 재시도할 수 있다.
 - 재생 시 현재 링크 코드 파생 설정이 생성 당시와 다르면
   `500 LINK_CODE_REPLAY_UNAVAILABLE`로 실패한다. 이 오류는 같은 설정에서 반복해도
   복구되지 않으므로 자동 재시도하지 않는다. 운영자가 생성 당시 비밀을 복구하거나
   versioned key ring을 배포한 뒤 같은 키와 payload로 다시 요청한다.
-- 성공과 재생 응답에는 `Cache-Control: no-store`를 포함한다.
+- 성공과 재생 응답에는 `Cache-Control: no-store`와
+  `Referrer-Policy: no-referrer`를 포함한다.
 
 요청:
 
@@ -89,7 +93,10 @@ Idempotency-Key: 8e448211-66ae-44ab-9888-c4960648c22b
 }
 ```
 
-- 선택적인 `notBefore`와 `expiresAt`은 마이크로초 단위로 정확히 표현 가능하고 Java/JDBC가
+- 선택적인 `notBefore`와 `expiresAt`은 UTC `Z` suffix를 사용하는 JSON 문자열이어야 한다.
+  숫자 timestamp, offset·공백 표현, leap second, `24:00`과 파서가 다른 시각으로 보정하는
+  표현은 링크나 생성 예약을 저장하기 전에 `400 INVALID_REQUEST`로 거부한다.
+- 두 시각은 마이크로초 단위로 정확히 표현 가능하고 Java/JDBC가
   proleptic Gregorian `Instant`를 MySQL `DATETIME(6)` raw 값과 동일하게 보존하는 지원
   범위인 `1582-10-15T00:00:00Z` 이상
   `9999-12-31T23:59:59.999999Z` 이하여야 한다. 범위 밖이거나 소수 초 7번째부터 9번째
@@ -135,6 +142,7 @@ Idempotency-Key: 8e448211-66ae-44ab-9888-c4960648c22b
 
 관리용 Bearer credential이 필요하다. 원문 공개 코드나 `shortUrl`은 반환하지 않는다.
 성공 시 `200 OK`와 다음 형태의 현재 링크 상태를 반환한다.
+성공 응답에는 `Cache-Control: no-store`와 `Referrer-Policy: no-referrer`를 포함한다.
 
 ```json
 {
@@ -154,6 +162,7 @@ Idempotency-Key: 8e448211-66ae-44ab-9888-c4960648c22b
 관리용 Bearer credential이 필요하다. 폐기는 멱등이며 같은 링크를 다시 폐기해도 최초
 `revokedAt`을 유지한 현재 상태를 `200 OK`로 반환한다. 응답 형식은 관리 조회와 같고
 원문 공개 코드나 `shortUrl`은 포함하지 않는다.
+성공 응답에는 `Cache-Control: no-store`와 `Referrer-Policy: no-referrer`를 포함한다.
 
 저장 target이 현재 v1 계약을 위반하면 일반 관리 조회와 폐기도 raw target을 응답하지 않고
 `404 LINK_NOT_FOUND`로 숨긴다. 계약 전 데이터 정리는 아래의 별도 operations 계약만 사용한다.
@@ -218,6 +227,10 @@ DB primary key 순서의 keyset pagination으로 모든 링크를 raw 문자열 
   "expectedVersion": 0
 }
 ```
+
+`expectedVersion`은 `0..9223372036854775807` 범위의 JSON 정수 token만 허용한다. 문자열,
+소수와 지수 표기처럼 Jackson이 정수로 coercion할 수 있는 다른 표현은 행을 잠그거나
+폐기하지 않고 `400 INVALID_REQUEST`로 거부한다.
 
 서버는 raw 행을 잠근 뒤 exact target 정책과 version을 다시 확인한다.
 

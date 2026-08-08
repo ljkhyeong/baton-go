@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -20,6 +21,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.personal.batongo.adapter.in.web.GlobalExceptionHandler;
 import com.personal.batongo.adapter.in.web.PublicLinkProperties;
 import com.personal.batongo.adapter.in.web.RequestIdFilter;
+import com.personal.batongo.adapter.in.web.StrictHttpJsonConfiguration;
 import com.personal.batongo.application.link.CreationTimeStoragePolicy;
 import com.personal.batongo.application.link.error.IdempotencyKeyConflictException;
 import com.personal.batongo.application.link.error.InvalidIdempotencyKeyException;
@@ -48,8 +50,11 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.http.converter.json.JacksonJsonHttpMessageConverter;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import tools.jackson.databind.DeserializationFeature;
+import tools.jackson.databind.json.JsonMapper;
 
 class LinkHttpContractTest {
 
@@ -77,8 +82,15 @@ class LinkHttpContractTest {
                 new PublicLinkProperties(URI.create("https://go.example"))
         );
         LinkResolverController resolverController = new LinkResolverController(useCase);
+        var jsonMapperBuilder = JsonMapper.builder()
+                .findAndAddModules()
+                .enable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
+        new StrictHttpJsonConfiguration()
+                .strictHttpJsonCustomizer()
+                .customize(jsonMapperBuilder);
         mockMvc = MockMvcBuilders.standaloneSetup(managementController, resolverController)
                 .setControllerAdvice(new GlobalExceptionHandler(meterRegistry))
+                .setMessageConverters(new JacksonJsonHttpMessageConverter(jsonMapperBuilder))
                 .addFilters(new RequestIdFilter())
                 .build();
     }
@@ -111,6 +123,7 @@ class LinkHttpContractTest {
                         "false"
                 ))
                 .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
+                .andExpect(header().string("Referrer-Policy", "no-referrer"))
                 .andExpect(header().exists(RequestIdFilter.HEADER_NAME))
                 .andExpect(jsonPath("$.id").value(LINK_ID.toString()))
                 .andExpect(jsonPath("$.shortUrl")
@@ -148,6 +161,7 @@ class LinkHttpContractTest {
                         "true"
                 ))
                 .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
+                .andExpect(header().string("Referrer-Policy", "no-referrer"))
                 .andExpect(jsonPath("$.shortUrl")
                         .value("https://go.example/l/VOvLShvx93kQpj8x7w2HYQ"));
     }
@@ -207,6 +221,8 @@ class LinkHttpContractTest {
 
         mockMvc.perform(get("/api/v1/links/{linkId}", LINK_ID))
                 .andExpect(status().isOk())
+                .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
+                .andExpect(header().string("Referrer-Policy", "no-referrer"))
                 .andExpect(header().exists(RequestIdFilter.HEADER_NAME))
                 .andExpect(jsonPath("$.id").value(LINK_ID.toString()))
                 .andExpect(jsonPath("$.targetSystem").value("BATON"))
@@ -236,6 +252,8 @@ class LinkHttpContractTest {
         for (int attempt = 0; attempt < 2; attempt++) {
             mockMvc.perform(put("/api/v1/links/{linkId}/revocation", LINK_ID))
                     .andExpect(status().isOk())
+                    .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
+                    .andExpect(header().string("Referrer-Policy", "no-referrer"))
                     .andExpect(header().exists(RequestIdFilter.HEADER_NAME))
                     .andExpect(jsonPath("$.id").value(LINK_ID.toString()))
                     .andExpect(jsonPath("$.revokedAt").value(firstRevokedAt.toString()))
@@ -313,6 +331,46 @@ class LinkHttpContractTest {
         verifyNoMoreInteractions(useCase);
     }
 
+    @ParameterizedTest(name = "{index}: {0}")
+    @ValueSource(strings = {
+            "targetSystem=0",
+            "targetSystem=\"0\"",
+            "targetSystem=\" BATON\"",
+            "targetSystem=\"BATON \"",
+            "purpose=0",
+            "purpose=\"0\"",
+            "purpose=\" NAVIGATION\"",
+            "purpose=\"NAVIGATION \\t\""
+    })
+    @DisplayName("target enum의 비정확한 입력은 application 호출 전에 400으로 거부한다")
+    void rejectsInexactTargetEnumsBeforeApplication(String input) throws Exception {
+        String[] fieldAndValue = input.split("=", 2);
+        String targetSystem = fieldAndValue[0].equals("targetSystem")
+                ? fieldAndValue[1]
+                : "\"BATON\"";
+        String purpose = fieldAndValue[0].equals("purpose")
+                ? fieldAndValue[1]
+                : "\"NAVIGATION\"";
+
+        mockMvc.perform(post("/api/v1/links")
+                        .header(LinkManagementController.IDEMPOTENCY_KEY_HEADER, IDEMPOTENCY_KEY)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "targetSystem": %s,
+                                  "targetPath": "%s",
+                                  "purpose": %s
+                                }
+                                """.formatted(targetSystem, BATON_TARGET_PATH, purpose)))
+                .andExpect(status().isBadRequest())
+                .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
+                .andExpect(header().string("Referrer-Policy", "no-referrer"))
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
+                .andExpect(jsonPath("$.message").value("요청 형식이 올바르지 않습니다"));
+
+        verifyNoInteractions(useCase);
+    }
+
     @Test
     @DisplayName("과거 계약에도 없던 UUID 표기는 application 호출 전에 400으로 거부한다")
     void rejectsIdempotencyKeyOutsideHistoricalContract() throws Exception {
@@ -373,6 +431,90 @@ class LinkHttpContractTest {
                         .value("notBefore와 expiresAt은 1582-10-15T00:00:00Z 이상 "
                                 + "9999-12-31T23:59:59.999999Z 이하의 마이크로초 단위여야 합니다"))
                 .andExpect(jsonPath("$.requestId").isNotEmpty());
+
+        verify(useCase).createLink(any());
+        verifyNoMoreInteractions(useCase);
+    }
+
+    @ParameterizedTest(name = "{index}: {0}")
+    @ValueSource(strings = {
+            "\"2026-07-30T23:59:60Z\"",
+            "\"2026-07-30T24:00:00Z\"",
+            "\"2026-07-30T10:60:00Z\"",
+            "\"+02026-07-30T10:00:00Z\"",
+            "1780000000",
+            "\" 2026-07-30T10:00:00Z \"",
+            "\"2026-07-30T10:00:00+00:00\"",
+            "\"2026-07-30t10:00:00z\"",
+            "\"2026-07-30T10:00Z\""
+    })
+    @DisplayName("비canonical 생성 시각은 예약 전에 400 INVALID_REQUEST로 거부한다")
+    void rejectsNonCanonicalCreationTimesBeforeApplication(String rawJsonValue)
+            throws Exception {
+        for (String fieldName : new String[]{"notBefore", "expiresAt"}) {
+            mockMvc.perform(post("/api/v1/links")
+                            .header(
+                                    LinkManagementController.IDEMPOTENCY_KEY_HEADER,
+                                    IDEMPOTENCY_KEY
+                            )
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                    {
+                                      "targetSystem": "BATON",
+                                      "targetPath": "%s",
+                                      "purpose": "NAVIGATION",
+                                      "%s": %s
+                                    }
+                                    """.formatted(
+                                            BATON_TARGET_PATH,
+                                            fieldName,
+                                            rawJsonValue
+                                    )))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
+                    .andExpect(header().string("Referrer-Policy", "no-referrer"))
+                    .andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
+                    .andExpect(jsonPath("$.message").value("요청 형식이 올바르지 않습니다"));
+        }
+
+        verifyNoInteractions(useCase);
+    }
+
+    @ParameterizedTest(name = "{index}: {0}")
+    @ValueSource(strings = {
+            "2026-07-30T10:00:00.000000Z",
+            "2026-07-30T10:00:00.123456Z",
+            "2026-07-30T10:00:00.123456789Z"
+    })
+    @DisplayName("계약된 마이크로초와 과거 나노초 시각은 원본 Instant로 전달한다")
+    void forwardsCanonicalCreationTimesWithoutChangingTheirMeaning(String rawTime)
+            throws Exception {
+        when(useCase.createLink(any())).thenAnswer(invocation -> {
+            CreateLinkCommand command = invocation.getArgument(0);
+            assertThat(command.expiresAt()).isEqualTo(Instant.parse(rawTime));
+            return new CreatedLinkResult(
+                    linkResult(),
+                    "VOvLShvx93kQpj8x7w2HYQ",
+                    true
+            );
+        });
+
+        mockMvc.perform(post("/api/v1/links")
+                        .header(LinkManagementController.IDEMPOTENCY_KEY_HEADER, IDEMPOTENCY_KEY)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "targetSystem": "BATON",
+                                  "targetPath": "%s",
+                                  "purpose": "NAVIGATION",
+                                  "expiresAt": "%s"
+                                }
+                                """.formatted(BATON_TARGET_PATH, rawTime)))
+                .andExpect(status().isOk())
+                .andExpect(header().string(
+                        LinkManagementController.IDEMPOTENCY_REPLAYED_HEADER,
+                        "true"
+                ));
 
         verify(useCase).createLink(any());
         verifyNoMoreInteractions(useCase);

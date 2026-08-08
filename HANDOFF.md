@@ -8,6 +8,9 @@
   허용한다. 과거 배포가 허용했던 canonical 대문자·기타 UUID와 범위 안 나노초 payload는
   동일 키의 기존 예약과 저장 payload가 일치할 때만 replay-only로 처리한다. 기존 예약이
   없으면 안정된 `400`이며 예약·링크 행을 새로 만들지 않고, 범위 밖 시각은 항상 거부한다.
+- 신규 JSON wire 입력은 enum 이름과 UTC `Instant` 문자열 및 정수 `expectedVersion`을 exact
+  token으로 검증한다. enum ordinal·숫자 문자열, timestamp 숫자·leap second, version 문자열·
+  소수·지수 표기는 coercion하지 않고 저장·폐기 전에 `400`으로 거부한다.
 - 링크 코드 HMAC 파생 version·fingerprint를 `link_code_key_guard` singleton에 결합한다.
   시작 시점과 생성 예약 전에 검증하며, 링크와 예약이 모두 빈 DB만 자동 결합한다. 기존
   데이터가 있는 미결합 DB나 다른 identity는 secret·fingerprint를 노출하지 않고 fail-closed
@@ -25,7 +28,8 @@
   rollback 때 발생할 수 있는 deadlock victim도 동일 키 재시도로 복구되는지 검증한다.
 - 관리 Bearer 인증은 scheme 대소문자를 구분하지 않으며, `401`에는
   `WWW-Authenticate: Bearer realm="baton-go-management"`를 반환한다. 생성·재생 응답은
-  `Cache-Control: no-store`다.
+  물론 관리 조회·폐기 성공도 `Cache-Control: no-store`와 `Referrer-Policy: no-referrer`를
+  반환한다.
 - 공개 resolver는 DB 조회 전에 인스턴스 aggregate rate-limit backstop을 적용한다.
   client IP와 전달 헤더를 신뢰하지 않으며, 다중 replica 합산 제한은 ingress가 소유한다.
 - PRD-0003과 ADR-0005에서 v1 교차 서비스 target을 typed locator로 확정했다. 허용 조합은

@@ -26,6 +26,7 @@ public class LinkManagementController {
 
     public static final String IDEMPOTENCY_KEY_HEADER = "Idempotency-Key";
     public static final String IDEMPOTENCY_REPLAYED_HEADER = "Idempotency-Replayed";
+    private static final String REFERRER_POLICY = "Referrer-Policy";
 
     private final SmartLinkUseCase smartLinkUseCase;
     private final PublicLinkProperties publicLinkProperties;
@@ -57,6 +58,7 @@ public class LinkManagementController {
         return ResponseEntity.status(status)
                 .location(location)
                 .cacheControl(CacheControl.noStore())
+                .header(REFERRER_POLICY, "no-referrer")
                 .header(IDEMPOTENCY_REPLAYED_HEADER, Boolean.toString(result.replayed()))
                 .body(CreateLinkResponse.from(
                         result,
@@ -65,12 +67,19 @@ public class LinkManagementController {
     }
 
     @GetMapping("/{linkId}")
-    public LinkResponse getLink(@PathVariable UUID linkId) {
-        return LinkResponse.from(smartLinkUseCase.getLink(linkId));
+    public ResponseEntity<LinkResponse> getLink(@PathVariable UUID linkId) {
+        return noStore(LinkResponse.from(smartLinkUseCase.getLink(linkId)));
     }
 
     @PutMapping("/{linkId}/revocation")
-    public LinkResponse revokeLink(@PathVariable UUID linkId) {
-        return LinkResponse.from(smartLinkUseCase.revokeLink(linkId));
+    public ResponseEntity<LinkResponse> revokeLink(@PathVariable UUID linkId) {
+        return noStore(LinkResponse.from(smartLinkUseCase.revokeLink(linkId)));
+    }
+
+    private <T> ResponseEntity<T> noStore(T body) {
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore())
+                .header(REFERRER_POLICY, "no-referrer")
+                .body(body);
     }
 }

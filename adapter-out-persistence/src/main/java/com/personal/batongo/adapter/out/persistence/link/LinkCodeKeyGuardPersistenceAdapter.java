@@ -118,5 +118,10 @@ public class LinkCodeKeyGuardPersistenceAdapter implements LinkCodeKeyGuardPort 
         private boolean isUnbound() {
             return derivationVersion == null && keyFingerprint == null;
         }
+
+        @Override
+        public String toString() {
+            return "GuardRow[redacted]";
+        }
     }
 }

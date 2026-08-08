@@ -61,6 +61,30 @@ MySQL repeatable-read의 과거 snapshot을 만들지 않아 멱등 예약 승�
 4. 검증된 배포 도구가 singleton의 version과 fingerprint를 한 transaction에서 결합한다.
 5. 새 버전을 시작하고 readiness가 열리기 전에 guard 검증이 통과하는지 확인한다.
 
+검증된 배포 도구는 release source에서 별도 생성하는
+`baton-go-guard-binding.jar`다. 일반 애플리케이션의 우회 flag나 관리 HTTP endpoint가
+아니며, writer 중지 확인 인자와 stdin canary를 요구한다. 도구는 canary 멱등성 키의 예약
+해시와 현재 비밀에서 파생한 code hash가 같은 저장 링크에 결합됐는지 확인한 뒤 guard row를
+잠그고 같은 transaction에서 최초 결합한다. 세부 절차는
+[기존 데이터베이스 HMAC guard 최초 결합 runbook](../../RUNBOOK/link-code-key-guard-binding.md)을
+따른다.
+
+결합 도구의 canary 입력만 guard 도입 전 생성 규칙과 호환되어야 한다. 과거 규칙과 똑같이
+`UUID.fromString`으로 해석한 뒤 `parsed.toString().equalsIgnoreCase(input)`가 참인 문자열을
+lowercase canonical UUID로 정규화한다. 따라서 과거에 허용된 uppercase, version 7, nil,
+non-RFC variant canary도 검증할 수 있다. 이는 복구 전용 호환 규칙이며 공개 생성 API의
+lowercase version `1..5` RFC variant 계약을 완화하지 않는다.
+
+한 번의 결합은 입력한 canary가 현재 secret과 일치한다는 사실만 증명한다. 과거 데이터
+전체가 하나의 키로 만들어졌다는 증거나 이미 키가 섞인 DB의 교정 수단은 아니다. mixed-key
+가능성이 있으면 결합을 중단하고 별도 inventory와 복구 결정을 수행한다. commit 응답이
+유실되어 결과가 불명확하면 writer를 계속 중지한 채 같은 secret과 같은 canary로 도구를
+재실행한다. 같은 identity에 이미 commit됐다면 canary를 다시 검증하고 멱등 성공한다.
+
+DB general log, audit plugin과 query tracing은 JDBC prepared statement의 fingerprint와 hash
+bind 값을 기록할 수 있다. 결합 전에 해당 로그의 parameter capture를 비활성화하거나
+마스킹하고, 이미 수집된 DB 로그는 민감 운영 자료로 제한한다.
+
 canary나 검증된 secret version이 없다면 임의 secret에 DB를 결합하지 않는다. 링크 데이터가
 필요 없다면 새 DB로 시작하고, 필요하다면 올바른 secret을 복구할 때까지 배포를 중단한다.
 우회 환경 변수나 자동 강제 결합 옵션은 제공하지 않는다.

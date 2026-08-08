@@ -28,6 +28,22 @@ tasks.named('bootJar') {
 	archiveFileName = 'baton-go.jar'
 }
 
+tasks.register(
+		'guardBindingToolJar',
+		org.springframework.boot.gradle.tasks.bundling.BootJar
+) {
+	group = 'build'
+	description = 'Builds the one-shot existing-database HMAC guard binding tool.'
+	archiveFileName = 'baton-go-guard-binding.jar'
+	mainClass = 'com.personal.batongo.bootstrap.guard.LinkCodeKeyGuardBindingCli'
+	classpath = sourceSets.main.runtimeClasspath
+	targetJavaVersion = JavaVersion.VERSION_21
+}
+
+tasks.named('assemble') {
+	dependsOn tasks.named('guardBindingToolJar')
+}
+
 tasks.named('test') {
 	useJUnitPlatform {
 		excludeTags 'mysql'

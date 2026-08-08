@@ -12,15 +12,21 @@ import com.personal.batongo.application.link.port.in.SmartLinkUseCase.CreateLink
 import com.personal.batongo.application.link.port.out.LinkCodeKeyGuardPort;
 import com.personal.batongo.application.link.port.out.LinkCodePort;
 import com.personal.batongo.bootstrap.LinkCodeKeyStartupValidator;
+import com.personal.batongo.bootstrap.guard.ExistingDatabaseLinkCodeKeyBinder;
+import com.personal.batongo.bootstrap.guard.ExistingDatabaseLinkCodeKeyBinder.BindingResult;
+import com.personal.batongo.bootstrap.guard.ExistingDatabaseLinkCodeKeyBinder.GuardBindingToolException;
 import com.personal.batongo.domain.link.LinkPurpose;
 import com.personal.batongo.domain.link.TargetSystem;
+import java.sql.Connection;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -44,7 +50,7 @@ import org.testcontainers.mysql.MySQLContainer;
         "baton-go.link-code.secret=test-link-code-secret-that-is-separate-and-long-enough",
         "baton-go.public-base-url=https://go.example",
         "baton-go.targets.baton-base-url=https://baton.example",
-        "baton-go.targets.round-base-url=https://round.example"
+        "baton-go.targets.round-base-url=https://baton.example"
 })
 class LinkCodeKeyGuardIntegrationTest {
 
@@ -78,6 +84,9 @@ class LinkCodeKeyGuardIntegrationTest {
 
     @Autowired
     private PlatformTransactionManager transactionManager;
+
+    @Autowired
+    private DataSource dataSource;
 
     @BeforeEach
     void resetDatabase() {
@@ -226,6 +235,67 @@ class LinkCodeKeyGuardIntegrationTest {
         }
     }
 
+    @Test
+    @DisplayName("기존 데이터베이스는 보관한 canary가 현재 HMAC 키를 증명하면 한 번 결합된다")
+    void bindsExistingDatabaseAfterCanaryVerification() throws Exception {
+        String canaryIdempotencyKey = "60fa8eb4-e104-459d-aa45-e4a07831998e";
+        smartLinkUseCase.createLink(command(canaryIdempotencyKey));
+        unbind();
+
+        BindingResult result = bindExistingDatabase(canaryIdempotencyKey);
+
+        assertThat(result).isEqualTo(BindingResult.BOUND);
+        assertThat(storedIdentity()).isEqualTo(linkCodePort.derivationIdentity());
+        assertThat(linkCount()).isEqualTo(1L);
+        assertThat(reservationCount()).isEqualTo(1L);
+    }
+
+    @Test
+    @DisplayName("기존 MySQL 데이터의 uppercase version 7 canary는 과거 규칙으로 정규화해 결합한다")
+    void bindsExistingDatabaseWithLegacyUppercaseVersionSevenCanary() throws Exception {
+        String canonicalCanary = "019ae750-9234-7abc-8def-123456789abc";
+        insertLegacyCreation(canonicalCanary);
+        unbind();
+
+        BindingResult result = bindExistingDatabase(
+                canonicalCanary.toUpperCase(Locale.ROOT)
+        );
+
+        assertThat(result).isEqualTo(BindingResult.BOUND);
+        assertThat(storedIdentity()).isEqualTo(linkCodePort.derivationIdentity());
+        assertThat(linkCount()).isEqualTo(1L);
+        assertThat(reservationCount()).isEqualTo(1L);
+    }
+
+    @Test
+    @DisplayName("기존 데이터베이스는 HMAC 키를 증명하지 못하는 canary로 결합하지 않는다")
+    void rejectsExistingDatabaseWhenCanaryDoesNotMatch() {
+        String storedCanary = "527d7731-0e2a-49f9-a1cc-302673d4253f";
+        String wrongCanary = "a95e14e3-92aa-490a-9afe-65c88dbc680e";
+        smartLinkUseCase.createLink(command(storedCanary));
+        unbind();
+
+        assertThatThrownBy(() -> bindExistingDatabase(wrongCanary))
+                .isInstanceOf(GuardBindingToolException.class)
+                .hasMessage("기존 데이터베이스의 링크 코드 키 결합 검증에 실패했습니다")
+                .hasMessageNotContaining(storedCanary)
+                .hasMessageNotContaining(wrongCanary)
+                .hasMessageNotContaining(linkCodePort.derivationIdentity().hmacFingerprint());
+        assertThat(storedIdentity()).isNull();
+    }
+
+    @Test
+    @DisplayName("같은 identity에 이미 결합된 데이터베이스는 canary 검증 뒤 멱등하게 확인된다")
+    void confirmsAlreadyBoundDatabaseAfterCanaryVerification() throws Exception {
+        String canaryIdempotencyKey = "b46dd6bc-91f1-4f73-81e4-ceb63a438f66";
+        smartLinkUseCase.createLink(command(canaryIdempotencyKey));
+
+        BindingResult result = bindExistingDatabase(canaryIdempotencyKey);
+
+        assertThat(result).isEqualTo(BindingResult.ALREADY_BOUND);
+        assertThat(storedIdentity()).isEqualTo(linkCodePort.derivationIdentity());
+    }
+
     private LinkCodeDerivationIdentity bindInTransactionAfter(
             CountDownLatch start,
             LinkCodeDerivationIdentity identity
@@ -235,6 +305,61 @@ class LinkCodeKeyGuardIntegrationTest {
                 status -> linkCodeKeyGuardPort.verifyOrBind(identity)
         );
         return identity;
+    }
+
+    private BindingResult bindExistingDatabase(String canaryIdempotencyKey) throws Exception {
+        try (Connection connection = dataSource.getConnection()) {
+            connection.setAutoCommit(false);
+            try {
+                BindingResult result = new ExistingDatabaseLinkCodeKeyBinder().bind(
+                        connection,
+                        linkCodePort,
+                        canaryIdempotencyKey
+                );
+                connection.commit();
+                return result;
+            } catch (RuntimeException exception) {
+                connection.rollback();
+                throw exception;
+            }
+        }
+    }
+
+    private void insertLegacyCreation(String canonicalCanary) {
+        String linkId = "2df34d5c-2d80-4ae3-a82c-16ae447b3a61";
+        jdbcTemplate.update(
+                """
+                        INSERT INTO smart_links (
+                            id,
+                            code_hash,
+                            target_system,
+                            target_path,
+                            purpose,
+                            not_before,
+                            expires_at,
+                            revoked_at,
+                            created_at,
+                            version
+                        ) VALUES (
+                            UUID_TO_BIN(?), ?, 'BATON', ?, 'NAVIGATION',
+                            NULL, NULL, NULL, UTC_TIMESTAMP(6), 0
+                        )
+                        """,
+                linkId,
+                linkCodePort.issue(canonicalCanary).codeHash(),
+                CANONICAL_BATON_TARGET
+        );
+        jdbcTemplate.update(
+                """
+                        INSERT INTO link_creation_requests (
+                            idempotency_key_hash,
+                            link_id,
+                            created_at
+                        ) VALUES (?, UUID_TO_BIN(?), UTC_TIMESTAMP(6))
+                        """,
+                linkCodePort.hashIdempotencyKey(canonicalCanary),
+                linkId
+        );
     }
 
     private CreateLinkCommand command(String idempotencyKey) {

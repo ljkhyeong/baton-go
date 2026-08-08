@@ -179,8 +179,29 @@ docker compose --env-file .env up --build -d
 docker compose --env-file .env ps
 ```
 
-기본 애플리케이션 포트는 `8080`, 관리 포트는 `8081`이다.
-Docker는 관리 포트의 aggregate `/actuator/health`를 계속 사용한다. 오케스트레이터 probe는
+## Private Kubernetes 배포
+
+`deploy/k8s`에는 Kubernetes 기본 Kustomize로 조립하는 application과 GO 전용 MySQL
+매니페스트가 있다. MySQL은 BATON의 instance·database user·PVC를 공유하지 않으며,
+`baton_go` database와 별도 Secret·10Gi PVC를 사용한다. 특정 StorageClass, Ingress
+controller와 TLS 발급 방식은 private cluster마다 다르므로 저장소 base에 고정하지 않는다.
+
+namespace는 workload와 분리해 먼저 적용하고, 실제 origin·immutable image와 외부 Secret을
+준비한 뒤 private-server overlay를 적용한다.
+
+```bash
+kubectl kustomize deploy/k8s/bootstrap >/dev/null
+kubectl kustomize deploy/k8s/overlays/private-server >/dev/null
+```
+
+실제 Secret 생성, registry 인증, 배포·backup·restore와 edge 경계는
+[Private Kubernetes 배포 runbook](docs/RUNBOOK/kubernetes-private-server-deployment.md)을
+따른다. public Ingress는 `/l` Prefix만, private management 경로는 `/api/v1` Prefix만 같은
+HTTP Service로 분리해야 하며 Actuator `8081`은 기본 노출하지 않는다. 이 인프라 구성은
+PRD-0003의 public production rollout gate를 대신하지 않는다.
+
+기본 애플리케이션 포트는 `8080`, Actuator 관리 포트는 `8081`이다.
+Docker는 Actuator 포트의 aggregate `/actuator/health`를 계속 사용한다. 오케스트레이터 probe는
 `/actuator/health/liveness`와 `/actuator/health/readiness`를 사용하며, readiness는 DB
 연결 상태를 포함하지만 liveness는 포함하지 않는다.
 
@@ -228,6 +249,8 @@ curl -i http://localhost:8080/api/v1/links \
 - [제품 기준선](docs/PRD/0001_product-baseline/spec.md)
 - [API 계약](docs/PRD/0002_api-contract/spec.md)
 - [BATON·ROUND 교차 서비스 링크 계약](docs/PRD/0003_cross-service-link-contract/spec.md)
+- [Private Kubernetes DB 토폴로지](docs/ADR/0008_private-kubernetes-database-topology/adr.md)
+- [Private Kubernetes 배포 runbook](docs/RUNBOOK/kubernetes-private-server-deployment.md)
 - [마이크로서비스 경계](docs/ADR/0001_microservice-boundary/adr.md)
 - [링크 보안 모델](docs/ADR/0002_link-security/adr.md)
 - [멱등한 링크 생성](docs/ADR/0003_idempotent-link-creation/adr.md)

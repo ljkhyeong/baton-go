@@ -21,6 +21,13 @@
   canary를 stdin으로만 받고 예약·링크 hash 일치를 확인한 뒤 한 transaction에서 결합한다.
   서버의 웹 서버·Hibernate/Spring Data JPA·Actuator runtime과 분리되어 있으며 key ring
   전에는 secret을 회전하지 않는다.
+- Private Kubernetes 배포는 Kustomize base/overlay로 구성했다. GO 전용 MySQL StatefulSet,
+  `baton_go` database user, DB/runtime Secret과 10Gi `ReadWriteOnce` PVC를 사용하며 BATON의
+  MySQL instance·계정·volume을 공유하지 않는다. StorageClass와 Ingress는 환경에 맡기고,
+  namespace bootstrap은 workload overlay에서 분리해 PVC 연쇄 삭제 위험을 줄였다.
+- Kubernetes의 `8080` HTTP Service에는 public `/l` Prefix와 private `/api/v1` Prefix가 함께
+  있으므로 edge에서 두 경로를 분리해야 한다. Actuator `8081`은 Service·Ingress로 기본
+  노출하지 않고 kubelet probe와 제한된 운영 접근에만 사용한다.
 - 서버와 guard-tool은 HMAC 비밀을 placeholder 해석 없는 process environment 원문으로 읽는다.
   관리 credential과 DB password도 같은 raw 환경 경계를 사용하므로 `${...}`, backslash와
   공백이 설정 계층에서 치환되지 않는다.

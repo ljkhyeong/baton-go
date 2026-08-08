@@ -1,7 +1,7 @@
 package com.personal.batongo.adapter.in.web;
 
+import com.personal.batongo.domain.link.HttpOrigin;
 import java.net.URI;
-import java.util.Objects;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @ConfigurationProperties("baton-go")
@@ -10,28 +10,13 @@ public record PublicLinkProperties(
 ) {
 
     public PublicLinkProperties {
-        Objects.requireNonNull(publicBaseUrl, "공개 base URL은 필수입니다");
-        String scheme = publicBaseUrl.getScheme();
-        String rawPath = publicBaseUrl.getRawPath();
-        if ((!"http".equalsIgnoreCase(scheme) && !"https".equalsIgnoreCase(scheme))
-                || publicBaseUrl.getHost() == null
-                || publicBaseUrl.getUserInfo() != null
-                || hasInvalidExplicitPort(publicBaseUrl)
-                || publicBaseUrl.getQuery() != null
-                || publicBaseUrl.getFragment() != null
-                || (rawPath != null && !rawPath.isEmpty() && !rawPath.equals("/"))) {
+        HttpOrigin origin = HttpOrigin.require(publicBaseUrl, "공개 base URL");
+        if (!origin.isLoopback() && !origin.isHttps()) {
             throw new IllegalArgumentException(
-                    "공개 base URL은 경로가 없는 HTTP 또는 HTTPS origin이어야 합니다"
+                    "비로컬 공개 base URL은 HTTPS origin이어야 합니다"
             );
         }
-    }
-
-    private static boolean hasInvalidExplicitPort(URI uri) {
-        int port = uri.getPort();
-        String authority = uri.getRawAuthority();
-        return port == 0
-                || port > 65_535
-                || (port == -1 && authority != null && authority.endsWith(":"));
+        publicBaseUrl = origin.value();
     }
 
     public URI shortUrl(String rawCode) {

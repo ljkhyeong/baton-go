@@ -15,7 +15,9 @@
 - 대상은 `BATON`, `ROUND` enum과 안전한 target path로 나눈다.
 - target path에는 scheme, authority, query, fragment, backslash, 제어문자와 `//` prefix를
   허용하지 않는다.
-- base URL은 환경 설정으로만 제공하고 HTTP 또는 HTTPS origin이어야 한다.
+- 공개 base URL과 target base URL은 환경 설정으로만 제공하고 경로·query·fragment·userinfo가
+  없는 HTTP 또는 HTTPS origin이어야 한다. HTTP는 `localhost`, canonical `127.0.0.0/8`
+  IPv4 literal과 IPv6 loopback literal에만 허용하며 비로컬 origin은 HTTPS를 강제한다.
 - 리다이렉트 응답은 `no-store`와 `no-referrer`를 사용한다.
 - 관리 API는 공백 없는 printable ASCII로 구성한 최소 32자의 환경 변수 Bearer credential로
   보호한다. 이 자격은 파일럿용 서비스 인증이며 최종 사용자 신원 모델이 아니다.

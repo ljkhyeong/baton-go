@@ -18,12 +18,26 @@ class PublicLinkPropertiesTest {
             "https://go.example",
             "https://go.example/",
             "http://localhost:1",
+            "http://127.0.0.2:8080",
             "http://[::1]:65535"
     })
     @DisplayName("포트가 없거나 명시적 포트가 허용 범위이면 공개 base URL을 허용한다")
     void acceptsOriginWithoutPortOrWithPortInRange(String rawUrl) {
         assertThatCode(() -> new PublicLinkProperties(URI.create(rawUrl)))
                 .doesNotThrowAnyException();
+    }
+
+    @ParameterizedTest(name = "{index}: {0}")
+    @ValueSource(strings = {
+            "http://go.example",
+            "http://127.0.0.1.example:8080",
+            "http://0127.0.0.1:8080"
+    })
+    @DisplayName("비로컬 또는 모호한 HTTP 공개 origin은 거부한다")
+    void rejectsNonLoopbackHttpOrigins(String rawUrl) {
+        assertThatThrownBy(() -> new PublicLinkProperties(URI.create(rawUrl)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("비로컬 공개 base URL은 HTTPS origin이어야 합니다");
     }
 
     @ParameterizedTest(name = "{index}: {0}")

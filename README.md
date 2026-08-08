@@ -125,6 +125,10 @@ printable ASCII만 사용한다. 링크 코드 파생 비밀은 기존 DB-key �
 시작하지 않는다. 링크 코드 파생 비밀은 재시작과 복구 뒤에도 같은 값을 유지해야 기존 생성
 요청을 동일 URL로 재생할 수 있다.
 
+`BATON_GO_PUBLIC_BASE_URL`도 모든 실행 환경에서 명시한다. 로컬 개발의 loopback HTTP는
+허용하지만, 사용자에게 반환되는 비로컬 short URL origin은 HTTPS여야 한다. 값은 path, query,
+fragment나 userinfo가 없는 origin이어야 한다.
+
 ### HMAC 키와 데이터베이스 결합
 
 애플리케이션은 시작할 때 링크 코드 HMAC 파생 version과 key fingerprint를 DB의 singleton

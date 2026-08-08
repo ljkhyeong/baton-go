@@ -2,6 +2,7 @@ package com.personal.batongo.bootstrap.guard;
 
 import java.util.UUID;
 
+/** guard 도입 전 UUID 파서와 호환되는 복구 전용 canary입니다. */
 record LegacyCanaryIdempotencyKey(String value) {
 
     static LegacyCanaryIdempotencyKey parse(String rawValue) {

@@ -14,9 +14,10 @@
   한다. 재생 code hash 검증은 방어 계층으로 유지한다.
 - DB backup과 해당 HMAC secret-manager version은 하나의 복구 단위다. 기존 데이터가 있는
   DB에 guard를 처음 도입할 때는 writer를 중지하고 기존 secret 및 canary를 검증한 뒤
-  별도 `baton-go-guard-binding.jar`로 singleton을 결합한다. 도구는 canary를 stdin으로만
-  받고 예약·링크 hash 일치를 확인한 뒤 한 transaction에서 결합한다. key ring 전에는
-  secret을 회전하지 않는다.
+  전용 `guard-tool` 모듈의 `baton-go-guard-binding.jar`로 singleton을 결합한다. 도구는
+  canary를 stdin으로만 받고 예약·링크 hash 일치를 확인한 뒤 한 transaction에서 결합한다.
+  서버의 웹 서버·Hibernate/Spring Data JPA·Actuator runtime과 분리되어 있으며 key ring
+  전에는 secret을 회전하지 않는다.
 - MySQL Testcontainers가 동시 동일 요청을 링크·예약 각 한 건으로 직렬화하고, 최초 owner
   rollback 때 발생할 수 있는 deadlock victim도 동일 키 재시도로 복구되는지 검증한다.
 - 관리 Bearer 인증은 scheme 대소문자를 구분하지 않으며, `401`에는

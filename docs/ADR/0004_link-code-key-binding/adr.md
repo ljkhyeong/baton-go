@@ -62,10 +62,13 @@ MySQL repeatable-read의 과거 snapshot을 만들지 않아 멱등 예약 승�
 5. 새 버전을 시작하고 readiness가 열리기 전에 guard 검증이 통과하는지 확인한다.
 
 검증된 배포 도구는 release source에서 별도 생성하는
-`baton-go-guard-binding.jar`다. 일반 애플리케이션의 우회 flag나 관리 HTTP endpoint가
-아니며, writer 중지 확인 인자와 stdin canary를 요구한다. 도구는 canary 멱등성 키의 예약
-해시와 현재 비밀에서 파생한 code hash가 같은 저장 링크에 결합됐는지 확인한 뒤 guard row를
-잠그고 같은 transaction에서 최초 결합한다. 세부 절차는
+`guard-tool` 모듈의 `baton-go-guard-binding.jar`다. 이 모듈은 application, 링크 코드
+external adapter와 MySQL JDBC를 조합하며 일반 서버의 웹 서버·Hibernate/Spring Data JPA·
+Actuator runtime을 포함하지 않는다. 일반 애플리케이션의 우회 flag나 관리 HTTP endpoint가
+아니며, writer 중지 확인
+인자와 stdin canary를 요구한다. 도구는 canary 멱등성 키의 예약 해시와 현재 비밀에서 파생한
+code hash가 같은 저장 링크에 결합됐는지 확인한 뒤 guard row를 잠그고 같은 transaction에서
+최초 결합한다. 세부 절차는
 [기존 데이터베이스 HMAC guard 최초 결합 runbook](../../RUNBOOK/link-code-key-guard-binding.md)을
 따른다.
 

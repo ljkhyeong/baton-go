@@ -21,10 +21,12 @@
 - `adapter-in-web`: HTTP DTO, controller, filter, 오류 직렬화
 - `adapter-out-persistence`: JPA repository와 persistence port 구현
 - `adapter-out-external`: 신뢰 대상 URL 조립과 향후 BATON·ROUND HTTP adapter
+- `guard-tool`: 기존 DB HMAC guard 최초 결합을 위한 one-shot JDBC CLI
 - `bootstrap`: Spring Boot, 설정, Flyway와 런타임 조립
 
-프로덕션 의존 방향은 `bootstrap → adapters → application → domain`이다. Controller에
-업무 규칙을 두지 않고 application은 adapter를 참조하지 않는다.
+프로덕션 의존 방향은 `bootstrap → adapters → application → domain`과
+`guard-tool → adapter-out-external/application → domain`이다. Controller에 업무 규칙을
+두지 않고 application은 adapter를 참조하지 않는다.
 
 ## 구현 규칙
 

@@ -43,7 +43,7 @@ canary나 검증된 secret version이 없으면 여기서 중단한다. 임의 �
 검토·서명된 같은 release source에서 one-shot 실행 파일을 만든다.
 
 ```bash
-./gradlew --no-daemon :bootstrap:guardBindingToolJar
+./gradlew --no-daemon :guard-tool:bootJar
 ```
 
 canary는 process argument나 export된 환경 변수가 아니라 stdin으로만 전달한다. 다음 예시는
@@ -54,7 +54,7 @@ zsh에서 입력을 화면과 history에 남기지 않는다.
   trap 'unset BATON_GO_CANARY_KEY BATON_GO_GUARD_STATUS' EXIT
   read -rs "BATON_GO_CANARY_KEY?Canary Idempotency-Key: "
   printf '%s\n' "$BATON_GO_CANARY_KEY" |
-    java -jar bootstrap/build/libs/baton-go-guard-binding.jar --confirm-writers-stopped
+    java -jar guard-tool/build/libs/baton-go-guard-binding.jar --confirm-writers-stopped
   BATON_GO_GUARD_STATUS=$?
   exit "$BATON_GO_GUARD_STATUS"
 )

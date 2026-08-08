@@ -58,20 +58,14 @@ public class SmartLink {
     private SmartLink(
             UUID id,
             String codeHash,
-            TargetSystem targetSystem,
-            String targetPath,
-            LinkPurpose purpose,
+            TrustedTarget trustedTarget,
             Instant notBefore,
             Instant expiresAt,
             Instant createdAt
     ) {
         this.id = Objects.requireNonNull(id, "링크 식별자는 필수입니다");
         this.codeHash = requireCodeHash(codeHash);
-        TrustedTarget trustedTarget = TrustedTargetPolicy.requireAllowed(
-                targetSystem,
-                purpose,
-                targetPath
-        );
+        Objects.requireNonNull(trustedTarget, "신뢰 대상은 필수입니다");
         this.targetSystem = trustedTarget.targetSystem();
         this.purpose = trustedTarget.purpose();
         this.targetPath = trustedTarget.targetPath();
@@ -84,9 +78,7 @@ public class SmartLink {
     public static SmartLink create(
             UUID id,
             String codeHash,
-            TargetSystem targetSystem,
-            String targetPath,
-            LinkPurpose purpose,
+            TrustedTarget trustedTarget,
             Instant notBefore,
             Instant expiresAt,
             Instant createdAt
@@ -94,9 +86,7 @@ public class SmartLink {
         return new SmartLink(
                 id,
                 codeHash,
-                targetSystem,
-                targetPath,
-                purpose,
+                trustedTarget,
                 notBefore,
                 expiresAt,
                 createdAt

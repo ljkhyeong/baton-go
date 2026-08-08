@@ -82,12 +82,11 @@ public class SmartLinkService implements SmartLinkUseCase {
         UUID existingLinkId = reservationPort.findLinkId(
                 prepared.idempotencyKeyHash()
         ).orElseThrow(prepared.admission()::missingReservationException);
-        String targetPath = requireAllowedTargetPath(prepared.command());
+        TrustedTarget requestedTarget = requireAllowedTarget(prepared.command());
         linkCodeKeyGuard.verifyBound();
         return replayCreation(
                 existingLinkId,
-                prepared.command(),
-                targetPath,
+                requestedTarget,
                 prepared.admission().notBefore(),
                 prepared.admission().expiresAt(),
                 linkCodePort.issue(prepared.idempotencyKey())
@@ -95,8 +94,7 @@ public class SmartLinkService implements SmartLinkUseCase {
     }
 
     private CreatedLinkResult reserveCreateOrReplay(PreparedCreation prepared) {
-        CreateLinkCommand command = prepared.command();
-        String targetPath = requireAllowedTargetPath(command);
+        TrustedTarget requestedTarget = requireAllowedTarget(prepared.command());
         linkCodeKeyGuard.verifyBound();
         Instant now = databaseTime();
         LinkCreationReservationPort.Reservation reservation = reservationPort.reserve(
@@ -109,8 +107,7 @@ public class SmartLinkService implements SmartLinkUseCase {
         if (!reservation.owner()) {
             return replayCreation(
                     reservation.linkId(),
-                    command,
-                    targetPath,
+                    requestedTarget,
                     prepared.admission().notBefore(),
                     prepared.admission().expiresAt(),
                     issuedCode
@@ -120,9 +117,7 @@ public class SmartLinkService implements SmartLinkUseCase {
         SmartLink smartLink = SmartLink.create(
                 reservation.linkId(),
                 issuedCode.codeHash(),
-                command.targetSystem(),
-                targetPath,
-                command.purpose(),
+                requestedTarget,
                 prepared.admission().notBefore(),
                 prepared.admission().expiresAt(),
                 now
@@ -144,18 +139,17 @@ public class SmartLinkService implements SmartLinkUseCase {
         }
     }
 
-    private String requireAllowedTargetPath(CreateLinkCommand command) {
+    private TrustedTarget requireAllowedTarget(CreateLinkCommand command) {
         return TrustedTargetPolicy.requireAllowed(
                 command.targetSystem(),
                 command.purpose(),
                 command.targetPath()
-        ).targetPath();
+        );
     }
 
     private CreatedLinkResult replayCreation(
             UUID linkId,
-            CreateLinkCommand command,
-            String targetPath,
+            TrustedTarget requestedTarget,
             Instant notBefore,
             Instant expiresAt,
             IssuedLinkCode issuedCode
@@ -163,8 +157,7 @@ public class SmartLinkService implements SmartLinkUseCase {
         StoredLinkReplay existing = findReplayLink(linkId);
         TrustedTarget trustedTarget = requireSameCreationRequest(
                 existing,
-                command,
-                targetPath,
+                requestedTarget,
                 notBefore,
                 expiresAt
         );
@@ -245,8 +238,7 @@ public class SmartLinkService implements SmartLinkUseCase {
 
     private TrustedTarget requireSameCreationRequest(
             StoredLinkReplay existing,
-            CreateLinkCommand command,
-            String targetPath,
+            TrustedTarget requestedTarget,
             Instant notBefore,
             Instant expiresAt
     ) {
@@ -260,9 +252,9 @@ public class SmartLinkService implements SmartLinkUseCase {
         } catch (LinkValidationException exception) {
             throw new IdempotencyKeyConflictException();
         }
-        boolean sameRequest = trustedTarget.targetSystem() == command.targetSystem()
-                && trustedTarget.targetPath().equals(targetPath)
-                && trustedTarget.purpose() == command.purpose()
+        boolean sameRequest = trustedTarget.targetSystem() == requestedTarget.targetSystem()
+                && trustedTarget.targetPath().equals(requestedTarget.targetPath())
+                && trustedTarget.purpose() == requestedTarget.purpose()
                 && Objects.equals(existing.notBefore(), notBefore)
                 && Objects.equals(existing.expiresAt(), expiresAt);
         if (!sameRequest) {

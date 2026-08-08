@@ -17,13 +17,13 @@ interface SpringDataLinkCreationRequestRepository
                 created_at
             ) VALUES (
                 :idempotencyKeyHash,
-                :linkId,
+                UUID_TO_BIN(:linkId),
                 :createdAt
             )
             """, nativeQuery = true)
     int insertIfAbsent(
             @Param("idempotencyKeyHash") String idempotencyKeyHash,
-            @Param("linkId") byte[] linkId,
+            @Param("linkId") String linkId,
             @Param("createdAt") Instant createdAt
     );
 }

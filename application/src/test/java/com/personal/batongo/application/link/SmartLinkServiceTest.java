@@ -24,6 +24,7 @@ import com.personal.batongo.domain.link.LinkPurpose;
 import com.personal.batongo.domain.link.LinkValidationException;
 import com.personal.batongo.domain.link.SmartLink;
 import com.personal.batongo.domain.link.TargetSystem;
+import com.personal.batongo.domain.link.TrustedTargetPolicy;
 import java.net.URI;
 import java.time.Clock;
 import java.time.Instant;
@@ -150,9 +151,11 @@ class SmartLinkServiceTest {
         repository.save(SmartLink.create(
                 linkId,
                 CODE_HASH,
-                TargetSystem.ROUND,
-                ROUND_PATH,
-                LinkPurpose.MEETING_ENTRY,
+                TrustedTargetPolicy.requireAllowed(
+                        TargetSystem.ROUND,
+                        LinkPurpose.MEETING_ENTRY,
+                        ROUND_PATH
+                ),
                 null,
                 null,
                 NOW

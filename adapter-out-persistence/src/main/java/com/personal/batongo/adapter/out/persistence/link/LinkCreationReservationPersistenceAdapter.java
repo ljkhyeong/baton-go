@@ -1,7 +1,6 @@
 package com.personal.batongo.adapter.out.persistence.link;
 
 import com.personal.batongo.application.link.port.out.LinkCreationReservationPort;
-import java.nio.ByteBuffer;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
@@ -37,19 +36,12 @@ public class LinkCreationReservationPersistenceAdapter
     ) {
         int inserted = repository.insertIfAbsent(
                 idempotencyKeyHash,
-                toBytes(proposedLinkId),
+                proposedLinkId.toString(),
                 createdAt
         );
         LinkCreationRequestEntity request = repository
                 .findById(idempotencyKeyHash)
                 .orElseThrow(() -> new IllegalStateException("링크 생성 예약을 찾을 수 없습니다"));
         return new Reservation(request.getLinkId(), inserted == 1);
-    }
-
-    private byte[] toBytes(UUID value) {
-        return ByteBuffer.allocate(16)
-                .putLong(value.getMostSignificantBits())
-                .putLong(value.getLeastSignificantBits())
-                .array();
     }
 }

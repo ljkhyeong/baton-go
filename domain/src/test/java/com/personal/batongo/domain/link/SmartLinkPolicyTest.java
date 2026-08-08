@@ -82,9 +82,11 @@ class SmartLinkPolicyTest {
         return SmartLink.create(
                 UUID.randomUUID(),
                 CODE_HASH,
-                TargetSystem.BATON,
-                BATON_PATH,
-                LinkPurpose.NAVIGATION,
+                TrustedTargetPolicy.requireAllowed(
+                        TargetSystem.BATON,
+                        LinkPurpose.NAVIGATION,
+                        BATON_PATH
+                ),
                 notBefore,
                 expiresAt,
                 CREATED_AT
@@ -95,9 +97,11 @@ class SmartLinkPolicyTest {
         return SmartLink.create(
                 UUID.randomUUID(),
                 CODE_HASH,
-                TargetSystem.BATON,
-                path,
-                LinkPurpose.NAVIGATION,
+                TrustedTargetPolicy.requireAllowed(
+                        TargetSystem.BATON,
+                        LinkPurpose.NAVIGATION,
+                        path
+                ),
                 null,
                 null,
                 CREATED_AT

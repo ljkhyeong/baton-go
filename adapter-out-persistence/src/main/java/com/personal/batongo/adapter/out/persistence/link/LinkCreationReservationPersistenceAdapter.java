@@ -24,7 +24,7 @@ public class LinkCreationReservationPersistenceAdapter
     @Override
     @Transactional(propagation = Propagation.MANDATORY, readOnly = true)
     public Optional<UUID> findLinkId(String idempotencyKeyHash) {
-        return repository.findByIdempotencyKeyHash(idempotencyKeyHash)
+        return repository.findById(idempotencyKeyHash)
                 .map(LinkCreationRequestEntity::getLinkId);
     }
 
@@ -41,7 +41,7 @@ public class LinkCreationReservationPersistenceAdapter
                 createdAt
         );
         LinkCreationRequestEntity request = repository
-                .findByIdempotencyKeyHash(idempotencyKeyHash)
+                .findById(idempotencyKeyHash)
                 .orElseThrow(() -> new IllegalStateException("링크 생성 예약을 찾을 수 없습니다"));
         return new Reservation(request.getLinkId(), inserted == 1);
     }

@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.TimeZone;
 import java.util.UUID;
+import org.springframework.dao.support.DataAccessUtils;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
@@ -84,7 +85,7 @@ public class SmartLinkPersistenceAdapter implements SmartLinkRepository {
                 ),
                 id.toString()
         );
-        return rows.stream().findFirst();
+        return DataAccessUtils.optionalResult(rows);
     }
 
     @Override
@@ -113,7 +114,7 @@ public class SmartLinkPersistenceAdapter implements SmartLinkRepository {
                 ),
                 codeHash
         );
-        return rows.stream().findFirst();
+        return DataAccessUtils.optionalResult(rows);
     }
 
     @Override
@@ -183,7 +184,7 @@ public class SmartLinkPersistenceAdapter implements SmartLinkRepository {
                 this::storedSnapshot,
                 linkId
         );
-        return rows.stream().findFirst();
+        return DataAccessUtils.optionalResult(rows);
     }
 
     private StoredLinkSnapshot storedSnapshot(

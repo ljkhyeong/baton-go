@@ -4,4 +4,9 @@ public record IssuedLinkCode(
         String rawCode,
         String codeHash
 ) {
+
+    @Override
+    public String toString() {
+        return "IssuedLinkCode[redacted]";
+    }
 }

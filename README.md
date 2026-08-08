@@ -82,6 +82,9 @@ BATON mode 운영에서는 `BATON_GO_BATON_BASE_URL`과 `BATON_GO_ROUND_BASE_URL
 public HTTPS origin으로 설정한다. edge가 `/room/**`·`/round-ui/**`는 ROUND web으로,
 participation-grant refresh는 BATON으로, signaling·TURN만 ROUND 내부 서비스로 라우팅한다.
 로컬의 서로 다른 `5173`·`5174` 기본값은 이 end-to-end 운영 계약을 만족하지 않는다.
+두 target이 모두 loopback이면 서로 다른 HTTP port를 로컬 개발 예외로 허용한다. 하나라도
+비로컬이면 애플리케이션은 두 값을 동일한 HTTPS origin으로 검증하고 시작 단계에서
+fail-closed 한다. 이 설정 검증은 실제 edge route·cookie·header E2E를 대신하지 않는다.
 
 ## 기술 스택
 
@@ -126,6 +129,12 @@ canary 생성 intent의 동일 URL 재생을 확인한다. key ring을 도입하
 절차로 singleton identity를 한 번 결합한다. canary나 검증된 secret을 복구할 수 없으면 임의
 secret으로 강제 결합하지 않는다. 자세한 결정은
 [ADR-0004](docs/ADR/0004_link-code-key-binding/adr.md)를 따른다.
+
+이 저장소는 일반 애플리케이션과 분리된 `baton-go-guard-binding.jar`를 제공한다. 도구는
+canary `Idempotency-Key`를 stdin으로만 받고 저장된 예약·링크의 해시를 검증한 뒤 한
+transaction에서 결합한다. 직접 SQL이나 우회 환경 변수 대신
+[기존 데이터베이스 HMAC guard 최초 결합 runbook](docs/RUNBOOK/link-code-key-guard-binding.md)을
+따른다.
 
 호스트에서 Gradle로 애플리케이션을 실행할 때는 `.env`의 값을 자식 프로세스에 export하고
 MySQL만 Compose로 먼저 실행한다. JDBC URL은 zsh에서 `source`할 수 있도록 예시 파일에서
@@ -203,4 +212,6 @@ curl -i http://localhost:8080/api/v1/links \
 - [링크 코드 HMAC 키와 DB 결합](docs/ADR/0004_link-code-key-binding/adr.md)
 - [Typed target locator](docs/ADR/0005_trusted-target-locator/adr.md)
 - [계약 전 target 정리](docs/ADR/0006_target-contract-remediation/adr.md)
+- [MySQL 절대 시각 저장 형식](docs/ADR/0007_mysql-instant-storage/adr.md)
+- [기존 DB HMAC guard 최초 결합 runbook](docs/RUNBOOK/link-code-key-guard-binding.md)
 - [Target contract v1 정리 runbook](docs/RUNBOOK/target-contract-v1-remediation.md)

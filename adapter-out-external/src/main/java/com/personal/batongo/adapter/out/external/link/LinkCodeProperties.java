@@ -12,4 +12,9 @@ public record LinkCodeProperties(
             throw new IllegalArgumentException("링크 코드 파생 키는 32자 이상이어야 합니다");
         }
     }
+
+    @Override
+    public String toString() {
+        return "LinkCodeProperties[secret=redacted]";
+    }
 }

@@ -12,4 +12,9 @@ public record ManagementProperties(
             throw new IllegalArgumentException("관리 credential은 32자 이상이어야 합니다");
         }
     }
+
+    @Override
+    public String toString() {
+        return "ManagementProperties[token=redacted]";
+    }
 }

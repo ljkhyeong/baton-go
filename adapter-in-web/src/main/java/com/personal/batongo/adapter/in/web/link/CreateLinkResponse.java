@@ -32,4 +32,9 @@ public record CreateLinkResponse(
                 result.link().createdAt()
         );
     }
+
+    @Override
+    public String toString() {
+        return "CreateLinkResponse[id=" + id + ", shortUrl=redacted, target=redacted]";
+    }
 }

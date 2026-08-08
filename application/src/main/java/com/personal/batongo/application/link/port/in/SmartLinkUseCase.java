@@ -25,6 +25,11 @@ public interface SmartLinkUseCase {
             Instant notBefore,
             Instant expiresAt
     ) {
+
+        @Override
+        public String toString() {
+            return "CreateLinkCommand[redacted]";
+        }
     }
 
     record CreatedLinkResult(
@@ -32,12 +37,22 @@ public interface SmartLinkUseCase {
             String rawCode,
             boolean replayed
     ) {
+
+        @Override
+        public String toString() {
+            return "CreatedLinkResult[redacted]";
+        }
     }
 
     record ResolvedLinkResult(
             UUID id,
             URI destination
     ) {
+
+        @Override
+        public String toString() {
+            return "ResolvedLinkResult[id=" + id + ", destination=redacted]";
+        }
     }
 
     record LinkResult(
@@ -50,5 +65,10 @@ public interface SmartLinkUseCase {
             Instant revokedAt,
             Instant createdAt
     ) {
+
+        @Override
+        public String toString() {
+            return "LinkResult[id=" + id + ", target=redacted]";
+        }
     }
 }

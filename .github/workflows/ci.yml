@@ -28,8 +28,14 @@ jobs:
       - name: Gradle 설정
         uses: gradle/actions/setup-gradle@v6
 
-      - name: 정적·단위 검증
-        run: ./gradlew --no-daemon test
+      - name: 정적·단위·패키징 검증
+        run: ./gradlew --no-daemon build
+
+      - name: Compose 설정 검증
+        run: docker compose --env-file .env.example config --quiet
+
+      - name: 운영 이미지 빌드 검증
+        run: docker build --tag baton-go:ci .
 
       - name: MySQL 통합 검증
         run: ./gradlew --no-daemon :bootstrap:mysqlTest

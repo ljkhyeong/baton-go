@@ -4,13 +4,19 @@
 - 멱등 재생 시 현재 HMAC 파생 결과를 저장된 코드 해시와 대조하며, 파생 비밀 변경으로
   기존 short URL을 재생할 수 없으면 잘못된 URL 대신
   `500 LINK_CODE_REPLAY_UNAVAILABLE`로 실패한다.
+- 신규 생성은 lowercase UUID v1..5/RFC variant와 Java/JDBC 안전 저장 범위의 마이크로초 payload만
+  허용한다. 과거 배포가 허용했던 canonical 대문자·기타 UUID와 범위 안 나노초 payload는
+  동일 키의 기존 예약과 저장 payload가 일치할 때만 replay-only로 처리한다. 기존 예약이
+  없으면 안정된 `400`이며 예약·링크 행을 새로 만들지 않고, 범위 밖 시각은 항상 거부한다.
 - 링크 코드 HMAC 파생 version·fingerprint를 `link_code_key_guard` singleton에 결합한다.
   시작 시점과 생성 예약 전에 검증하며, 링크와 예약이 모두 빈 DB만 자동 결합한다. 기존
   데이터가 있는 미결합 DB나 다른 identity는 secret·fingerprint를 노출하지 않고 fail-closed
   한다. 재생 code hash 검증은 방어 계층으로 유지한다.
 - DB backup과 해당 HMAC secret-manager version은 하나의 복구 단위다. 기존 데이터가 있는
   DB에 guard를 처음 도입할 때는 writer를 중지하고 기존 secret 및 canary를 검증한 뒤
-  singleton을 결합한다. key ring 전에는 secret을 회전하지 않는다.
+  별도 `baton-go-guard-binding.jar`로 singleton을 결합한다. 도구는 canary를 stdin으로만
+  받고 예약·링크 hash 일치를 확인한 뒤 한 transaction에서 결합한다. key ring 전에는
+  secret을 회전하지 않는다.
 - MySQL Testcontainers가 동시 동일 요청을 링크·예약 각 한 건으로 직렬화하고, 최초 owner
   rollback 때 발생할 수 있는 deadlock victim도 동일 키 재시도로 복구되는지 검증한다.
 - 관리 Bearer 인증은 scheme 대소문자를 구분하지 않으며, `401`에는
@@ -34,6 +40,8 @@
   갱신하는 짧은 수명의 participation grant다. ROUND browser/signaling 쪽 검증은 있으나
   BATON session·grant 발급 endpoint와 edge routing은 아직 연결되지 않았다.
 - BATON mode에서 GO의 BATON·ROUND target origin은 같은 BATON public HTTPS origin이어야 한다.
+  두 target이 모두 loopback인 로컬 개발만 서로 다른 HTTP port를 허용하고, 그 외 설정은
+  같은 HTTPS origin이 아니면 시작 단계에서 거부한다.
   BATON은 room별 one-to-one active resource mapping과 영구 tombstone을 소유하며 v1 grant는
   `study_id=teamId`, `role=participant`로 제한한다.
 - 공개 production rollout은 아직 승인되지 않았다. 다음 우선순위는 계약 전 저장 데이터를

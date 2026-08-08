@@ -382,7 +382,7 @@ projection 조회에서 링크별로 GO를 호출하지 않는다.
 | BATON workspace route | 구현됨 | v1은 기존 access key 보유 브라우저 복귀로만 노출 |
 | BATON 신규 브라우저 진입 | 미구현 | 계정·초대·claim landing 계약 전에는 지원 표시 금지 |
 | ROUND landing·pre-join | 구현됨 | canonical path E2E 고정 |
-| BATON-mode 동일 origin | 미연결 | GO의 BATON·ROUND origin을 같은 public HTTPS origin으로 고정하고 전체 edge route 검증 |
+| BATON-mode 동일 origin | GO 비로컬 설정은 동일 HTTPS origin으로 fail-fast, edge는 미연결 | 전체 edge route와 cookie·header 보존 검증 |
 | ROUND BATON-mode browser·signaling 검증 | 구현됨 | BATON session·refresh 발급과 edge routing 연결 |
 | BATON account session·grant 발급 | 미구현 | 5절의 session, CSRF, mapping, participant role, JWK와 cookie 계약 구현 |
 | BATON room mapping | 미구현 | one-to-one active mapping, 영구 room tombstone과 `study_id=teamId` 강제 |

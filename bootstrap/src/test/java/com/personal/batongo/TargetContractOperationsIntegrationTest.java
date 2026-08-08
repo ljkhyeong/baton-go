@@ -49,7 +49,7 @@ import org.testcontainers.mysql.MySQLContainer;
         "baton-go.link-code.secret=test-link-code-secret-that-is-separate-and-long-enough",
         "baton-go.public-base-url=https://go.example",
         "baton-go.targets.baton-base-url=https://baton.example",
-        "baton-go.targets.round-base-url=https://round.example",
+        "baton-go.targets.round-base-url=https://baton.example",
         "baton-go.target-contract-operations.enabled=true",
         "baton-go.target-contract-operations.private-ingress-confirmed=true"
 })

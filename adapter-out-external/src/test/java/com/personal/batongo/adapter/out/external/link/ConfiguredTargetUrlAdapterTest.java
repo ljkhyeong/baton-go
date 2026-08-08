@@ -12,7 +12,7 @@ class ConfiguredTargetUrlAdapterTest {
     private final ConfiguredTargetUrlAdapter adapter = new ConfiguredTargetUrlAdapter(
             new TrustedTargetProperties(
                     URI.create("https://baton.example"),
-                    URI.create("https://round.example")
+                    URI.create("https://baton.example")
             )
     );
 
@@ -25,6 +25,6 @@ class ConfiguredTargetUrlAdapterTest {
         assertThat(adapter.resolve(TargetSystem.BATON, batonTarget))
                 .isEqualTo(URI.create("https://baton.example" + batonTarget));
         assertThat(adapter.resolve(TargetSystem.ROUND, "/room/abcd-efgh-jkmp"))
-                .isEqualTo(URI.create("https://round.example/room/abcd-efgh-jkmp"));
+                .isEqualTo(URI.create("https://baton.example/room/abcd-efgh-jkmp"));
     }
 }

@@ -28,6 +28,16 @@ jobs:
       - name: Gradle 설정
         uses: gradle/actions/setup-gradle@v6
 
+      - name: Kubernetes CLI 설정
+        uses: azure/setup-kubectl@v5
+        with:
+          version: v1.36.1
+
+      - name: Kubernetes Kustomize 렌더링 검증
+        run: |
+          kubectl kustomize deploy/k8s/bootstrap >/dev/null
+          kubectl kustomize deploy/k8s/overlays/private-server >/dev/null
+
       - name: 정적·단위·패키징 검증
         run: ./gradlew --no-daemon build
 

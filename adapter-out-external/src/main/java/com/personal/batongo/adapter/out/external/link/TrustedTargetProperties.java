@@ -37,7 +37,10 @@ public record TrustedTargetProperties(
 
     private static boolean hasInvalidExplicitPort(URI value) {
         int port = value.getPort();
-        return port == 0 || port > 65_535;
+        String authority = value.getRawAuthority();
+        return port == 0
+                || port > 65_535
+                || (port == -1 && authority != null && authority.endsWith(":"));
     }
 
     private static void requireDeploymentTopology(URI batonBaseUrl, URI roundBaseUrl) {

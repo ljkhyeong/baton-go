@@ -100,6 +100,9 @@ class TrustedTargetPropertiesTest {
 
     @ParameterizedTest
     @ValueSource(strings = {
+            "https://baton.example:",
+            "http://127.0.0.1:",
+            "https://[::1]:",
             "https://baton.example:0",
             "https://baton.example:65536"
     })

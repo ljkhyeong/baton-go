@@ -1,6 +1,7 @@
 package com.personal.batongo.adapter.out.external.link;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.personal.batongo.domain.link.TargetSystem;
 import java.net.URI;
@@ -26,5 +27,16 @@ class ConfiguredTargetUrlAdapterTest {
                 .isEqualTo(URI.create("https://baton.example" + batonTarget));
         assertThat(adapter.resolve(TargetSystem.ROUND, "/room/abcd-efgh-jkmp"))
                 .isEqualTo(URI.create("https://baton.example/room/abcd-efgh-jkmp"));
+    }
+
+    @Test
+    @DisplayName("scheme-relative 대상이 신뢰 origin 밖으로 벗어나면 해석을 거부한다")
+    void rejectsSchemeRelativeOriginEscape() {
+        assertThatThrownBy(() -> adapter.resolve(
+                TargetSystem.ROUND,
+                "//evil.example/room/abcd-efgh-jkmp"
+        ))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("신뢰 대상 origin 밖으로 링크를 해석할 수 없습니다");
     }
 }

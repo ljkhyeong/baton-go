@@ -42,6 +42,8 @@
 - BATON mode에서 GO의 BATON·ROUND target origin은 같은 BATON public HTTPS origin이어야 한다.
   두 target이 모두 loopback인 로컬 개발만 서로 다른 HTTP port를 허용하고, 그 외 설정은
   같은 HTTPS origin이 아니면 시작 단계에서 거부한다.
+  loopback은 `localhost`, 선행 0이 없는 canonical dotted-decimal IPv4 `127.0.0.0/8`과
+  IPv6 loopback literal로 판정하고 명시적 origin port는 `1..65535`만 허용한다.
   BATON은 room별 one-to-one active resource mapping과 영구 tombstone을 소유하며 v1 grant는
   `study_id=teamId`, `role=participant`로 제한한다.
 - 공개 production rollout은 아직 승인되지 않았다. 다음 우선순위는 계약 전 저장 데이터를

@@ -85,6 +85,8 @@ participation-grant refresh는 BATON으로, signaling·TURN만 ROUND 내부 서�
 두 target이 모두 loopback이면 서로 다른 HTTP port를 로컬 개발 예외로 허용한다. 하나라도
 비로컬이면 애플리케이션은 두 값을 동일한 HTTPS origin으로 검증하고 시작 단계에서
 fail-closed 한다. 이 설정 검증은 실제 edge route·cookie·header E2E를 대신하지 않는다.
+loopback은 `localhost`, 선행 0이 없는 canonical dotted-decimal IPv4 `127.0.0.0/8`과 IPv6
+loopback literal로 판정하며, 명시적 origin port는 `1..65535`만 허용한다.
 
 ## 기술 스택
 
@@ -184,7 +186,8 @@ Flyway/JPA와 동시 생성 동작을 포함한 MySQL 통합 검증은 Docker가
 ./gradlew --no-daemon :bootstrap:mysqlTest
 ```
 
-CI의 필수 검증 job은 일반 테스트와 MySQL 통합 테스트를 모두 실행한다.
+CI의 필수 검증 job은 일반 테스트, 패키징된 guard 도구의 fail-closed 실행, 운영 이미지와
+MySQL 통합 테스트를 모두 검증한다.
 
 ## MVP 링크 생성
 

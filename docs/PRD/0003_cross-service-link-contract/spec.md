@@ -60,7 +60,8 @@ ROUND
   보내지 않는다. GO도 이를 canonical 값으로 고쳐 저장하지 않고 거부해야 한다.
 - query, fragment, percent encoding, scheme, authority, 역슬래시, 반복 slash와 dot segment는
   허용하지 않는다.
-- 신뢰 origin은 path·query·fragment가 없는 HTTP(S) origin이다. 운영 환경은 HTTPS만 쓴다.
+- 신뢰 origin은 user-info·path·query·fragment가 없는 HTTP(S) origin이다. 명시적 port는
+  `1..65535`만 허용하며 운영 환경은 HTTPS만 쓴다.
 - `BATON + MEETING_ENTRY`, `ROUND + NAVIGATION`을 포함한 표 밖의 모든 조합은
   `400 INVALID_LINK`로 거부한다.
 - 알려지지 않은 enum 문자열처럼 JSON 자체가 역직렬화되지 않는 입력은 PRD-0002에 따라
@@ -101,6 +102,9 @@ BATON mode에서 BATON과 ROUND는 브라우저에 **하나의 동일한 HTTPS o
 BATON public origin으로 설정한다. `targetSystem`은 논리적 route owner를 구분할 뿐 별도
 host를 뜻하지 않는다. 로컬 기본값의 서로 다른 `5173`, `5174` port는 독립 개발 편의값이며
 BATON-mode E2E 계약을 만족하지 않는다.
+GO 설정의 로컬 예외는 `localhost`, 선행 0이 없는 canonical dotted-decimal IPv4
+`127.0.0.0/8`과 IPv6 loopback literal에만 적용한다. 브라우저와 서버의 주소 해석이 달라질
+수 있는 비canonical IPv4 표기는 loopback으로 간주하지 않는다.
 
 outer edge는 더 구체적인 경로를 먼저 평가해 다음과 같이 라우팅한다.
 

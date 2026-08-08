@@ -1,0 +1,123 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: baton-go-mysql
+  labels:
+    app.kubernetes.io/name: baton-go
+    app.kubernetes.io/component: database
+spec:
+  serviceName: baton-go-mysql
+  replicas: 1
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: baton-go
+      app.kubernetes.io/component: database
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: baton-go
+        app.kubernetes.io/component: database
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 120
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: mysql
+          image: mysql:8.4
+          imagePullPolicy: IfNotPresent
+          args:
+            - --character-set-server=utf8mb4
+            - --collation-server=utf8mb4_unicode_ci
+            - --default-time-zone=+00:00
+          env:
+            - name: MYSQL_DATABASE
+              value: baton_go
+            - name: MYSQL_USER
+              valueFrom:
+                configMapKeyRef:
+                  name: baton-go-database-identity
+                  key: BATON_GO_DB_USERNAME
+            - name: MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: baton-go-database-credentials
+                  key: BATON_GO_DB_PASSWORD
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: baton-go-database-credentials
+                  key: BATON_GO_DB_ROOT_PASSWORD
+            - name: MYSQL_ROOT_HOST
+              value: localhost
+            - name: TZ
+              value: UTC
+          ports:
+            - name: mysql
+              containerPort: 3306
+              protocol: TCP
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "2"
+              memory: 2Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            privileged: false
+          startupProbe:
+            exec:
+              command:
+                - sh
+                - -ec
+                - >-
+                  MYSQL_PWD="${MYSQL_PASSWORD}"
+                  mysql --protocol=TCP --host=127.0.0.1
+                  --user="${MYSQL_USER}" --database="${MYSQL_DATABASE}"
+                  --execute='SELECT 1' >/dev/null 2>&1
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 30
+          livenessProbe:
+            exec:
+              command:
+                - sh
+                - -ec
+                - >-
+                  MYSQL_PWD="${MYSQL_PASSWORD}"
+                  mysqladmin --protocol=TCP --host=127.0.0.1
+                  --user="${MYSQL_USER}" ping --silent
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 4
+          readinessProbe:
+            exec:
+              command:
+                - sh
+                - -ec
+                - >-
+                  MYSQL_PWD="${MYSQL_PASSWORD}"
+                  mysql --protocol=TCP --host=127.0.0.1
+                  --user="${MYSQL_USER}" --database="${MYSQL_DATABASE}"
+                  --execute='SELECT 1' >/dev/null 2>&1
+            periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 3
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/mysql
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        labels:
+          app.kubernetes.io/name: baton-go
+          app.kubernetes.io/component: database
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 10Gi

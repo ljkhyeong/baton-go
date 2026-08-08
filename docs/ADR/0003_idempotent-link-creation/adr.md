@@ -11,7 +11,14 @@ BATON과 ROUND가 링크를 원격 생성할 때 서버는 저장을 완료했�
 
 ## 결정
 
-- `POST /api/v1/links`는 생성 intent마다 canonical UUID `Idempotency-Key`를 요구한다.
+- `POST /api/v1/links`는 생성 intent마다 lowercase canonical UUID `Idempotency-Key`를 요구한다.
+  UUID version은 `1..5`, variant는 RFC variant만 허용하며 대문자나 nil UUID를 정규화하지
+  않는다.
+- 과거 배포에서 이미 성공한 intent의 재생 보장을 지키기 위해 당시 UUID 파서가 허용한
+  canonical 대문자, nil, version `0`·`6..f`, non-RFC variant는 replay-only 후보로
+  lowercase 정규화한다. 해당 키 해시의 기존 예약이 있을 때만 payload와 코드 해시를
+  검증해 재생하고, 예약이 없으면 `400 INVALID_IDEMPOTENCY_KEY`로 거부한다. 이 경로는
+  `INSERT IGNORE`나 링크 저장을 호출하지 않는다.
 - 관리 credential과 분리된 `BATON_GO_LINK_CODE_SECRET`을 사용한다.
 - 공개 코드는
   `first16(HMAC-SHA-256(secret, "baton-go-link-code:v1\0" + idempotencyKey))`로 파생한다.
@@ -20,12 +27,25 @@ BATON과 ROUND가 링크를 원격 생성할 때 서버는 저장을 완료했�
 - MySQL `INSERT IGNORE`의 unique-key 대기를 승자 선택 경계로 사용한다. 중복 insert가
   반환된 뒤에는 승자 transaction이 커밋되었으므로 일반 조회로 완성된 링크를 읽는다.
 - 같은 키와 payload는 동일 URL을 재생하고 같은 키의 다른 payload는 `409`로 거부한다.
+- 생성 payload의 `notBefore`와 `expiresAt`은 마이크로초 단위로 정확히 표현되고 MySQL
+  `DATETIME(6)`의 UTC 범위인 `1000-01-01T00:00:00Z` 이상
+  `9999-12-31T23:59:59.999999Z` 이하인 값만 받는다. 더 세밀하거나 범위 밖인 값을 DB
+  정밀도·범위에 맞춰 절삭하거나 보정하면 서로 다른 요청이 같은 replay payload로 합쳐질 수
+  있으므로 링크 생성 예약·저장 전에 `400 INVALID_REQUEST`로 거부한다.
+- 과거 배포가 `DATETIME(6)` 범위 안의 더 세밀한 입력을 마이크로초로 절삭해 이미 저장한
+  intent만 replay-only로 호환한다. 기존 예약을 먼저 조회하고 같은 마이크로초 절삭 payload가
+  저장값과 일치할 때만 재생한다. 예약이 없으면 새 행 없이 `400 INVALID_REQUEST`, 범위 밖이면
+  예약 여부와 무관하게 `400 INVALID_REQUEST`다.
 - 재생 응답은 최초 snapshot이 아니라 링크의 현재 폐기 상태를 반환한다.
 
 ## 트랜잭션 경계
 
 예약 생성, 링크 생성과 저장은 하나의 transaction에서 수행한다. 승자 transaction이
 rollback되면 예약 행도 함께 사라져 대기 중인 요청 하나가 새 승자가 된다.
+
+과거 UUID 또는 나노초 정밀도 호환 요청은 쓰기 transaction의 승자 선택 경계에 들어가지
+않는다. 기존 예약을 읽은 뒤 raw replay projection, canonical target, 마이크로초 payload와
+현재 HMAC 코드 해시가 모두 일치할 때만 기존 응답을 재생한다.
 
 승자 rollback 시 동일 unique key를 기다리던 나머지 transaction 일부는 MySQL의 deadlock
 victim으로 선택될 수 있다. 이 실패는 transaction 전체를 rollback한 뒤 호출자가 동일한

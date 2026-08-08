@@ -1,6 +1,8 @@
 package com.personal.batongo.application.link;
 
 import com.personal.batongo.application.link.error.IdempotencyKeyConflictException;
+import com.personal.batongo.application.link.error.InvalidCreationTimeException;
+import com.personal.batongo.application.link.error.InvalidIdempotencyKeyException;
 import com.personal.batongo.application.link.error.LinkCodeReplayMismatchException;
 import com.personal.batongo.application.link.error.LinkNotFoundException;
 import com.personal.batongo.application.link.error.StoredTargetPolicyViolationException;
@@ -9,6 +11,7 @@ import com.personal.batongo.application.link.port.out.IssuedLinkCode;
 import com.personal.batongo.application.link.port.out.LinkCodePort;
 import com.personal.batongo.application.link.port.out.LinkCreationReservationPort;
 import com.personal.batongo.application.link.port.out.SmartLinkRepository;
+import com.personal.batongo.application.link.port.out.SmartLinkRepository.StoredLinkReplay;
 import com.personal.batongo.application.link.port.out.SmartLinkRepository.StoredLinkResolution;
 import com.personal.batongo.application.link.port.out.SmartLinkRepository.StoredLinkSnapshot;
 import com.personal.batongo.application.link.port.out.TargetUrlPort;
@@ -54,17 +57,41 @@ public class SmartLinkService implements SmartLinkUseCase {
 
     @Override
     public CreatedLinkResult createLink(CreateLinkCommand command) {
-        String targetPath = TrustedTargetPolicy.requireAllowed(
-                command.targetSystem(),
-                command.purpose(),
-                command.targetPath()
-        ).targetPath();
-        linkCodeKeyGuard.verifyBound();
-        Instant now = databaseTime();
-        Instant notBefore = databaseTime(command.notBefore());
-        Instant expiresAt = databaseTime(command.expiresAt());
+        boolean storableCreationTime = CreationTimeStoragePolicy.isStorable(
+                command.notBefore(),
+                command.expiresAt()
+        );
+        if (!CreationTimeStoragePolicy.isWithinRange(
+                command.notBefore(),
+                command.expiresAt()
+        )) {
+            throw new InvalidCreationTimeException();
+        }
         String idempotencyKey = command.idempotencyKey().value();
         String idempotencyKeyHash = linkCodePort.hashIdempotencyKey(idempotencyKey);
+        Instant notBefore = databaseTime(command.notBefore());
+        Instant expiresAt = databaseTime(command.expiresAt());
+
+        if (!command.idempotencyKey().meetsCurrentContract() || !storableCreationTime) {
+            UUID existingLinkId = requireExistingReplayReservation(
+                    idempotencyKeyHash,
+                    command
+            );
+            String targetPath = requireAllowedTargetPath(command);
+            linkCodeKeyGuard.verifyBound();
+            return replayCreation(
+                    existingLinkId,
+                    command,
+                    targetPath,
+                    notBefore,
+                    expiresAt,
+                    linkCodePort.issue(idempotencyKey)
+            );
+        }
+
+        String targetPath = requireAllowedTargetPath(command);
+        linkCodeKeyGuard.verifyBound();
+        Instant now = databaseTime();
         LinkCreationReservationPort.Reservation reservation = reservationPort.reserve(
                 idempotencyKeyHash,
                 UUID.randomUUID(),
@@ -73,16 +100,14 @@ public class SmartLinkService implements SmartLinkUseCase {
         IssuedLinkCode issuedCode = linkCodePort.issue(idempotencyKey);
 
         if (!reservation.owner()) {
-            SmartLink existing = findLink(reservation.linkId());
-            requireSameCreationRequest(
-                    existing,
+            return replayCreation(
+                    reservation.linkId(),
                     command,
                     targetPath,
                     notBefore,
-                    expiresAt
+                    expiresAt,
+                    issuedCode
             );
-            requireReplayableCode(existing, issuedCode);
-            return new CreatedLinkResult(toResult(existing), issuedCode.rawCode(), true);
         }
 
         SmartLink smartLink = SmartLink.create(
@@ -97,6 +122,52 @@ public class SmartLinkService implements SmartLinkUseCase {
         );
         SmartLink saved = repository.save(smartLink);
         return new CreatedLinkResult(toResult(saved), issuedCode.rawCode(), false);
+    }
+
+    private UUID requireExistingReplayReservation(
+            String idempotencyKeyHash,
+            CreateLinkCommand command
+    ) {
+        UUID existingLinkId = reservationPort.findLinkId(idempotencyKeyHash).orElse(null);
+        if (existingLinkId != null) {
+            return existingLinkId;
+        }
+        if (!command.idempotencyKey().meetsCurrentContract()) {
+            throw new InvalidIdempotencyKeyException();
+        }
+        throw new InvalidCreationTimeException();
+    }
+
+    private String requireAllowedTargetPath(CreateLinkCommand command) {
+        return TrustedTargetPolicy.requireAllowed(
+                command.targetSystem(),
+                command.purpose(),
+                command.targetPath()
+        ).targetPath();
+    }
+
+    private CreatedLinkResult replayCreation(
+            UUID linkId,
+            CreateLinkCommand command,
+            String targetPath,
+            Instant notBefore,
+            Instant expiresAt,
+            IssuedLinkCode issuedCode
+    ) {
+        StoredLinkReplay existing = findReplayLink(linkId);
+        TrustedTarget trustedTarget = requireSameCreationRequest(
+                existing,
+                command,
+                targetPath,
+                notBefore,
+                expiresAt
+        );
+        requireReplayableCode(existing, issuedCode);
+        return new CreatedLinkResult(
+                toResult(existing, trustedTarget),
+                issuedCode.rawCode(),
+                true
+        );
     }
 
     @Override
@@ -162,29 +233,43 @@ public class SmartLinkService implements SmartLinkUseCase {
         return toResult(storedLink, trustedTarget, revokedAt);
     }
 
-    private SmartLink findLink(UUID linkId) {
-        return repository.findById(linkId).orElseThrow(LinkNotFoundException::new);
+    private StoredLinkReplay findReplayLink(UUID linkId) {
+        return repository.findReplayById(linkId).orElseThrow(LinkNotFoundException::new);
     }
 
-    private void requireSameCreationRequest(
-            SmartLink existing,
+    private TrustedTarget requireSameCreationRequest(
+            StoredLinkReplay existing,
             CreateLinkCommand command,
             String targetPath,
             Instant notBefore,
             Instant expiresAt
     ) {
-        boolean sameRequest = existing.getTargetSystem() == command.targetSystem()
-                && existing.getTargetPath().equals(targetPath)
-                && existing.getPurpose() == command.purpose()
-                && Objects.equals(existing.getNotBefore(), notBefore)
-                && Objects.equals(existing.getExpiresAt(), expiresAt);
+        TrustedTarget trustedTarget;
+        try {
+            trustedTarget = TrustedTargetPolicy.requireAllowed(
+                    existing.targetSystem(),
+                    existing.purpose(),
+                    existing.targetPath()
+            );
+        } catch (LinkValidationException exception) {
+            throw new IdempotencyKeyConflictException();
+        }
+        boolean sameRequest = trustedTarget.targetSystem() == command.targetSystem()
+                && trustedTarget.targetPath().equals(targetPath)
+                && trustedTarget.purpose() == command.purpose()
+                && Objects.equals(existing.notBefore(), notBefore)
+                && Objects.equals(existing.expiresAt(), expiresAt);
         if (!sameRequest) {
             throw new IdempotencyKeyConflictException();
         }
+        return trustedTarget;
     }
 
-    private void requireReplayableCode(SmartLink existing, IssuedLinkCode issuedCode) {
-        if (!existing.getCodeHash().equals(issuedCode.codeHash())) {
+    private void requireReplayableCode(
+            StoredLinkReplay existing,
+            IssuedLinkCode issuedCode
+    ) {
+        if (!existing.codeHash().equals(issuedCode.codeHash())) {
             throw new LinkCodeReplayMismatchException();
         }
     }
@@ -207,6 +292,22 @@ public class SmartLinkService implements SmartLinkUseCase {
                 smartLink.getExpiresAt(),
                 smartLink.getRevokedAt(),
                 smartLink.getCreatedAt()
+        );
+    }
+
+    private LinkResult toResult(
+            StoredLinkReplay storedLink,
+            TrustedTarget trustedTarget
+    ) {
+        return new LinkResult(
+                storedLink.id(),
+                trustedTarget.targetSystem(),
+                trustedTarget.targetPath(),
+                trustedTarget.purpose(),
+                storedLink.notBefore(),
+                storedLink.expiresAt(),
+                storedLink.revokedAt(),
+                storedLink.createdAt()
         );
     }
 

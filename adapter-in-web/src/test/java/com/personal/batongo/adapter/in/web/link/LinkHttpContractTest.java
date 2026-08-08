@@ -20,7 +20,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.personal.batongo.adapter.in.web.GlobalExceptionHandler;
 import com.personal.batongo.adapter.in.web.PublicLinkProperties;
 import com.personal.batongo.adapter.in.web.RequestIdFilter;
+import com.personal.batongo.application.link.CreationTimeStoragePolicy;
 import com.personal.batongo.application.link.error.IdempotencyKeyConflictException;
+import com.personal.batongo.application.link.error.InvalidIdempotencyKeyException;
+import com.personal.batongo.application.link.port.in.SmartLinkUseCase.CreateLinkCommand;
 import com.personal.batongo.application.link.error.LinkCodeKeyBindingException;
 import com.personal.batongo.application.link.error.LinkCodeReplayMismatchException;
 import com.personal.batongo.application.link.error.LinkNotFoundException;
@@ -40,6 +43,9 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
@@ -266,6 +272,110 @@ class LinkHttpContractTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_IDEMPOTENCY_KEY"))
                 .andExpect(jsonPath("$.requestId").isNotEmpty());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "8E448211-66AE-44AB-9888-C4960648C22B",
+            "00000000-0000-0000-0000-000000000000",
+            "00000000-0000-0000-8000-000000000000",
+            "00000000-0000-6000-8000-000000000000",
+            "00000000-0000-4000-7000-000000000000"
+    })
+    @DisplayName("기존 예약이 없는 과거 UUID 멱등성 키는 안정된 400으로 거부한다")
+    void rejectsReplayOnlyIdempotencyKeyWithoutReservation(String idempotencyKey)
+            throws Exception {
+        when(useCase.createLink(any())).thenAnswer(invocation -> {
+            CreateLinkCommand command = invocation.getArgument(0);
+            assertThat(command.idempotencyKey().meetsCurrentContract()).isFalse();
+            throw new InvalidIdempotencyKeyException();
+        });
+
+        mockMvc.perform(post("/api/v1/links")
+                        .header(LinkManagementController.IDEMPOTENCY_KEY_HEADER, idempotencyKey)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "targetSystem": "BATON",
+                                  "targetPath": "%s",
+                                  "purpose": "NAVIGATION"
+                                }
+                                """.formatted(BATON_TARGET_PATH)))
+                .andExpect(status().isBadRequest())
+                .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
+                .andExpect(header().string("Referrer-Policy", "no-referrer"))
+                .andExpect(jsonPath("$.code").value("INVALID_IDEMPOTENCY_KEY"))
+                .andExpect(jsonPath("$.message")
+                        .value("Idempotency-Key는 canonical UUID 형식이어야 합니다"))
+                .andExpect(jsonPath("$.requestId").isNotEmpty());
+
+        verify(useCase).createLink(any());
+        verifyNoMoreInteractions(useCase);
+    }
+
+    @Test
+    @DisplayName("과거 계약에도 없던 UUID 표기는 application 호출 전에 400으로 거부한다")
+    void rejectsIdempotencyKeyOutsideHistoricalContract() throws Exception {
+        mockMvc.perform(post("/api/v1/links")
+                        .header(LinkManagementController.IDEMPOTENCY_KEY_HEADER, "1-1-1-1-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "targetSystem": "BATON",
+                                  "targetPath": "%s",
+                                  "purpose": "NAVIGATION"
+                                }
+                                """.formatted(BATON_TARGET_PATH)))
+                .andExpect(status().isBadRequest())
+                .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
+                .andExpect(jsonPath("$.code").value("INVALID_IDEMPOTENCY_KEY"))
+                .andExpect(jsonPath("$.requestId").isNotEmpty());
+
+        verifyNoMoreInteractions(useCase);
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+            "notBefore, 0999-12-31T23:59:59.999999Z",
+            "expiresAt, 0999-12-31T23:59:59.999999Z",
+            "notBefore, +10000-01-01T00:00:00Z",
+            "expiresAt, +10000-01-01T00:00:00Z",
+            "notBefore, 2026-07-30T10:00:00.123456001Z",
+            "expiresAt, 2026-07-30T10:00:00.123456001Z"
+    })
+    @DisplayName("저장 범위 밖이거나 마이크로초보다 세밀한 생성 시각은 안정된 400으로 거부한다")
+    void rejectsUnstorableCreationTimes(String fieldName, String rawTime) throws Exception {
+        when(useCase.createLink(any())).thenAnswer(invocation -> {
+            CreateLinkCommand command = invocation.getArgument(0);
+            CreationTimeStoragePolicy.requireStorable(
+                    command.notBefore(),
+                    command.expiresAt()
+            );
+            throw new AssertionError("저장할 수 없는 생성 시각을 허용했습니다");
+        });
+
+        mockMvc.perform(post("/api/v1/links")
+                        .header(LinkManagementController.IDEMPOTENCY_KEY_HEADER, IDEMPOTENCY_KEY)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "targetSystem": "BATON",
+                                  "targetPath": "%s",
+                                  "purpose": "NAVIGATION",
+                                  "%s": "%s"
+                                }
+                                """.formatted(BATON_TARGET_PATH, fieldName, rawTime)))
+                .andExpect(status().isBadRequest())
+                .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
+                .andExpect(header().string("Referrer-Policy", "no-referrer"))
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
+                .andExpect(jsonPath("$.message")
+                        .value("notBefore와 expiresAt은 1000-01-01T00:00:00Z 이상 "
+                                + "9999-12-31T23:59:59.999999Z 이하의 마이크로초 단위여야 합니다"))
+                .andExpect(jsonPath("$.requestId").isNotEmpty());
+
+        verify(useCase).createLink(any());
+        verifyNoMoreInteractions(useCase);
     }
 
     @Test

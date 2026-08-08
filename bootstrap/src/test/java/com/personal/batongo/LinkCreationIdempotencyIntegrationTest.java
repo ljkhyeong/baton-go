@@ -15,6 +15,7 @@ import com.personal.batongo.application.link.error.IdempotencyKeyConflictExcepti
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.CreateLinkCommand;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.CreatedLinkResult;
+import com.personal.batongo.application.link.port.in.SmartLinkUseCase.LinkResult;
 import com.personal.batongo.application.link.port.out.LinkCodePort;
 import com.personal.batongo.application.link.port.out.LinkCreationReservationPort;
 import com.personal.batongo.application.link.port.out.SmartLinkRepository;
@@ -22,9 +23,16 @@ import com.personal.batongo.domain.link.LinkPurpose;
 import com.personal.batongo.domain.link.SmartLink;
 import com.personal.batongo.domain.link.TargetSystem;
 import jakarta.persistence.EntityManager;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Timestamp;
+import java.time.Clock;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.List;
+import java.util.TimeZone;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
@@ -64,7 +72,7 @@ import org.testcontainers.mysql.MySQLContainer;
         "baton-go.link-code.secret=test-link-code-secret-that-is-separate-and-long-enough",
         "baton-go.public-base-url=https://go.example",
         "baton-go.targets.baton-base-url=https://baton.example",
-        "baton-go.targets.round-base-url=https://round.example"
+        "baton-go.targets.round-base-url=https://baton.example"
 })
 class LinkCreationIdempotencyIntegrationTest {
 
@@ -73,9 +81,17 @@ class LinkCreationIdempotencyIntegrationTest {
             "8e448211-66ae-44ab-9888-c4960648c22b";
     private static final String ROLLBACK_IDEMPOTENCY_KEY =
             "7606bb52-2837-4359-bca4-d7f295b64fe4";
+    private static final String FAR_FUTURE_IDEMPOTENCY_KEY =
+            "96eb6b91-8390-422b-9ad7-a9b980809af8";
     private static final String CANONICAL_BATON_TARGET =
             "/teams/8e448211-66ae-44ab-9888-c4960648c22b"
                     + "/seasons/713d9cb7-2842-4f9f-b3cc-e31d98c6238a";
+    private static final Instant FAR_FUTURE_NOW =
+            Instant.parse("2040-06-01T12:34:56.123456Z");
+    private static final Instant FAR_FUTURE_NOT_BEFORE =
+            Instant.parse("2040-06-01T13:00:00.654321Z");
+    private static final Instant FAR_FUTURE_EXPIRES_AT =
+            Instant.parse("2040-06-02T13:00:00.987654Z");
 
     @Container
     @ServiceConnection
@@ -122,6 +138,128 @@ class LinkCreationIdempotencyIntegrationTest {
 
         assertThat(saved).isSameAs(candidate);
         assertThat(entityManager.contains(candidate)).isTrue();
+    }
+
+    @Test
+    @DisplayName("Flyway와 JPA는 2040년 링크의 생성 재생 폐기 시각을 마이크로초까지 보존한다")
+    void persistsCreationReplayAndRevocationAfterTimestampLimit() {
+        CreateLinkCommand command = new CreateLinkCommand(
+                new CreationIdempotencyKey(FAR_FUTURE_IDEMPOTENCY_KEY),
+                TargetSystem.ROUND,
+                "/room/wxyz-2345-6789",
+                LinkPurpose.MEETING_ENTRY,
+                FAR_FUTURE_NOT_BEFORE,
+                FAR_FUTURE_EXPIRES_AT
+        );
+
+        CreatedLinkResult created = smartLinkUseCase.createLink(command);
+        CreatedLinkResult replayed = smartLinkUseCase.createLink(command);
+
+        assertThat(created.replayed()).isFalse();
+        assertThat(created.link().createdAt()).isEqualTo(FAR_FUTURE_NOW);
+        assertThat(created.link().notBefore()).isEqualTo(FAR_FUTURE_NOT_BEFORE);
+        assertThat(created.link().expiresAt()).isEqualTo(FAR_FUTURE_EXPIRES_AT);
+        assertThat(replayed.replayed()).isTrue();
+        assertThat(replayed.link()).isEqualTo(created.link());
+        assertThat(replayed.rawCode()).isEqualTo(created.rawCode());
+
+        LinkResult revoked = smartLinkUseCase.revokeLink(created.link().id());
+        CreatedLinkResult replayedAfterRevocation = smartLinkUseCase.createLink(command);
+
+        assertThat(revoked.revokedAt()).isEqualTo(FAR_FUTURE_NOW);
+        assertThat(replayedAfterRevocation.replayed()).isTrue();
+        assertThat(replayedAfterRevocation.link().revokedAt()).isEqualTo(FAR_FUTURE_NOW);
+
+        StoredAbsoluteTimes stored = storedAbsoluteTimes(created.link().id());
+        assertThat(stored).isEqualTo(new StoredAbsoluteTimes(
+                FAR_FUTURE_NOT_BEFORE,
+                FAR_FUTURE_EXPIRES_AT,
+                FAR_FUTURE_NOW,
+                FAR_FUTURE_NOW,
+                FAR_FUTURE_NOW
+        ));
+    }
+
+    @Test
+    @DisplayName("V4 마이그레이션은 모든 절대 시각 열을 DATETIME(6)으로 바꾸고 제약과 인덱스를 유지한다")
+    void migratesAbsoluteTimeColumnsWithoutDroppingSchemaObjects() {
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM flyway_schema_history WHERE version = '4' AND success = 1",
+                Long.class
+        )).isOne();
+
+        List<TimeColumn> timeColumns = jdbcTemplate.query(
+                """
+                        SELECT table_name,
+                               column_name,
+                               data_type,
+                               datetime_precision,
+                               is_nullable
+                        FROM information_schema.columns
+                        WHERE table_schema = DATABASE()
+                          AND (
+                              (table_name = 'smart_links' AND column_name IN (
+                                  'not_before',
+                                  'expires_at',
+                                  'revoked_at',
+                                  'created_at'
+                              ))
+                              OR (table_name = 'link_creation_requests'
+                                  AND column_name = 'created_at')
+                          )
+                        """,
+                (resultSet, rowNumber) -> new TimeColumn(
+                        resultSet.getString("table_name"),
+                        resultSet.getString("column_name"),
+                        resultSet.getString("data_type"),
+                        resultSet.getInt("datetime_precision"),
+                        resultSet.getString("is_nullable")
+                )
+        );
+        assertThat(timeColumns).containsExactlyInAnyOrder(
+                new TimeColumn("smart_links", "not_before", "datetime", 6, "YES"),
+                new TimeColumn("smart_links", "expires_at", "datetime", 6, "YES"),
+                new TimeColumn("smart_links", "revoked_at", "datetime", 6, "YES"),
+                new TimeColumn("smart_links", "created_at", "datetime", 6, "NO"),
+                new TimeColumn(
+                        "link_creation_requests",
+                        "created_at",
+                        "datetime",
+                        6,
+                        "NO"
+                )
+        );
+
+        List<SchemaObject> constraints = schemaObjects(
+                "information_schema.table_constraints",
+                "constraint_name"
+        );
+        assertThat(constraints).contains(
+                new SchemaObject("smart_links", "PRIMARY"),
+                new SchemaObject("smart_links", "uk_smart_links_code_hash"),
+                new SchemaObject("smart_links", "ck_smart_links_expiry_after_creation"),
+                new SchemaObject("smart_links", "ck_smart_links_expiry_after_activation"),
+                new SchemaObject("link_creation_requests", "PRIMARY"),
+                new SchemaObject(
+                        "link_creation_requests",
+                        "uk_link_creation_requests_link_id"
+                )
+        );
+
+        List<SchemaObject> indexes = schemaObjects(
+                "information_schema.statistics",
+                "index_name"
+        );
+        assertThat(indexes).contains(
+                new SchemaObject("smart_links", "PRIMARY"),
+                new SchemaObject("smart_links", "uk_smart_links_code_hash"),
+                new SchemaObject("smart_links", "ix_smart_links_expiry"),
+                new SchemaObject("link_creation_requests", "PRIMARY"),
+                new SchemaObject(
+                        "link_creation_requests",
+                        "uk_link_creation_requests_link_id"
+                )
+        );
     }
 
     @Test
@@ -226,6 +364,239 @@ class LinkCreationIdempotencyIntegrationTest {
                 Long.class,
                 linkCodePort.hashIdempotencyKey(idempotencyKey)
         )).isZero();
+    }
+
+    @Test
+    @DisplayName("과거 대문자 UUID 요청은 기존 MySQL 예약과 일치할 때 행을 늘리지 않고 재생한다")
+    void replaysLegacyUppercaseUuidFromExistingMysqlReservation() throws Exception {
+        String rawIdempotencyKey = "00000000-0000-7000-8000-00000000000A";
+        String normalizedIdempotencyKey = rawIdempotencyKey.toLowerCase(
+                java.util.Locale.ROOT
+        );
+        String linkId = "466d487c-e690-4bf7-b116-f99f380f1b82";
+        String targetPath = "/room/efgh-jkmn-pqrs";
+        jdbcTemplate.update(
+                """
+                        INSERT INTO smart_links (
+                            id,
+                            code_hash,
+                            target_system,
+                            target_path,
+                            purpose,
+                            created_at,
+                            version
+                        ) VALUES (UUID_TO_BIN(?), ?, 'ROUND', ?, 'MEETING_ENTRY', ?, 0)
+                        """,
+                linkId,
+                linkCodePort.issue(normalizedIdempotencyKey).codeHash(),
+                targetPath,
+                FAR_FUTURE_NOW
+        );
+        jdbcTemplate.update(
+                """
+                        INSERT INTO link_creation_requests (
+                            idempotency_key_hash,
+                            link_id,
+                            created_at
+                        ) VALUES (?, UUID_TO_BIN(?), ?)
+                        """,
+                linkCodePort.hashIdempotencyKey(normalizedIdempotencyKey),
+                linkId,
+                FAR_FUTURE_NOW
+        );
+
+        mockMvc.perform(post("/api/v1/links")
+                        .header(
+                                HttpHeaders.AUTHORIZATION,
+                                "Bearer test-management-token-that-is-long-enough"
+                        )
+                        .header("Idempotency-Key", rawIdempotencyKey)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "targetSystem": "ROUND",
+                                  "targetPath": "%s",
+                                  "purpose": "MEETING_ENTRY"
+                                }
+                                """.formatted(targetPath)))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Idempotency-Replayed", "true"))
+                .andExpect(jsonPath("$.id").value(linkId));
+
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM smart_links WHERE target_path = ?",
+                Long.class,
+                targetPath
+        )).isOne();
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM link_creation_requests WHERE idempotency_key_hash = ?",
+                Long.class,
+                linkCodePort.hashIdempotencyKey(normalizedIdempotencyKey)
+        )).isOne();
+    }
+
+    @Test
+    @DisplayName("과거 UUID 요청은 기존 예약이 없으면 MySQL에 행을 남기지 않고 400으로 거부한다")
+    void rejectsLegacyUuidWithoutMysqlReservation() throws Exception {
+        String rawIdempotencyKey = "00000000-0000-7000-8000-00000000000B";
+        String normalizedIdempotencyKey = rawIdempotencyKey.toLowerCase(
+                java.util.Locale.ROOT
+        );
+        String targetPath = "/room/tuvw-xy23-4567";
+
+        mockMvc.perform(post("/api/v1/links")
+                        .header(
+                                HttpHeaders.AUTHORIZATION,
+                                "Bearer test-management-token-that-is-long-enough"
+                        )
+                        .header("Idempotency-Key", rawIdempotencyKey)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "targetSystem": "ROUND",
+                                  "targetPath": "%s",
+                                  "purpose": "MEETING_ENTRY"
+                                }
+                                """.formatted(targetPath)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_IDEMPOTENCY_KEY"));
+
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM smart_links WHERE target_path = ?",
+                Long.class,
+                targetPath
+        )).isZero();
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM link_creation_requests WHERE idempotency_key_hash = ?",
+                Long.class,
+                linkCodePort.hashIdempotencyKey(normalizedIdempotencyKey)
+        )).isZero();
+    }
+
+    @Test
+    @DisplayName("과거 나노초 요청은 기존 MySQL 예약의 마이크로초 payload와 일치할 때 재생한다")
+    void replaysLegacySubMicrosecondTimeFromExistingMysqlReservation() throws Exception {
+        String idempotencyKey = "61a78df8-4859-4e66-8ad9-57c3a29bd2d2";
+        String targetPath = "/room/abcd-2345-efgh";
+        Instant historicalExpiresAt = Instant.parse("2040-06-02T13:00:00.123456789Z");
+        Instant storedExpiresAt = Instant.parse("2040-06-02T13:00:00.123456Z");
+        CreatedLinkResult created = smartLinkUseCase.createLink(new CreateLinkCommand(
+                new CreationIdempotencyKey(idempotencyKey),
+                TargetSystem.ROUND,
+                targetPath,
+                LinkPurpose.MEETING_ENTRY,
+                null,
+                storedExpiresAt
+        ));
+
+        mockMvc.perform(post("/api/v1/links")
+                        .header(
+                                HttpHeaders.AUTHORIZATION,
+                                "Bearer test-management-token-that-is-long-enough"
+                        )
+                        .header("Idempotency-Key", idempotencyKey)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "targetSystem": "ROUND",
+                                  "targetPath": "%s",
+                                  "purpose": "MEETING_ENTRY",
+                                  "expiresAt": "%s"
+                                }
+                                """.formatted(targetPath, historicalExpiresAt)))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Idempotency-Replayed", "true"))
+                .andExpect(jsonPath("$.id").value(created.link().id().toString()))
+                .andExpect(jsonPath("$.expiresAt").value(storedExpiresAt.toString()));
+
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM smart_links WHERE target_path = ?",
+                Long.class,
+                targetPath
+        )).isOne();
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM link_creation_requests WHERE idempotency_key_hash = ?",
+                Long.class,
+                linkCodePort.hashIdempotencyKey(idempotencyKey)
+        )).isOne();
+    }
+
+    @Test
+    @DisplayName("과거 나노초 요청은 기존 예약이 없으면 MySQL에 행을 남기지 않고 400으로 거부한다")
+    void rejectsLegacySubMicrosecondTimeWithoutMysqlReservation() throws Exception {
+        String idempotencyKey = "0e85e771-1261-4630-a1f3-9b46573aa300";
+        String targetPath = "/room/jkmn-pqrs-tuvw";
+        Instant historicalExpiresAt = Instant.parse("2040-06-02T13:00:00.123456789Z");
+
+        mockMvc.perform(post("/api/v1/links")
+                        .header(
+                                HttpHeaders.AUTHORIZATION,
+                                "Bearer test-management-token-that-is-long-enough"
+                        )
+                        .header("Idempotency-Key", idempotencyKey)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "targetSystem": "ROUND",
+                                  "targetPath": "%s",
+                                  "purpose": "MEETING_ENTRY",
+                                  "expiresAt": "%s"
+                                }
+                                """.formatted(targetPath, historicalExpiresAt)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM smart_links WHERE target_path = ?",
+                Long.class,
+                targetPath
+        )).isZero();
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM link_creation_requests WHERE idempotency_key_hash = ?",
+                Long.class,
+                linkCodePort.hashIdempotencyKey(idempotencyKey)
+        )).isZero();
+    }
+
+    @Test
+    @DisplayName("저장된 unknown과 공백 enum의 생성 재생은 raw 값 없이 충돌로 거부한다")
+    void rejectsUnsafeStoredReplayEnumsWithoutHydrationOrExposure() throws Exception {
+        assertUnsafeStoredReplayIsRejected(
+                "c1478a51-2c84-451f-8291-4f3fb563ac20",
+                "83aa4b8b-49ae-487c-9250-a193828ff8d1",
+                "BATON_LEGACY",
+                CANONICAL_BATON_TARGET,
+                "NAVIGATION"
+        );
+        assertUnsafeStoredReplayIsRejected(
+                "de283961-52f7-4612-a6ef-d94ba3b36f39",
+                "66c06fb7-69c6-4bd9-a396-a49cf8450a65",
+                "BATON",
+                CANONICAL_BATON_TARGET,
+                "NAVIGATION "
+        );
+    }
+
+    @Test
+    @DisplayName("정상 생성 재생은 현재 폐기 시각을 보존해 반환한다")
+    void replaysCurrentRevokedStateThroughRawProjection() {
+        CreateLinkCommand command = new CreateLinkCommand(
+                new CreationIdempotencyKey("bbbf78dd-3a8d-4624-b30d-e20983138d2a"),
+                TargetSystem.ROUND,
+                "/room/abcd-efgh-jkmn",
+                LinkPurpose.MEETING_ENTRY,
+                null,
+                null
+        );
+
+        CreatedLinkResult first = smartLinkUseCase.createLink(command);
+        var revoked = smartLinkUseCase.revokeLink(first.link().id());
+        CreatedLinkResult replay = smartLinkUseCase.createLink(command);
+
+        assertThat(replay.replayed()).isTrue();
+        assertThat(replay.link().id()).isEqualTo(first.link().id());
+        assertThat(replay.rawCode()).isEqualTo(first.rawCode());
+        assertThat(replay.link().revokedAt()).isEqualTo(revoked.revokedAt());
     }
 
     @Test
@@ -458,6 +829,122 @@ class LinkCreationIdempotencyIntegrationTest {
         );
     }
 
+    private void assertUnsafeStoredReplayIsRejected(
+            String linkId,
+            String idempotencyKey,
+            String rawTargetSystem,
+            String rawTargetPath,
+            String rawPurpose
+    ) throws Exception {
+        String codeHash = linkCodePort.issue(idempotencyKey).codeHash();
+        jdbcTemplate.update(
+                """
+                        INSERT INTO smart_links (
+                            id,
+                            code_hash,
+                            target_system,
+                            target_path,
+                            purpose,
+                            created_at,
+                            version
+                        ) VALUES (UUID_TO_BIN(?), ?, ?, ?, ?, UTC_TIMESTAMP(6), 0)
+                        """,
+                linkId,
+                codeHash,
+                rawTargetSystem,
+                rawTargetPath,
+                rawPurpose
+        );
+        jdbcTemplate.update(
+                """
+                        INSERT INTO link_creation_requests (
+                            idempotency_key_hash,
+                            link_id,
+                            created_at
+                        ) VALUES (?, UUID_TO_BIN(?), UTC_TIMESTAMP(6))
+                        """,
+                linkCodePort.hashIdempotencyKey(idempotencyKey),
+                linkId
+        );
+
+        String responseBody = mockMvc.perform(post("/api/v1/links")
+                        .header(
+                                HttpHeaders.AUTHORIZATION,
+                                "Bearer test-management-token-that-is-long-enough"
+                        )
+                        .header("Idempotency-Key", idempotencyKey)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "targetSystem": "BATON",
+                                  "targetPath": "%s",
+                                  "purpose": "NAVIGATION"
+                                }
+                                """.formatted(CANONICAL_BATON_TARGET)))
+                .andExpect(status().isConflict())
+                .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
+                .andExpect(jsonPath("$.code").value("IDEMPOTENCY_KEY_REUSED"))
+                .andExpect(jsonPath("$.message")
+                        .value("같은 Idempotency-Key를 다른 링크 생성 요청에 사용할 수 없습니다"))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        assertThat(responseBody)
+                .doesNotContain(rawTargetSystem, rawTargetPath, rawPurpose, codeHash);
+    }
+
+    private StoredAbsoluteTimes storedAbsoluteTimes(UUID linkId) {
+        return jdbcTemplate.queryForObject(
+                """
+                        SELECT link.not_before,
+                               link.expires_at,
+                               link.revoked_at,
+                               link.created_at,
+                               creation_request.created_at AS request_created_at
+                        FROM smart_links link
+                        JOIN link_creation_requests creation_request
+                          ON creation_request.link_id = link.id
+                        WHERE link.id = UUID_TO_BIN(?)
+                        """,
+                (resultSet, rowNumber) -> new StoredAbsoluteTimes(
+                        instant(resultSet, "not_before"),
+                        instant(resultSet, "expires_at"),
+                        instant(resultSet, "revoked_at"),
+                        instant(resultSet, "created_at"),
+                        instant(resultSet, "request_created_at")
+                ),
+                linkId.toString()
+        );
+    }
+
+    private List<SchemaObject> schemaObjects(
+            String informationSchemaTable,
+            String objectNameColumn
+    ) {
+        return jdbcTemplate.query(
+                """
+                        SELECT DISTINCT table_name, %s AS object_name
+                        FROM %s
+                        WHERE table_schema = DATABASE()
+                          AND table_name IN ('smart_links', 'link_creation_requests')
+                        """.formatted(objectNameColumn, informationSchemaTable),
+                (resultSet, rowNumber) -> new SchemaObject(
+                        resultSet.getString("table_name"),
+                        resultSet.getString("object_name")
+                )
+        );
+    }
+
+    private Instant instant(ResultSet resultSet, String columnName) throws SQLException {
+        Timestamp timestamp = resultSet.getTimestamp(columnName, utcCalendar());
+        return timestamp == null ? null : timestamp.toInstant();
+    }
+
+    private Calendar utcCalendar() {
+        return Calendar.getInstance(TimeZone.getTimeZone("UTC"));
+    }
+
     private void assertStoredTargetIsHidden(String rawCode) throws Exception {
         String requestId = "stored-target-policy-test";
 
@@ -536,6 +1023,12 @@ class LinkCreationIdempotencyIntegrationTest {
 
         @Bean
         @Primary
+        Clock farFutureClock() {
+            return Clock.fixed(FAR_FUTURE_NOW, ZoneOffset.UTC);
+        }
+
+        @Bean
+        @Primary
         ControllableReservationPort controllableReservationPort(
                 @Qualifier("linkCreationReservationPersistenceAdapter")
                 LinkCreationReservationPort delegate
@@ -556,6 +1049,11 @@ class LinkCreationIdempotencyIntegrationTest {
 
         private ControllableReservationPort(LinkCreationReservationPort delegate) {
             this.delegate = delegate;
+        }
+
+        @Override
+        public java.util.Optional<UUID> findLinkId(String idempotencyKeyHash) {
+            return delegate.findLinkId(idempotencyKeyHash);
         }
 
         void arm(int expectedRequests, boolean failFirstOwner) {
@@ -621,5 +1119,26 @@ class LinkCreationIdempotencyIntegrationTest {
     }
 
     static final class ForcedReservationRollbackException extends RuntimeException {
+    }
+
+    private record StoredAbsoluteTimes(
+            Instant notBefore,
+            Instant expiresAt,
+            Instant revokedAt,
+            Instant createdAt,
+            Instant requestCreatedAt
+    ) {
+    }
+
+    private record TimeColumn(
+            String tableName,
+            String columnName,
+            String dataType,
+            int datetimePrecision,
+            String nullable
+    ) {
+    }
+
+    private record SchemaObject(String tableName, String objectName) {
     }
 }

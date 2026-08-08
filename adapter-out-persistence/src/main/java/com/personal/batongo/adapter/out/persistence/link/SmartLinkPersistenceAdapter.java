@@ -1,6 +1,7 @@
 package com.personal.batongo.adapter.out.persistence.link;
 
 import com.personal.batongo.application.link.port.out.SmartLinkRepository;
+import com.personal.batongo.application.link.port.out.SmartLinkRepository.StoredLinkReplay;
 import com.personal.batongo.application.link.port.out.SmartLinkRepository.StoredLinkResolution;
 import com.personal.batongo.application.link.port.out.SmartLinkRepository.StoredLinkSnapshot;
 import com.personal.batongo.domain.link.SmartLink;
@@ -55,8 +56,35 @@ public class SmartLinkPersistenceAdapter implements SmartLinkRepository {
     }
 
     @Override
-    public Optional<SmartLink> findById(UUID id) {
-        return repository.findById(id);
+    public Optional<StoredLinkReplay> findReplayById(UUID id) {
+        List<StoredLinkReplay> rows = jdbcTemplate.query(
+                """
+                        SELECT BIN_TO_UUID(id) AS id,
+                               target_system,
+                               target_path,
+                               purpose,
+                               code_hash,
+                               not_before,
+                               expires_at,
+                               revoked_at,
+                               created_at
+                        FROM smart_links
+                        WHERE id = UUID_TO_BIN(?)
+                        """,
+                (resultSet, rowNumber) -> new StoredLinkReplay(
+                        UUID.fromString(resultSet.getString("id")),
+                        resultSet.getString("target_system"),
+                        resultSet.getString("target_path"),
+                        resultSet.getString("purpose"),
+                        resultSet.getString("code_hash"),
+                        instant(resultSet.getTimestamp("not_before", utcCalendar())),
+                        instant(resultSet.getTimestamp("expires_at", utcCalendar())),
+                        instant(resultSet.getTimestamp("revoked_at", utcCalendar())),
+                        instant(resultSet.getTimestamp("created_at", utcCalendar()))
+                ),
+                id.toString()
+        );
+        return rows.stream().findFirst();
     }
 
     @Override

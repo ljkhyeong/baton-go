@@ -14,6 +14,7 @@ import com.personal.batongo.application.link.port.in.TargetContractOperationsUse
 import com.personal.batongo.application.link.port.in.TargetContractOperationsUseCase.RemediationCommand;
 import com.personal.batongo.application.link.port.in.TargetContractOperationsUseCase.RemediationState;
 import com.personal.batongo.application.link.port.out.SmartLinkRepository;
+import com.personal.batongo.application.link.port.out.SmartLinkRepository.StoredLinkReplay;
 import com.personal.batongo.application.link.port.out.SmartLinkRepository.StoredLinkResolution;
 import com.personal.batongo.application.link.port.out.SmartLinkRepository.StoredLinkSnapshot;
 import com.personal.batongo.domain.link.SmartLink;
@@ -327,7 +328,7 @@ class TargetContractOperationsServiceTest {
         }
 
         @Override
-        public Optional<SmartLink> findById(UUID id) {
+        public Optional<StoredLinkReplay> findReplayById(UUID id) {
             throw new UnsupportedOperationException();
         }
 

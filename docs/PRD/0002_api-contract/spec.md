@@ -14,6 +14,7 @@
 ```
 
 - 입력 형식 오류: `400`
+- 생성 시각이 UTC `DATETIME(6)` 저장 범위나 정밀도를 벗어남: `400 INVALID_REQUEST`
 - 관리 인증 누락·실패: `401`
 - 링크 없음: `404 LINK_NOT_FOUND`
 - 저장된 target이 현재 신뢰 계약을 위반함: 존재를 숨기는 `404 LINK_NOT_FOUND`
@@ -48,13 +49,25 @@
 Idempotency-Key: 8e448211-66ae-44ab-9888-c4960648c22b
 ```
 
-- 값은 canonical UUID 형식이다.
+- 값은 다음 정규식과 정확히 일치하는 lowercase canonical UUID다. version은 `1..5`, RFC
+  variant 첫 문자는 `8`, `9`, `a`, `b` 중 하나이며 대문자, nil UUID, version `0`과
+  non-RFC variant를 정규화해서 받아들이지 않는다.
+
+```text
+^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$
+```
+
 - 호출자는 하나의 생성 intent에 같은 키를 사용하고 원본 도메인 상태와 함께 영속화한다.
 - 최초 성공은 `201 Created`와 `Idempotency-Replayed: false`를 반환한다.
 - 같은 키와 같은 payload의 재시도는 동일한 `id`, `shortUrl`, `Location`을
   `200 OK`와 `Idempotency-Replayed: true`로 반환한다.
 - 같은 키와 다른 payload는 `409 IDEMPOTENCY_KEY_REUSED`로 거부한다.
 - 키 누락·형식 오류는 `400 INVALID_IDEMPOTENCY_KEY`로 거부한다.
+- 과거 배포가 이미 저장한 생성 intent에 한해서는 당시 파서가 허용했던 대문자, nil,
+  version `0`·`6..f`, non-RFC variant의 canonical UUID를 lowercase로 정규화해 조회한다.
+  동일한 멱등성 키 해시의 기존 예약과 동일 payload가 모두 확인될 때만 `200` 재생하며,
+  예약이 없으면 `400 INVALID_IDEMPOTENCY_KEY`로 거부하고 새 예약이나 링크를 만들지 않는다.
+  이 replay-only 예외는 신규 생성 문법을 확장하지 않는다.
 - 요청 본문에 정의되지 않은 필드가 있으면 저장하지 않고
   `400 INVALID_REQUEST`로 거부한다.
 - timeout이나 일시적인 `5xx` 뒤에는 동일한 키와 payload로 재시도할 수 있다.
@@ -75,6 +88,17 @@ Idempotency-Key: 8e448211-66ae-44ab-9888-c4960648c22b
   "expiresAt": "2026-07-30T12:00:00Z"
 }
 ```
+
+- 선택적인 `notBefore`와 `expiresAt`은 마이크로초 단위로 정확히 표현 가능하고 MySQL
+  `DATETIME(6)`의 UTC 의미 범위인 `1000-01-01T00:00:00Z` 이상
+  `9999-12-31T23:59:59.999999Z` 이하여야 한다. 범위 밖이거나 소수 초 7번째부터 9번째
+  자리 중 하나라도 0이 아니면 서버가 반올림하거나 절삭하지 않고 링크 생성 예약 전에
+  `400 INVALID_REQUEST`로 거부한다.
+- 과거 배포가 범위 안의 나노초 입력을 마이크로초로 절삭해 이미 저장한 intent는 예외다.
+  동일한 멱등성 키 해시의 기존 예약이 있고, 같은 마이크로초 절삭 결과가 저장 payload와
+  일치할 때만 `200` 재생한다. 예약이 없으면 `400 INVALID_REQUEST`로 거부하며 새 행을
+  만들지 않는다. `DATETIME(6)` 범위 밖 시각은 기존 예약 여부와 관계없이 항상 거부한다.
+- 호출자는 재시도할 때 두 시각을 포함한 동일한 canonical payload 값을 사용한다.
 
 최초 응답 `201`, 재생 응답 `200`:
 

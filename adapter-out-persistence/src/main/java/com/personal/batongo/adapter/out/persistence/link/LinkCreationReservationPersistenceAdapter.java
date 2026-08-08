@@ -3,6 +3,7 @@ package com.personal.batongo.adapter.out.persistence.link;
 import com.personal.batongo.application.link.port.out.LinkCreationReservationPort;
 import java.nio.ByteBuffer;
 import java.time.Instant;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Propagation;
@@ -18,6 +19,13 @@ public class LinkCreationReservationPersistenceAdapter
             SpringDataLinkCreationRequestRepository repository
     ) {
         this.repository = repository;
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY, readOnly = true)
+    public Optional<UUID> findLinkId(String idempotencyKeyHash) {
+        return repository.findByIdempotencyKeyHash(idempotencyKeyHash)
+                .map(LinkCreationRequestEntity::getLinkId);
     }
 
     @Override

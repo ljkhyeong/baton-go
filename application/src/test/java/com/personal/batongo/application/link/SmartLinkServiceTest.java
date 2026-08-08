@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.personal.batongo.application.link.error.IdempotencyKeyConflictException;
+import com.personal.batongo.application.link.error.InvalidCreationTimeException;
+import com.personal.batongo.application.link.error.InvalidIdempotencyKeyException;
 import com.personal.batongo.application.link.error.LinkCodeKeyBindingException;
 import com.personal.batongo.application.link.error.LinkCodeReplayMismatchException;
 import com.personal.batongo.application.link.error.LinkNotFoundException;
@@ -14,6 +16,7 @@ import com.personal.batongo.application.link.port.out.LinkCodeKeyGuardPort;
 import com.personal.batongo.application.link.port.out.LinkCodePort;
 import com.personal.batongo.application.link.port.out.LinkCreationReservationPort;
 import com.personal.batongo.application.link.port.out.SmartLinkRepository;
+import com.personal.batongo.application.link.port.out.SmartLinkRepository.StoredLinkReplay;
 import com.personal.batongo.application.link.port.out.SmartLinkRepository.StoredLinkResolution;
 import com.personal.batongo.application.link.port.out.SmartLinkRepository.StoredLinkSnapshot;
 import com.personal.batongo.application.link.port.out.TargetUrlPort;
@@ -109,11 +112,148 @@ class SmartLinkServiceTest {
         assertThat(repository.links).isEmpty();
         assertThat(repository.saveCalls).isZero();
         assertThat(repository.findByIdCalls).isZero();
+        assertThat(repository.replayLookupCalls).isZero();
         assertThat(repository.resolutionLookupCalls).isZero();
     }
 
     @Test
-    @DisplayName("같은 멱등성 키와 요청은 동일한 링크와 공개 코드를 다시 반환한다")
+    @DisplayName("저장할 수 없는 생성 시각은 멱등성 예약과 링크 저장 전에 거부한다")
+    void rejectsUnstorableCreationTimeBeforeReservationAndRepository() {
+        CreateLinkCommand command = new CreateLinkCommand(
+                IDEMPOTENCY_KEY,
+                TargetSystem.BATON,
+                BATON_PATH,
+                LinkPurpose.NAVIGATION,
+                null,
+                CreationTimeStoragePolicy.MAXIMUM.plusSeconds(1)
+        );
+
+        assertThatThrownBy(() -> service.createLink(command))
+                .isExactlyInstanceOf(InvalidCreationTimeException.class);
+
+        assertThat(reservationPort.reservations).isEmpty();
+        assertThat(repository.links).isEmpty();
+        assertThat(repository.saveCalls).isZero();
+        assertThat(repository.replayLookupCalls).isZero();
+    }
+
+    @Test
+    @DisplayName("과거 UUID 표기는 기존 예약과 생성 요청이 일치할 때만 재생한다")
+    void replaysHistoricallyAcceptedIdempotencyKeyOnlyForExistingReservation() {
+        String legacyHeader = "00000000-0000-7000-8000-00000000000A";
+        CreationIdempotencyKey legacyKey = CreationIdempotencyKey.parseRequest(legacyHeader);
+        UUID linkId = UUID.fromString("d3014090-bd91-4bfc-8a42-89b7f1800c32");
+        reservationPort.reservations.put(
+                linkCodePort.hashIdempotencyKey(legacyKey.value()),
+                linkId
+        );
+        repository.save(SmartLink.create(
+                linkId,
+                CODE_HASH,
+                TargetSystem.ROUND,
+                ROUND_PATH,
+                LinkPurpose.MEETING_ENTRY,
+                null,
+                null,
+                NOW
+        ));
+
+        var replay = service.createLink(new CreateLinkCommand(
+                legacyKey,
+                TargetSystem.ROUND,
+                ROUND_PATH,
+                LinkPurpose.MEETING_ENTRY,
+                null,
+                null
+        ));
+
+        assertThat(replay.replayed()).isTrue();
+        assertThat(replay.link().id()).isEqualTo(linkId);
+        assertThat(repository.saveCalls).isOne();
+        assertThat(reservationPort.reserveCalls).isZero();
+        assertThat(reservationPort.lookupCalls).isOne();
+    }
+
+    @Test
+    @DisplayName("과거 UUID 표기는 기존 예약이 없으면 새 링크를 만들지 않고 거부한다")
+    void rejectsHistoricallyAcceptedIdempotencyKeyWithoutExistingReservation() {
+        CreationIdempotencyKey legacyKey = CreationIdempotencyKey.parseRequest(
+                "00000000-0000-7000-8000-00000000000A"
+        );
+
+        assertThatThrownBy(() -> service.createLink(new CreateLinkCommand(
+                legacyKey,
+                TargetSystem.ROUND,
+                ROUND_PATH,
+                LinkPurpose.MEETING_ENTRY,
+                null,
+                null
+        )))
+                .isExactlyInstanceOf(InvalidIdempotencyKeyException.class);
+
+        assertThat(reservationPort.reservations).isEmpty();
+        assertThat(reservationPort.reserveCalls).isZero();
+        assertThat(reservationPort.lookupCalls).isOne();
+        assertThat(repository.saveCalls).isZero();
+        assertThat(repository.replayLookupCalls).isZero();
+    }
+
+    @Test
+    @DisplayName("과거 나노초 시각은 저장된 마이크로초 요청과 일치할 때만 재생한다")
+    void replaysHistoricalSubMicrosecondTimeOnlyForExistingReservation() {
+        Instant historicalTime = Instant.parse("2026-07-29T10:05:00.123456789Z");
+        Instant storedTime = historicalTime.truncatedTo(java.time.temporal.ChronoUnit.MICROS);
+        CreateLinkCommand storableCommand = new CreateLinkCommand(
+                IDEMPOTENCY_KEY,
+                TargetSystem.ROUND,
+                ROUND_PATH,
+                LinkPurpose.MEETING_ENTRY,
+                null,
+                storedTime
+        );
+        var created = service.createLink(storableCommand);
+
+        var replay = service.createLink(new CreateLinkCommand(
+                IDEMPOTENCY_KEY,
+                TargetSystem.ROUND,
+                ROUND_PATH,
+                LinkPurpose.MEETING_ENTRY,
+                null,
+                historicalTime
+        ));
+
+        assertThat(replay.replayed()).isTrue();
+        assertThat(replay.link().id()).isEqualTo(created.link().id());
+        assertThat(replay.link().expiresAt()).isEqualTo(storedTime);
+        assertThat(reservationPort.reserveCalls).isOne();
+        assertThat(reservationPort.lookupCalls).isOne();
+        assertThat(repository.saveCalls).isOne();
+    }
+
+    @Test
+    @DisplayName("과거 나노초 시각은 기존 예약이 없으면 새 링크를 만들지 않고 거부한다")
+    void rejectsHistoricalSubMicrosecondTimeWithoutExistingReservation() {
+        Instant historicalTime = Instant.parse("2026-07-29T10:05:00.123456789Z");
+
+        assertThatThrownBy(() -> service.createLink(new CreateLinkCommand(
+                IDEMPOTENCY_KEY,
+                TargetSystem.ROUND,
+                ROUND_PATH,
+                LinkPurpose.MEETING_ENTRY,
+                null,
+                historicalTime
+        )))
+                .isExactlyInstanceOf(InvalidCreationTimeException.class);
+
+        assertThat(reservationPort.reservations).isEmpty();
+        assertThat(reservationPort.reserveCalls).isZero();
+        assertThat(reservationPort.lookupCalls).isOne();
+        assertThat(repository.saveCalls).isZero();
+        assertThat(repository.replayLookupCalls).isZero();
+    }
+
+    @Test
+    @DisplayName("같은 멱등성 키와 요청은 현재 폐기 상태를 포함한 동일 링크를 다시 반환한다")
     void replaysSameCreation() {
         CreateLinkCommand command = new CreateLinkCommand(
                 IDEMPOTENCY_KEY,
@@ -125,12 +265,73 @@ class SmartLinkServiceTest {
         );
 
         var first = service.createLink(command);
+        service.revokeLink(first.link().id());
         var replay = service.createLink(command);
 
         assertThat(replay.replayed()).isTrue();
         assertThat(replay.link().id()).isEqualTo(first.link().id());
         assertThat(replay.rawCode()).isEqualTo(first.rawCode());
+        assertThat(replay.link().revokedAt()).isEqualTo(NOW);
+        assertThat(repository.replayLookupCalls).isOne();
         assertThat(repository.links).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("재생 projection은 알 수 없거나 공백이 붙은 저장 enum을 보정하거나 노출하지 않는다")
+    void rejectsUnsafeStoredEnumsWithoutNormalizationOrExposure() {
+        CreateLinkCommand command = new CreateLinkCommand(
+                IDEMPOTENCY_KEY,
+                TargetSystem.ROUND,
+                ROUND_PATH,
+                LinkPurpose.MEETING_ENTRY,
+                null,
+                NOW.plusSeconds(300)
+        );
+        var first = service.createLink(command);
+        String rawTargetSystem = "ROUND_LEGACY";
+        String rawTargetPath = "/room/private-credential";
+        StoredLinkReplay unknownEnumReplay = new StoredLinkReplay(
+                first.link().id(),
+                rawTargetSystem,
+                rawTargetPath,
+                LinkPurpose.MEETING_ENTRY.name(),
+                CODE_HASH,
+                null,
+                NOW.plusSeconds(300),
+                null,
+                NOW
+        );
+        repository.storeReplay(unknownEnumReplay);
+
+        assertThat(unknownEnumReplay.toString())
+                .isEqualTo("StoredLinkReplay[id=" + first.link().id() + "]")
+                .doesNotContain(rawTargetSystem, rawTargetPath, CODE_HASH);
+        assertThatThrownBy(() -> service.createLink(command))
+                .isExactlyInstanceOf(IdempotencyKeyConflictException.class)
+                .hasMessageNotContaining(rawTargetSystem)
+                .hasMessageNotContaining(rawTargetPath)
+                .hasMessageNotContaining(CODE_HASH);
+
+        String rawPurpose = "MEETING_ENTRY ";
+        repository.storeReplay(new StoredLinkReplay(
+                first.link().id(),
+                TargetSystem.ROUND.name(),
+                ROUND_PATH,
+                rawPurpose,
+                CODE_HASH,
+                null,
+                NOW.plusSeconds(300),
+                null,
+                NOW
+        ));
+
+        assertThatThrownBy(() -> service.createLink(command))
+                .isExactlyInstanceOf(IdempotencyKeyConflictException.class)
+                .hasMessageNotContaining(rawPurpose)
+                .hasMessageNotContaining(ROUND_PATH)
+                .hasMessageNotContaining(CODE_HASH);
+        assertThat(repository.findByIdCalls).isZero();
+        assertThat(repository.replayLookupCalls).isEqualTo(2);
     }
 
     @Test
@@ -511,6 +712,14 @@ class SmartLinkServiceTest {
             implements LinkCreationReservationPort {
 
         private final Map<String, UUID> reservations = new HashMap<>();
+        private int lookupCalls;
+        private int reserveCalls;
+
+        @Override
+        public Optional<UUID> findLinkId(String idempotencyKeyHash) {
+            lookupCalls++;
+            return Optional.ofNullable(reservations.get(idempotencyKeyHash));
+        }
 
         @Override
         public Reservation reserve(
@@ -518,6 +727,7 @@ class SmartLinkServiceTest {
                 UUID proposedLinkId,
                 Instant createdAt
         ) {
+            reserveCalls++;
             UUID existing = reservations.putIfAbsent(idempotencyKeyHash, proposedLinkId);
             return existing == null
                     ? new Reservation(proposedLinkId, true)
@@ -543,12 +753,14 @@ class SmartLinkServiceTest {
     private static final class InMemoryRepository implements SmartLinkRepository {
 
         private final Map<UUID, SmartLink> links = new HashMap<>();
+        private final Map<UUID, StoredLinkReplay> storedReplays = new HashMap<>();
         private final Map<String, StoredLinkResolution> storedResolutions = new HashMap<>();
         private final Map<UUID, StoredLinkSnapshot> storedSnapshots = new HashMap<>();
         private final Map<UUID, Long> versions = new HashMap<>();
         private final Set<UUID> lockedLinkIds = new HashSet<>();
         private int saveCalls;
         private int findByIdCalls;
+        private int replayLookupCalls;
         private int resolutionLookupCalls;
         private int revokeStoredCalls;
 
@@ -560,10 +772,29 @@ class SmartLinkServiceTest {
             return smartLink;
         }
 
-        @Override
         public Optional<SmartLink> findById(UUID id) {
             findByIdCalls++;
             return Optional.ofNullable(links.get(id));
+        }
+
+        @Override
+        public Optional<StoredLinkReplay> findReplayById(UUID id) {
+            replayLookupCalls++;
+            StoredLinkReplay replay = storedReplays.get(id);
+            if (replay != null) {
+                return Optional.of(replay);
+            }
+            return Optional.ofNullable(links.get(id)).map(link -> new StoredLinkReplay(
+                    link.getId(),
+                    link.getTargetSystem().name(),
+                    link.getTargetPath(),
+                    link.getPurpose().name(),
+                    link.getCodeHash(),
+                    link.getNotBefore(),
+                    link.getExpiresAt(),
+                    link.getRevokedAt(),
+                    link.getCreatedAt()
+            ));
         }
 
         @Override
@@ -670,6 +901,10 @@ class SmartLinkServiceTest {
                 StoredLinkResolution storedResolution
         ) {
             storedResolutions.put(codeHash, storedResolution);
+        }
+
+        private void storeReplay(StoredLinkReplay storedLinkReplay) {
+            storedReplays.put(storedLinkReplay.id(), storedLinkReplay);
         }
 
         private void storeSnapshot(StoredLinkSnapshot storedLinkSnapshot) {

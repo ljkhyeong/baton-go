@@ -10,7 +10,7 @@ public interface SmartLinkRepository {
 
     SmartLink save(SmartLink smartLink);
 
-    Optional<SmartLink> findById(UUID id);
+    Optional<StoredLinkReplay> findReplayById(UUID id);
 
     Optional<StoredLinkResolution> findResolutionByCodeHash(String codeHash);
 
@@ -21,6 +21,23 @@ public interface SmartLinkRepository {
     List<StoredLinkSnapshot> scanStoredAfter(UUID afterLinkId, int limit);
 
     boolean revokeStoredIfVersion(UUID id, long expectedVersion, Instant revokedAt);
+
+    record StoredLinkReplay(
+            UUID id,
+            String targetSystem,
+            String targetPath,
+            String purpose,
+            String codeHash,
+            Instant notBefore,
+            Instant expiresAt,
+            Instant revokedAt,
+            Instant createdAt
+    ) {
+        @Override
+        public String toString() {
+            return "StoredLinkReplay[id=" + id + "]";
+        }
+    }
 
     record StoredLinkResolution(
             UUID id,

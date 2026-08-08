@@ -113,6 +113,14 @@ vim .env
 무작위 값이어야 한다. 관리 credential은 HTTP header에 안정적으로 제시할 수 있도록 공백 없는
 printable ASCII만 사용한다. 링크 코드 파생 비밀은 기존 DB-key 결합과 복구 호환성을 위해
 길이 외의 문법을 추가 제한하거나 trim·Unicode 정규화하지 않고 설정 문자열 그대로 사용한다.
+서버는 링크 코드 비밀, 관리 credential과 DB password를 Spring `${...}` placeholder로 다시
+해석하지 않고 process environment 원문 그대로 읽는다. 따라서 server와 guard-tool은
+`${random.uuid}`, `${HOME}`, backslash나 공백을 포함한 링크 코드 비밀도 동일한 key bytes로
+해석한다. 이 환경 변수들은 동일한 command line·JVM property보다 우선한다. credential을
+로그나 명령행 인자로 출력해 이 동작을 확인하지 않는다.
+이 원문 보장은 process environment에 주입된 뒤의 값에 적용된다. Compose `.env`에서
+`${...}` 자체를 credential 일부로 사용할 때는 값을 single quote로 감싸 Compose interpolation을
+막고, guard-tool에도 Compose 처리 뒤와 동일한 문자열을 주입한다.
 공개된 `replace-with-...` 예시값을 그대로 사용하거나 두 값을 같게 설정하면 애플리케이션은
 시작하지 않는다. 링크 코드 파생 비밀은 재시작과 복구 뒤에도 같은 값을 유지해야 기존 생성
 요청을 동일 URL로 재생할 수 있다.

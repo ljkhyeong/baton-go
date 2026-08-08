@@ -22,6 +22,14 @@
 - credential이 담긴 Compose dotenv는 Compose parser가 읽는 데이터 파일로만 취급하고 셸에서
   `source`하지 않는다. 호스트 실행은 secret manager나 IDE가 process environment에 직접
   주입해 parser 변환이나 셸 확장 없이 설정 문자열을 보존한다.
+- HMAC 비밀, 관리 credential과 DB password는 Spring placeholder가 다시 해석하지 않는 raw
+  process environment 경계에서 읽는다. `${...}`, backslash와 공백을 포함한 값도 각 credential
+  자체의 문법 검증 전까지 원문 바이트를 보존하며 서버와 guard-tool이 같은 값을 사용한다.
+  해당 process environment 값이 존재하면 command line, JVM system property와
+  `SPRING_APPLICATION_JSON`의 동일 canonical property보다 우선한다.
+- raw 보존 경계는 Compose dotenv parsing 이후의 process environment다. dotenv 값 자체에
+  literal `${...}`가 필요하면 single-quoted value로 interpolation을 막고, server와 guard-tool에
+  동일한 parsing 결과를 주입한다.
 - token, access key와 전체 Authorization 값을 로그에 기록하지 않는다.
 - 멱등성 키, 링크 코드 파생 비밀과 전체 short URL을 로그에 기록하지 않는다.
 

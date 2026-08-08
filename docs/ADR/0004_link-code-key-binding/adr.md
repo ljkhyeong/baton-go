@@ -9,6 +9,10 @@
 기존 생성 요청을 재생하면 다른 공개 코드가 만들어지므로 ADR-0003은 저장된 code hash와
 현재 파생 결과를 비교해 잘못된 URL 반환을 막았다.
 
+이 값은 Spring `${...}` placeholder 문법과 우연히 같은 문자열을 포함할 수 있다. 서버만
+placeholder를 재해석하고 guard-tool은 process environment 원문을 사용하면 같은 배포 입력도
+서로 다른 HMAC key identity가 되어 시작·복구 계약을 만족할 수 없다.
+
 하지만 재생 요청이 오기 전에는 설정 오류를 발견하지 못한다. 잘못된 secret으로 시작한
 replica가 새 생성 intent를 먼저 처리하면 한 데이터베이스에 서로 다른 키로 파생된 링크가
 섞이고, 어느 secret으로도 전체 데이터를 재생할 수 없게 된다.
@@ -22,6 +26,8 @@ replica가 새 생성 intent를 먼저 처리하면 한 데이터베이스에 �
   - fingerprint:
     `hex(HMAC-SHA-256(secret, "baton-go-link-code-key-fingerprint:v1\0"))`
 - fingerprint는 secret 자체가 아니지만 로그, 오류 응답과 운영 티켓에 기록하지 않는다.
+- 서버와 guard-tool은 `BATON_GO_LINK_CODE_SECRET`을 placeholder 해석 없는 raw process
+  environment 값으로 읽고 trim·Unicode 정규화·문자열 치환 없이 같은 UTF-8 key bytes로 쓴다.
 - 애플리케이션 시작의 `ApplicationRunner`가 현재 identity와 DB identity를 검증한다.
 - 링크 생성 transaction은 예약 행을 만들기 전에 같은 검증을 다시 수행한다.
 - DB identity가 이미 결합되어 있으면 version과 fingerprint가 모두 일치해야 한다.

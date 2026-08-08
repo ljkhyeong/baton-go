@@ -18,6 +18,9 @@
   canary를 stdin으로만 받고 예약·링크 hash 일치를 확인한 뒤 한 transaction에서 결합한다.
   서버의 웹 서버·Hibernate/Spring Data JPA·Actuator runtime과 분리되어 있으며 key ring
   전에는 secret을 회전하지 않는다.
+- 서버와 guard-tool은 HMAC 비밀을 placeholder 해석 없는 process environment 원문으로 읽는다.
+  관리 credential과 DB password도 같은 raw 환경 경계를 사용하므로 `${...}`, backslash와
+  공백이 설정 계층에서 치환되지 않는다.
 - MySQL Testcontainers가 동시 동일 요청을 링크·예약 각 한 건으로 직렬화하고, 최초 owner
   rollback 때 발생할 수 있는 deadlock victim도 동일 키 재시도로 복구되는지 검증한다.
 - 관리 Bearer 인증은 scheme 대소문자를 구분하지 않으며, `401`에는

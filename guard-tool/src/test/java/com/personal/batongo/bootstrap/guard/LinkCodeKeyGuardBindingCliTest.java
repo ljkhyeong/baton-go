@@ -84,6 +84,29 @@ class LinkCodeKeyGuardBindingCliTest {
     }
 
     @Test
+    @DisplayName("복구 CLI는 placeholder와 역슬래시가 포함된 credential을 원문 그대로 사용한다")
+    void preservesLiteralPlaceholdersAndBackslashesInCredentials() {
+        String rawSecret = " 링크-${random.uuid}-${HOME}\\비밀-원문을-그대로-보존한다 ";
+        String rawUrl = "jdbc:mysql://db:3306/baton_go?label=${HOME}\\raw";
+        String rawUsername = "user-${HOME}\\raw";
+        String rawPassword = " password-${random.uuid}\\${HOME} ";
+        Map<String, String> environment = validEnvironment(rawSecret);
+        environment.put("BATON_GO_DB_URL", rawUrl);
+        environment.put("BATON_GO_DB_USERNAME", rawUsername);
+        environment.put("BATON_GO_DB_PASSWORD", rawPassword);
+
+        LinkCodeKeyGuardBindingCli.RuntimeConfiguration configuration =
+                LinkCodeKeyGuardBindingCli.RuntimeConfiguration.from(
+                        environment
+                );
+
+        assertThat(configuration.linkCodeProperties().secret()).isSameAs(rawSecret);
+        assertThat(configuration.jdbcUrl()).isSameAs(rawUrl);
+        assertThat(configuration.username()).isSameAs(rawUsername);
+        assertThat(configuration.password()).isSameAs(rawPassword);
+    }
+
+    @Test
     @DisplayName("복구 CLI는 공개 예시와 다른 replace-with 접두사의 링크 코드 비밀을 허용한다")
     void acceptsNonPublishedSecretWithPlaceholderPrefix() {
         assertThatCode(() -> LinkCodeKeyGuardBindingCli.RuntimeConfiguration.from(

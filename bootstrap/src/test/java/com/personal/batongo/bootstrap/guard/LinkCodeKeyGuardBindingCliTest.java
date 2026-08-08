@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
@@ -26,6 +27,29 @@ class LinkCodeKeyGuardBindingCliTest {
         assertThat(output.exitCode()).isEqualTo(LinkCodeKeyGuardBindingCli.EXIT_USAGE);
         assertThat(output.standardError()).contains("--confirm-writers-stopped");
         assertThat(output.combined()).doesNotContain(CANARY);
+    }
+
+    @Test
+    @DisplayName("canary 입력이 없으면 설정 조회와 DB 연결 전에 안전하게 실패한다")
+    void rejectsMissingCanaryBeforeRuntimeConfiguration() {
+        Map<String, String> unreadableEnvironment = new HashMap<>() {
+            @Override
+            public String get(Object key) {
+                throw new AssertionError("canary 검증 전에 설정을 조회하면 안 됩니다");
+            }
+        };
+
+        CapturedOutput output = run(
+                new String[]{"--confirm-writers-stopped"},
+                unreadableEnvironment,
+                null
+        );
+
+        assertThat(output.exitCode())
+                .isEqualTo(LinkCodeKeyGuardBindingCli.EXIT_VERIFICATION_FAILED);
+        assertThat(output.standardOutput()).isEmpty();
+        assertThat(output.standardError())
+                .contains("설정, canary와 DB 상태를 확인하세요");
     }
 
     @Test
@@ -78,12 +102,20 @@ class LinkCodeKeyGuardBindingCliTest {
     }
 
     private CapturedOutput run(String[] args, Map<String, String> environment) {
+        return run(args, environment, CANARY);
+    }
+
+    private CapturedOutput run(
+            String[] args,
+            Map<String, String> environment,
+            String canary
+    ) {
         ByteArrayOutputStream standardOutput = new ByteArrayOutputStream();
         ByteArrayOutputStream standardError = new ByteArrayOutputStream();
         int exitCode = new LinkCodeKeyGuardBindingCli().run(
                 args,
                 environment,
-                CANARY,
+                canary,
                 new PrintStream(standardOutput, true, StandardCharsets.UTF_8),
                 new PrintStream(standardError, true, StandardCharsets.UTF_8)
         );

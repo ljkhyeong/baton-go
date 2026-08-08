@@ -21,10 +21,24 @@ public final class ExistingDatabaseLinkCodeKeyBinder {
             LinkCodePort linkCodePort,
             String rawCanaryIdempotencyKey
     ) {
+        LegacyCanaryIdempotencyKey canaryIdempotencyKey;
+        try {
+            canaryIdempotencyKey = LegacyCanaryIdempotencyKey.parse(
+                    rawCanaryIdempotencyKey
+            );
+        } catch (RuntimeException exception) {
+            throw unsafeState();
+        }
+        return bind(connection, linkCodePort, canaryIdempotencyKey);
+    }
+
+    BindingResult bind(
+            Connection connection,
+            LinkCodePort linkCodePort,
+            LegacyCanaryIdempotencyKey canaryIdempotencyKey
+    ) {
         try {
             requireTransactionalConnection(connection);
-            LegacyCanaryIdempotencyKey canaryIdempotencyKey =
-                    LegacyCanaryIdempotencyKey.parse(rawCanaryIdempotencyKey);
             LinkCodeDerivationIdentity identity = linkCodePort.derivationIdentity();
             GuardState guardState = lockGuard(connection);
             verifyCanary(connection, linkCodePort, canaryIdempotencyKey);

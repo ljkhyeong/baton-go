@@ -31,6 +31,65 @@ jobs:
       - name: 정적·단위·패키징 검증
         run: ./gradlew --no-daemon build
 
+      - name: Guard 결합 도구 fail-closed 실행 검증
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          guard_jar=bootstrap/build/libs/baton-go-guard-binding.jar
+          smoke_dir="$(mktemp -d)"
+          trap 'rm -rf -- "$smoke_dir"' EXIT
+
+          usage_status=0
+          java -jar "$guard_jar" </dev/null \
+            >"$smoke_dir/usage.out" 2>"$smoke_dir/usage.err" \
+            || usage_status=$?
+
+          test "$usage_status" -eq 2
+          test ! -s "$smoke_dir/usage.out"
+          cmp -s \
+            <(printf '%s\n' \
+              '사용법: baton-go-guard-binding.jar --confirm-writers-stopped') \
+            "$smoke_dir/usage.err"
+
+          canary_status=0
+          env \
+            BATON_GO_LINK_CODE_SECRET=ci-guard-smoke-secret-000000000000 \
+            'BATON_GO_DB_URL=jdbc:mysql://127.0.0.1:1/guard_smoke?connectTimeout=100' \
+            BATON_GO_DB_USERNAME=guard_smoke \
+            BATON_GO_DB_PASSWORD=guard_smoke \
+            java -jar "$guard_jar" --confirm-writers-stopped </dev/null \
+            >"$smoke_dir/canary.out" 2>"$smoke_dir/canary.err" \
+            || canary_status=$?
+
+          test "$canary_status" -eq 3
+          test ! -s "$smoke_dir/canary.out"
+          cmp -s \
+            <(printf '%s\n' \
+              '링크 코드 키 guard 결합에 실패했습니다. 설정, canary와 DB 상태를 확인하세요') \
+            "$smoke_dir/canary.err"
+
+          printf '%s\n' '00000000-0000-4000-8000-000000000000' \
+            >"$smoke_dir/canary.in"
+          configuration_status=0
+          env \
+            -u BATON_GO_LINK_CODE_SECRET \
+            -u BATON_GO_DB_URL \
+            -u BATON_GO_DB_USERNAME \
+            -u BATON_GO_DB_PASSWORD \
+            java -jar "$guard_jar" --confirm-writers-stopped \
+            <"$smoke_dir/canary.in" \
+            >"$smoke_dir/configuration.out" \
+            2>"$smoke_dir/configuration.err" \
+            || configuration_status=$?
+
+          test "$configuration_status" -eq 3
+          test ! -s "$smoke_dir/configuration.out"
+          cmp -s \
+            <(printf '%s\n' \
+              '링크 코드 키 guard 결합에 실패했습니다. 설정, canary와 DB 상태를 확인하세요') \
+            "$smoke_dir/configuration.err"
+
       - name: Compose 설정 검증
         run: docker compose --env-file .env.example config --quiet
 

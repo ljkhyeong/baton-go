@@ -54,6 +54,8 @@ public final class LinkCodeKeyGuardBindingCli {
         }
 
         try {
+            LegacyCanaryIdempotencyKey canary =
+                    LegacyCanaryIdempotencyKey.parse(canaryIdempotencyKey);
             RuntimeConfiguration configuration = RuntimeConfiguration.from(environment);
             LinkCodePort linkCodePort = new SecureLinkCodeAdapter(
                     new LinkCodeProperties(configuration.linkCodeSecret())
@@ -68,7 +70,7 @@ public final class LinkCodeKeyGuardBindingCli {
                     BindingResult result = new ExistingDatabaseLinkCodeKeyBinder().bind(
                             connection,
                             linkCodePort,
-                            canaryIdempotencyKey
+                            canary
                     );
                     connection.commit();
                     standardOutput.println(result == BindingResult.BOUND

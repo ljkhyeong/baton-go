@@ -19,6 +19,9 @@
 - 리다이렉트 응답은 `no-store`와 `no-referrer`를 사용한다.
 - 관리 API는 공백 없는 printable ASCII로 구성한 최소 32자의 환경 변수 Bearer credential로
   보호한다. 이 자격은 파일럿용 서비스 인증이며 최종 사용자 신원 모델이 아니다.
+- credential이 담긴 Compose dotenv는 Compose parser가 읽는 데이터 파일로만 취급하고 셸에서
+  `source`하지 않는다. 호스트 실행은 secret manager나 IDE가 process environment에 직접
+  주입해 parser 변환이나 셸 확장 없이 설정 문자열을 보존한다.
 - token, access key와 전체 Authorization 값을 로그에 기록하지 않는다.
 - 멱등성 키, 링크 코드 파생 비밀과 전체 short URL을 로그에 기록하지 않는다.
 

@@ -135,28 +135,32 @@ canary 생성 intent의 동일 URL 재생을 확인한다. key ring을 도입하
 secret으로 강제 결합하지 않는다. 자세한 결정은
 [ADR-0004](docs/ADR/0004_link-code-key-binding/adr.md)를 따른다.
 
-이 저장소는 일반 애플리케이션과 분리된 `baton-go-guard-binding.jar`를 제공한다. 도구는
-canary `Idempotency-Key`를 stdin으로만 받고 저장된 예약·링크의 해시를 검증한 뒤 한
-transaction에서 결합한다. 직접 SQL이나 우회 환경 변수 대신
+이 저장소는 일반 애플리케이션과 분리된 `guard-tool` 모듈의
+`baton-go-guard-binding.jar`를 제공한다. 도구는 canary `Idempotency-Key`를 stdin으로만
+받고 저장된 예약·링크의 해시를 검증한 뒤 한 transaction에서 결합한다. 직접 SQL이나 우회
+환경 변수 대신
 [기존 데이터베이스 HMAC guard 최초 결합 runbook](docs/RUNBOOK/link-code-key-guard-binding.md)을
 따른다.
 
-호스트에서 Gradle로 애플리케이션을 실행할 때는 `.env`의 값을 자식 프로세스에 export하고
-MySQL만 Compose로 먼저 실행한다. JDBC URL은 zsh에서 `source`할 수 있도록 예시 파일에서
-따옴표로 감싸져 있다.
+`.env`는 Docker Compose의 dotenv 문법으로 해석하는 데이터 파일이며 셸 스크립트가 아니다.
+겉보기에는 `KEY=VALUE` 형식이어도 `source ./.env`로 읽으면 셸이 명령 치환, 변수 확장과
+백틱을 실행해 credential 값을 바꾸거나 명령으로 실행할 수 있다. 예시 파일의 JDBC URL
+따옴표도 Compose parser 문법이므로 셸 호환성을 뜻하지 않는다.
+
+호스트에서 Gradle로 애플리케이션을 실행할 때는 MySQL만 Compose로 먼저 실행하고,
+애플리케이션에 필요한 `BATON_GO_*` 값은 secret manager의 process injection이나 IDE Run
+Configuration으로 Gradle 프로세스 환경에 직접 주입한다. Compose용 `.env`를 셸에서
+`source`하거나 다른 dotenv parser로 재해석하지 않는다.
 
 ```bash
 docker compose --env-file .env up -d mysql
 
-set -a
-source ./.env
-set +a
-
+# 이 명령을 실행하는 프로세스 환경에는 secret manager나 IDE가 BATON_GO_* 값을 주입한다.
 ./gradlew :bootstrap:bootRun
 ```
 
 애플리케이션과 MySQL을 모두 Compose로 실행하려면 다음 명령을 사용한다. 이 경로에서는
-Compose가 `.env`를 각 컨테이너에 주입하므로 별도의 `source`가 필요하지 않다.
+Compose가 자기 dotenv 문법으로 `.env`를 읽어 각 컨테이너에 주입한다.
 
 ```bash
 docker compose --env-file .env up --build -d

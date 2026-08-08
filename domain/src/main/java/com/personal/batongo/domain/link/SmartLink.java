@@ -104,11 +104,8 @@ public class SmartLink {
 
     public void revoke(Instant now) {
         Objects.requireNonNull(now, "폐기 시각은 필수입니다");
-        if (now.isBefore(createdAt)) {
-            throw new LinkValidationException("폐기 시각은 생성 시각보다 빠를 수 없습니다");
-        }
         if (revokedAt == null) {
-            revokedAt = now;
+            revokedAt = LinkRevocationPolicy.requireFirstRevocationAt(createdAt, now);
         }
     }
 

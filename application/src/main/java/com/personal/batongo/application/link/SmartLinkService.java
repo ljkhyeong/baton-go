@@ -14,6 +14,7 @@ import com.personal.batongo.application.link.port.out.SmartLinkRepository.Stored
 import com.personal.batongo.application.link.port.out.SmartLinkRepository.StoredLinkSnapshot;
 import com.personal.batongo.application.link.port.out.TargetUrlPort;
 import com.personal.batongo.domain.link.LinkAvailabilityPolicy;
+import com.personal.batongo.domain.link.LinkRevocationPolicy;
 import com.personal.batongo.domain.link.LinkValidationException;
 import com.personal.batongo.domain.link.SmartLink;
 import com.personal.batongo.domain.link.TrustedTarget;
@@ -217,11 +218,10 @@ public class SmartLinkService implements SmartLinkUseCase {
         if (storedLink.revokedAt() != null) {
             return toResult(storedLink, trustedTarget, storedLink.revokedAt());
         }
-
-        Instant revokedAt = databaseTime();
-        if (revokedAt.isBefore(storedLink.createdAt())) {
-            throw new IllegalStateException("폐기 시각은 생성 시각보다 빠를 수 없습니다");
-        }
+        Instant revokedAt = LinkRevocationPolicy.requireFirstRevocationAt(
+                storedLink.createdAt(),
+                databaseTime()
+        );
         if (!repository.revokeStoredIfVersion(
                 storedLink.id(),
                 storedLink.version(),

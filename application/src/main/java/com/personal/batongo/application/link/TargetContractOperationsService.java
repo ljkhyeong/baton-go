@@ -9,6 +9,7 @@ import com.personal.batongo.application.link.port.in.TargetContractOperationsUse
 import com.personal.batongo.application.link.port.out.SmartLinkRepository;
 import com.personal.batongo.application.link.port.out.SmartLinkRepository.StoredLinkSnapshot;
 import com.personal.batongo.domain.link.LinkValidationException;
+import com.personal.batongo.domain.link.LinkRevocationPolicy;
 import com.personal.batongo.domain.link.TrustedTargetPolicy;
 import java.time.Clock;
 import java.time.Instant;
@@ -83,10 +84,10 @@ public class TargetContractOperationsService implements TargetContractOperations
             throw new TargetContractRemediationStaleException();
         }
 
-        Instant revokedAt = databaseTime();
-        if (revokedAt.isBefore(storedLink.createdAt())) {
-            throw new IllegalStateException("폐기 시각은 생성 시각보다 빠를 수 없습니다");
-        }
+        Instant revokedAt = LinkRevocationPolicy.requireFirstRevocationAt(
+                storedLink.createdAt(),
+                databaseTime()
+        );
         boolean revoked = repository.revokeStoredIfVersion(
                 storedLink.id(),
                 command.expectedVersion(),

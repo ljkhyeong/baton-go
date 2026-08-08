@@ -45,7 +45,7 @@ class SmartLinkPolicyTest {
         Instant firstRevocation = CREATED_AT.plusSeconds(30);
 
         link.revoke(firstRevocation);
-        link.revoke(firstRevocation.plusSeconds(30));
+        link.revoke(CREATED_AT.minusSeconds(30));
 
         assertThat(link.getRevokedAt()).isEqualTo(firstRevocation);
         assertThatThrownBy(() -> link.requireResolvableAt(firstRevocation.plusSeconds(60)))

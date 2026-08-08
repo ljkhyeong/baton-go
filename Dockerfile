@@ -35,7 +35,7 @@ RUN addgroup -S -g 10001 batongo \
     && adduser -S -D -H -u 10001 -G batongo batongo
 
 WORKDIR /opt/baton-go
-COPY --from=build --chown=10001:10001 /workspace/baton-go.jar ./baton-go.jar
+COPY --from=build --chown=0:0 --chmod=0444 /workspace/baton-go.jar ./baton-go.jar
 
 ENV JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=75.0 -XX:+ExitOnOutOfMemoryError -Djava.io.tmpdir=/tmp"
 USER 10001:10001

@@ -25,8 +25,8 @@ class CreationIdempotencyKeyTest {
         CreationIdempotencyKey key = new CreationIdempotencyKey(value);
 
         assertThat(key.value()).isEqualTo(value);
-        assertThat(key.meetsCurrentContract()).isTrue();
-        assertThat(CreationIdempotencyKey.parseRequest(value).meetsCurrentContract())
+        assertThat(key.allowsNewReservation()).isTrue();
+        assertThat(CreationIdempotencyKey.parseRequest(value).allowsNewReservation())
                 .isTrue();
     }
 
@@ -42,7 +42,7 @@ class CreationIdempotencyKeyTest {
         CreationIdempotencyKey key = CreationIdempotencyKey.parseRequest(value);
 
         assertThat(key.value()).isEqualTo(value.toLowerCase());
-        assertThat(key.meetsCurrentContract()).isFalse();
+        assertThat(key.allowsNewReservation()).isFalse();
     }
 
     @Test

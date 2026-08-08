@@ -13,20 +13,26 @@ public final class CreationIdempotencyKey {
     );
 
     private final String value;
-    private final boolean currentContract;
+    private final ReservationAdmission reservationAdmission;
 
     public CreationIdempotencyKey(String value) {
-        this(requireCurrentContract(value), true);
+        this(requireCurrentContract(value), ReservationAdmission.CREATE_OR_REPLAY);
     }
 
-    private CreationIdempotencyKey(String value, boolean currentContract) {
+    private CreationIdempotencyKey(
+            String value,
+            ReservationAdmission reservationAdmission
+    ) {
         this.value = value;
-        this.currentContract = currentContract;
+        this.reservationAdmission = reservationAdmission;
     }
 
     public static CreationIdempotencyKey parseRequest(String value) {
         if (matchesCurrentContract(value)) {
-            return new CreationIdempotencyKey(value, true);
+            return new CreationIdempotencyKey(
+                    value,
+                    ReservationAdmission.CREATE_OR_REPLAY
+            );
         }
 
         UUID parsed;
@@ -38,15 +44,18 @@ public final class CreationIdempotencyKey {
         if (!parsed.toString().equalsIgnoreCase(value)) {
             throw new InvalidIdempotencyKeyException();
         }
-        return new CreationIdempotencyKey(parsed.toString(), false);
+        return new CreationIdempotencyKey(
+                parsed.toString(),
+                ReservationAdmission.REPLAY_ONLY
+        );
     }
 
     public String value() {
         return value;
     }
 
-    public boolean meetsCurrentContract() {
-        return currentContract;
+    public boolean allowsNewReservation() {
+        return reservationAdmission == ReservationAdmission.CREATE_OR_REPLAY;
     }
 
     private static String requireCurrentContract(String value) {
@@ -65,16 +74,21 @@ public final class CreationIdempotencyKey {
         return this == other
                 || other instanceof CreationIdempotencyKey that
                 && value.equals(that.value)
-                && currentContract == that.currentContract;
+                && reservationAdmission == that.reservationAdmission;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(value, currentContract);
+        return Objects.hash(value, reservationAdmission);
     }
 
     @Override
     public String toString() {
         return "CreationIdempotencyKey[redacted]";
+    }
+
+    private enum ReservationAdmission {
+        CREATE_OR_REPLAY,
+        REPLAY_ONLY
     }
 }

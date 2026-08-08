@@ -253,6 +253,30 @@ class SmartLinkServiceTest {
     }
 
     @Test
+    @DisplayName("과거 UUID와 나노초 시각이 겹쳐도 키 오류로 끝나며 새 예약을 만들지 않는다")
+    void preservesLegacyKeyErrorPriorityAcrossReplayOnlyRules() {
+        CreationIdempotencyKey legacyKey = CreationIdempotencyKey.parseRequest(
+                "00000000-0000-7000-8000-00000000000A"
+        );
+
+        assertThatThrownBy(() -> service.createLink(new CreateLinkCommand(
+                legacyKey,
+                TargetSystem.ROUND,
+                ROUND_PATH,
+                LinkPurpose.MEETING_ENTRY,
+                null,
+                Instant.parse("2026-07-29T10:05:00.123456789Z")
+        )))
+                .isExactlyInstanceOf(InvalidIdempotencyKeyException.class);
+
+        assertThat(reservationPort.reservations).isEmpty();
+        assertThat(reservationPort.reserveCalls).isZero();
+        assertThat(reservationPort.lookupCalls).isOne();
+        assertThat(repository.saveCalls).isZero();
+        assertThat(repository.replayLookupCalls).isZero();
+    }
+
+    @Test
     @DisplayName("같은 멱등성 키와 요청은 현재 폐기 상태를 포함한 동일 링크를 다시 반환한다")
     void replaysSameCreation() {
         CreateLinkCommand command = new CreateLinkCommand(

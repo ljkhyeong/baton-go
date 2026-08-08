@@ -287,7 +287,7 @@ class LinkHttpContractTest {
             throws Exception {
         when(useCase.createLink(any())).thenAnswer(invocation -> {
             CreateLinkCommand command = invocation.getArgument(0);
-            assertThat(command.idempotencyKey().meetsCurrentContract()).isFalse();
+            assertThat(command.idempotencyKey().allowsNewReservation()).isFalse();
             throw new InvalidIdempotencyKeyException();
         });
 

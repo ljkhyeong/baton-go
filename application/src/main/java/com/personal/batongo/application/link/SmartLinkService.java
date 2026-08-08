@@ -1,8 +1,6 @@
 package com.personal.batongo.application.link;
 
 import com.personal.batongo.application.link.error.IdempotencyKeyConflictException;
-import com.personal.batongo.application.link.error.InvalidCreationTimeException;
-import com.personal.batongo.application.link.error.InvalidIdempotencyKeyException;
 import com.personal.batongo.application.link.error.LinkCodeReplayMismatchException;
 import com.personal.batongo.application.link.error.LinkNotFoundException;
 import com.personal.batongo.application.link.error.StoredTargetPolicyViolationException;
@@ -57,55 +55,64 @@ public class SmartLinkService implements SmartLinkUseCase {
 
     @Override
     public CreatedLinkResult createLink(CreateLinkCommand command) {
-        boolean storableCreationTime = CreationTimeStoragePolicy.isStorable(
-                command.notBefore(),
-                command.expiresAt()
-        );
-        if (!CreationTimeStoragePolicy.isWithinRange(
-                command.notBefore(),
-                command.expiresAt()
-        )) {
-            throw new InvalidCreationTimeException();
+        PreparedCreation prepared = prepareCreation(command);
+        if (!prepared.admission().allowsNewReservation()) {
+            return replayExistingOnly(prepared);
         }
+        return reserveCreateOrReplay(prepared);
+    }
+
+    private PreparedCreation prepareCreation(CreateLinkCommand command) {
+        CreationRequestAdmissionPolicy.Decision admission =
+                CreationRequestAdmissionPolicy.evaluate(
+                        command.idempotencyKey(),
+                        command.notBefore(),
+                        command.expiresAt()
+                );
         String idempotencyKey = command.idempotencyKey().value();
-        String idempotencyKeyHash = linkCodePort.hashIdempotencyKey(idempotencyKey);
-        Instant notBefore = databaseTime(command.notBefore());
-        Instant expiresAt = databaseTime(command.expiresAt());
+        return new PreparedCreation(
+                command,
+                admission,
+                idempotencyKey,
+                linkCodePort.hashIdempotencyKey(idempotencyKey)
+        );
+    }
 
-        if (!command.idempotencyKey().meetsCurrentContract() || !storableCreationTime) {
-            UUID existingLinkId = requireExistingReplayReservation(
-                    idempotencyKeyHash,
-                    command
-            );
-            String targetPath = requireAllowedTargetPath(command);
-            linkCodeKeyGuard.verifyBound();
-            return replayCreation(
-                    existingLinkId,
-                    command,
-                    targetPath,
-                    notBefore,
-                    expiresAt,
-                    linkCodePort.issue(idempotencyKey)
-            );
-        }
+    private CreatedLinkResult replayExistingOnly(PreparedCreation prepared) {
+        UUID existingLinkId = reservationPort.findLinkId(
+                prepared.idempotencyKeyHash()
+        ).orElseThrow(prepared.admission()::missingReservationException);
+        String targetPath = requireAllowedTargetPath(prepared.command());
+        linkCodeKeyGuard.verifyBound();
+        return replayCreation(
+                existingLinkId,
+                prepared.command(),
+                targetPath,
+                prepared.admission().notBefore(),
+                prepared.admission().expiresAt(),
+                linkCodePort.issue(prepared.idempotencyKey())
+        );
+    }
 
+    private CreatedLinkResult reserveCreateOrReplay(PreparedCreation prepared) {
+        CreateLinkCommand command = prepared.command();
         String targetPath = requireAllowedTargetPath(command);
         linkCodeKeyGuard.verifyBound();
         Instant now = databaseTime();
         LinkCreationReservationPort.Reservation reservation = reservationPort.reserve(
-                idempotencyKeyHash,
+                prepared.idempotencyKeyHash(),
                 UUID.randomUUID(),
                 now
         );
-        IssuedLinkCode issuedCode = linkCodePort.issue(idempotencyKey);
+        IssuedLinkCode issuedCode = linkCodePort.issue(prepared.idempotencyKey());
 
         if (!reservation.owner()) {
             return replayCreation(
                     reservation.linkId(),
                     command,
                     targetPath,
-                    notBefore,
-                    expiresAt,
+                    prepared.admission().notBefore(),
+                    prepared.admission().expiresAt(),
                     issuedCode
             );
         }
@@ -116,26 +123,25 @@ public class SmartLinkService implements SmartLinkUseCase {
                 command.targetSystem(),
                 targetPath,
                 command.purpose(),
-                notBefore,
-                expiresAt,
+                prepared.admission().notBefore(),
+                prepared.admission().expiresAt(),
                 now
         );
         SmartLink saved = repository.save(smartLink);
         return new CreatedLinkResult(toResult(saved), issuedCode.rawCode(), false);
     }
 
-    private UUID requireExistingReplayReservation(
-            String idempotencyKeyHash,
-            CreateLinkCommand command
+    private record PreparedCreation(
+            CreateLinkCommand command,
+            CreationRequestAdmissionPolicy.Decision admission,
+            String idempotencyKey,
+            String idempotencyKeyHash
     ) {
-        UUID existingLinkId = reservationPort.findLinkId(idempotencyKeyHash).orElse(null);
-        if (existingLinkId != null) {
-            return existingLinkId;
+
+        @Override
+        public String toString() {
+            return "PreparedCreation[redacted]";
         }
-        if (!command.idempotencyKey().meetsCurrentContract()) {
-            throw new InvalidIdempotencyKeyException();
-        }
-        throw new InvalidCreationTimeException();
     }
 
     private String requireAllowedTargetPath(CreateLinkCommand command) {

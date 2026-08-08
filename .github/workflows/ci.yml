@@ -96,5 +96,43 @@ jobs:
       - name: 운영 이미지 빌드 검증
         run: docker build --tag baton-go:ci .
 
+      - name: 운영 이미지 기동과 health 검증
+        shell: bash
+        env:
+          BATON_GO_APP_IMAGE: baton-go:ci
+          BATON_GO_MANAGEMENT_TOKEN: ci-runtime-management-token-000000000000
+          BATON_GO_LINK_CODE_SECRET: ci-runtime-link-code-secret-000000000000
+          BATON_GO_DB_PASSWORD: ci-runtime-db-password
+          BATON_GO_DB_ROOT_PASSWORD: ci-runtime-root-password
+          BATON_GO_HTTP_PORT: "0"
+          BATON_GO_MANAGEMENT_PORT: "0"
+          BATON_GO_MYSQL_PORT: "0"
+          COMPOSE_PROJECT_NAME: baton-go-smoke-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+
+          compose=(docker compose --env-file .env.example)
+
+          cleanup() {
+            status=$?
+            if test "$status" -ne 0; then
+              "${compose[@]}" logs --no-color mysql app || true
+            fi
+            "${compose[@]}" down --volumes --remove-orphans || true
+            exit "$status"
+          }
+          trap cleanup EXIT
+
+          "${compose[@]}" up \
+            --detach \
+            --no-build \
+            --pull missing \
+            --wait \
+            --wait-timeout 180
+
+          app_container="$("${compose[@]}" ps --quiet app)"
+          test -n "$app_container"
+          test "$(docker inspect --format '{{.Config.User}}' "$app_container")" = "10001:10001"
+
       - name: MySQL 통합 검증
         run: ./gradlew --no-daemon :bootstrap:mysqlTest

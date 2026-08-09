@@ -26,7 +26,13 @@ BATON MySQL을 공유하면 초기 인프라 수는 줄지만 backup, 장애, mi
 - application Deployment는 Flyway를 비활성화하고 runtime DML credential만 받는다. 같은
   release image의 `--baton-go.migration-only=true` 모드는 component scan·웹·JPA·domain runner
   없이 DataSource와 Flyway만 시작하고 종료한다. 일회성 Kubernetes Job만 migration credential을
-  받아 schema를 적용한다. root password는 MySQL Pod에만 주입한다.
+  받아 schema를 적용한다. runner는 context 시작 side effect를 성공으로 간주하지 않고
+  Flyway를 `LATEST` target으로만 명시적 실행한 뒤 resolved migration 존재, pending 0건과
+  schema history를 검증한다. `CURRENT`·`NEXT`·특정 version target은 일부 DDL을 적용하기
+  전에 거부하고, SQL 실행 생략·baseline·선택 적용, migration 이름 또는 migration 전
+  validation 비활성화와 기존 baseline state도 허용하지 않는다. Flyway가 비활성화되었거나
+  bean을 조립할 수 없으면 Job은 실패한다.
+  root password는 MySQL Pod에만 주입한다.
 - TLS JDBC URL, runtime password, migration password와 root password는 서로 다른 네 Secret에
   보관한다. Kubernetes Secret RBAC는 key 단위가 아니므로 수명주기·권한이 다른 credential을
   한 object에 합치지 않는다. application은 client URL과 runtime Secret, migration Job은 client
@@ -60,6 +66,14 @@ BATON MySQL을 공유하면 초기 인프라 수는 줄지만 backup, 장애, mi
   `require_secure_transport=ON`으로 TCP 평문 연결을 거부한다. application과 migration Job은
   전용 PKCS12 truststore를 mount하고 Connector/J `sslMode=VERIFY_IDENTITY`로 Service DNS를
   검증한다. 인증서 SAN은 JDBC host인 `baton-go-mysql`을 반드시 포함한다.
+- MySQL main container보다 먼저 같은 고정 image의 non-root initContainer를 실행한다. 이
+  preflight는 data volume을 mount하지 않은 채 database·계정 문법과 서로 다른 password,
+  TLS 파일 권한·PEM·certificate/private-key 일치·`baton-go-mysql` DNS SAN·CA 검증, repository
+  runtime-user init script의 필수 계정·권한 문장 존재를 확인한다. 실제 추가 SQL의
+  안전성과 최소 권한은 exact script를 실행하는 topology smoke가 검증한다. 검증 실패 이유에는 credential
+  원문을 포함하지 않으며 main container가 data directory를 만들기 전에 실패한다.
+  MySQL startup·readiness probe는 runtime 계정의 local TCP TLS 세션으로 실행해 socket만
+  살아 있고 server TLS 설정이 실패한 상태를 Ready로 간주하지 않는다.
 - 초기 운영은 application과 MySQL 모두 단일 replica다. MySQL HA, distributed resolver
   rate limit과 multi-node storage failover는 별도 운영 결정 전에는 구현됐다고 보지 않는다.
 
@@ -83,6 +97,11 @@ BATON MySQL을 공유하면 초기 인프라 수는 줄지만 backup, 장애, mi
 - 공식 MySQL image의 초기화 환경 변수는 빈 data directory에만 적용된다. 기존 PVC의
   권한 분리와 credential 회전은 MySQL account 변경과 Secret rollout을 함께 수행하는 별도
   절차가 필요하다.
+- preflight는 검증 가능한 입력 오류를 최초 초기화 전에 차단하지만, main entrypoint가 system
+  schema를 만든 뒤 다른 이유로 실패한 partial data directory를 자동 복구하지 않는다. 공식
+  image는 재시작 때 이를 기존 database로 판단해 init script를 건너뛸 수 있다. PVC 삭제·재생성은
+  데이터가 없다고 확인된 최초 rollout에만 허용하고, 데이터 존재 가능성이 있으면 backup 뒤
+  승인된 MySQL 관리 채널에서 account를 수동 복구한다.
 - 인증서 발급·SAN, truststore 생성·교체와 CA rotation은 cluster PKI 운영 계층이 소유한다.
 - 표준 NetworkPolicy는 HTTP path, node host firewall과 일부 host-network 경로를 표현하지
   못하므로 CNI·edge별 preflight와 추가 정책이 필요하다.

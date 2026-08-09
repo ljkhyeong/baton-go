@@ -234,7 +234,10 @@ Docker는 Actuator 포트의 aggregate `/actuator/health`를 계속 사용한다
 ```
 
 Flyway/JPA와 동시 생성 동작을 포함한 MySQL 통합 검증은 Docker가 실행 중인 환경에서
-별도로 수행한다.
+별도로 수행한다. 이 suite는 Kubernetes 배포용 MySQL init script, TLS
+`VERIFY_IDENTITY`, runtime 계정의 DML-only 권한과 migration-only runner도 함께 검증한다.
+TLS hostname 검증용 test alias를 loopback에 고정하므로 로컬 Docker socket 또는 일반
+GitHub runner를 기준으로 하며, 원격 `DOCKER_HOST`는 현재 지원하지 않는다.
 
 ```bash
 ./gradlew --no-daemon :bootstrap:mysqlTest

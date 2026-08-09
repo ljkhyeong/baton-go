@@ -31,6 +31,16 @@
   `baton_go` database user, DB/runtime Secret과 10Gi `ReadWriteOnce` PVC를 사용하며 BATON의
   MySQL instance·계정·volume을 공유하지 않는다. StorageClass와 Ingress는 환경에 맡기고,
   namespace bootstrap은 workload overlay에서 분리해 PVC 연쇄 삭제 위험을 줄였다.
+- MySQL은 data PVC를 mount하지 않는 non-root preflight initContainer에서 계정·password 문법과
+  분리, TLS 권한·certificate/key·`baton-go-mysql` SAN·CA, runtime-user init script 구조를 먼저
+  검증한다. 공식 image가 system schema 생성 뒤 실패한 partial PVC를 자동 복구한다고 보지 않으며,
+  PVC 재생성은 데이터가 없다고 확인한 최초 rollout만 허용하고 그 외에는 backup 뒤 account를
+  수동 복구한다.
+- database migration Job은 최소 context에서 Flyway `LATEST` target만 명시적으로 실행하고
+  resolved migration 존재, pending 0건과 history validation을 검증한다. 다른 target,
+  SQL 실행 생략·baseline·선택 적용, migration 이름 또는 migration 전 validation 비활성화,
+  기존 baseline state와 Flyway 비활성화·bean 누락은 context 시작 성공으로 오인하지 않고
+  non-zero로 fail-closed 한다.
 - Kubernetes의 `8080` HTTP Service에는 public `/l` Prefix와 private `/api/v1` Prefix가 함께
   있으므로 edge에서 두 경로를 분리해야 한다. Actuator `8081`은 Service·Ingress로 기본
   노출하지 않고 kubelet probe와 제한된 운영 접근에만 사용한다.

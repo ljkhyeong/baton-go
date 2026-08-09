@@ -18,6 +18,7 @@
 | `Secret/baton-go-database-bootstrap-credentials` | local root password | MySQL Pod만 참조 |
 | `Secret/baton-go-mysql-server-tls` | MySQL CA, server certificate와 private key | MySQL Pod만 mount |
 | `Secret/baton-go-mysql-client-tls` | 공개 CA만 든 Connector/J PKCS12 truststore | application·migration Job만 mount |
+| `ConfigMap/baton-go-mysql-init-preflight-*` | 최초 DB 초기화 전 credential·TLS·init script 계약 검증 | MySQL initContainer만 mount |
 
 이 배포만으로 public production rollout이 승인되지는 않는다. PRD-0003의 BATON session,
 participation grant, room mapping, edge routing과 기존 데이터 inventory gate는 별도다.
@@ -153,6 +154,16 @@ baton-go-mysql-client-tls
   이 값을 비밀로 바꾸거나 다른 credential을 같은 property에 넣지 않는다. truststore object의
   변경 무결성과 접근 제한은 Secret at-rest encryption과 RBAC로 보장한다.
 
+MySQL Pod의 `mysql-bootstrap-preflight` initContainer는 위 runtime·migration·root password의
+길이·alphabet·상호 분리, 고정 username과 database 이름을 값 출력 없이 다시 검증한다. server
+TLS 세 파일은 non-empty·readable `0440`이어야 하며 certificate와 unencrypted private key의
+일치, encrypted PKCS#8·legacy PEM marker 부재, `DNS:baton-go-mysql` SAN과 CA·hostname
+검증을 통과해야 한다. repository runtime-user
+초기화 script도 `0555`이고 local root socket을 통해 runtime user와 DML-only grant를 만드는
+필수 문장을 포함해야 한다. 이 정적 presence check만으로 추가 SQL의 안전성을 증명하지
+않으며, CI의 exact init-script topology smoke가 실제 runtime 계정의 DML 4종·DDL 거부와
+원격 root 부재를 검증한다. 이 검증을 완화해 임의 quote나 공백 password를 허용하지 않는다.
+
 ```text
 jdbc:mysql://baton-go-mysql:3306/baton_go?sslMode=VERIFY_IDENTITY&trustCertificateKeyStoreUrl=file:/etc/baton-go/mysql-tls/truststore.p12&trustCertificateKeyStoreType=PKCS12&fallbackToSystemTrustStore=false&serverTimezone=UTC
 ```
@@ -250,6 +261,29 @@ Job은 DB가 준비될 때까지 실패를 재시도하고 application은 migrat
 되지 않는다. Job이 `Complete`가 되지 않으면 application rollout을 성공으로 판단하지 말고
 Job Pod의 종료 원인과 MySQL TLS·credential을 먼저 확인한다.
 
+migration-only runner는 Flyway bean을 명시적으로 요구하고 `LATEST` target의 resolved
+migration 존재, `migrate()` 실행, pending 0건과 schema history validation을 모두
+통과해야 성공 종료한다. `CURRENT`, `NEXT`, 특정 version target은 변경을 시작하기
+전에 거부한다. `skipExecutingMigrations`, `baselineOnMigrate`, `cherryPick`과
+`ignoreMigrationPatterns`처럼 SQL을 생략하거나 일부만 선택하는 설정, migration 이름
+검증 또는 migration 전 validation 비활성화와 기존 baseline state도 거부한다. runner는
+Flyway의 `validateOnMigrate` 사전 검증을 강제하고 migration 뒤 다시 history를 검증한다.
+`SPRING_FLYWAY_ENABLED=false`나 Flyway 조립 누락은 context만 열고 성공하는 대신
+non-zero로 실패하므로, Job manifest의 명시적인 `true`를 제거하지 않는다.
+
+`mysql-bootstrap-preflight`는 MySQL data PVC를 mount하지 않아 datadir를 읽거나 쓰지
+않는다. kubelet은 Pod volume stage와 `fsGroup` 적용을 수행할 수 있지만, initContainer가
+실패한 동안 MySQL main container·공식 entrypoint가 시작해 system schema를 만들지는 않는다.
+실패 원인은 다음처럼 확인할 수 있고 출력에는 credential 원문, certificate,
+JDBC URL을 포함하지 않는다. Secret 또는 certificate를 고친 뒤에는 PVC가 아니라 Pod만
+재생성해 initContainer부터 다시 검증한다.
+
+```bash
+kubectl -n baton-go logs pod/baton-go-mysql-0 -c mysql-bootstrap-preflight
+kubectl -n baton-go delete pod baton-go-mysql-0 --wait=true
+kubectl -n baton-go rollout status statefulset/baton-go-mysql --timeout=10m
+```
+
 신규 빈 PVC에서 MySQL 공식 image는 다음을 최초 한 번만 수행한다.
 
 - `baton_go` database와 DDL/DML 권한의 `baton_go_migrator` user 생성
@@ -268,6 +302,122 @@ private-server 배포는 신규 빈 DB를 전제로 한다.
 검증한다. 신규 빈 DB의 링크 코드 HMAC guard는 application 시작 시 현재 HMAC 비밀에 자동
 결합된다. 이후에는 DB와 `BATON_GO_LINK_CODE_SECRET`을 항상 같은 시점의 복구 단위로
 보존한다. key ring을 도입하기 전에는 HMAC 비밀만 회전하지 않는다.
+
+### 부분 초기화 실패 복구
+
+preflight가 성공한 뒤 MySQL 공식 entrypoint가 system schema를 만들고 account·init script
+단계에서 실패하면 `/var/lib/mysql/mysql`이 남을 수 있다. 공식 image는 재시작 때 이를 기존
+database로 판단하므로 초기화 환경 변수와 `/docker-entrypoint-initdb.d`를 다시 실행하지 않는다.
+Pod 재시작이나 Secret 수정만으로 runtime·migration account가 복구된다고 가정하지 않는다.
+
+PVC 삭제·재생성은 다음 증거를 모두 확인하고 서비스·DB 운영자가 승인한 **신규 빈 DB의 첫
+rollout**에만 허용한다.
+
+1. PVC가 이번 최초 배포에서 새로 provision됐고 snapshot·restore나 기존 volume 재결합 이력이 없다.
+2. migration Job이 한 번도 `Complete`가 아니었고 application이 한 번도 `Ready`가 아니었으며
+   management writer와 호출자 outbox가 열리지 않았다.
+3. MySQL log와 배포 기록상 업무 row나 보존해야 할 schema가 생성될 가능성이 없음을 확인했다.
+
+확인된 빈 PVC만 대상으로 application Deployment와 migration Job을 먼저 중지한다.
+application Pod는 0개, migration Job은 `suspend=true`·active 0이고 Pending·Running Pod가
+0개임을 확인한 뒤 StatefulSet을 0으로 내린다. Failed·Succeeded Job Pod는 active writer가
+아니므로 삭제를 기다리지 않고 복구 증거로 보존한다. caller outbox·management writer 차단도
+별도로 유지한다. 현재 cluster context, PVC UID·PV·StorageClass와 PV의 실제 reclaim policy를
+승인 기록과 대조한다. 아래 PVC 삭제는 volume을 복구 불가능하게 제거할 수 있는 파괴
+작업이므로 승인 기록 없이 실행하지 않는다.
+
+```bash
+kubectl config current-context
+kubectl -n baton-go get deployment/baton-go job/baton-go-database-migration \
+  statefulset/baton-go-mysql pvc/data-baton-go-mysql-0 -o wide
+kubectl -n baton-go scale deployment/baton-go --replicas=0
+kubectl -n baton-go patch job baton-go-database-migration \
+  --type=merge --patch '{"spec":{"suspend":true}}'
+kubectl -n baton-go wait --for=delete \
+  pod -l app.kubernetes.io/name=baton-go,app.kubernetes.io/component=application \
+  --timeout=10m
+kubectl -n baton-go get job baton-go-database-migration \
+  -o custom-columns=NAME:.metadata.name,SUSPEND:.spec.suspend,ACTIVE:.status.active
+kubectl -n baton-go get pod \
+  -l app.kubernetes.io/name=baton-go,app.kubernetes.io/component=database-migration \
+  --field-selector=status.phase!=Succeeded,status.phase!=Failed \
+  -o custom-columns=NAME:.metadata.name,PHASE:.status.phase,DELETION:.metadata.deletionTimestamp
+```
+
+Job 출력이 `SUSPEND=true`, `ACTIVE=<none>` 또는 `0`이고 바로 다음 Pod 조회가 행을 반환하지
+않는지 확인한다. Pending·Running·Terminating Pod가 하나라도 보이면 DB 중지로 진행하지
+않는다. Failed·Succeeded Pod와 Job log는 비밀값을 제외한 실패 증거로 보존한다.
+
+```bash
+kubectl -n baton-go scale statefulset/baton-go-mysql --replicas=0
+kubectl -n baton-go wait --for=delete pod/baton-go-mysql-0 --timeout=10m
+kubectl -n baton-go get pvc data-baton-go-mysql-0 \
+  -o custom-columns=NAME:.metadata.name,UID:.metadata.uid,PV:.spec.volumeName,SC:.spec.storageClassName
+BATON_GO_RECOVERY_PV_NAME="$(kubectl -n baton-go get pvc data-baton-go-mysql-0 \
+  -o jsonpath='{.spec.volumeName}')"
+BATON_GO_RECOVERY_STORAGE_CLASS_NAME="$(kubectl -n baton-go get pvc data-baton-go-mysql-0 \
+  -o jsonpath='{.spec.storageClassName}')"
+test -n "${BATON_GO_RECOVERY_PV_NAME}"
+test -n "${BATON_GO_RECOVERY_STORAGE_CLASS_NAME}"
+kubectl get pv "${BATON_GO_RECOVERY_PV_NAME}" \
+  -o custom-columns=NAME:.metadata.name,SC:.spec.storageClassName,RECLAIM:.spec.persistentVolumeReclaimPolicy
+kubectl get storageclass "${BATON_GO_RECOVERY_STORAGE_CLASS_NAME}"
+```
+
+PVC UID·PV·StorageClass·reclaim policy가 승인 기록과 정확히 일치할 때만 다음 파괴 블록을
+별도로 실행한다.
+
+```bash
+kubectl -n baton-go delete pvc data-baton-go-mysql-0 --wait=true
+kubectl -n baton-go scale statefulset/baton-go-mysql --replicas=1
+kubectl -n baton-go rollout status statefulset/baton-go-mysql --timeout=10m
+```
+
+Job이 이미 `Failed` terminal condition이면 suspend 해제로 재시도할 수 없다. 실패 원인과
+비밀이 아닌 metadata를 보존한 뒤 Job만 삭제하고 private overlay에서
+`app.kubernetes.io/component=database-migration` label과 일치하는 Job만 재적용한다. 전체
+overlay를 적용하면 application replica가 1로 돌아갈 수 있으므로 이 복구 분기에서는 금지한다.
+
+```bash
+kubectl -n baton-go get job baton-go-database-migration
+kubectl -n baton-go delete job baton-go-database-migration --wait=true
+kubectl apply -k deploy/k8s/overlays/private-server \
+  --selector app.kubernetes.io/component=database-migration
+kubectl -n baton-go wait --for=condition=complete \
+  job/baton-go-database-migration --timeout=10m
+kubectl -n baton-go scale deployment/baton-go --replicas=1
+kubectl -n baton-go rollout status deployment/baton-go --timeout=10m
+```
+
+terminal 상태가 아닌 suspended Job만 다음처럼 재개한다.
+
+```bash
+kubectl -n baton-go patch job baton-go-database-migration \
+  --type=merge --patch '{"spec":{"suspend":false}}'
+kubectl -n baton-go wait --for=condition=complete \
+  job/baton-go-database-migration --timeout=10m
+kubectl -n baton-go scale deployment/baton-go --replicas=1
+kubectl -n baton-go rollout status deployment/baton-go --timeout=10m
+```
+
+어느 분기에서도 management edge·caller writer 차단과 application replica 0은 migration
+Job이 `Complete`가 될 때까지 유지한다. terminal Job 재생성 분기에서도 마지막 두 application
+scale·rollout 명령만 migration 완료 뒤 실행한다.
+
+세 조건 중 하나라도 확인할 수 없거나 data가 존재할 가능성이 있으면 PVC를 삭제하지 않는다.
+application·migration writer를 차단하고 먼저 일관된 snapshot 또는 MySQL-aware backup을 확보한
+뒤 승인된 local MySQL 관리 채널에서 account와 schema 상태를 조사한다. 실제 password는 SQL
+명령 인자, shell history나 작업 log에 넣지 않고 보호된 interactive input 또는 승인된 credential
+injection으로 전달한다.
+
+- `baton_go` runtime account에는 `baton_go.*`의 `SELECT`, `INSERT`, `UPDATE`, `DELETE`만
+  부여되고 DDL·grant 권한이 없는지 확인·복구한다.
+- `baton_go_migrator` account와 Flyway schema history를 확인하고 account의 실제 password를 먼저
+  복구한 뒤 대응하는 Secret version을 맞춘다. Secret만 먼저 바꾸지 않는다.
+- local root account 접근을 복구할 수 없거나 system schema 손상 가능성이 있으면 임의 init script
+  재실행이나 datadir 파일 삭제를 하지 않고 DBA와 backup/restore 담당자에게 escalation한다.
+- account 수동 복구 뒤 migration Job `Complete`, runtime user의 DML 성공·DDL 거부, application
+  readiness를 차례로 확인한다.
 
 ## 5. 접근 경계
 
@@ -343,6 +493,9 @@ kubectl -n baton-go get events --sort-by=.lastTimestamp
 ```
 
 - MySQL과 application Pod가 `Ready`다.
+- MySQL Pod의 `mysql-bootstrap-preflight` initContainer가 exit code `0`으로 완료됐다.
+- MySQL startup·readiness probe가 runtime 계정의 local TCP `ssl-mode=REQUIRED` 세션으로
+  통과했다. socket ping만으로 server TLS 성공을 추정하지 않는다.
 - database migration Job이 `Complete`이며 실패한 이전 Pod 원인이 남아 있지 않다.
 - `data-baton-go-mysql-0` PVC가 `Bound`다.
 - HTTP Service만 존재하며 MySQL Service는 headless다.
@@ -484,6 +637,10 @@ short URL, code hash, HMAC fingerprint, JDBC URL이나 Secret 값은 restore evi
 - `kubectl delete pvc data-baton-go-mysql-0`
 - 검증되지 않은 snapshot으로 PVC만 되돌리기
 - DB 없이 HMAC Secret만 과거 또는 새 값으로 바꾸기
+
+PVC 삭제의 유일한 예외는 4절의 세 조건으로 데이터가 없음을 확인하고 승인한 최초 rollout의
+부분 초기화 복구다. 그 외에는 이름이 같더라도 기존 PVC로 취급해 backup·수동 account 복구 또는
+restore escalation을 사용한다.
 
 StatefulSet 삭제는 기본적으로 PVC를 보존하지만 namespace 삭제는 namespaced PVC를 함께
 삭제하고 StorageClass reclaim policy에 따라 실제 volume까지 잃을 수 있다. namespace manifest를

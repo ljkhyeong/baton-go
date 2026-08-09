@@ -62,7 +62,7 @@ class LinkCodeKeyGuardIntegrationTest {
 
     @Container
     @ServiceConnection
-    static final MySQLContainer MYSQL = new MySQLContainer("mysql:8.4");
+    static final MySQLContainer MYSQL = new MySQLContainer("mysql:8.4.10");
 
     @Autowired
     private JdbcTemplate jdbcTemplate;

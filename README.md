@@ -127,7 +127,14 @@ printable ASCII만 사용한다. 링크 코드 파생 비밀은 기존 DB-key �
 
 `BATON_GO_PUBLIC_BASE_URL`도 모든 실행 환경에서 명시한다. 로컬 개발의 loopback HTTP는
 허용하지만, 사용자에게 반환되는 비로컬 short URL origin은 HTTPS여야 한다. 값은 path, query,
-fragment나 userinfo가 없는 origin이어야 한다.
+fragment나 userinfo가 없는 origin이어야 한다. scheme·host 대소문자, 기본 port와 root slash는
+canonical origin으로 정규화해 생성 예약에 저장한다. 같은 intent를 재생할 때는 현재 설정이
+아니라 최초 예약의 origin을 사용하므로 origin 이전 뒤에도 같은 short URL을 반환한다. V5 이전
+예약처럼 origin 증거가 없으면 현재 값으로 추정하지 않고 운영 오류로 실패한다.
+
+비로컬 공개 base URL을 사용하면서 BATON·ROUND target 환경 변수를 생략해 localhost 기본값이
+남은 설정은 시작 단계에서 거부한다. 로컬 기본값은 loopback 공개 origin을 사용하는 개발에만
+허용되며 운영 배포는 세 origin을 모두 명시한다.
 
 ### HMAC 키와 데이터베이스 결합
 
@@ -183,7 +190,10 @@ docker compose --env-file .env ps
 
 `deploy/k8s`에는 Kubernetes 기본 Kustomize로 조립하는 application과 GO 전용 MySQL
 매니페스트가 있다. MySQL은 BATON의 instance·database user·PVC를 공유하지 않으며,
-`baton_go` database와 별도 Secret·10Gi PVC를 사용한다. 특정 StorageClass, Ingress
+`baton_go` database와 별도 Secret·10Gi PVC를 사용한다. 장기 실행 application은 DML 전용
+계정만 받고, Flyway DDL credential은 component scan 없는 일회성 migration Job에만 주입한다.
+MySQL은 secure transport를 강제하고 application과 Job은 `VERIFY_IDENTITY` truststore 계약을
+사용한다. 특정 StorageClass, Ingress
 controller와 TLS 발급 방식은 private cluster마다 다르므로 저장소 base에 고정하지 않는다.
 
 namespace는 workload와 분리해 먼저 적용하고, 실제 origin·immutable image와 외부 Secret을
@@ -199,6 +209,10 @@ kubectl kustomize deploy/k8s/overlays/private-server >/dev/null
 따른다. public Ingress는 `/l` Prefix만, private management 경로는 `/api/v1` Prefix만 같은
 HTTP Service로 분리해야 하며 Actuator `8081`은 기본 노출하지 않는다. 이 인프라 구성은
 PRD-0003의 public production rollout gate를 대신하지 않는다.
+
+application ingress NetworkPolicy는 HTTP를 명시적으로 표시한 ingress namespace에서만 받고,
+Actuator는 표시한 monitoring namespace와 client Pod 조합에만 허용한다. 실제 적용 전 CNI의
+NetworkPolicy 집행과 kubelet probe 동작을 private cluster에서 검증한다.
 
 기본 애플리케이션 포트는 `8080`, Actuator 관리 포트는 `8081`이다.
 Docker는 Actuator 포트의 aggregate `/actuator/health`를 계속 사용한다. 오케스트레이터 probe는
@@ -254,6 +268,7 @@ curl -i http://localhost:8080/api/v1/links \
 - [마이크로서비스 경계](docs/ADR/0001_microservice-boundary/adr.md)
 - [링크 보안 모델](docs/ADR/0002_link-security/adr.md)
 - [멱등한 링크 생성](docs/ADR/0003_idempotent-link-creation/adr.md)
+- [멱등 생성의 공개 origin 보존](docs/ADR/0009_idempotent-public-origin-replay/adr.md)
 - [링크 코드 HMAC 키와 DB 결합](docs/ADR/0004_link-code-key-binding/adr.md)
 - [Typed target locator](docs/ADR/0005_trusted-target-locator/adr.md)
 - [계약 전 target 정리](docs/ADR/0006_target-contract-remediation/adr.md)

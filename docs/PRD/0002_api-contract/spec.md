@@ -23,6 +23,8 @@
 - 같은 멱등성 키를 다른 payload에 재사용: `409`
 - 링크 코드 파생 설정 불일치로 기존 생성 요청을 재생할 수 없음:
   `500 LINK_CODE_REPLAY_UNAVAILABLE`
+- 최초 생성에 사용한 canonical 공개 origin을 기존 예약에서 복구할 수 없음:
+  `500 PUBLIC_LINK_ORIGIN_REPLAY_UNAVAILABLE`
 - 링크 코드 파생 키와 데이터베이스 바인딩 불일치:
   `500 LINK_CODE_CONFIGURATION_MISMATCH`
 - 존재하지 않는 API 경로: `404 RESOURCE_NOT_FOUND`
@@ -61,6 +63,10 @@ Idempotency-Key: 8e448211-66ae-44ab-9888-c4960648c22b
 - 최초 성공은 `201 Created`와 `Idempotency-Replayed: false`를 반환한다.
 - 같은 키와 같은 payload의 재시도는 동일한 `id`, `shortUrl`, `Location`을
   `200 OK`와 `Idempotency-Replayed: true`로 반환한다.
+- 최초 생성의 canonical 공개 origin은 멱등 예약에 함께 저장한다. 이후 현재
+  `BATON_GO_PUBLIC_BASE_URL` 설정이 바뀌어도 재시도는 저장된 origin과 같은 공개 코드로
+  최초 `shortUrl`을 정확히 재생한다. 저장 origin이 없거나 canonical 형식이 아니면 현재
+  설정으로 추정하지 않고 `500 PUBLIC_LINK_ORIGIN_REPLAY_UNAVAILABLE`로 실패한다.
 - 같은 키와 다른 payload는 `409 IDEMPOTENCY_KEY_REUSED`로 거부한다.
 - 키 누락·형식 오류는 `400 INVALID_IDEMPOTENCY_KEY`로 거부한다.
 - 과거 배포가 이미 저장한 생성 intent에 한해서는 당시 파서가 허용했던 대문자, nil,
@@ -228,9 +234,10 @@ DB primary key 순서의 keyset pagination으로 모든 링크를 raw 문자열 
 }
 ```
 
-`expectedVersion`은 `0..9223372036854775807` 범위의 JSON 정수 token만 허용한다. 문자열,
-소수와 지수 표기처럼 Jackson이 정수로 coercion할 수 있는 다른 표현은 행을 잠그거나
-폐기하지 않고 `400 INVALID_REQUEST`로 거부한다.
+`expectedVersion`은 `0..9223372036854775806` 범위의 JSON 정수 token만 허용한다. 문자열,
+소수와 지수 표기처럼 Jackson이 정수로 coercion할 수 있는 다른 표현과 다음 version으로
+증가할 수 없는 `9223372036854775807`은 행을 잠그거나 폐기하지 않고
+`400 INVALID_REQUEST`로 거부한다.
 
 서버는 raw 행을 잠근 뒤 exact target 정책과 version을 다시 확인한다.
 

@@ -1,6 +1,10 @@
 # HANDOFF
 
 - BATON GO의 정책형 링크 생성·해석·폐기와 원격 생성 idempotency를 완료했다.
+- 생성 승자는 canonical 공개 origin을 멱등 예약에 저장한다. origin 설정이 바뀐 뒤의 재시도도
+  저장 origin과 동일 공개 코드를 사용해 최초 short URL을 정확히 반환한다. V5 이전 예약처럼
+  origin 증거가 없거나 저장값이 비canonical이면 현재 설정으로 추정하지 않고
+  `500 PUBLIC_LINK_ORIGIN_REPLAY_UNAVAILABLE`로 fail-closed 한다.
 - 멱등 재생 시 현재 HMAC 파생 결과를 저장된 코드 해시와 대조하며, 파생 비밀 변경으로
   기존 short URL을 재생할 수 없으면 잘못된 URL 대신
   `500 LINK_CODE_REPLAY_UNAVAILABLE`로 실패한다.
@@ -11,6 +15,8 @@
 - 신규 JSON wire 입력은 enum 이름과 UTC `Instant` 문자열 및 정수 `expectedVersion`을 exact
   token으로 검증한다. enum ordinal·숫자 문자열, timestamp 숫자·leap second, version 문자열·
   소수·지수 표기는 coercion하지 않고 저장·폐기 전에 `400`으로 거부한다.
+- remediation `expectedVersion`은 다음 BIGINT version으로 증가할 수 있는
+  `0..9223372036854775806`만 허용하고 최대 long 값은 행 잠금 전에 `400`으로 거부한다.
 - 링크 코드 HMAC 파생 version·fingerprint를 `link_code_key_guard` singleton에 결합한다.
   시작 시점과 생성 예약 전에 검증하며, 링크와 예약이 모두 빈 DB만 자동 결합한다. 기존
   데이터가 있는 미결합 DB나 다른 identity는 secret·fingerprint를 노출하지 않고 fail-closed

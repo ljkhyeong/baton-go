@@ -2,8 +2,9 @@ package com.personal.batongo.domain.link;
 
 import java.net.InetAddress;
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.UnknownHostException;
-import java.util.Arrays;
+import java.util.Locale;
 import java.util.Objects;
 
 /** HTTP(S) origin의 구조와 browser origin 비교 규칙을 한 곳에서 보존합니다. */
@@ -30,7 +31,7 @@ public final class HttpOrigin {
                     name + "은 경로가 없는 HTTP 또는 HTTPS origin이어야 합니다"
             );
         }
-        return new HttpOrigin(value);
+        return new HttpOrigin(canonicalize(value));
     }
 
     public URI value() {
@@ -82,6 +83,35 @@ public final class HttpOrigin {
                 || port == -1 && authority != null && authority.endsWith(":");
     }
 
+    private static URI canonicalize(URI value) {
+        String scheme = value.getScheme().toLowerCase(Locale.ROOT);
+        String host = canonicalHost(value.getHost());
+        int port = value.getPort();
+        if (port == defaultPort(scheme)) {
+            port = -1;
+        }
+        try {
+            return new URI(scheme, null, host, port, null, null, null);
+        } catch (URISyntaxException exception) {
+            throw new IllegalArgumentException("HTTP origin을 정규화할 수 없습니다", exception);
+        }
+    }
+
+    private static String canonicalHost(String host) {
+        String literal = stripIpv6Brackets(host);
+        if (literal.indexOf(':') >= 0 && literal.indexOf('%') < 0) {
+            try {
+                InetAddress address = InetAddress.getByName(literal);
+                if (address.getAddress().length == 16) {
+                    return address.getHostAddress().toLowerCase(Locale.ROOT);
+                }
+            } catch (UnknownHostException ignored) {
+                // URI가 허용한 미래 주소 표현은 원문 host의 대소문자만 정규화한다.
+            }
+        }
+        return literal.toLowerCase(Locale.ROOT);
+    }
+
     private static String stripIpv6Brackets(String host) {
         if (host.startsWith("[") && host.endsWith("]")) {
             return host.substring(1, host.length() - 1);
@@ -102,10 +132,8 @@ public final class HttpOrigin {
             return false;
         }
         try {
-            return Arrays.equals(
-                    InetAddress.getByName(leftLiteral).getAddress(),
-                    InetAddress.getByName(rightLiteral).getAddress()
-            );
+            return InetAddress.getByName(leftLiteral)
+                    .equals(InetAddress.getByName(rightLiteral));
         } catch (UnknownHostException exception) {
             return false;
         }
@@ -153,6 +181,10 @@ public final class HttpOrigin {
         if (value.getPort() >= 0) {
             return value.getPort();
         }
-        return "https".equalsIgnoreCase(value.getScheme()) ? 443 : 80;
+        return defaultPort(value.getScheme());
+    }
+
+    private static int defaultPort(String scheme) {
+        return "https".equalsIgnoreCase(scheme) ? 443 : 80;
     }
 }

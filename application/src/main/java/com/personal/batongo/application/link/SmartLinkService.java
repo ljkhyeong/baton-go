@@ -3,11 +3,13 @@ package com.personal.batongo.application.link;
 import com.personal.batongo.application.link.error.IdempotencyKeyConflictException;
 import com.personal.batongo.application.link.error.LinkCodeReplayMismatchException;
 import com.personal.batongo.application.link.error.LinkNotFoundException;
+import com.personal.batongo.application.link.error.PublicLinkOriginReplayUnavailableException;
 import com.personal.batongo.application.link.error.StoredTargetPolicyViolationException;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase;
 import com.personal.batongo.application.link.port.out.IssuedLinkCode;
 import com.personal.batongo.application.link.port.out.LinkCodePort;
 import com.personal.batongo.application.link.port.out.LinkCreationReservationPort;
+import com.personal.batongo.application.link.port.out.PublicLinkOriginPort;
 import com.personal.batongo.application.link.port.out.SmartLinkRepository;
 import com.personal.batongo.application.link.port.out.SmartLinkRepository.StoredLinkReplay;
 import com.personal.batongo.application.link.port.out.SmartLinkRepository.StoredLinkResolution;
@@ -35,6 +37,7 @@ public class SmartLinkService implements SmartLinkUseCase {
     private final LinkCreationReservationPort reservationPort;
     private final LinkCodePort linkCodePort;
     private final LinkCodeKeyGuard linkCodeKeyGuard;
+    private final PublicLinkOriginPort publicLinkOriginPort;
     private final TargetUrlPort targetUrlPort;
     private final Clock clock;
 
@@ -43,6 +46,7 @@ public class SmartLinkService implements SmartLinkUseCase {
             LinkCreationReservationPort reservationPort,
             LinkCodePort linkCodePort,
             LinkCodeKeyGuard linkCodeKeyGuard,
+            PublicLinkOriginPort publicLinkOriginPort,
             TargetUrlPort targetUrlPort,
             Clock clock
     ) {
@@ -50,6 +54,7 @@ public class SmartLinkService implements SmartLinkUseCase {
         this.reservationPort = reservationPort;
         this.linkCodePort = linkCodePort;
         this.linkCodeKeyGuard = linkCodeKeyGuard;
+        this.publicLinkOriginPort = publicLinkOriginPort;
         this.targetUrlPort = targetUrlPort;
         this.clock = clock;
     }
@@ -80,13 +85,13 @@ public class SmartLinkService implements SmartLinkUseCase {
     }
 
     private CreatedLinkResult replayExistingOnly(PreparedCreation prepared) {
-        UUID existingLinkId = reservationPort.findLinkId(
+        LinkCreationReservationPort.Reservation reservation = reservationPort.find(
                 prepared.idempotencyKeyHash()
         ).orElseThrow(prepared.admission()::missingReservationException);
         TrustedTarget requestedTarget = requireAllowedTarget(prepared.command());
         linkCodeKeyGuard.verifyBound();
         return replayCreation(
-                existingLinkId,
+                reservation,
                 requestedTarget,
                 prepared.admission().notBefore(),
                 prepared.admission().expiresAt(),
@@ -97,17 +102,19 @@ public class SmartLinkService implements SmartLinkUseCase {
     private CreatedLinkResult reserveCreateOrReplay(PreparedCreation prepared) {
         TrustedTarget requestedTarget = requireAllowedTarget(prepared.command());
         linkCodeKeyGuard.verifyBound();
+        PublicLinkOrigin currentOrigin = publicLinkOriginPort.current();
         Instant now = databaseTime();
         LinkCreationReservationPort.Reservation reservation = reservationPort.reserve(
                 prepared.idempotencyKeyHash(),
                 UUID.randomUUID(),
+                currentOrigin.serialized(),
                 now
         );
         IssuedLinkCode issuedCode = linkCodePort.issue(prepared.idempotencyKey());
 
         if (!reservation.owner()) {
             return replayCreation(
-                    reservation.linkId(),
+                    reservation,
                     requestedTarget,
                     prepared.admission().notBefore(),
                     prepared.admission().expiresAt(),
@@ -124,7 +131,11 @@ public class SmartLinkService implements SmartLinkUseCase {
                 now
         );
         SmartLink saved = repository.save(smartLink);
-        return new CreatedLinkResult(toResult(saved), issuedCode.rawCode(), false);
+        return new CreatedLinkResult(
+                toResult(saved),
+                currentOrigin.shortUrl(issuedCode.rawCode()),
+                false
+        );
     }
 
     private record PreparedCreation(
@@ -149,13 +160,13 @@ public class SmartLinkService implements SmartLinkUseCase {
     }
 
     private CreatedLinkResult replayCreation(
-            UUID linkId,
+            LinkCreationReservationPort.Reservation reservation,
             TrustedTarget requestedTarget,
             Instant notBefore,
             Instant expiresAt,
             IssuedLinkCode issuedCode
     ) {
-        StoredLinkReplay existing = findReplayLink(linkId);
+        StoredLinkReplay existing = findReplayLink(reservation.linkId());
         TrustedTarget trustedTarget = requireSameCreationRequest(
                 existing,
                 requestedTarget,
@@ -163,11 +174,20 @@ public class SmartLinkService implements SmartLinkUseCase {
                 expiresAt
         );
         requireReplayableCode(existing, issuedCode);
+        PublicLinkOrigin storedOrigin = requireReplayOrigin(reservation.publicOrigin());
         return new CreatedLinkResult(
                 toResult(existing, trustedTarget),
-                issuedCode.rawCode(),
+                storedOrigin.shortUrl(issuedCode.rawCode()),
                 true
         );
+    }
+
+    private PublicLinkOrigin requireReplayOrigin(String storedOrigin) {
+        try {
+            return PublicLinkOrigin.fromStored(storedOrigin);
+        } catch (RuntimeException exception) {
+            throw new PublicLinkOriginReplayUnavailableException();
+        }
     }
 
     @Override

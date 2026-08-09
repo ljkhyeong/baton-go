@@ -1,6 +1,5 @@
 package com.personal.batongo.adapter.in.web.link;
 
-import com.personal.batongo.adapter.in.web.PublicLinkProperties;
 import com.personal.batongo.application.link.CreationIdempotencyKey;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.CreateLinkCommand;
@@ -29,14 +28,9 @@ public class LinkManagementController {
     private static final String REFERRER_POLICY = "Referrer-Policy";
 
     private final SmartLinkUseCase smartLinkUseCase;
-    private final PublicLinkProperties publicLinkProperties;
 
-    public LinkManagementController(
-            SmartLinkUseCase smartLinkUseCase,
-            PublicLinkProperties publicLinkProperties
-    ) {
+    public LinkManagementController(SmartLinkUseCase smartLinkUseCase) {
         this.smartLinkUseCase = smartLinkUseCase;
-        this.publicLinkProperties = publicLinkProperties;
     }
 
     @PostMapping
@@ -60,10 +54,7 @@ public class LinkManagementController {
                 .cacheControl(CacheControl.noStore())
                 .header(REFERRER_POLICY, "no-referrer")
                 .header(IDEMPOTENCY_REPLAYED_HEADER, Boolean.toString(result.replayed()))
-                .body(CreateLinkResponse.from(
-                        result,
-                        publicLinkProperties.shortUrl(result.rawCode())
-                ));
+                .body(CreateLinkResponse.from(result));
     }
 
     @GetMapping("/{linkId}")

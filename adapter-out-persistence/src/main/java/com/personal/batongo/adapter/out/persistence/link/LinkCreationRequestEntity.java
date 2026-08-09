@@ -18,6 +18,9 @@ class LinkCreationRequestEntity {
     @Column(name = "link_id", nullable = false, columnDefinition = "binary(16)")
     private UUID linkId;
 
+    @Column(name = "public_origin", length = 255)
+    private String publicOrigin;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -26,5 +29,9 @@ class LinkCreationRequestEntity {
 
     UUID getLinkId() {
         return linkId;
+    }
+
+    String getPublicOrigin() {
+        return publicOrigin;
     }
 }

@@ -25,6 +25,7 @@ class SensitiveValueToStringTest {
                     + "/seasons/713d9cb7-2842-4f9f-b3cc-e31d98c6238a";
     private static final String RAW_CODE = "abcdefghijklmnopqrstuv";
     private static final String CODE_HASH = "a".repeat(64);
+    private static final URI SHORT_URL = URI.create("https://go.example/l/" + RAW_CODE);
 
     @Test
     @DisplayName("링크 생성과 해석 값의 문자열 표현은 키·코드·대상을 노출하지 않는다")
@@ -51,7 +52,11 @@ class SensitiveValueToStringTest {
                         null
                 ),
                 new IssuedLinkCode(RAW_CODE, CODE_HASH),
-                new CreatedLinkResult(link, RAW_CODE, false),
+                new CreatedLinkResult(
+                        link,
+                        SHORT_URL,
+                        false
+                ),
                 link,
                 new ResolvedLinkResult(link.id(), URI.create("https://baton.example" + TARGET_PATH))
         );
@@ -60,6 +65,7 @@ class SensitiveValueToStringTest {
                 .doesNotContain(IDEMPOTENCY_KEY)
                 .doesNotContain(RAW_CODE)
                 .doesNotContain(CODE_HASH)
+                .doesNotContain(SHORT_URL.toString())
                 .doesNotContain(TARGET_PATH);
     }
 }

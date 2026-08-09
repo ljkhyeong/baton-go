@@ -58,6 +58,34 @@ class HttpOriginTest {
         assertThat(compressed.sameOrigin(expanded)).isTrue();
     }
 
+    @Test
+    @DisplayName("동등한 origin 표현은 scheme과 host와 기본 포트와 root 경로를 정규화한다")
+    void canonicalizesEquivalentOriginRepresentations() {
+        HttpOrigin canonical = HttpOrigin.require(
+                URI.create("HTTPS://GO.Example:443/"),
+                "origin"
+        );
+
+        assertThat(canonical.value()).isEqualTo(URI.create("https://go.example"));
+    }
+
+    @Test
+    @DisplayName("동등한 IPv6 표기는 하나의 안정된 origin URI로 정규화한다")
+    void canonicalizesEquivalentIpv6Representations() {
+        HttpOrigin compressed = HttpOrigin.require(
+                URI.create("https://[2001:db8::1]"),
+                "origin"
+        );
+        HttpOrigin expanded = HttpOrigin.require(
+                URI.create("https://[2001:0DB8:0:0:0:0:0:1]:443/"),
+                "origin"
+        );
+
+        assertThat(compressed.value()).isEqualTo(expanded.value());
+        assertThat(compressed.value())
+                .isEqualTo(URI.create("https://[2001:db8:0:0:0:0:0:1]"));
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {
             "https://user@go.example",

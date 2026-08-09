@@ -9,12 +9,14 @@ import com.personal.batongo.application.link.error.InvalidIdempotencyKeyExceptio
 import com.personal.batongo.application.link.error.LinkCodeKeyBindingException;
 import com.personal.batongo.application.link.error.LinkCodeReplayMismatchException;
 import com.personal.batongo.application.link.error.LinkNotFoundException;
+import com.personal.batongo.application.link.error.PublicLinkOriginReplayUnavailableException;
 import com.personal.batongo.application.link.error.StoredTargetPolicyViolationException;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.CreateLinkCommand;
 import com.personal.batongo.application.link.port.out.IssuedLinkCode;
 import com.personal.batongo.application.link.port.out.LinkCodeKeyGuardPort;
 import com.personal.batongo.application.link.port.out.LinkCodePort;
 import com.personal.batongo.application.link.port.out.LinkCreationReservationPort;
+import com.personal.batongo.application.link.port.out.PublicLinkOriginPort;
 import com.personal.batongo.application.link.port.out.SmartLinkRepository;
 import com.personal.batongo.application.link.port.out.SmartLinkRepository.StoredLinkReplay;
 import com.personal.batongo.application.link.port.out.SmartLinkRepository.StoredLinkResolution;
@@ -59,6 +61,8 @@ class SmartLinkServiceTest {
             );
     private static final CreationIdempotencyKey IDEMPOTENCY_KEY =
             new CreationIdempotencyKey("8e448211-66ae-44ab-9888-c4960648c22b");
+    private static final PublicLinkOrigin PUBLIC_ORIGIN =
+            new PublicLinkOrigin(URI.create("https://go.example"));
 
     private final InMemoryRepository repository = new InMemoryRepository();
     private final InMemoryReservationPort reservationPort = new InMemoryReservationPort();
@@ -67,12 +71,14 @@ class SmartLinkServiceTest {
             new InMemoryLinkCodeKeyGuardPort(DERIVATION_IDENTITY);
     private final LinkCodeKeyGuard linkCodeKeyGuard =
             new LinkCodeKeyGuard(linkCodePort, keyGuardPort);
+    private final PublicLinkOriginPort publicLinkOriginPort = () -> PUBLIC_ORIGIN;
     private final RecordingTargetUrlPort targetUrlPort = new RecordingTargetUrlPort();
     private final SmartLinkService service = new SmartLinkService(
             repository,
             reservationPort,
             linkCodePort,
             linkCodeKeyGuard,
+            publicLinkOriginPort,
             targetUrlPort,
             Clock.fixed(NOW, ZoneOffset.UTC)
     );
@@ -90,7 +96,8 @@ class SmartLinkServiceTest {
         ));
 
         SmartLink stored = repository.findById(created.link().id()).orElseThrow();
-        assertThat(created.rawCode()).isEqualTo(RAW_CODE);
+        assertThat(created.shortUrl())
+                .isEqualTo(URI.create("https://go.example/l/" + RAW_CODE));
         assertThat(stored.getCodeHash()).isEqualTo(CODE_HASH);
         assertThat(stored.getCodeHash()).doesNotContain(RAW_CODE);
         assertThat(created.replayed()).isFalse();
@@ -146,7 +153,11 @@ class SmartLinkServiceTest {
         UUID linkId = UUID.fromString("d3014090-bd91-4bfc-8a42-89b7f1800c32");
         reservationPort.reservations.put(
                 linkCodePort.hashIdempotencyKey(legacyKey.value()),
-                linkId
+                new LinkCreationReservationPort.Reservation(
+                        linkId,
+                        PUBLIC_ORIGIN.serialized(),
+                        false
+                )
         );
         repository.save(SmartLink.create(
                 linkId,
@@ -297,7 +308,7 @@ class SmartLinkServiceTest {
 
         assertThat(replay.replayed()).isTrue();
         assertThat(replay.link().id()).isEqualTo(first.link().id());
-        assertThat(replay.rawCode()).isEqualTo(first.rawCode());
+        assertThat(replay.shortUrl()).isEqualTo(first.shortUrl());
         assertThat(replay.link().revokedAt()).isEqualTo(NOW);
         assertThat(repository.replayLookupCalls).isOne();
         assertThat(repository.links).hasSize(1);
@@ -380,6 +391,7 @@ class SmartLinkServiceTest {
                 reservationPort,
                 changedDerivationPort,
                 new LinkCodeKeyGuard(changedDerivationPort, keyGuardPort),
+                publicLinkOriginPort,
                 targetUrlPort,
                 Clock.fixed(NOW, ZoneOffset.UTC)
         );
@@ -405,6 +417,7 @@ class SmartLinkServiceTest {
                 reservationPort,
                 linkCodePort,
                 failingGuard,
+                publicLinkOriginPort,
                 targetUrlPort,
                 Clock.fixed(NOW, ZoneOffset.UTC)
         );
@@ -442,6 +455,7 @@ class SmartLinkServiceTest {
                 reservationPort,
                 linkCodePort,
                 linkCodeKeyGuard,
+                publicLinkOriginPort,
                 targetUrlPort,
                 Clock.fixed(NOW.plusSeconds(120), ZoneOffset.UTC)
         );
@@ -450,7 +464,58 @@ class SmartLinkServiceTest {
 
         assertThat(replay.replayed()).isTrue();
         assertThat(replay.link().id()).isEqualTo(first.link().id());
-        assertThat(replay.rawCode()).isEqualTo(first.rawCode());
+        assertThat(replay.shortUrl()).isEqualTo(first.shortUrl());
+    }
+
+    @Test
+    @DisplayName("공개 origin 설정이 바뀌어도 기존 생성 요청은 최초 short URL을 재생한다")
+    void replaysOriginalShortUrlAfterPublicOriginChanges() {
+        CreateLinkCommand command = new CreateLinkCommand(
+                IDEMPOTENCY_KEY,
+                TargetSystem.BATON,
+                BATON_PATH,
+                LinkPurpose.NAVIGATION,
+                null,
+                NOW.plusSeconds(300)
+        );
+        var first = service.createLink(command);
+        SmartLinkService changedOriginService = new SmartLinkService(
+                repository,
+                reservationPort,
+                linkCodePort,
+                linkCodeKeyGuard,
+                () -> new PublicLinkOrigin(URI.create("https://new-go.example")),
+                targetUrlPort,
+                Clock.fixed(NOW, ZoneOffset.UTC)
+        );
+
+        var replay = changedOriginService.createLink(command);
+
+        assertThat(first.shortUrl()).isEqualTo(URI.create("https://go.example/l/" + RAW_CODE));
+        assertThat(replay.shortUrl()).isEqualTo(first.shortUrl());
+        assertThat(replay.replayed()).isTrue();
+    }
+
+    @Test
+    @DisplayName("기존 예약의 공개 origin을 복구할 수 없으면 잘못된 short URL 대신 실패한다")
+    void rejectsReplayWhenStoredPublicOriginIsUnavailable() {
+        CreateLinkCommand command = new CreateLinkCommand(
+                IDEMPOTENCY_KEY,
+                TargetSystem.BATON,
+                BATON_PATH,
+                LinkPurpose.NAVIGATION,
+                null,
+                NOW.plusSeconds(300)
+        );
+        var first = service.createLink(command);
+        reservationPort.reservations.put(
+                linkCodePort.hashIdempotencyKey(IDEMPOTENCY_KEY.value()),
+                new LinkCreationReservationPort.Reservation(first.link().id(), null, false)
+        );
+
+        assertThatThrownBy(() -> service.createLink(command))
+                .isExactlyInstanceOf(PublicLinkOriginReplayUnavailableException.class)
+                .hasMessage("기존 링크 생성에 사용한 공개 origin을 복구할 수 없습니다");
     }
 
     @Test
@@ -489,7 +554,7 @@ class SmartLinkServiceTest {
                 null
         ));
 
-        var resolved = service.resolveLink(created.rawCode());
+        var resolved = service.resolveLink(RAW_CODE);
 
         assertThat(resolved.id()).isEqualTo(created.link().id());
         assertThat(resolved.destination()).isEqualTo(URI.create("https://baton.example" + BATON_PATH));
@@ -573,6 +638,7 @@ class SmartLinkServiceTest {
                 reservationPort,
                 linkCodePort,
                 linkCodeKeyGuard,
+                publicLinkOriginPort,
                 targetUrlPort,
                 Clock.fixed(NOW.plusSeconds(60), ZoneOffset.UTC)
         );
@@ -738,12 +804,12 @@ class SmartLinkServiceTest {
     private static final class InMemoryReservationPort
             implements LinkCreationReservationPort {
 
-        private final Map<String, UUID> reservations = new HashMap<>();
+        private final Map<String, Reservation> reservations = new HashMap<>();
         private int lookupCalls;
         private int reserveCalls;
 
         @Override
-        public Optional<UUID> findLinkId(String idempotencyKeyHash) {
+        public Optional<Reservation> find(String idempotencyKeyHash) {
             lookupCalls++;
             return Optional.ofNullable(reservations.get(idempotencyKeyHash));
         }
@@ -752,13 +818,15 @@ class SmartLinkServiceTest {
         public Reservation reserve(
                 String idempotencyKeyHash,
                 UUID proposedLinkId,
+                String publicOrigin,
                 Instant createdAt
         ) {
             reserveCalls++;
-            UUID existing = reservations.putIfAbsent(idempotencyKeyHash, proposedLinkId);
+            Reservation stored = new Reservation(proposedLinkId, publicOrigin, false);
+            Reservation existing = reservations.putIfAbsent(idempotencyKeyHash, stored);
             return existing == null
-                    ? new Reservation(proposedLinkId, true)
-                    : new Reservation(existing, false);
+                    ? new Reservation(proposedLinkId, publicOrigin, true)
+                    : existing;
         }
     }
 

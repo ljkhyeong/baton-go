@@ -22,9 +22,9 @@ public class LinkCreationReservationPersistenceAdapter
 
     @Override
     @Transactional(propagation = Propagation.MANDATORY, readOnly = true)
-    public Optional<UUID> findLinkId(String idempotencyKeyHash) {
+    public Optional<Reservation> find(String idempotencyKeyHash) {
         return repository.findById(idempotencyKeyHash)
-                .map(LinkCreationRequestEntity::getLinkId);
+                .map(request -> toReservation(request, false));
     }
 
     @Override
@@ -32,16 +32,22 @@ public class LinkCreationReservationPersistenceAdapter
     public Reservation reserve(
             String idempotencyKeyHash,
             UUID proposedLinkId,
+            String publicOrigin,
             Instant createdAt
     ) {
         int inserted = repository.insertIfAbsent(
                 idempotencyKeyHash,
                 proposedLinkId.toString(),
+                publicOrigin,
                 createdAt
         );
         LinkCreationRequestEntity request = repository
                 .findById(idempotencyKeyHash)
                 .orElseThrow(() -> new IllegalStateException("링크 생성 예약을 찾을 수 없습니다"));
-        return new Reservation(request.getLinkId(), inserted == 1);
+        return toReservation(request, inserted == 1);
+    }
+
+    private Reservation toReservation(LinkCreationRequestEntity request, boolean owner) {
+        return new Reservation(request.getLinkId(), request.getPublicOrigin(), owner);
     }
 }

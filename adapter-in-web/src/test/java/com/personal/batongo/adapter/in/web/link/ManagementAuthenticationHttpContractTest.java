@@ -13,7 +13,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.personal.batongo.adapter.in.web.FilterErrorResponseWriter;
 import com.personal.batongo.adapter.in.web.ManagementAuthenticationFilter;
 import com.personal.batongo.adapter.in.web.ManagementProperties;
-import com.personal.batongo.adapter.in.web.PublicLinkProperties;
 import com.personal.batongo.adapter.in.web.RequestIdFilter;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.CreatedLinkResult;
@@ -51,10 +50,7 @@ class ManagementAuthenticationHttpContractTest {
     @BeforeEach
     void setUp() {
         useCase = mock(SmartLinkUseCase.class);
-        LinkManagementController controller = new LinkManagementController(
-                useCase,
-                new PublicLinkProperties(URI.create("https://go.example"))
-        );
+        LinkManagementController controller = new LinkManagementController(useCase);
         ManagementAuthenticationFilter authenticationFilter =
                 new ManagementAuthenticationFilter(
                         new ManagementProperties(MANAGEMENT_TOKEN),
@@ -165,7 +161,7 @@ class ManagementAuthenticationHttpContractTest {
                         null,
                         Instant.parse("2026-07-29T10:00:00Z")
                 ),
-                "VOvLShvx93kQpj8x7w2HYQ",
+                URI.create("https://go.example/l/VOvLShvx93kQpj8x7w2HYQ"),
                 false
         );
     }

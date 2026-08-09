@@ -21,3 +21,4 @@ images:
 
 patches:
   - path: app-private-registry-patch.yaml
+  - path: migration-private-registry-patch.yaml

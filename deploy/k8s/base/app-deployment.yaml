@@ -31,6 +31,8 @@ spec:
         runAsNonRoot: true
         runAsUser: 10001
         runAsGroup: 10001
+        fsGroup: 10001
+        fsGroupChangePolicy: OnRootMismatch
         seccompProfile:
           type: RuntimeDefault
       containers:
@@ -56,10 +58,15 @@ spec:
                 configMapKeyRef:
                   name: baton-go-database-identity
                   key: BATON_GO_DB_USERNAME
+            - name: BATON_GO_DB_URL
+              valueFrom:
+                secretKeyRef:
+                  name: baton-go-database-client-config
+                  key: BATON_GO_DB_URL
             - name: BATON_GO_DB_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: baton-go-database-credentials
+                  name: baton-go-database-runtime-credentials
                   key: BATON_GO_DB_PASSWORD
           ports:
             - name: http
@@ -105,8 +112,18 @@ spec:
           volumeMounts:
             - name: tmp
               mountPath: /tmp
+            - name: mysql-client-tls
+              mountPath: /etc/baton-go/mysql-tls
+              readOnly: true
       volumes:
         - name: tmp
           emptyDir:
             medium: Memory
             sizeLimit: 64Mi
+        - name: mysql-client-tls
+          secret:
+            secretName: baton-go-mysql-client-tls
+            defaultMode: 0440
+            items:
+              - key: truststore.p12
+                path: truststore.p12

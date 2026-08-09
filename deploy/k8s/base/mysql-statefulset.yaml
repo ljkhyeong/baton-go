@@ -24,6 +24,8 @@ spec:
       securityContext:
         seccompProfile:
           type: RuntimeDefault
+        fsGroup: 999
+        fsGroupChangePolicy: OnRootMismatch
       containers:
         - name: mysql
           image: mysql:8.4
@@ -32,6 +34,11 @@ spec:
             - --character-set-server=utf8mb4
             - --collation-server=utf8mb4_unicode_ci
             - --default-time-zone=+00:00
+            - --require-secure-transport=ON
+            - --ssl-ca=/etc/mysql/tls/ca.pem
+            - --ssl-cert=/etc/mysql/tls/tls.crt
+            - --ssl-key=/etc/mysql/tls/tls.key
+            - --tls-version=TLSv1.2,TLSv1.3
           env:
             - name: MYSQL_DATABASE
               value: baton_go
@@ -39,16 +46,26 @@ spec:
               valueFrom:
                 configMapKeyRef:
                   name: baton-go-database-identity
-                  key: BATON_GO_DB_USERNAME
+                  key: BATON_GO_DB_MIGRATION_USERNAME
             - name: MYSQL_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: baton-go-database-credentials
+                  name: baton-go-database-migration-credentials
+                  key: BATON_GO_DB_MIGRATION_PASSWORD
+            - name: BATON_GO_DB_USERNAME
+              valueFrom:
+                configMapKeyRef:
+                  name: baton-go-database-identity
+                  key: BATON_GO_DB_USERNAME
+            - name: BATON_GO_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: baton-go-database-runtime-credentials
                   key: BATON_GO_DB_PASSWORD
             - name: MYSQL_ROOT_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: baton-go-database-credentials
+                  name: baton-go-database-bootstrap-credentials
                   key: BATON_GO_DB_ROOT_PASSWORD
             - name: MYSQL_ROOT_HOST
               value: localhost
@@ -74,9 +91,9 @@ spec:
                 - sh
                 - -ec
                 - >-
-                  MYSQL_PWD="${MYSQL_PASSWORD}"
-                  mysql --protocol=TCP --host=127.0.0.1
-                  --user="${MYSQL_USER}" --database="${MYSQL_DATABASE}"
+                  MYSQL_PWD="${BATON_GO_DB_PASSWORD}"
+                  mysql --protocol=SOCKET
+                  --user="${BATON_GO_DB_USERNAME}" --database="${MYSQL_DATABASE}"
                   --execute='SELECT 1' >/dev/null 2>&1
             periodSeconds: 10
             timeoutSeconds: 5
@@ -87,9 +104,9 @@ spec:
                 - sh
                 - -ec
                 - >-
-                  MYSQL_PWD="${MYSQL_PASSWORD}"
-                  mysqladmin --protocol=TCP --host=127.0.0.1
-                  --user="${MYSQL_USER}" ping --silent
+                  MYSQL_PWD="${BATON_GO_DB_PASSWORD}"
+                  mysqladmin --protocol=SOCKET
+                  --user="${BATON_GO_DB_USERNAME}" ping --silent
             periodSeconds: 15
             timeoutSeconds: 5
             failureThreshold: 4
@@ -99,9 +116,9 @@ spec:
                 - sh
                 - -ec
                 - >-
-                  MYSQL_PWD="${MYSQL_PASSWORD}"
-                  mysql --protocol=TCP --host=127.0.0.1
-                  --user="${MYSQL_USER}" --database="${MYSQL_DATABASE}"
+                  MYSQL_PWD="${BATON_GO_DB_PASSWORD}"
+                  mysql --protocol=SOCKET
+                  --user="${BATON_GO_DB_USERNAME}" --database="${MYSQL_DATABASE}"
                   --execute='SELECT 1' >/dev/null 2>&1
             periodSeconds: 5
             timeoutSeconds: 5
@@ -109,6 +126,28 @@ spec:
           volumeMounts:
             - name: data
               mountPath: /var/lib/mysql
+            - name: runtime-user-init
+              mountPath: /docker-entrypoint-initdb.d
+              readOnly: true
+            - name: mysql-server-tls
+              mountPath: /etc/mysql/tls
+              readOnly: true
+      volumes:
+        - name: runtime-user-init
+          configMap:
+            name: baton-go-mysql-runtime-user-init
+            defaultMode: 0555
+        - name: mysql-server-tls
+          secret:
+            secretName: baton-go-mysql-server-tls
+            defaultMode: 0440
+            items:
+              - key: ca.pem
+                path: ca.pem
+              - key: tls.crt
+                path: tls.crt
+              - key: tls.key
+                path: tls.key
   volumeClaimTemplates:
     - metadata:
         name: data

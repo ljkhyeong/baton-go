@@ -8,3 +8,4 @@ metadata:
 immutable: true
 data:
   BATON_GO_DB_USERNAME: baton_go
+  BATON_GO_DB_MIGRATION_USERNAME: baton_go_migrator

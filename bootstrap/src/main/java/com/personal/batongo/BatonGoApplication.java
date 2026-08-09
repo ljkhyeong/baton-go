@@ -1,5 +1,6 @@
 package com.personal.batongo;
 
+import com.personal.batongo.bootstrap.DatabaseMigrationRunner;
 import java.time.Clock;
 import java.util.Arrays;
 import org.springframework.boot.SpringApplication;
@@ -16,6 +17,10 @@ public class BatonGoApplication {
 
     public static void main(String[] args) {
         requireNormalApplicationArguments(args);
+        if (DatabaseMigrationRunner.isRequested(args)) {
+            DatabaseMigrationRunner.run(args);
+            return;
+        }
         SpringApplication.run(BatonGoApplication.class, args);
     }
 

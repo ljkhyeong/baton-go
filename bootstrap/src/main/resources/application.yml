@@ -17,6 +17,13 @@ spring:
         trustCertificateKeyStorePassword: baton-go-public-ca-v1
   flyway:
     enabled: true
+    target: latest
+    baseline-on-migrate: false
+    skip-executing-migrations: false
+    ignore-migration-patterns: []
+    validate-on-migrate: true
+    validate-migration-naming: true
+    fail-on-missing-locations: true
     locations: classpath:db/migration
   jpa:
     open-in-view: false

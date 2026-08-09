@@ -17,6 +17,7 @@ dependencies {
 
 	testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
 	testImplementation 'org.springframework.boot:spring-boot-testcontainers'
+	testImplementation 'org.yaml:snakeyaml'
 	testImplementation 'org.testcontainers:testcontainers-junit-jupiter'
 	testImplementation 'org.testcontainers:testcontainers-mysql'
 	testImplementation project(':guard-tool')
@@ -27,6 +28,15 @@ tasks.named('bootJar') {
 }
 
 tasks.named('test') {
+	inputs.files(
+			rootProject.file('deploy/k8s/base/app-deployment.yaml'),
+			rootProject.file('deploy/k8s/base/database-migration-job.yaml'),
+			rootProject.file('deploy/k8s/base/kustomization.yaml'),
+			rootProject.file('deploy/k8s/base/mysql-statefulset.yaml'),
+			rootProject.file('deploy/k8s/overlays/private-server/app-config.properties'),
+			rootProject.file('deploy/k8s/overlays/private-server/kustomization.yaml')
+	)
+	systemProperty 'batonGo.repositoryRoot', rootProject.projectDir.absolutePath
 	useJUnitPlatform {
 		excludeTags 'mysql'
 	}
@@ -35,8 +45,19 @@ tasks.named('test') {
 tasks.register('mysqlTest', Test) {
 	group = 'verification'
 	description = 'Runs MySQL Testcontainers integration tests.'
+	inputs.file rootProject.file('deploy/k8s/base/mysql-init-preflight.sh')
+	inputs.file rootProject.file('deploy/k8s/base/mysql-runtime-user-init-config.yaml')
+	inputs.file rootProject.file('deploy/k8s/base/app-deployment.yaml')
+	inputs.file rootProject.file('deploy/k8s/base/database-migration-job.yaml')
+	inputs.file rootProject.file('deploy/k8s/base/mysql-statefulset.yaml')
+	inputs.file rootProject.file('deploy/k8s/overlays/private-server/app-config.properties')
+	inputs.file rootProject.file('deploy/k8s/overlays/private-server/kustomization.yaml')
 	testClassesDirs = sourceSets.test.output.classesDirs
 	classpath = sourceSets.test.runtimeClasspath
+	systemProperty 'batonGo.repositoryRoot', rootProject.projectDir.absolutePath
+	systemProperty 'jdk.net.hosts.file', file(
+			'src/test/resources/com/personal/batongo/bootstrap/mysql/hosts'
+	).absolutePath
 	useJUnitPlatform {
 		includeTags 'mysql'
 	}

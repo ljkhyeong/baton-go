@@ -25,6 +25,7 @@ public class TargetContractOperationsService implements TargetContractOperations
 
     private static final String CONTRACT_VERSION = "v1";
     private static final int MAX_INVENTORY_LIMIT = 500;
+    private static final long MAX_REVOCABLE_VERSION = Long.MAX_VALUE - 1;
 
     private final SmartLinkRepository repository;
     private final Clock clock;
@@ -63,7 +64,10 @@ public class TargetContractOperationsService implements TargetContractOperations
 
     @Override
     public RemediationResult remediate(RemediationCommand command) {
-        if (command == null || command.linkId() == null || command.expectedVersion() < 0) {
+        if (command == null
+                || command.linkId() == null
+                || command.expectedVersion() < 0
+                || command.expectedVersion() > MAX_REVOCABLE_VERSION) {
             throw new InvalidTargetContractRemediationRequestException();
         }
         StoredLinkSnapshot storedLink = repository.findStoredByIdForUpdate(command.linkId())

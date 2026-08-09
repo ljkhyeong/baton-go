@@ -71,7 +71,7 @@ class TargetContractOperationsIntegrationTest {
 
     @Container
     @ServiceConnection
-    static final MySQLContainer MYSQL = new MySQLContainer("mysql:8.4");
+    static final MySQLContainer MYSQL = new MySQLContainer("mysql:8.4.10");
 
     @Autowired
     private MockMvc mockMvc;
@@ -340,6 +340,33 @@ class TargetContractOperationsIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.revokedAt").value(firstRevokedAt.toString()));
         assertThat(storedVersion(VALID_LINK_ID)).isEqualTo(3L);
+    }
+
+    @Test
+    @DisplayName("증가할 수 없는 최대 version은 MySQL 행을 변경하지 않고 400으로 거부한다")
+    void rejectsMaximumVersionBeforeMysqlMutation() throws Exception {
+        insertStoredLink(
+                INVALID_LINK_ID,
+                "7".repeat(64),
+                "BATON",
+                INVALID_TARGET_PATH,
+                "NAVIGATION",
+                0,
+                true
+        );
+
+        mockMvc.perform(put(
+                        "/api/v1/operations/link-target-contract-v1/links/{linkId}/revocation",
+                        INVALID_LINK_ID
+                )
+                        .header(HttpHeaders.AUTHORIZATION, bearerToken())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"expectedVersion\":9223372036854775807}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+
+        assertThat(storedRevokedAt(INVALID_LINK_ID)).isNull();
+        assertThat(storedVersion(INVALID_LINK_ID)).isZero();
     }
 
     private RemediationResult remediateAfterStart(

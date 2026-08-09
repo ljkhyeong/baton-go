@@ -257,6 +257,17 @@ class TargetContractOperationsServiceTest {
     }
 
     @Test
+    @DisplayName("remediation은 증가할 수 없는 최대 version을 행 잠금 전에 거부한다")
+    void rejectsMaximumVersionBeforeLockingStoredLink() {
+        assertThatThrownBy(() -> service.remediate(
+                new RemediationCommand(uuid(10), Long.MAX_VALUE)
+        )).isExactlyInstanceOf(InvalidTargetContractRemediationRequestException.class);
+
+        assertThat(repository.findForUpdateCalls).isZero();
+        assertThat(repository.updateCalls).isZero();
+    }
+
+    @Test
     @DisplayName("remediation은 서버 시각이 생성 시각보다 빠르면 저장하지 않는다")
     void rejectsRemediationBeforeCreationTime() {
         StoredLinkSnapshot violation = new StoredLinkSnapshot(
@@ -312,6 +323,7 @@ class TargetContractOperationsServiceTest {
 
         private final Map<UUID, StoredLinkSnapshot> snapshots = new HashMap<>();
         private int scanCalls;
+        private int findForUpdateCalls;
         private int updateCalls;
         private int lastLimit;
         private boolean forceUpdateFailure;
@@ -344,6 +356,7 @@ class TargetContractOperationsServiceTest {
 
         @Override
         public Optional<StoredLinkSnapshot> findStoredByIdForUpdate(UUID id) {
+            findForUpdateCalls++;
             return findStoredById(id);
         }
 

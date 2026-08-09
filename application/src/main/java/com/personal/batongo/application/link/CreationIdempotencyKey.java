@@ -3,14 +3,8 @@ package com.personal.batongo.application.link;
 import com.personal.batongo.application.link.error.InvalidIdempotencyKeyException;
 import java.util.Objects;
 import java.util.UUID;
-import java.util.regex.Pattern;
 
 public final class CreationIdempotencyKey {
-
-    private static final Pattern CURRENT_CANONICAL_UUID = Pattern.compile(
-            "[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}"
-                    + "-[89ab][0-9a-f]{3}-[0-9a-f]{12}"
-    );
 
     private final String value;
     private final ReservationAdmission reservationAdmission;
@@ -28,24 +22,16 @@ public final class CreationIdempotencyKey {
     }
 
     public static CreationIdempotencyKey parseRequest(String value) {
-        if (matchesCurrentContract(value)) {
+        UUID parsed = requireCanonicalUuid(value, true);
+        String canonicalValue = parsed.toString();
+        if (canonicalValue.equals(value) && matchesCurrentContract(parsed)) {
             return new CreationIdempotencyKey(
-                    value,
+                    canonicalValue,
                     ReservationAdmission.CREATE_OR_REPLAY
             );
         }
-
-        UUID parsed;
-        try {
-            parsed = UUID.fromString(value);
-        } catch (IllegalArgumentException | NullPointerException exception) {
-            throw new InvalidIdempotencyKeyException();
-        }
-        if (!parsed.toString().equalsIgnoreCase(value)) {
-            throw new InvalidIdempotencyKeyException();
-        }
         return new CreationIdempotencyKey(
-                parsed.toString(),
+                canonicalValue,
                 ReservationAdmission.REPLAY_ONLY
         );
     }
@@ -59,14 +45,33 @@ public final class CreationIdempotencyKey {
     }
 
     private static String requireCurrentContract(String value) {
-        if (!matchesCurrentContract(value)) {
+        UUID parsed = requireCanonicalUuid(value, false);
+        if (!matchesCurrentContract(parsed)) {
             throw new InvalidIdempotencyKeyException();
         }
-        return value;
+        return parsed.toString();
     }
 
-    private static boolean matchesCurrentContract(String value) {
-        return value != null && CURRENT_CANONICAL_UUID.matcher(value).matches();
+    private static UUID requireCanonicalUuid(String value, boolean allowUppercase) {
+        UUID parsed;
+        try {
+            parsed = UUID.fromString(value);
+        } catch (IllegalArgumentException | NullPointerException exception) {
+            throw new InvalidIdempotencyKeyException();
+        }
+        boolean canonical = allowUppercase
+                ? parsed.toString().equalsIgnoreCase(value)
+                : parsed.toString().equals(value);
+        if (!canonical) {
+            throw new InvalidIdempotencyKeyException();
+        }
+        return parsed;
+    }
+
+    private static boolean matchesCurrentContract(UUID value) {
+        return value.version() >= 1
+                && value.version() <= 5
+                && value.variant() == 2;
     }
 
     @Override

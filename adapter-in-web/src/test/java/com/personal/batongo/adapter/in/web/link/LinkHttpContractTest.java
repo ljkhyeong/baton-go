@@ -19,7 +19,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.personal.batongo.adapter.in.web.GlobalExceptionHandler;
-import com.personal.batongo.adapter.in.web.PublicLinkProperties;
 import com.personal.batongo.adapter.in.web.RequestIdFilter;
 import com.personal.batongo.adapter.in.web.StrictHttpJsonConfiguration;
 import com.personal.batongo.application.link.CreationTimeStoragePolicy;
@@ -29,6 +28,7 @@ import com.personal.batongo.application.link.port.in.SmartLinkUseCase.CreateLink
 import com.personal.batongo.application.link.error.LinkCodeKeyBindingException;
 import com.personal.batongo.application.link.error.LinkCodeReplayMismatchException;
 import com.personal.batongo.application.link.error.LinkNotFoundException;
+import com.personal.batongo.application.link.error.PublicLinkOriginReplayUnavailableException;
 import com.personal.batongo.application.link.error.StoredTargetPolicyViolationException;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.CreatedLinkResult;
@@ -77,10 +77,7 @@ class LinkHttpContractTest {
     void setUp() {
         useCase = mock(SmartLinkUseCase.class);
         meterRegistry = new SimpleMeterRegistry();
-        LinkManagementController managementController = new LinkManagementController(
-                useCase,
-                new PublicLinkProperties(URI.create("https://go.example"))
-        );
+        LinkManagementController managementController = new LinkManagementController(useCase);
         LinkResolverController resolverController = new LinkResolverController(useCase);
         var jsonMapperBuilder = JsonMapper.builder()
                 .findAndAddModules()
@@ -101,7 +98,7 @@ class LinkHttpContractTest {
         LinkResult link = linkResult();
         when(useCase.createLink(any())).thenReturn(new CreatedLinkResult(
                 link,
-                "VOvLShvx93kQpj8x7w2HYQ",
+                URI.create("https://go.example/l/VOvLShvx93kQpj8x7w2HYQ"),
                 false
         ));
 
@@ -128,6 +125,7 @@ class LinkHttpContractTest {
                 .andExpect(jsonPath("$.id").value(LINK_ID.toString()))
                 .andExpect(jsonPath("$.shortUrl")
                         .value("https://go.example/l/VOvLShvx93kQpj8x7w2HYQ"))
+                .andExpect(jsonPath("$.rawCode").doesNotExist())
                 .andExpect(jsonPath("$.targetSystem").value("BATON"))
                 .andExpect(jsonPath("$.targetPath").value(BATON_TARGET_PATH))
                 .andExpect(jsonPath("$.purpose").value("NAVIGATION"))
@@ -139,7 +137,7 @@ class LinkHttpContractTest {
     void replaysLinkCreationContract() throws Exception {
         when(useCase.createLink(any())).thenReturn(new CreatedLinkResult(
                 linkResult(),
-                "VOvLShvx93kQpj8x7w2HYQ",
+                URI.create("https://go.example/l/VOvLShvx93kQpj8x7w2HYQ"),
                 true
         ));
 
@@ -187,6 +185,31 @@ class LinkHttpContractTest {
                 .andExpect(jsonPath("$.code").value("LINK_CODE_REPLAY_UNAVAILABLE"))
                 .andExpect(jsonPath("$.message")
                         .value("현재 링크 코드 파생 설정으로 기존 링크를 재생할 수 없습니다"))
+                .andExpect(jsonPath("$.requestId").isNotEmpty());
+    }
+
+    @Test
+    @DisplayName("최초 공개 origin을 복구할 수 없으면 잘못된 short URL 대신 운영 오류를 반환한다")
+    void returnsOperationalErrorWhenPublicOriginReplayIsUnavailable() throws Exception {
+        when(useCase.createLink(any()))
+                .thenThrow(new PublicLinkOriginReplayUnavailableException());
+
+        mockMvc.perform(post("/api/v1/links")
+                        .header(LinkManagementController.IDEMPOTENCY_KEY_HEADER, IDEMPOTENCY_KEY)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "targetSystem": "BATON",
+                                  "targetPath": "%s",
+                                  "purpose": "NAVIGATION"
+                                }
+                                """.formatted(BATON_TARGET_PATH)))
+                .andExpect(status().isInternalServerError())
+                .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
+                .andExpect(jsonPath("$.code")
+                        .value("PUBLIC_LINK_ORIGIN_REPLAY_UNAVAILABLE"))
+                .andExpect(jsonPath("$.message")
+                        .value("기존 링크 생성에 사용한 공개 origin을 복구할 수 없습니다"))
                 .andExpect(jsonPath("$.requestId").isNotEmpty());
     }
 
@@ -494,7 +517,7 @@ class LinkHttpContractTest {
             assertThat(command.expiresAt()).isEqualTo(Instant.parse(rawTime));
             return new CreatedLinkResult(
                     linkResult(),
-                    "VOvLShvx93kQpj8x7w2HYQ",
+                    URI.create("https://go.example/l/VOvLShvx93kQpj8x7w2HYQ"),
                     true
             );
         });

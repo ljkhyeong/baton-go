@@ -159,17 +159,22 @@ public class SmartLinkPersistenceAdapter implements SmartLinkRepository {
             long expectedVersion,
             Instant revokedAt
     ) {
+        if (expectedVersion < 0 || expectedVersion == Long.MAX_VALUE) {
+            throw new IllegalArgumentException("expectedVersion은 증가 가능한 범위여야 합니다");
+        }
+        long nextVersion = Math.incrementExact(expectedVersion);
         int updated = jdbcTemplate.update(connection -> {
             PreparedStatement statement = connection.prepareStatement("""
                     UPDATE smart_links
-                    SET revoked_at = ?, version = version + 1
+                    SET revoked_at = ?, version = ?
                     WHERE id = UUID_TO_BIN(?)
                       AND version = ?
                       AND revoked_at IS NULL
                     """);
             statement.setTimestamp(1, Timestamp.from(revokedAt), utcCalendar());
-            statement.setString(2, id.toString());
-            statement.setLong(3, expectedVersion);
+            statement.setLong(2, nextVersion);
+            statement.setString(3, id.toString());
+            statement.setLong(4, expectedVersion);
             return statement;
         });
         return updated == 1;

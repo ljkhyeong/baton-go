@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: baton-go-database-identity
+  labels:
+    app.kubernetes.io/name: baton-go
+    app.kubernetes.io/component: database
+immutable: true
+data:
+  BATON_GO_DB_USERNAME: baton_go
+  BATON_GO_DB_MIGRATION_USERNAME: baton_go_migrator

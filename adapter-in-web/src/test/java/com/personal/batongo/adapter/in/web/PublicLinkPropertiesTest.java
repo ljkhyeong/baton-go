@@ -1,17 +1,30 @@
 package com.personal.batongo.adapter.in.web;
 
 import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.net.URI;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 class PublicLinkPropertiesTest {
+
+    @Test
+    @DisplayName("공개 base URL은 replay 저장에 사용할 canonical origin으로 정규화한다")
+    void canonicalizesPublicOrigin() {
+        PublicLinkProperties properties = new PublicLinkProperties(
+                URI.create("HTTPS://GO.Example:443/")
+        );
+
+        assertThat(properties.publicBaseUrl()).isEqualTo(URI.create("https://go.example"));
+        assertThat(properties.current().serialized()).isEqualTo("https://go.example");
+    }
 
     @ParameterizedTest(name = "{index}: {0}")
     @ValueSource(strings = {

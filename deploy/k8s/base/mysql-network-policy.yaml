@@ -1,0 +1,27 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: baton-go-mysql-ingress
+  labels:
+    app.kubernetes.io/name: baton-go
+    app.kubernetes.io/component: database
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: baton-go
+      app.kubernetes.io/component: database
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: baton-go
+              app.kubernetes.io/component: application
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: baton-go
+              app.kubernetes.io/component: database-migration
+      ports:
+        - protocol: TCP
+          port: 3306

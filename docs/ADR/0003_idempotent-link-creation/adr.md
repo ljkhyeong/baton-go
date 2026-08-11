@@ -24,6 +24,10 @@ BATON과 ROUND가 링크를 원격 생성할 때 서버는 저장을 완료했�
   `first16(HMAC-SHA-256(secret, "baton-go-link-code:v1\0" + idempotencyKey))`로 파생한다.
 - DB에는 공개 코드와 멱등성 키의 SHA-256 해시만 저장한다.
 - `link_creation_requests`가 멱등성 키 해시와 링크 ID를 연결한다.
+- `link_creation_requests`는 생성 승자가 사용한 canonical 공개 origin도 함께 저장한다.
+  재생은 현재 설정이 아니라 저장 origin과 다시 파생한 공개 코드를 결합해 최초 short URL을
+  정확히 복원한다. 저장 origin을 증명할 수 없으면 현재 origin으로 추정하지 않고 fail-closed
+  하며 세부 결정은 ADR-0009를 따른다.
 - MySQL `INSERT IGNORE`의 unique-key 대기를 승자 선택 경계로 사용한다. 중복 insert가
   반환된 뒤에는 승자 transaction이 커밋되었으므로 일반 조회로 완성된 링크를 읽는다.
 - 같은 키와 payload는 동일 URL을 재생하고 같은 키의 다른 payload는 `409`로 거부한다.

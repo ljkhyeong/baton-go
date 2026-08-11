@@ -12,8 +12,18 @@ spring:
     url: ${BATON_GO_DB_URL:jdbc:mysql://localhost:3307/baton_go?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC}
     username: ${BATON_GO_DB_USERNAME:baton_go}
     password: ${BATON_GO_DB_PASSWORD:}
+    hikari:
+      data-source-properties:
+        trustCertificateKeyStorePassword: baton-go-public-ca-v1
   flyway:
     enabled: true
+    target: latest
+    baseline-on-migrate: false
+    skip-executing-migrations: false
+    ignore-migration-patterns: []
+    validate-on-migrate: true
+    validate-migration-naming: true
+    fail-on-missing-locations: true
     locations: classpath:db/migration
   jpa:
     open-in-view: false

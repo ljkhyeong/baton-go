@@ -1,0 +1,231 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: baton-go-mysql
+  labels:
+    app.kubernetes.io/name: baton-go
+    app.kubernetes.io/component: database
+spec:
+  serviceName: baton-go-mysql
+  replicas: 1
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: baton-go
+      app.kubernetes.io/component: database
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: baton-go
+        app.kubernetes.io/component: database
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 120
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+        fsGroup: 999
+        fsGroupChangePolicy: OnRootMismatch
+      initContainers:
+        - name: mysql-bootstrap-preflight
+          image: mysql:8.4
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/sh
+            - /opt/baton-go/mysql-preflight/mysql-init-preflight.sh
+          args:
+            - /etc/mysql/tls
+            - /opt/baton-go/mysql-init/10-create-runtime-user.sh
+          env:
+            - name: MYSQL_DATABASE
+              value: baton_go
+            - name: MYSQL_USER
+              valueFrom:
+                configMapKeyRef:
+                  name: baton-go-database-identity
+                  key: BATON_GO_DB_MIGRATION_USERNAME
+            - name: MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: baton-go-database-migration-credentials
+                  key: BATON_GO_DB_MIGRATION_PASSWORD
+            - name: BATON_GO_DB_USERNAME
+              valueFrom:
+                configMapKeyRef:
+                  name: baton-go-database-identity
+                  key: BATON_GO_DB_USERNAME
+            - name: BATON_GO_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: baton-go-database-runtime-credentials
+                  key: BATON_GO_DB_PASSWORD
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: baton-go-database-bootstrap-credentials
+                  key: BATON_GO_DB_ROOT_PASSWORD
+          resources:
+            requests:
+              cpu: 25m
+              memory: 32Mi
+            limits:
+              cpu: 250m
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            privileged: false
+            readOnlyRootFilesystem: true
+            runAsGroup: 999
+            runAsNonRoot: true
+            runAsUser: 999
+          volumeMounts:
+            - name: mysql-init-preflight
+              mountPath: /opt/baton-go/mysql-preflight
+              readOnly: true
+            - name: runtime-user-init
+              mountPath: /opt/baton-go/mysql-init
+              readOnly: true
+            - name: mysql-server-tls
+              mountPath: /etc/mysql/tls
+              readOnly: true
+      containers:
+        - name: mysql
+          image: mysql:8.4
+          imagePullPolicy: IfNotPresent
+          args:
+            - --character-set-server=utf8mb4
+            - --collation-server=utf8mb4_unicode_ci
+            - --default-time-zone=+00:00
+            - --require-secure-transport=ON
+            - --ssl-ca=/etc/mysql/tls/ca.pem
+            - --ssl-cert=/etc/mysql/tls/tls.crt
+            - --ssl-key=/etc/mysql/tls/tls.key
+            - --tls-version=TLSv1.2,TLSv1.3
+          env:
+            - name: MYSQL_DATABASE
+              value: baton_go
+            - name: MYSQL_USER
+              valueFrom:
+                configMapKeyRef:
+                  name: baton-go-database-identity
+                  key: BATON_GO_DB_MIGRATION_USERNAME
+            - name: MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: baton-go-database-migration-credentials
+                  key: BATON_GO_DB_MIGRATION_PASSWORD
+            - name: BATON_GO_DB_USERNAME
+              valueFrom:
+                configMapKeyRef:
+                  name: baton-go-database-identity
+                  key: BATON_GO_DB_USERNAME
+            - name: BATON_GO_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: baton-go-database-runtime-credentials
+                  key: BATON_GO_DB_PASSWORD
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: baton-go-database-bootstrap-credentials
+                  key: BATON_GO_DB_ROOT_PASSWORD
+            - name: MYSQL_ROOT_HOST
+              value: localhost
+            - name: TZ
+              value: UTC
+          ports:
+            - name: mysql
+              containerPort: 3306
+              protocol: TCP
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "2"
+              memory: 2Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            privileged: false
+          startupProbe:
+            exec:
+              command:
+                - sh
+                - -ec
+                - >-
+                  MYSQL_PWD="${BATON_GO_DB_PASSWORD}"
+                  mysql --protocol=TCP --host=127.0.0.1 --ssl-mode=REQUIRED
+                  --user="${BATON_GO_DB_USERNAME}" --database="${MYSQL_DATABASE}"
+                  --execute='SELECT 1' >/dev/null 2>&1
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 30
+          livenessProbe:
+            exec:
+              command:
+                - sh
+                - -ec
+                - >-
+                  MYSQL_PWD="${BATON_GO_DB_PASSWORD}"
+                  mysqladmin --protocol=SOCKET
+                  --user="${BATON_GO_DB_USERNAME}" ping --silent
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 4
+          readinessProbe:
+            exec:
+              command:
+                - sh
+                - -ec
+                - >-
+                  MYSQL_PWD="${BATON_GO_DB_PASSWORD}"
+                  mysql --protocol=TCP --host=127.0.0.1 --ssl-mode=REQUIRED
+                  --user="${BATON_GO_DB_USERNAME}" --database="${MYSQL_DATABASE}"
+                  --execute='SELECT 1' >/dev/null 2>&1
+            periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 3
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/mysql
+            - name: runtime-user-init
+              mountPath: /docker-entrypoint-initdb.d
+              readOnly: true
+            - name: mysql-server-tls
+              mountPath: /etc/mysql/tls
+              readOnly: true
+      volumes:
+        - name: mysql-init-preflight
+          configMap:
+            name: baton-go-mysql-init-preflight
+            defaultMode: 0555
+        - name: runtime-user-init
+          configMap:
+            name: baton-go-mysql-runtime-user-init
+            defaultMode: 0555
+        - name: mysql-server-tls
+          secret:
+            secretName: baton-go-mysql-server-tls
+            defaultMode: 0440
+            items:
+              - key: ca.pem
+                path: ca.pem
+              - key: tls.crt
+                path: tls.crt
+              - key: tls.key
+                path: tls.key
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        labels:
+          app.kubernetes.io/name: baton-go
+          app.kubernetes.io/component: database
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 10Gi

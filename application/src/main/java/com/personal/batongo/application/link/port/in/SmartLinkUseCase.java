@@ -34,7 +34,7 @@ public interface SmartLinkUseCase {
 
     record CreatedLinkResult(
             LinkResult link,
-            String rawCode,
+            URI shortUrl,
             boolean replayed
     ) {
 

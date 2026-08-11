@@ -1,0 +1,32 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: baton-go-application-ingress
+  labels:
+    app.kubernetes.io/name: baton-go
+    app.kubernetes.io/component: application
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: baton-go
+      app.kubernetes.io/component: application
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              baton-go.networking/allow-http: "true"
+      ports:
+        - protocol: TCP
+          port: 8080
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              baton-go.networking/allow-actuator: "true"
+          podSelector:
+            matchLabels:
+              baton-go.networking/actuator-client: "true"
+      ports:
+        - protocol: TCP
+          port: 8081

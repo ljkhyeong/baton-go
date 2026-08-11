@@ -9,6 +9,7 @@ import com.personal.batongo.application.link.error.IdempotencyKeyConflictExcepti
 import com.personal.batongo.application.link.error.LinkCodeKeyBindingException;
 import com.personal.batongo.application.link.error.LinkCodeReplayMismatchException;
 import com.personal.batongo.application.link.error.LinkNotFoundException;
+import com.personal.batongo.application.link.error.PublicLinkOriginReplayUnavailableException;
 import com.personal.batongo.application.link.error.StoredTargetPolicyViolationException;
 import com.personal.batongo.application.link.error.TargetContractRemediationNotApplicableException;
 import com.personal.batongo.application.link.error.TargetContractRemediationStaleException;
@@ -202,6 +203,20 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return error(
                 HttpStatus.INTERNAL_SERVER_ERROR,
                 "LINK_CODE_CONFIGURATION_MISMATCH",
+                exception.getMessage(),
+                request
+        );
+    }
+
+    @ExceptionHandler(PublicLinkOriginReplayUnavailableException.class)
+    public ResponseEntity<ErrorResponse> handlePublicLinkOriginReplayUnavailable(
+            PublicLinkOriginReplayUnavailableException exception,
+            HttpServletRequest request
+    ) {
+        logUnexpected(exception, request);
+        return error(
+                HttpStatus.INTERNAL_SERVER_ERROR,
+                "PUBLIC_LINK_ORIGIN_REPLAY_UNAVAILABLE",
                 exception.getMessage(),
                 request
         );

@@ -1,6 +1,10 @@
 # HANDOFF
 
 - BATON GO의 정책형 링크 생성·해석·폐기와 원격 생성 idempotency를 완료했다.
+- 생성 승자는 canonical 공개 origin을 멱등 예약에 저장한다. origin 설정이 바뀐 뒤의 재시도도
+  저장 origin과 동일 공개 코드를 사용해 최초 short URL을 정확히 반환한다. V5 이전 예약처럼
+  origin 증거가 없거나 저장값이 비canonical이면 현재 설정으로 추정하지 않고
+  `500 PUBLIC_LINK_ORIGIN_REPLAY_UNAVAILABLE`로 fail-closed 한다.
 - 멱등 재생 시 현재 HMAC 파생 결과를 저장된 코드 해시와 대조하며, 파생 비밀 변경으로
   기존 short URL을 재생할 수 없으면 잘못된 URL 대신
   `500 LINK_CODE_REPLAY_UNAVAILABLE`로 실패한다.
@@ -11,6 +15,8 @@
 - 신규 JSON wire 입력은 enum 이름과 UTC `Instant` 문자열 및 정수 `expectedVersion`을 exact
   token으로 검증한다. enum ordinal·숫자 문자열, timestamp 숫자·leap second, version 문자열·
   소수·지수 표기는 coercion하지 않고 저장·폐기 전에 `400`으로 거부한다.
+- remediation `expectedVersion`은 다음 BIGINT version으로 증가할 수 있는
+  `0..9223372036854775806`만 허용하고 최대 long 값은 행 잠금 전에 `400`으로 거부한다.
 - 링크 코드 HMAC 파생 version·fingerprint를 `link_code_key_guard` singleton에 결합한다.
   시작 시점과 생성 예약 전에 검증하며, 링크와 예약이 모두 빈 DB만 자동 결합한다. 기존
   데이터가 있는 미결합 DB나 다른 identity는 secret·fingerprint를 노출하지 않고 fail-closed
@@ -21,6 +27,23 @@
   canary를 stdin으로만 받고 예약·링크 hash 일치를 확인한 뒤 한 transaction에서 결합한다.
   서버의 웹 서버·Hibernate/Spring Data JPA·Actuator runtime과 분리되어 있으며 key ring
   전에는 secret을 회전하지 않는다.
+- Private Kubernetes 배포는 Kustomize base/overlay로 구성했다. GO 전용 MySQL StatefulSet,
+  `baton_go` database user, DB/runtime Secret과 10Gi `ReadWriteOnce` PVC를 사용하며 BATON의
+  MySQL instance·계정·volume을 공유하지 않는다. StorageClass와 Ingress는 환경에 맡기고,
+  namespace bootstrap은 workload overlay에서 분리해 PVC 연쇄 삭제 위험을 줄였다.
+- MySQL은 data PVC를 mount하지 않는 non-root preflight initContainer에서 계정·password 문법과
+  분리, TLS 권한·certificate/key·`baton-go-mysql` SAN·CA, runtime-user init script 구조를 먼저
+  검증한다. 공식 image가 system schema 생성 뒤 실패한 partial PVC를 자동 복구한다고 보지 않으며,
+  PVC 재생성은 데이터가 없다고 확인한 최초 rollout만 허용하고 그 외에는 backup 뒤 account를
+  수동 복구한다.
+- database migration Job은 최소 context에서 Flyway `LATEST` target만 명시적으로 실행하고
+  resolved migration 존재, pending 0건과 history validation을 검증한다. 다른 target,
+  SQL 실행 생략·baseline·선택 적용, migration 이름 또는 migration 전 validation 비활성화,
+  기존 baseline state와 Flyway 비활성화·bean 누락은 context 시작 성공으로 오인하지 않고
+  non-zero로 fail-closed 한다.
+- Kubernetes의 `8080` HTTP Service에는 public `/l` Prefix와 private `/api/v1` Prefix가 함께
+  있으므로 edge에서 두 경로를 분리해야 한다. Actuator `8081`은 Service·Ingress로 기본
+  노출하지 않고 kubelet probe와 제한된 운영 접근에만 사용한다.
 - 서버와 guard-tool은 HMAC 비밀을 placeholder 해석 없는 process environment 원문으로 읽는다.
   관리 credential과 DB password도 같은 raw 환경 경계를 사용하므로 `${...}`, backslash와
   공백이 설정 계층에서 치환되지 않는다.

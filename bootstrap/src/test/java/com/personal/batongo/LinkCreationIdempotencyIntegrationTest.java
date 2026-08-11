@@ -12,6 +12,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.personal.batongo.application.link.CreationIdempotencyKey;
 import com.personal.batongo.application.link.CreationTimeStoragePolicy;
+import com.personal.batongo.application.link.PublicLinkOrigin;
 import com.personal.batongo.application.link.error.IdempotencyKeyConflictException;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.CreateLinkCommand;
@@ -19,12 +20,14 @@ import com.personal.batongo.application.link.port.in.SmartLinkUseCase.CreatedLin
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.LinkResult;
 import com.personal.batongo.application.link.port.out.LinkCodePort;
 import com.personal.batongo.application.link.port.out.LinkCreationReservationPort;
+import com.personal.batongo.application.link.port.out.PublicLinkOriginPort;
 import com.personal.batongo.application.link.port.out.SmartLinkRepository;
 import com.personal.batongo.domain.link.LinkPurpose;
 import com.personal.batongo.domain.link.SmartLink;
 import com.personal.batongo.domain.link.TargetSystem;
 import com.personal.batongo.domain.link.TrustedTargetPolicy;
 import jakarta.persistence.EntityManager;
+import java.net.URI;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
@@ -36,6 +39,7 @@ import java.util.Calendar;
 import java.util.List;
 import java.util.TimeZone;
 import java.util.UUID;
+import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -97,7 +101,7 @@ class LinkCreationIdempotencyIntegrationTest {
 
     @Container
     @ServiceConnection
-    static final MySQLContainer MYSQL = new MySQLContainer("mysql:8.4");
+    static final MySQLContainer MYSQL = new MySQLContainer("mysql:8.4.10");
 
     @Autowired
     private SmartLinkUseCase smartLinkUseCase;
@@ -116,6 +120,9 @@ class LinkCreationIdempotencyIntegrationTest {
 
     @Autowired
     private ControllableReservationPort controllableReservationPort;
+
+    @Autowired
+    private ControllablePublicLinkOriginPort controllablePublicLinkOriginPort;
 
     @Autowired
     private MockMvc mockMvc;
@@ -165,7 +172,18 @@ class LinkCreationIdempotencyIntegrationTest {
         assertThat(created.link().expiresAt()).isEqualTo(FAR_FUTURE_EXPIRES_AT);
         assertThat(replayed.replayed()).isTrue();
         assertThat(replayed.link()).isEqualTo(created.link());
-        assertThat(replayed.rawCode()).isEqualTo(created.rawCode());
+        assertThat(replayed.shortUrl()).isEqualTo(created.shortUrl());
+        assertThat(created.shortUrl().toString())
+                .matches("https://go\\.example/l/[A-Za-z0-9_-]{22}");
+        assertThat(jdbcTemplate.queryForObject(
+                """
+                        SELECT public_origin
+                        FROM link_creation_requests
+                        WHERE link_id = UUID_TO_BIN(?)
+                        """,
+                String.class,
+                created.link().id().toString()
+        )).isEqualTo("https://go.example");
 
         LinkResult revoked = smartLinkUseCase.revokeLink(created.link().id());
         CreatedLinkResult replayedAfterRevocation = smartLinkUseCase.createLink(command);
@@ -481,8 +499,9 @@ class LinkCreationIdempotencyIntegrationTest {
                         INSERT INTO link_creation_requests (
                             idempotency_key_hash,
                             link_id,
+                            public_origin,
                             created_at
-                        ) VALUES (?, UUID_TO_BIN(?), ?)
+                        ) VALUES (?, UUID_TO_BIN(?), 'https://go.example', ?)
                         """,
                 linkCodePort.hashIdempotencyKey(normalizedIdempotencyKey),
                 linkId,
@@ -517,6 +536,62 @@ class LinkCreationIdempotencyIntegrationTest {
                 Long.class,
                 linkCodePort.hashIdempotencyKey(normalizedIdempotencyKey)
         )).isOne();
+    }
+
+    @Test
+    @DisplayName("공개 origin 증거가 없는 기존 MySQL 예약은 잘못 추정하지 않고 500으로 거부한다")
+    void rejectsExistingMysqlReservationWithoutPublicOrigin() throws Exception {
+        String idempotencyKey = "cc9d17dd-d02d-4c14-842c-afbb03887fc6";
+        String linkId = "93d4229a-0edf-4d85-a769-0efb7e58c179";
+        String targetPath = "/room/qrst-6789-uvwx";
+        jdbcTemplate.update(
+                """
+                        INSERT INTO smart_links (
+                            id,
+                            code_hash,
+                            target_system,
+                            target_path,
+                            purpose,
+                            created_at,
+                            version
+                        ) VALUES (UUID_TO_BIN(?), ?, 'ROUND', ?, 'MEETING_ENTRY', ?, 0)
+                        """,
+                linkId,
+                linkCodePort.issue(idempotencyKey).codeHash(),
+                targetPath,
+                FAR_FUTURE_NOW
+        );
+        jdbcTemplate.update(
+                """
+                        INSERT INTO link_creation_requests (
+                            idempotency_key_hash,
+                            link_id,
+                            created_at
+                        ) VALUES (?, UUID_TO_BIN(?), ?)
+                        """,
+                linkCodePort.hashIdempotencyKey(idempotencyKey),
+                linkId,
+                FAR_FUTURE_NOW
+        );
+
+        mockMvc.perform(post("/api/v1/links")
+                        .header(
+                                HttpHeaders.AUTHORIZATION,
+                                "Bearer test-management-token-that-is-long-enough"
+                        )
+                        .header("Idempotency-Key", idempotencyKey)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "targetSystem": "ROUND",
+                                  "targetPath": "%s",
+                                  "purpose": "MEETING_ENTRY"
+                                }
+                                """.formatted(targetPath)))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.code")
+                        .value("PUBLIC_LINK_ORIGIN_REPLAY_UNAVAILABLE"))
+                .andExpect(jsonPath("$.requestId").isNotEmpty());
     }
 
     @Test
@@ -631,9 +706,9 @@ class LinkCreationIdempotencyIntegrationTest {
                 .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
 
         assertThat(jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM smart_links WHERE target_path = ?",
+                "SELECT COUNT(*) FROM smart_links WHERE code_hash = ?",
                 Long.class,
-                targetPath
+                linkCodePort.issue(idempotencyKey).codeHash()
         )).isZero();
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM link_creation_requests WHERE idempotency_key_hash = ?",
@@ -679,7 +754,7 @@ class LinkCreationIdempotencyIntegrationTest {
 
         assertThat(replay.replayed()).isTrue();
         assertThat(replay.link().id()).isEqualTo(first.link().id());
-        assertThat(replay.rawCode()).isEqualTo(first.rawCode());
+        assertThat(replay.shortUrl()).isEqualTo(first.shortUrl());
         assertThat(replay.link().revokedAt()).isEqualTo(revoked.revokedAt());
     }
 
@@ -746,8 +821,8 @@ class LinkCreationIdempotencyIntegrationTest {
                     .extracting(result -> result.link().id())
                     .containsOnly(first.link().id());
             assertThat(results)
-                    .extracting(CreatedLinkResult::rawCode)
-                    .containsOnly(first.rawCode());
+                    .extracting(CreatedLinkResult::shortUrl)
+                    .containsOnly(first.shortUrl());
             assertThat(results)
                     .filteredOn(result -> !result.replayed())
                     .hasSize(1);
@@ -772,7 +847,7 @@ class LinkCreationIdempotencyIntegrationTest {
                     command.targetPath()
             ))
                     .matches("^[0-9a-f]{64}$")
-                    .isNotEqualTo(first.rawCode());
+                    .isNotEqualTo(rawCode(first));
             assertThat(jdbcTemplate.queryForObject(
                     """
                             SELECT request.idempotency_key_hash
@@ -794,6 +869,68 @@ class LinkCreationIdempotencyIntegrationTest {
                     null
             )))
                     .isInstanceOf(IdempotencyKeyConflictException.class);
+        } finally {
+            controllableReservationPort.releaseFirstOwner();
+            controllableReservationPort.reset();
+            executor.shutdownNow();
+        }
+    }
+
+    @Test
+    @DisplayName("서로 다른 공개 origin의 replica가 경쟁해도 저장된 승자 short URL로 수렴한다")
+    void convergesOnStoredPublicOriginAcrossConcurrentReplicas() throws Exception {
+        String idempotencyKey = "f14af1a6-9d56-4a41-8f47-c05f7c8898a1";
+        CreateLinkCommand command = new CreateLinkCommand(
+                new CreationIdempotencyKey(idempotencyKey),
+                TargetSystem.ROUND,
+                "/room/wxyz-2345-6789",
+                LinkPurpose.MEETING_ENTRY,
+                null,
+                null
+        );
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        controllableReservationPort.arm(2, false);
+
+        try {
+            Future<CreatedLinkResult> firstFuture = executor.submit(() ->
+                    controllablePublicLinkOriginPort.withOrigin(
+                            "https://go-a.example",
+                            () -> smartLinkUseCase.createLink(command)
+                    ));
+            Future<CreatedLinkResult> secondFuture = executor.submit(() ->
+                    controllablePublicLinkOriginPort.withOrigin(
+                            "https://go-b.example",
+                            () -> smartLinkUseCase.createLink(command)
+                    ));
+
+            controllableReservationPort.awaitAllEntered();
+            controllableReservationPort.awaitFirstOwnerReserved();
+            awaitReservationInsertWaiters(1);
+            controllableReservationPort.releaseFirstOwner();
+
+            CreatedLinkResult first = firstFuture.get(20, TimeUnit.SECONDS);
+            CreatedLinkResult second = secondFuture.get(20, TimeUnit.SECONDS);
+            String storedOrigin = jdbcTemplate.queryForObject(
+                    """
+                            SELECT public_origin
+                            FROM link_creation_requests
+                            WHERE idempotency_key_hash = ?
+                            """,
+                    String.class,
+                    linkCodePort.hashIdempotencyKey(idempotencyKey)
+            );
+            URI expectedShortUrl = URI.create(
+                    storedOrigin + first.shortUrl().getRawPath()
+            );
+
+            assertThat(storedOrigin)
+                    .isIn("https://go-a.example", "https://go-b.example");
+            assertThat(first.link().id()).isEqualTo(second.link().id());
+            assertThat(first.shortUrl()).isEqualTo(expectedShortUrl);
+            assertThat(second.shortUrl()).isEqualTo(expectedShortUrl);
+            assertThat(List.of(first, second))
+                    .filteredOn(result -> !result.replayed())
+                    .hasSize(1);
         } finally {
             controllableReservationPort.releaseFirstOwner();
             controllableReservationPort.reset();
@@ -854,8 +991,8 @@ class LinkCreationIdempotencyIntegrationTest {
                     .extracting(result -> result.link().id())
                     .containsOnly(first.link().id());
             assertThat(results)
-                    .extracting(CreatedLinkResult::rawCode)
-                    .containsOnly(first.rawCode());
+                    .extracting(CreatedLinkResult::shortUrl)
+                    .containsOnly(first.shortUrl());
             assertThat(results)
                     .filteredOn(result -> !result.replayed())
                     .hasSize(1);
@@ -863,7 +1000,7 @@ class LinkCreationIdempotencyIntegrationTest {
             CreatedLinkResult replay = smartLinkUseCase.createLink(command);
             assertThat(replay.replayed()).isTrue();
             assertThat(replay.link().id()).isEqualTo(first.link().id());
-            assertThat(replay.rawCode()).isEqualTo(first.rawCode());
+            assertThat(replay.shortUrl()).isEqualTo(first.shortUrl());
             assertThat(jdbcTemplate.queryForObject(
                     "SELECT COUNT(*) FROM smart_links WHERE target_path = ?",
                     Long.class,
@@ -1074,6 +1211,11 @@ class LinkCreationIdempotencyIntegrationTest {
         return results;
     }
 
+    private String rawCode(CreatedLinkResult result) {
+        String path = result.shortUrl().getRawPath();
+        return path.substring("/l/".length());
+    }
+
     private void awaitReservationInsertWaiters(int expectedWaiters)
             throws InterruptedException {
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
@@ -1119,6 +1261,35 @@ class LinkCreationIdempotencyIntegrationTest {
         ) {
             return new ControllableReservationPort(delegate);
         }
+
+        @Bean
+        @Primary
+        ControllablePublicLinkOriginPort controllablePublicLinkOriginPort() {
+            return new ControllablePublicLinkOriginPort();
+        }
+    }
+
+    static final class ControllablePublicLinkOriginPort implements PublicLinkOriginPort {
+
+        private static final PublicLinkOrigin DEFAULT_ORIGIN =
+                new PublicLinkOrigin(URI.create("https://go.example"));
+
+        private final ThreadLocal<PublicLinkOrigin> currentOrigin = new ThreadLocal<>();
+
+        @Override
+        public PublicLinkOrigin current() {
+            PublicLinkOrigin configuredOrigin = currentOrigin.get();
+            return configuredOrigin == null ? DEFAULT_ORIGIN : configuredOrigin;
+        }
+
+        <T> T withOrigin(String origin, Callable<T> action) throws Exception {
+            currentOrigin.set(new PublicLinkOrigin(URI.create(origin)));
+            try {
+                return action.call();
+            } finally {
+                currentOrigin.remove();
+            }
+        }
     }
 
     static final class ControllableReservationPort implements LinkCreationReservationPort {
@@ -1136,8 +1307,8 @@ class LinkCreationIdempotencyIntegrationTest {
         }
 
         @Override
-        public java.util.Optional<UUID> findLinkId(String idempotencyKeyHash) {
-            return delegate.findLinkId(idempotencyKeyHash);
+        public java.util.Optional<Reservation> find(String idempotencyKeyHash) {
+            return delegate.find(idempotencyKeyHash);
         }
 
         void arm(int expectedRequests, boolean failFirstOwner) {
@@ -1152,12 +1323,14 @@ class LinkCreationIdempotencyIntegrationTest {
         public Reservation reserve(
                 String idempotencyKeyHash,
                 UUID proposedLinkId,
+                String publicOrigin,
                 Instant createdAt
         ) {
             allEntered.countDown();
             Reservation reservation = delegate.reserve(
                     idempotencyKeyHash,
                     proposedLinkId,
+                    publicOrigin,
                     createdAt
             );
             if (reservation.owner() && firstOwnerHandled.compareAndSet(false, true)) {

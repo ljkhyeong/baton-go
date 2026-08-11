@@ -14,16 +14,19 @@ interface SpringDataLinkCreationRequestRepository
             INSERT IGNORE INTO link_creation_requests (
                 idempotency_key_hash,
                 link_id,
+                public_origin,
                 created_at
             ) VALUES (
                 :idempotencyKeyHash,
                 UUID_TO_BIN(:linkId),
+                :publicOrigin,
                 :createdAt
             )
             """, nativeQuery = true)
     int insertIfAbsent(
             @Param("idempotencyKeyHash") String idempotencyKeyHash,
             @Param("linkId") String linkId,
+            @Param("publicOrigin") String publicOrigin,
             @Param("createdAt") Instant createdAt
     );
 }

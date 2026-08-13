@@ -5,35 +5,32 @@
 
 ## 결정
 
-- 공개 코드는 별도 32자 이상 비밀과 canonical UUID 멱등성 키를 HMAC-SHA-256으로
-  결합하고 앞 16 byte를 Base64 URL-safe no-padding으로 표현한다. 기존 DB-key 결합과
-  복구 호환성을 위해 길이 외의 문법을 추가 제한하거나 trim·Unicode 정규화하지 않고
+- 공개 코드는 별도 32자 이상 비밀값과 정규 UUID 멱등성 키를 HMAC-SHA-256으로
+  결합하고 앞 16바이트를 패딩 없는 Base64 URL-safe 형식으로 표현한다. 기존 DB-키 결합과
+  복원 호환성을 위해 길이 외의 문법을 추가 제한하거나 공백 제거·Unicode 정규화하지 않고
   설정 문자열 그대로 사용한다.
-- DB에는 원문 코드가 아니라 SHA-256 lowercase hex 해시만 저장한다.
-- DB에는 원문 멱등성 키도 저장하지 않고 SHA-256 lowercase hex 해시만 저장한다.
+- DB에는 원문 코드가 아니라 SHA-256 소문자 16진수 해시만 저장한다.
+- DB에는 원문 멱등성 키도 저장하지 않고 SHA-256 소문자 16진수 해시만 저장한다.
 - 코드 입력은 정확한 URL-safe 형식과 길이를 검증한 뒤 해시한다.
-- 대상은 `BATON`, `ROUND` enum과 안전한 target path로 나눈다.
-- target path에는 scheme, authority, query, fragment, backslash, 제어문자와 `//` prefix를
+- 대상은 `BATON`, `ROUND` 열거형과 안전한 대상 경로로 나눈다.
+- 대상 경로에는 URI 스킴, 권한부, 쿼리, 프래그먼트, 역슬래시, 제어문자와 `//` 접두사를
   허용하지 않는다.
-- 공개 base URL과 target base URL은 환경 설정으로만 제공하고 경로·query·fragment·userinfo가
-  없는 HTTP 또는 HTTPS origin이어야 한다. HTTP는 `localhost`, canonical `127.0.0.0/8`
-  IPv4 literal과 IPv6 loopback literal에만 허용하며 비로컬 origin은 HTTPS를 강제한다.
+- 공개 기본 URL과 대상 기본 URL은 환경 설정으로만 제공하고 경로·쿼리·프래그먼트·사용자 정보가
+  없는 HTTP 또는 HTTPS 출처여야 한다. HTTP는 `localhost`, 정규 `127.0.0.0/8`
+  IPv4 리터럴과 IPv6 루프백 리터럴에만 허용하며 비로컬 출처는 HTTPS를 강제한다.
 - 리다이렉트 응답은 `no-store`와 `no-referrer`를 사용한다.
-- 관리 API는 공백 없는 printable ASCII로 구성한 최소 32자의 환경 변수 Bearer credential로
-  보호한다. 이 자격은 파일럿용 서비스 인증이며 최종 사용자 신원 모델이 아니다.
-- credential이 담긴 Compose dotenv는 Compose parser가 읽는 데이터 파일로만 취급하고 셸에서
-  `source`하지 않는다. 호스트 실행은 secret manager나 IDE가 process environment에 직접
-  주입해 parser 변환이나 셸 확장 없이 설정 문자열을 보존한다.
-- HMAC 비밀, 관리 credential과 DB password는 Spring placeholder가 다시 해석하지 않는 raw
-  process environment 경계에서 읽는다. `${...}`, backslash와 공백을 포함한 값도 각 credential
-  자체의 문법 검증 전까지 원문 바이트를 보존하며 서버와 guard-tool이 같은 값을 사용한다.
-  해당 process environment 값이 존재하면 command line, JVM system property와
-  `SPRING_APPLICATION_JSON`의 동일 canonical property보다 우선한다.
-- raw 보존 경계는 Compose dotenv parsing 이후의 process environment다. dotenv 값 자체에
-  literal `${...}`가 필요하면 single-quoted value로 interpolation을 막고, server와 guard-tool에
-  동일한 parsing 결과를 주입한다.
-- token, access key와 전체 Authorization 값을 로그에 기록하지 않는다.
-- 멱등성 키, 링크 코드 파생 비밀과 전체 short URL을 로그에 기록하지 않는다.
+- 관리 API는 공백 없는 출력 가능 ASCII로 구성한 최소 32자의 환경 변수 Bearer 자격 증명으로
+  보호한다. 이 자격 증명은 시험 운영용 서비스 인증이며 최종 사용자 신원 모델이 아니다.
+- 자격 증명이 담긴 Compose dotenv는 Compose 파서가 읽는 데이터 파일로만 취급하고 셸에서
+  `source`하지 않는다. 호스트 실행은 비밀값 관리자나 IDE가 프로세스 환경에 직접
+  주입해 파서 변환이나 셸 확장 없이 설정 문자열을 보존한다.
+- 외부 설정은 Spring Boot의 표준 속성 원본 우선순위와 바인딩을 사용한다. 자격 증명은
+  base64url 또는 16진수처럼 셸, dotenv와 자리표시자 문법에 걸리지 않는 알파벳으로 생성해
+  파서별 원문 보존을 위한 별도 속성 원본을 두지 않는다.
+- 서버와 `guard-tool`에는 같은 비밀값 관리자 버전을 주입한다. Compose dotenv는 데이터
+  파일로만 취급하고 셸에서 `source`하지 않는다.
+- 토큰, 접근 키와 전체 Authorization 값을 로그에 기록하지 않는다.
+- 멱등성 키, 링크 코드 파생 비밀값과 전체 단축 URL을 로그에 기록하지 않는다.
 
 ## 시간 경계
 
@@ -42,13 +39,13 @@
 - `expiresAt`은 생성 시각과 `notBefore`보다 뒤여야 한다.
 - 폐기는 멱등이며 최초 폐기 시각을 보존한다.
 
-## 인증된 admission과 향후 redemption
+## 인증된 입장 승인과 향후 일회성 사용
 
-초대·회의 입장은 공개 `GET` 리다이렉트와 분리한다. `GET`은 landing 또는 resolution만
-수행한다. BATON v1 navigation은 기존 access key를 보유한 브라우저의 복귀만 지원하며
-session이나 claim을 새로 발급하지 않는다. ROUND participation grant만 BATON의 인증된
-`POST`에서 발급한다. 선행 `GET /api/v1/auth/session`은 기존 session과 CSRF 상태 조회다.
+초대·회의 입장은 공개 `GET` 리다이렉트와 분리한다. `GET`은 진입 화면 표시 또는 대상 해석만
+수행한다. BATON v1 이동은 기존 접근 키를 보유한 브라우저의 복귀만 지원하며
+세션이나 권리 증명을 새로 발급하지 않는다. ROUND 참여 허가는 BATON의 인증된
+`POST`에서만 발급한다. 선행 `GET /api/v1/auth/session`은 기존 세션과 CSRF 상태 조회다.
 
-PRD-0003의 현재 ROUND 계약은 BATON session·CSRF 뒤 갱신하는 짧은 수명의 participation
-grant이며 one-time 사용을 보장하지 않는다. 진정한 일회성 redemption이 필요하면 원자적
+PRD-0003의 현재 ROUND 계약은 BATON 세션·CSRF 뒤 갱신하는 짧은 수명의 참여
+허가이며 일회성 사용을 보장하지 않는다. 진정한 일회성 사용이 필요하면 원자적
 소비 저장소와 별도 인증 `POST` 계약을 추가한다.

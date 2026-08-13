@@ -1,95 +1,93 @@
-# HANDOFF
+# 인수인계
 
-- BATON GO의 정책형 링크 생성·해석·폐기와 원격 생성 idempotency를 완료했다.
-- 생성 승자는 canonical 공개 origin을 멱등 예약에 저장한다. origin 설정이 바뀐 뒤의 재시도도
-  저장 origin과 동일 공개 코드를 사용해 최초 short URL을 정확히 반환한다. V5 이전 예약처럼
-  origin 증거가 없거나 저장값이 비canonical이면 현재 설정으로 추정하지 않고
-  `500 PUBLIC_LINK_ORIGIN_REPLAY_UNAVAILABLE`로 fail-closed 한다.
-- 멱등 재생 시 현재 HMAC 파생 결과를 저장된 코드 해시와 대조하며, 파생 비밀 변경으로
-  기존 short URL을 재생할 수 없으면 잘못된 URL 대신
+- BATON GO의 정책형 링크 생성·해석·폐기와 원격 생성 멱등성을 완료했다.
+- 생성에 성공한 요청은 정규 공개 출처를 멱등 예약에 저장한다. 출처 설정이 바뀐 뒤의 재시도도
+  저장된 출처와 동일한 공개 코드를 사용해 최초 단축 URL을 정확히 반환한다. V5 이전 예약처럼
+  출처 증거가 없거나 저장값이 비정규이면 현재 설정으로 추정하지 않고
+  `500 PUBLIC_LINK_ORIGIN_REPLAY_UNAVAILABLE`로 안전하게 차단한다.
+- 멱등 재생 시 현재 HMAC 파생 결과를 저장된 코드 해시와 대조하며, 파생 비밀값 변경으로
+  기존 단축 URL을 재생할 수 없으면 잘못된 URL 대신
   `500 LINK_CODE_REPLAY_UNAVAILABLE`로 실패한다.
-- 신규 생성은 lowercase UUID v1..5/RFC variant와 Java/JDBC 안전 저장 범위의 마이크로초 payload만
-  허용한다. 과거 배포가 허용했던 canonical 대문자·기타 UUID와 범위 안 나노초 payload는
-  동일 키의 기존 예약과 저장 payload가 일치할 때만 replay-only로 처리한다. 기존 예약이
+- 신규 생성은 소문자 UUID v1..5/RFC 변형과 Java/JDBC 안전 저장 범위의 마이크로초 요청 내용만
+  허용한다. 과거 배포가 허용했던 정규 대문자·기타 UUID와 범위 안 나노초 요청 내용은
+  동일 키의 기존 예약과 저장 내용이 일치할 때만 재생 전용으로 처리한다. 기존 예약이
   없으면 안정된 `400`이며 예약·링크 행을 새로 만들지 않고, 범위 밖 시각은 항상 거부한다.
-- 신규 JSON wire 입력은 enum 이름과 UTC `Instant` 문자열 및 정수 `expectedVersion`을 exact
-  token으로 검증한다. enum ordinal·숫자 문자열, timestamp 숫자·leap second, version 문자열·
-  소수·지수 표기는 coercion하지 않고 저장·폐기 전에 `400`으로 거부한다.
-- remediation `expectedVersion`은 다음 BIGINT version으로 증가할 수 있는
+- 신규 JSON 전송 입력은 열거형 이름과 UTC `Instant` 문자열 및 정수 `expectedVersion`을 정확한
+  토큰으로 검증한다. 열거형 순번·숫자 문자열, 타임스탬프 숫자·윤초, 버전 문자열·
+  소수·지수 표기는 강제 변환하지 않고 저장·폐기 전에 `400`으로 거부한다.
+- 정리 작업의 `expectedVersion`은 다음 BIGINT 버전으로 증가할 수 있는
   `0..9223372036854775806`만 허용하고 최대 long 값은 행 잠금 전에 `400`으로 거부한다.
-- 링크 코드 HMAC 파생 version·fingerprint를 `link_code_key_guard` singleton에 결합한다.
+- 링크 코드 HMAC 파생 버전·지문을 `link_code_key_guard` 단일 행에 결합한다.
   시작 시점과 생성 예약 전에 검증하며, 링크와 예약이 모두 빈 DB만 자동 결합한다. 기존
-  데이터가 있는 미결합 DB나 다른 identity는 secret·fingerprint를 노출하지 않고 fail-closed
-  한다. 재생 code hash 검증은 방어 계층으로 유지한다.
-- DB backup과 해당 HMAC secret-manager version은 하나의 복구 단위다. 기존 데이터가 있는
-  DB에 guard를 처음 도입할 때는 writer를 중지하고 기존 secret 및 canary를 검증한 뒤
-  전용 `guard-tool` 모듈의 `baton-go-guard-binding.jar`로 singleton을 결합한다. 도구는
-  canary를 stdin으로만 받고 예약·링크 hash 일치를 확인한 뒤 한 transaction에서 결합한다.
-  서버의 웹 서버·Hibernate/Spring Data JPA·Actuator runtime과 분리되어 있으며 key ring
-  전에는 secret을 회전하지 않는다.
-- Private Kubernetes 배포는 Kustomize base/overlay로 구성했다. GO 전용 MySQL StatefulSet,
-  `baton_go` database user, DB/runtime Secret과 10Gi `ReadWriteOnce` PVC를 사용하며 BATON의
-  MySQL instance·계정·volume을 공유하지 않는다. StorageClass와 Ingress는 환경에 맡기고,
-  namespace bootstrap은 workload overlay에서 분리해 PVC 연쇄 삭제 위험을 줄였다.
-- MySQL은 data PVC를 mount하지 않는 non-root preflight initContainer에서 계정·password 문법과
-  분리, TLS 권한·certificate/key·`baton-go-mysql` SAN·CA, runtime-user init script 구조를 먼저
-  검증한다. 공식 image가 system schema 생성 뒤 실패한 partial PVC를 자동 복구한다고 보지 않으며,
-  PVC 재생성은 데이터가 없다고 확인한 최초 rollout만 허용하고 그 외에는 backup 뒤 account를
-  수동 복구한다.
-- database migration Job은 최소 context에서 Flyway `LATEST` target만 명시적으로 실행하고
-  resolved migration 존재, pending 0건과 history validation을 검증한다. 다른 target,
-  SQL 실행 생략·baseline·선택 적용, migration 이름 또는 migration 전 validation 비활성화,
-  기존 baseline state와 Flyway 비활성화·bean 누락은 context 시작 성공으로 오인하지 않고
-  non-zero로 fail-closed 한다.
-- Kubernetes의 `8080` HTTP Service에는 public `/l` Prefix와 private `/api/v1` Prefix가 함께
-  있으므로 edge에서 두 경로를 분리해야 한다. Actuator `8081`은 Service·Ingress로 기본
-  노출하지 않고 kubelet probe와 제한된 운영 접근에만 사용한다.
-- 서버와 guard-tool은 HMAC 비밀을 placeholder 해석 없는 process environment 원문으로 읽는다.
-  관리 credential과 DB password도 같은 raw 환경 경계를 사용하므로 `${...}`, backslash와
-  공백이 설정 계층에서 치환되지 않는다.
-- MySQL Testcontainers가 동시 동일 요청을 링크·예약 각 한 건으로 직렬화하고, 최초 owner
-  rollback 때 발생할 수 있는 deadlock victim도 동일 키 재시도로 복구되는지 검증한다.
-- 관리 Bearer 인증은 scheme 대소문자를 구분하지 않으며, `401`에는
+  데이터가 있는 미결합 DB나 다른 식별값은 비밀값·지문을 노출하지 않고 안전하게 차단한다.
+  재생 코드 해시 검증은 방어 계층으로 유지한다.
+- DB 백업과 해당 HMAC 비밀값 관리 버전은 하나의 복구 단위다. 기존 데이터가 있는
+  DB에 보호 장치를 처음 도입할 때는 쓰기 작업을 중지하고 기존 비밀값 및 카나리를 검증한 뒤
+  전용 `guard-tool` 모듈의 `baton-go-guard-binding.jar`로 단일 행을 결합한다. 도구는
+  카나리를 표준 입력으로만 받고 예약·링크 해시 일치를 확인한 뒤 한 트랜잭션에서 결합한다.
+  서버의 웹 서버·Hibernate/Spring Data JPA·Actuator 실행 환경과 분리되어 있으며 키 묶음
+  도입 전에는 비밀값을 회전하지 않는다.
+- 비공개 Kubernetes 배포는 Kustomize 기본 구성과 오버레이로 구성했다. GO 전용 MySQL StatefulSet,
+  `baton_go` 데이터베이스 사용자, DB/실행 환경 Secret과 10Gi `ReadWriteOnce` PVC를 사용하며 BATON의
+  MySQL 인스턴스·계정·볼륨을 공유하지 않는다. StorageClass와 Ingress는 환경에 맡기고,
+  네임스페이스 초기 구성은 워크로드 오버레이에서 분리해 PVC 연쇄 삭제 위험을 줄였다.
+- MySQL은 공식 진입점과 Kustomize가 생성한 실행 사용자 초기화 스크립트를 사용한다. TLS는
+  `mysqld` 시작과 실행 계정 TCP 탐침, Connector/J `VERIFY_IDENTITY` 통합 검증에 맡긴다.
+  공식 이미지가 초기화 도중 만든 불완전한 PVC를 자동 복구한다고 보지 않으며, PVC 재생성은
+  데이터가 없다고 확인한 최초 배포만 허용하고 그 외에는 백업 뒤 계정을 수동 복구한다.
+- 데이터베이스 마이그레이션 Job은 컴포넌트 스캔 없는 최소 컨텍스트에서 Spring Boot의 표준
+  `FlywayMigrationInitializer`를 실행한다. Flyway 마이그레이션 또는 검증 예외는 컨텍스트
+  시작 실패와 Job의 0이 아닌 종료 코드로 전파되며, Flyway가 비활성화되어 빈이 없을 때도 성공으로
+  종료하지 않는다.
+- Kubernetes의 `8080` HTTP Service에는 공개 `/l` 접두 경로와 비공개 `/api/v1` 접두 경로가 함께
+  있으므로 경계에서 두 경로를 분리해야 한다. Actuator `8081`은 Service·Ingress로 기본
+  노출하지 않고 kubelet 탐침과 제한된 운영 접근에만 사용한다.
+- 서버는 Spring Boot 표준 외부 설정 우선순위를 사용한다. 새 자격 증명은 base64url/hex처럼
+  dotenv·셸·자리 표시자 문법과 충돌하지 않는 문자 집합으로 생성하고, HMAC 비밀값은 서버와
+  `guard-tool`에 동일한 비밀값 관리 버전으로 주입한다.
+- MySQL Testcontainers가 동시 동일 요청을 링크·예약 각 한 건으로 직렬화하고, 최초 소유자
+  롤백 때 발생할 수 있는 교착 상태 희생 요청도 동일 키 재시도로 복구되는지 검증한다.
+- 관리 Bearer 인증은 스킴 대소문자를 구분하지 않으며, `401`에는
   `WWW-Authenticate: Bearer realm="baton-go-management"`를 반환한다. 생성·재생 응답은
   물론 관리 조회·폐기 성공도 `Cache-Control: no-store`와 `Referrer-Policy: no-referrer`를
   반환한다.
-- 공개 resolver는 DB 조회 전에 인스턴스 aggregate rate-limit backstop을 적용한다.
-  client IP와 전달 헤더를 신뢰하지 않으며, 다중 replica 합산 제한은 ingress가 소유한다.
-- PRD-0003과 ADR-0005에서 v1 교차 서비스 target을 typed locator로 확정했다. 허용 조합은
+- 공개 해석기는 DB 조회 전에 인스턴스 집계 요청률 제한 안전장치를 적용한다.
+  클라이언트 IP와 전달 헤더를 신뢰하지 않으며, 다중 복제본 합산 제한은 Ingress가 소유한다.
+- PRD-0003과 ADR-0005에서 v1 교차 서비스 대상을 형식화한 위치 식별자로 확정했다. 허용 조합은
   `BATON + NAVIGATION + /teams/{teamId}/seasons/{seasonId}`와
   `ROUND + MEETING_ENTRY + /room/{roomId}`뿐이며 `RESOURCE_OPEN`은 예약 상태다.
-- GO는 이 exact 조합을 생성과 resolution 양쪽에서 강제한다. 알려진 값으로 만든 비허용 생성은
-  링크와 예약을 쓰기 전에 `400 INVALID_LINK`로 거부한다. resolver는 raw 문자열 projection으로
-  저장 target을 읽어 비허용 조합과 알 수 없는 enum 모두 `GET·HEAD`에서 Location 없는
+- GO는 이 정확한 조합을 생성과 해석 양쪽에서 강제한다. 알려진 값으로 만든 비허용 생성은
+  링크와 예약을 쓰기 전에 `400 INVALID_LINK`로 거부한다. 해석기는 원문 문자열 투영으로
+  저장 대상을 읽어 비허용 조합과 알 수 없는 열거형 모두 `GET·HEAD`에서 `Location` 없는
   `404 LINK_NOT_FOUND`로 숨긴다.
-- 저장 target 계약 위반은
-  `baton.go.public.resolver.target.contract.violations` metric으로 집계하고 linkId와 requestId만
-  포함한 안전한 로그를 남긴다. 공개 코드, target path와 전체 short URL은 기록하지 않는다.
-- BATON locator는 기존 access key를 이미 보유한 브라우저의 workspace 복귀만 지원한다.
-  신규 브라우저 초대·권한 부여는 BATON account/claim landing 전까지 지원하지 않는다.
-- ROUND의 현재 권한 모델은 one-time ticket이 아니라 BATON session·CSRF 뒤 HttpOnly cookie로
-  갱신하는 짧은 수명의 participation grant다. ROUND browser/signaling 쪽 검증은 있으나
-  BATON session·grant 발급 endpoint와 edge routing은 아직 연결되지 않았다.
-- BATON mode에서 GO의 BATON·ROUND target origin은 같은 BATON public HTTPS origin이어야 한다.
-  두 target이 모두 loopback인 로컬 개발만 서로 다른 HTTP port를 허용하고, 그 외 설정은
-  같은 HTTPS origin이 아니면 시작 단계에서 거부한다.
-  loopback은 `localhost`, 선행 0이 없는 canonical dotted-decimal IPv4 `127.0.0.0/8`과
-  IPv6 loopback literal로 판정하고 명시적 origin port는 `1..65535`만 허용한다.
-  BATON은 room별 one-to-one active resource mapping과 영구 tombstone을 소유하며 v1 grant는
+- 저장 대상 계약 위반은
+  `baton.go.public.resolver.target.contract.violations` 지표로 집계하고 `linkId`와 `requestId`만
+  포함한 안전한 로그를 남긴다. 공개 코드, 대상 경로와 전체 단축 URL은 기록하지 않는다.
+- BATON 위치 식별자는 기존 접근 키를 이미 보유한 브라우저의 작업 공간 복귀만 지원한다.
+  신규 브라우저 초대·권한 부여는 BATON 계정/초대 claim 진입 화면을 마련하기 전까지 지원하지 않는다.
+- ROUND의 현재 권한 모델은 일회성 티켓이 아니라 BATON 세션·CSRF 확인 뒤 HttpOnly 쿠키로
+  갱신하는 짧은 수명의 참여 허가다. ROUND 브라우저/시그널링 쪽 검증은 있으나
+  BATON 세션·허가 발급 엔드포인트와 경계 라우팅은 아직 연결되지 않았다.
+- BATON 모드에서 GO의 BATON·ROUND 대상 출처는 같은 BATON 공개 HTTPS 출처여야 한다.
+  두 대상이 모두 루프백인 로컬 개발만 서로 다른 HTTP 포트를 허용하고, 그 외 설정은
+  같은 HTTPS 출처가 아니면 시작 단계에서 거부한다.
+  루프백은 `localhost`, 선행 0이 없는 정규 점-십진 표기 IPv4 `127.0.0.0/8`과
+  IPv6 루프백 리터럴로 판정하고 명시적 출처 포트는 `1..65535`만 허용한다.
+  BATON은 방별 일대일 활성 리소스 연결과 영구 삭제 표식을 소유하며 v1 허가는
   `study_id=teamId`, `role=participant`로 제한한다.
-- 공개 production rollout은 아직 승인되지 않았다. 다음 우선순위는 계약 전 저장 데이터를
-  배포 DB에서 inventory해 비허용 링크를 폐기·재발급하고, PRD-0003의 나머지 gate를 연결하는
-  것이다. 이후 REST Docs/OpenAPI, edge/distributed rate limit, access-log 코드 마스킹과 운영
+- 공개 운영 배포는 아직 승인되지 않았다. 다음 우선순위는 계약 전 저장 데이터를
+  배포 DB에서 조사해 비허용 링크를 폐기·재발급하고, PRD-0003의 나머지 관문을 연결하는
+  것이다. 이후 REST Docs/OpenAPI, 경계/분산 요청률 제한, 접근 로그 코드 가림과 운영
   배포를 연결한다.
-- 계약 전 데이터 정리는 ADR-0006의 승인형 흐름을 따른다. 기본 비활성화된 operations API는
-  raw target을 응답하지 않고 모든 행의 compliance, 폐기 상태, 예약 존재 여부와 DB version만
-  keyset pagination으로 제공한다. 자동 bulk revoke는 없으며 승인된 non-compliant link ID만
-  raw row lock과 version 재검증 뒤 멱등 폐기한다.
-- operations는 enable과 private-ingress-confirmed가 모두 true일 때만 등록한다. 두 번째 flag는
-  public edge 차단 preflight evidence 뒤에만 설정하며 실제 network boundary를 대신하지 않는다.
-- GO는 legacy target을 교정해 재발급하지 않는다. 원본 BATON/ROUND owner가 authoritative
-  mapping과 새 intent UUID로 정상 생성한 뒤 이전 링크를 폐기한다. 실제 배포 DB 전체 재스캔과
-  `unrevoked non-compliant=0`, 미승인 `HOLD=0` 증거 전에는 inventory gate를 완료 처리하지 않는다.
-- BATON과 ROUND 저장소에는 이번에도 통합 코드를 추가하지 않았다. 두 저장소는 실제 route와
+- 계약 전 데이터 정리는 ADR-0006의 승인형 흐름을 따른다. 기본 비활성화된 운영 API는
+  원문 대상을 응답하지 않고 모든 행의 준수 여부, 폐기 상태, 예약 존재 여부와 DB 버전만
+  키셋 페이지 방식으로 제공한다. 자동 일괄 폐기는 없으며 승인된 비준수 링크 ID만
+  원문 행 잠금과 버전 재검증 뒤 멱등 폐기한다.
+- 운영 기능은 활성화 값과 비공개 Ingress 확인 값이 모두 `true`일 때만 등록한다. 두 번째 표시는
+  공개 경계 차단 사전 점검 증거를 확인한 뒤에만 설정하며 실제 네트워크 경계를 대신하지 않는다.
+- GO는 이전 형식 대상을 교정해 재발급하지 않는다. 원본 BATON/ROUND 소유자가 권위 있는
+  연결 정보와 새 의도 UUID로 정상 생성한 뒤 이전 링크를 폐기한다. 실제 배포 DB 전체 재검사와
+  `unrevoked non-compliant=0`, 미승인 `HOLD=0` 증거 전에는 조사 관문을 완료 처리하지 않는다.
+- BATON과 ROUND 저장소에는 이번에도 통합 코드를 추가하지 않았다. 두 저장소는 실제 경로와
   권한 경계를 읽기 전용으로 확인했다.
-- 계정 기반 사용자·역할 권한은 BATON P3 identity 이전에 구현된 것으로 주장하지 않는다.
+- 계정 기반 사용자·역할 권한은 BATON P3 식별 체계 이전에 구현된 것으로 주장하지 않는다.

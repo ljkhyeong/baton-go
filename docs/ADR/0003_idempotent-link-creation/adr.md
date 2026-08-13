@@ -7,54 +7,54 @@
 
 BATON과 ROUND가 링크를 원격 생성할 때 서버는 저장을 완료했지만 응답이 유실될 수 있다.
 기존 무작위 발급을 그대로 재시도하면 여러 링크가 생기고, DB에 원문 코드를 저장하지
-않으므로 최초 short URL을 복구할 수도 없다.
+않으므로 최초 단축 URL을 복구할 수도 없다.
 
 ## 결정
 
-- `POST /api/v1/links`는 생성 intent마다 lowercase canonical UUID `Idempotency-Key`를 요구한다.
-  UUID version은 `1..5`, variant는 RFC variant만 허용하며 대문자나 nil UUID를 정규화하지
+- `POST /api/v1/links`는 생성 의도마다 소문자 정규 UUID `Idempotency-Key`를 요구한다.
+  UUID 버전은 `1..5`, 변형은 RFC 변형만 허용하며 대문자나 nil UUID를 정규화하지
   않는다.
-- 과거 배포에서 이미 성공한 intent의 재생 보장을 지키기 위해 당시 UUID 파서가 허용한
-  canonical 대문자, nil, version `0`·`6..f`, non-RFC variant는 replay-only 후보로
-  lowercase 정규화한다. 해당 키 해시의 기존 예약이 있을 때만 payload와 코드 해시를
+- 과거 배포에서 이미 성공한 생성 의도의 재생 보장을 지키기 위해 당시 UUID 파서가 허용한
+  정규 대문자, nil, 버전 `0`·`6..f`, 비 RFC 변형은 재생 전용 후보로
+  소문자 정규화한다. 해당 키 해시의 기존 예약이 있을 때만 요청 내용과 코드 해시를
   검증해 재생하고, 예약이 없으면 `400 INVALID_IDEMPOTENCY_KEY`로 거부한다. 이 경로는
   `INSERT IGNORE`나 링크 저장을 호출하지 않는다.
-- 관리 credential과 분리된 `BATON_GO_LINK_CODE_SECRET`을 사용한다.
+- 관리 자격 증명과 분리된 `BATON_GO_LINK_CODE_SECRET`을 사용한다.
 - 공개 코드는
   `first16(HMAC-SHA-256(secret, "baton-go-link-code:v1\0" + idempotencyKey))`로 파생한다.
 - DB에는 공개 코드와 멱등성 키의 SHA-256 해시만 저장한다.
 - `link_creation_requests`가 멱등성 키 해시와 링크 ID를 연결한다.
-- `link_creation_requests`는 생성 승자가 사용한 canonical 공개 origin도 함께 저장한다.
-  재생은 현재 설정이 아니라 저장 origin과 다시 파생한 공개 코드를 결합해 최초 short URL을
-  정확히 복원한다. 저장 origin을 증명할 수 없으면 현재 origin으로 추정하지 않고 fail-closed
+- `link_creation_requests`는 생성 승자가 사용한 정규 공개 출처도 함께 저장한다.
+  재생은 현재 설정이 아니라 저장 출처와 다시 파생한 공개 코드를 결합해 최초 단축 URL을
+  정확히 복원한다. 저장 출처를 증명할 수 없으면 현재 출처로 추정하지 않고 안전 차단
   하며 세부 결정은 ADR-0009를 따른다.
-- MySQL `INSERT IGNORE`의 unique-key 대기를 승자 선택 경계로 사용한다. 중복 insert가
-  반환된 뒤에는 승자 transaction이 커밋되었으므로 일반 조회로 완성된 링크를 읽는다.
-- 같은 키와 payload는 동일 URL을 재생하고 같은 키의 다른 payload는 `409`로 거부한다.
-- 생성 payload의 `notBefore`와 `expiresAt`은 마이크로초 단위로 정확히 표현되고 Java/JDBC가
-  proleptic Gregorian `Instant`를 MySQL `DATETIME(6)` raw 값과 동일하게 보존하는
+- MySQL `INSERT IGNORE`의 고유 키 대기를 승자 선택 경계로 사용한다. 중복 삽입이
+  반환된 뒤에는 승자 트랜잭션이 커밋되었으므로 일반 조회로 완성된 링크를 읽는다.
+- 같은 키와 요청 내용은 동일 URL을 재생하고 같은 키의 다른 요청 내용은 `409`로 거부한다.
+- 생성 요청의 `notBefore`와 `expiresAt`은 마이크로초 단위로 정확히 표현되고 Java/JDBC가
+  역산 그레고리력 `Instant`를 MySQL `DATETIME(6)` 원시 값과 동일하게 보존하는
   `1582-10-15T00:00:00Z` 이상
   `9999-12-31T23:59:59.999999Z` 이하인 값만 받는다. 더 세밀하거나 범위 밖인 값을 DB
-  정밀도·범위에 맞춰 절삭하거나 보정하면 서로 다른 요청이 같은 replay payload로 합쳐질 수
+  정밀도·범위에 맞춰 절삭하거나 보정하면 서로 다른 요청이 같은 재생 요청 내용으로 합쳐질 수
   있으므로 링크 생성 예약·저장 전에 `400 INVALID_REQUEST`로 거부한다.
 - 과거 배포가 지원 저장 범위 안의 더 세밀한 입력을 마이크로초로 절삭해 이미 저장한
-  intent만 replay-only로 호환한다. 기존 예약을 먼저 조회하고 같은 마이크로초 절삭 payload가
+  생성 의도만 재생 전용으로 호환한다. 기존 예약을 먼저 조회하고 같은 마이크로초 절삭 요청 내용이
   저장값과 일치할 때만 재생한다. 예약이 없으면 새 행 없이 `400 INVALID_REQUEST`, 범위 밖이면
   예약 여부와 무관하게 `400 INVALID_REQUEST`다.
-- 재생 응답은 최초 snapshot이 아니라 링크의 현재 폐기 상태를 반환한다.
+- 재생 응답은 최초 스냅샷이 아니라 링크의 현재 폐기 상태를 반환한다.
 
 ## 트랜잭션 경계
 
-예약 생성, 링크 생성과 저장은 하나의 transaction에서 수행한다. 승자 transaction이
-rollback되면 예약 행도 함께 사라져 대기 중인 요청 하나가 새 승자가 된다.
+예약 생성, 링크 생성과 저장은 하나의 트랜잭션에서 수행한다. 승자 트랜잭션이
+롤백되면 예약 행도 함께 사라져 대기 중인 요청 하나가 새 승자가 된다.
 
-과거 UUID 또는 나노초 정밀도 호환 요청은 쓰기 transaction의 승자 선택 경계에 들어가지
-않는다. 기존 예약을 읽은 뒤 raw replay projection, canonical target, 마이크로초 payload와
+과거 UUID 또는 나노초 정밀도 호환 요청은 쓰기 트랜잭션의 승자 선택 경계에 들어가지
+않는다. 기존 예약을 읽은 뒤 원시 재생 조회 결과, 정규 대상, 마이크로초 요청 내용과
 현재 HMAC 코드 해시가 모두 일치할 때만 기존 응답을 재생한다.
 
-승자 rollback 시 동일 unique key를 기다리던 나머지 transaction 일부는 MySQL의 deadlock
-victim으로 선택될 수 있다. 이 실패는 transaction 전체를 rollback한 뒤 호출자가 동일한
-멱등성 키와 payload로 재시도한다. 새 승자가 저장한 링크가 있으면 재시도는 그 링크를
+승자 롤백 시 동일 고유 키를 기다리던 나머지 트랜잭션 일부는 MySQL의 교착 상태
+희생자로 선택될 수 있다. 이 실패는 트랜잭션 전체를 롤백한 뒤 호출자가 동일한
+멱등성 키와 요청 내용으로 재시도한다. 새 승자가 저장한 링크가 있으면 재시도는 그 링크를
 재생한다.
 
 `INSERT IGNORE` 뒤에 패자들이 `SELECT ... FOR UPDATE`로 잠금을 승격하면 교착이 발생할 수
@@ -63,13 +63,13 @@ victim으로 선택될 수 있다. 이 실패는 transaction 전체를 rollback�
 
 ## 운영 결과
 
-- 서비스 재시작, replica 변경과 DB 복구 뒤에도 같은 비밀을 사용해야 같은 URL을 재생한다.
-- key ring과 key version을 도입하기 전에는 링크 코드 파생 비밀을 회전하지 않는다.
-- ADR-0004에 따라 시작 시점과 신규 생성 예약 전에 HMAC 파생 version·fingerprint를 DB의
-  singleton identity와 대조한다. 빈 DB만 자동 결합하며 기존 데이터가 있는 미결합 DB와
-  identity 불일치는 fail-closed 한다.
+- 서비스 재시작, 복제본 변경과 DB 복구 뒤에도 같은 비밀값을 사용해야 같은 URL을 재생한다.
+- 키 묶음과 키 버전을 도입하기 전에는 링크 코드 파생 비밀값을 회전하지 않는다.
+- ADR-0004에 따라 시작 시점과 신규 생성 예약 전에 HMAC 파생 버전·지문을 DB의
+  단일 식별 정보와 대조한다. 빈 DB만 자동 결합하며 기존 데이터가 있는 미결합 DB와
+  식별 정보 불일치는 안전 차단한다.
 - 재생 시 현재 파생한 코드 해시가 저장값과 다르면 동작하지 않는 URL을 반환하지 않고
   설정 불일치로 실패한다. 이 검증은 DB-key 결합 이후에도 방어 계층으로 유지한다.
-- BATON과 ROUND는 원본 aggregate commit 뒤 GO를 호출하고 생성 intent UUID를 outbox 또는
+- BATON과 ROUND는 원본 애그리게이트 커밋 뒤 GO를 호출하고 생성 의도 UUID를 아웃박스 또는
   소유 상태에 보존한다.
-- 관리 credential과 파생 비밀을 공유하지 않고 둘 다 로그와 URL에 넣지 않는다.
+- 관리 자격 증명과 파생 비밀값을 공유하지 않고 둘 다 로그와 URL에 넣지 않는다.

@@ -18,15 +18,13 @@ spec:
             matchLabels:
               baton-go.networking/allow-http: "true"
       ports:
-        - protocol: TCP
-          port: 8080
+        - port: 8080
     - from:
         - namespaceSelector:
             matchLabels:
               baton-go.networking/allow-actuator: "true"
           podSelector:
-            matchLabels:
-              baton-go.networking/actuator-client: "true"
+              matchLabels:
+                baton-go.networking/actuator-client: "true"
       ports:
-        - protocol: TCP
-          port: 8081
+        - port: 8081

@@ -6,7 +6,6 @@ metadata:
     app.kubernetes.io/name: baton-go
     app.kubernetes.io/component: application
 spec:
-  type: ClusterIP
   selector:
     app.kubernetes.io/name: baton-go
     app.kubernetes.io/component: application
@@ -14,5 +13,4 @@ spec:
     - name: http
       port: 8080
       targetPort: http
-      protocol: TCP
       appProtocol: http

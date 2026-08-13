@@ -16,7 +16,6 @@ images:
     newName: registry.invalid/baton-go
     newTag: replace-with-immutable-release
   - name: mysql
-    newName: mysql
     digest: sha256:8dbcf531a03aade657e181b9cf2f1d1803ce621a1d55610cb44cb531ab7d7db6
 
 patches:

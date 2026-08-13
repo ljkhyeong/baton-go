@@ -23,5 +23,4 @@ spec:
               app.kubernetes.io/name: baton-go
               app.kubernetes.io/component: database-migration
       ports:
-        - protocol: TCP
-          port: 3306
+        - port: 3306

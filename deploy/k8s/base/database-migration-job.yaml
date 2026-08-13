@@ -15,7 +15,6 @@ spec:
         app.kubernetes.io/name: baton-go
         app.kubernetes.io/component: database-migration
     spec:
-      serviceAccountName: baton-go
       automountServiceAccountToken: false
       restartPolicy: OnFailure
       securityContext:

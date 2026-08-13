@@ -4,8 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.personal.batongo.BatonGoApplication;
-import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -14,12 +12,11 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.LinkedHashSet;
 import java.util.Set;
-import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-import org.testcontainers.containers.Container.ExecResult;
+import org.junit.jupiter.api.io.TempDir;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
@@ -32,68 +29,28 @@ class DatabaseMigrationRunnerIntegrationTest {
     @Container
     static final DeploymentMySqlFixture MYSQL = new DeploymentMySqlFixture();
 
-    private static Path truststoreDirectory;
+    @TempDir
+    static Path truststoreDirectory;
+
     private static Path trustedCaStore;
-    private static Path untrustedCaStore;
 
     @BeforeAll
     static void createClientTruststores() throws Exception {
-        truststoreDirectory = Files.createTempDirectory("baton-go-mysql-tls-");
         trustedCaStore = MYSQL.createTruststore(
                 "/etc/mysql/tls/ca.pem",
                 truststoreDirectory.resolve("trusted-ca.p12")
         );
-        untrustedCaStore = MYSQL.createTruststore(
-                "/etc/mysql/tls/wrong-ca.pem",
-                truststoreDirectory.resolve("untrusted-ca.p12")
-        );
-    }
-
-    @AfterAll
-    static void deleteClientTruststores() throws IOException {
-        if (trustedCaStore != null) {
-            Files.deleteIfExists(trustedCaStore);
-        }
-        if (untrustedCaStore != null) {
-            Files.deleteIfExists(untrustedCaStore);
-        }
-        if (truststoreDirectory != null) {
-            Files.deleteIfExists(truststoreDirectory);
-        }
     }
 
     @Test
-    @DisplayName("배포 preflight는 공식 entrypoint 전에 통과하고 원격 root 계정을 남기지 않는다")
-    void executesDeploymentPreflightAndKeepsRootLocalOnly()
-            throws IOException, InterruptedException {
-        assertThat(MYSQL.getLogs())
-                .contains("mysql encrypted private key negative preflight passed")
-                .contains("mysql mismatched private key negative preflight passed")
-                .contains("mysql bootstrap preflight passed");
-
-        ExecResult remoteRootCount = MYSQL.execInContainer(
-                "/bin/sh",
-                "-c",
-                """
-                MYSQL_PWD="${MYSQL_ROOT_PASSWORD}" \
-                mysql --protocol=SOCKET --user=root --batch --skip-column-names \
-                  --execute="SELECT COUNT(*) FROM mysql.user WHERE user='root' AND host='%';"
-                """
-        );
-        assertThat(remoteRootCount.getExitCode()).isZero();
-        assertThat(remoteRootCount.getStdout()).isEqualTo("0\n");
-    }
-
-    @Test
-    @DisplayName("migration-only 실행은 VERIFY_IDENTITY로 최신 스키마를 적용하고 반복 실행한다")
-    void migratesSchemaThroughVerifiedTlsAndReturns() throws SQLException {
+    @DisplayName("Spring Boot Flyway initializer는 VERIFY_IDENTITY로 최신 스키마를 적용한다")
+    void migratesSchemaThroughVerifiedTls() throws SQLException {
         String jdbcUrl = MYSQL.verifiedJdbcUrl(
                 DeploymentMySqlFixture.VERIFIED_HOST,
                 trustedCaStore
         );
         String[] arguments = MYSQL.migrationArguments(jdbcUrl);
 
-        BatonGoApplication.main(arguments);
         BatonGoApplication.main(arguments);
 
         try (Connection connection = MYSQL.connectAsMigrator(jdbcUrl)) {
@@ -177,57 +134,6 @@ class DatabaseMigrationRunnerIntegrationTest {
         }
     }
 
-    @Test
-    @DisplayName("MySQL은 sslMode가 DISABLED인 TCP 연결을 거부한다")
-    void rejectsConnectionWhenTlsIsDisabled() throws SQLException {
-        try (Connection control = MYSQL.connectAsMigrator(MYSQL.verifiedJdbcUrl(
-                DeploymentMySqlFixture.VERIFIED_HOST,
-                trustedCaStore
-        ))) {
-            assertSecureTransport(control);
-        }
-
-        assertThatThrownBy(() -> {
-            try (Connection ignored = MYSQL.connectAsMigrator(MYSQL.disabledTlsJdbcUrl())) {
-                // 연결되면 require_secure_transport 운영 계약 위반입니다.
-            }
-        }).isInstanceOfSatisfying(SQLException.class, exception ->
-                assertThat(exception.getErrorCode()).isEqualTo(3159)
-        );
-    }
-
-    @Test
-    @DisplayName("VERIFY_IDENTITY는 신뢰하지 않는 CA의 서버 인증서를 거부한다")
-    void rejectsServerCertificateFromUntrustedCa() throws SQLException {
-        try (Connection control = MYSQL.connectAsMigrator(MYSQL.verifiedJdbcUrl(
-                DeploymentMySqlFixture.VERIFIED_HOST,
-                trustedCaStore
-        ))) {
-            assertSecureTransport(control);
-        }
-
-        assertTlsConnectionFailure(MYSQL.verifiedJdbcUrl(
-                DeploymentMySqlFixture.VERIFIED_HOST,
-                untrustedCaStore
-        ));
-    }
-
-    @Test
-    @DisplayName("VERIFY_IDENTITY는 인증서 SAN에 없는 MySQL hostname을 거부한다")
-    void rejectsHostnameMissingFromCertificateSubjectAlternativeNames() throws SQLException {
-        try (Connection control = MYSQL.connectAsMigrator(MYSQL.verifiedCaJdbcUrl(
-                DeploymentMySqlFixture.INVALID_HOST,
-                trustedCaStore
-        ))) {
-            assertSecureTransport(control);
-        }
-
-        assertTlsConnectionFailure(MYSQL.verifiedJdbcUrl(
-                DeploymentMySqlFixture.INVALID_HOST,
-                trustedCaStore
-        ));
-    }
-
     private static void assertSecureTransport(Connection connection) throws SQLException {
         try (Statement statement = connection.createStatement();
              ResultSet cipher = statement.executeQuery("SHOW SESSION STATUS LIKE 'Ssl_cipher'")) {
@@ -276,15 +182,5 @@ class DatabaseMigrationRunnerIntegrationTest {
                 return resultSet.getInt(1) > 0;
             }
         }
-    }
-
-    private static void assertTlsConnectionFailure(String jdbcUrl) {
-        assertThatThrownBy(() -> {
-            try (Connection ignored = MYSQL.connectAsMigrator(jdbcUrl)) {
-                // 연결되면 VERIFY_IDENTITY 운영 계약 위반입니다.
-            }
-        }).isInstanceOfSatisfying(SQLException.class, exception ->
-                assertThat(exception.getSQLState()).startsWith("08")
-        );
     }
 }

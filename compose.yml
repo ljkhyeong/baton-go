@@ -34,7 +34,6 @@ services:
     image: ${BATON_GO_APP_IMAGE:-baton-go:local}
     build:
       context: .
-      dockerfile: Dockerfile
     restart: unless-stopped
     environment:
       BATON_GO_MANAGEMENT_TOKEN: ${BATON_GO_MANAGEMENT_TOKEN:?BATON_GO_MANAGEMENT_TOKEN is required}

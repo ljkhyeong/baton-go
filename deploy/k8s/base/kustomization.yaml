@@ -2,18 +2,16 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 configMapGenerator:
-  - name: baton-go-mysql-init-preflight
+  - name: baton-go-mysql-runtime-user-init
     files:
-      - mysql-init-preflight.sh
+      - 10-create-runtime-user.sh=mysql-runtime-user-init.sh
     options:
       labels:
         app.kubernetes.io/name: baton-go
         app.kubernetes.io/component: database
 
 resources:
-  - service-account.yaml
   - database-identity-config.yaml
-  - mysql-runtime-user-init-config.yaml
   - database-migration-job.yaml
   - app-deployment.yaml
   - app-service.yaml

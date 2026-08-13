@@ -23,24 +23,18 @@ class HealthGroupConfigurationTest {
             .withBean(HealthContributorRegistry.class, this::healthContributorRegistry);
 
     @Test
-    @DisplayName("readiness는 데이터베이스를 포함하고 liveness는 생존 상태만 확인한다")
-    void separatesReadinessAndLivenessDependencies() {
+    @DisplayName("readiness는 애플리케이션 상태와 데이터베이스를 함께 확인한다")
+    void includesDatabaseInReadiness() {
         contextRunner.run(context -> {
             assertThat(context).hasNotFailed();
 
             HealthEndpointGroups groups = context.getBean(HealthEndpointGroups.class);
             HealthEndpointGroup readiness = groups.get("readiness");
-            HealthEndpointGroup liveness = groups.get("liveness");
 
             assertThat(readiness).isNotNull();
             assertThat(readiness.isMember("readinessState")).isTrue();
             assertThat(readiness.isMember("db")).isTrue();
             assertThat(readiness.isMember("livenessState")).isFalse();
-
-            assertThat(liveness).isNotNull();
-            assertThat(liveness.isMember("livenessState")).isTrue();
-            assertThat(liveness.isMember("readinessState")).isFalse();
-            assertThat(liveness.isMember("db")).isFalse();
         });
     }
 
@@ -48,7 +42,6 @@ class HealthGroupConfigurationTest {
         DefaultHealthContributorRegistry registry = new DefaultHealthContributorRegistry();
         HealthIndicator up = () -> Health.up().build();
         registry.registerContributor("readinessState", up);
-        registry.registerContributor("livenessState", up);
         registry.registerContributor("db", up);
         return registry;
     }

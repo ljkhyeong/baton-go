@@ -8,7 +8,6 @@ metadata:
 spec:
   replicas: 1
   revisionHistoryLimit: 3
-  progressDeadlineSeconds: 600
   strategy:
     type: RollingUpdate
     rollingUpdate:
@@ -24,7 +23,6 @@ spec:
         app.kubernetes.io/name: baton-go
         app.kubernetes.io/component: application
     spec:
-      serviceAccountName: baton-go
       automountServiceAccountToken: false
       terminationGracePeriodSeconds: 40
       securityContext:
@@ -71,10 +69,8 @@ spec:
           ports:
             - name: http
               containerPort: 8080
-              protocol: TCP
             - name: actuator
               containerPort: 8081
-              protocol: TCP
           resources:
             requests:
               cpu: 100m

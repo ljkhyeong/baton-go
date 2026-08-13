@@ -14,5 +14,4 @@ spec:
     - name: mysql
       port: 3306
       targetPort: mysql
-      protocol: TCP
       appProtocol: mysql

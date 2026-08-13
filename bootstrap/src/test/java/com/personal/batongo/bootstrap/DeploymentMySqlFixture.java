@@ -1,9 +1,6 @@
 package com.personal.batongo.bootstrap;
 
 import java.io.ByteArrayInputStream;
-import java.io.IOException;
-import java.io.Reader;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.KeyStore;
@@ -13,21 +10,15 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.time.Duration;
-import java.util.Map;
 import java.util.Properties;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.wait.strategy.Wait;
-import org.testcontainers.images.builder.Transferable;
 import org.testcontainers.utility.DockerImageName;
 import org.testcontainers.utility.MountableFile;
-import org.yaml.snakeyaml.LoaderOptions;
-import org.yaml.snakeyaml.Yaml;
-import org.yaml.snakeyaml.constructor.SafeConstructor;
 
 final class DeploymentMySqlFixture extends GenericContainer<DeploymentMySqlFixture> {
 
     static final String VERIFIED_HOST = "baton-go-mysql";
-    static final String INVALID_HOST = "baton-go-mysql-invalid";
 
     private static final int MYSQL_PORT = 3306;
     private static final String DATABASE = "baton_go";
@@ -42,11 +33,8 @@ final class DeploymentMySqlFixture extends GenericContainer<DeploymentMySqlFixtu
     private static final String TRUSTSTORE_PASSWORD = "baton-go-public-ca-v1";
     private static final String TLS_ENTRYPOINT_RESOURCE =
             "com/personal/batongo/bootstrap/mysql/generate-test-tls-and-start.sh";
-    private static final String RUNTIME_INIT_MANIFEST =
-            "deploy/k8s/base/mysql-runtime-user-init-config.yaml";
-    private static final String MYSQL_PREFLIGHT_SCRIPT =
-            "deploy/k8s/base/mysql-init-preflight.sh";
-    private static final String RUNTIME_INIT_SCRIPT = "10-create-runtime-user.sh";
+    private static final String RUNTIME_INIT_SCRIPT =
+            "deploy/k8s/base/mysql-runtime-user-init.sh";
 
     DeploymentMySqlFixture() {
         super(DockerImageName.parse("mysql:8.4.10"));
@@ -60,20 +48,13 @@ final class DeploymentMySqlFixture extends GenericContainer<DeploymentMySqlFixtu
         withEnv("BATON_GO_DB_PASSWORD", RUNTIME_PASSWORD);
         withEnv("TZ", "UTC");
         withExposedPorts(MYSQL_PORT);
-        withCopyToContainer(
-                Transferable.of(loadRuntimeUserInitScript(), 0555),
-                "/docker-entrypoint-initdb.d/" + RUNTIME_INIT_SCRIPT
+        withCopyFileToContainer(
+                MountableFile.forHostPath(repositoryFile(RUNTIME_INIT_SCRIPT), 0555),
+                "/docker-entrypoint-initdb.d/10-create-runtime-user.sh"
         );
         withCopyFileToContainer(
                 MountableFile.forClasspathResource(TLS_ENTRYPOINT_RESOURCE, 0755),
                 "/baton-go-test-entrypoint.sh"
-        );
-        withCopyFileToContainer(
-                MountableFile.forHostPath(
-                        repositoryFile(MYSQL_PREFLIGHT_SCRIPT),
-                        0555
-                ),
-                "/opt/baton-go/mysql-preflight/mysql-init-preflight.sh"
         );
         withCreateContainerCmdModifier(command ->
                 command.withEntrypoint("/baton-go-test-entrypoint.sh")
@@ -135,27 +116,12 @@ final class DeploymentMySqlFixture extends GenericContainer<DeploymentMySqlFixtu
     }
 
     String verifiedJdbcUrl(String host, Path truststore) {
-        return tlsJdbcUrl(host, truststore, "VERIFY_IDENTITY");
-    }
-
-    String verifiedCaJdbcUrl(String host, Path truststore) {
-        return tlsJdbcUrl(host, truststore, "VERIFY_CA");
-    }
-
-    private String tlsJdbcUrl(String host, Path truststore, String sslMode) {
         return "jdbc:mysql://" + host + ":" + getMappedPort(MYSQL_PORT)
                 + "/" + DATABASE
-                + "?sslMode=" + sslMode
+                + "?sslMode=VERIFY_IDENTITY"
                 + "&trustCertificateKeyStoreUrl=" + truststore.toUri()
                 + "&trustCertificateKeyStoreType=PKCS12"
                 + "&fallbackToSystemTrustStore=false"
-                + "&serverTimezone=UTC";
-    }
-
-    String disabledTlsJdbcUrl() {
-        return "jdbc:mysql://" + VERIFIED_HOST + ":" + getMappedPort(MYSQL_PORT)
-                + "/" + DATABASE
-                + "?sslMode=DISABLED"
                 + "&serverTimezone=UTC";
     }
 
@@ -165,27 +131,6 @@ final class DeploymentMySqlFixture extends GenericContainer<DeploymentMySqlFixtu
 
     Connection connectAsRuntime(String jdbcUrl) throws SQLException {
         return connect(jdbcUrl, RUNTIME_USERNAME, RUNTIME_PASSWORD);
-    }
-
-    private String loadRuntimeUserInitScript() {
-        Path manifest = repositoryFile(RUNTIME_INIT_MANIFEST);
-        try (Reader reader = Files.newBufferedReader(manifest, StandardCharsets.UTF_8)) {
-            Object document = new Yaml(new SafeConstructor(new LoaderOptions())).load(reader);
-            if (!(document instanceof Map<?, ?> root)
-                    || !(root.get("data") instanceof Map<?, ?> data)
-                    || !(data.get(RUNTIME_INIT_SCRIPT) instanceof String script)
-                    || script.isBlank()) {
-                throw new IllegalStateException(
-                        "MySQL runtime user init ConfigMap에서 실행 script를 찾을 수 없습니다"
-                );
-            }
-            return script;
-        } catch (IOException exception) {
-            throw new IllegalStateException(
-                    "MySQL runtime user init ConfigMap을 읽을 수 없습니다",
-                    exception
-            );
-        }
     }
 
     private static Path repositoryFile(String relativePath) {

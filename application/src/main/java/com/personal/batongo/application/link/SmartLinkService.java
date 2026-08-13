@@ -23,7 +23,6 @@ import com.personal.batongo.domain.link.TrustedTarget;
 import com.personal.batongo.domain.link.TrustedTargetPolicy;
 import java.time.Clock;
 import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 import java.util.Objects;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -103,7 +102,7 @@ public class SmartLinkService implements SmartLinkUseCase {
         TrustedTarget requestedTarget = requireAllowedTarget(prepared.command());
         linkCodeKeyGuard.verifyBound();
         PublicLinkOrigin currentOrigin = publicLinkOriginPort.current();
-        Instant now = databaseTime();
+        Instant now = clock.instant();
         LinkCreationReservationPort.Reservation reservation = reservationPort.reserve(
                 prepared.idempotencyKeyHash(),
                 UUID.randomUUID(),
@@ -219,7 +218,7 @@ public class SmartLinkService implements SmartLinkUseCase {
                 storedLink.revokedAt(),
                 storedLink.notBefore(),
                 storedLink.expiresAt(),
-                databaseTime()
+                clock.instant()
         );
         return new ResolvedLinkResult(
                 storedLink.id(),
@@ -240,7 +239,7 @@ public class SmartLinkService implements SmartLinkUseCase {
         }
         Instant revokedAt = LinkRevocationPolicy.requireFirstRevocationAt(
                 storedLink.createdAt(),
-                databaseTime()
+                clock.instant()
         );
         if (!repository.revokeStoredIfVersion(
                 storedLink.id(),
@@ -290,14 +289,6 @@ public class SmartLinkService implements SmartLinkUseCase {
         if (!existing.codeHash().equals(issuedCode.codeHash())) {
             throw new LinkCodeReplayMismatchException();
         }
-    }
-
-    private Instant databaseTime() {
-        return databaseTime(clock.instant());
-    }
-
-    private Instant databaseTime(Instant value) {
-        return value == null ? null : value.truncatedTo(ChronoUnit.MICROS);
     }
 
     private LinkResult toResult(SmartLink smartLink) {

@@ -1,38 +1,33 @@
 package com.personal.batongo.application.link;
 
 import com.personal.batongo.application.link.error.InvalidIdempotencyKeyException;
-import java.util.Objects;
 import java.util.UUID;
 
 public final class CreationIdempotencyKey {
 
     private final String value;
-    private final ReservationAdmission reservationAdmission;
-
-    public CreationIdempotencyKey(String value) {
-        this(requireCurrentContract(value), ReservationAdmission.CREATE_OR_REPLAY);
-    }
+    private final boolean allowsNewReservation;
 
     private CreationIdempotencyKey(
             String value,
-            ReservationAdmission reservationAdmission
+            boolean allowsNewReservation
     ) {
         this.value = value;
-        this.reservationAdmission = reservationAdmission;
+        this.allowsNewReservation = allowsNewReservation;
     }
 
     public static CreationIdempotencyKey parseRequest(String value) {
-        UUID parsed = requireCanonicalUuid(value, true);
+        UUID parsed = requireCanonicalUuid(value);
         String canonicalValue = parsed.toString();
         if (canonicalValue.equals(value) && matchesCurrentContract(parsed)) {
             return new CreationIdempotencyKey(
                     canonicalValue,
-                    ReservationAdmission.CREATE_OR_REPLAY
+                    true
             );
         }
         return new CreationIdempotencyKey(
                 canonicalValue,
-                ReservationAdmission.REPLAY_ONLY
+                false
         );
     }
 
@@ -41,28 +36,17 @@ public final class CreationIdempotencyKey {
     }
 
     public boolean allowsNewReservation() {
-        return reservationAdmission == ReservationAdmission.CREATE_OR_REPLAY;
+        return allowsNewReservation;
     }
 
-    private static String requireCurrentContract(String value) {
-        UUID parsed = requireCanonicalUuid(value, false);
-        if (!matchesCurrentContract(parsed)) {
-            throw new InvalidIdempotencyKeyException();
-        }
-        return parsed.toString();
-    }
-
-    private static UUID requireCanonicalUuid(String value, boolean allowUppercase) {
+    private static UUID requireCanonicalUuid(String value) {
         UUID parsed;
         try {
             parsed = UUID.fromString(value);
         } catch (IllegalArgumentException | NullPointerException exception) {
             throw new InvalidIdempotencyKeyException();
         }
-        boolean canonical = allowUppercase
-                ? parsed.toString().equalsIgnoreCase(value)
-                : parsed.toString().equals(value);
-        if (!canonical) {
+        if (!parsed.toString().equalsIgnoreCase(value)) {
             throw new InvalidIdempotencyKeyException();
         }
         return parsed;
@@ -75,25 +59,7 @@ public final class CreationIdempotencyKey {
     }
 
     @Override
-    public boolean equals(Object other) {
-        return this == other
-                || other instanceof CreationIdempotencyKey that
-                && value.equals(that.value)
-                && reservationAdmission == that.reservationAdmission;
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(value, reservationAdmission);
-    }
-
-    @Override
     public String toString() {
         return "CreationIdempotencyKey[redacted]";
-    }
-
-    private enum ReservationAdmission {
-        CREATE_OR_REPLAY,
-        REPLAY_ONLY
     }
 }

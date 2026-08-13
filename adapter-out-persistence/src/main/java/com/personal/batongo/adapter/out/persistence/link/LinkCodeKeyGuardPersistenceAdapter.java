@@ -3,8 +3,8 @@ package com.personal.batongo.adapter.out.persistence.link;
 import com.personal.batongo.application.link.LinkCodeDerivationIdentity;
 import com.personal.batongo.application.link.error.LinkCodeKeyBindingException;
 import com.personal.batongo.application.link.port.out.LinkCodeKeyGuardPort;
-import java.util.List;
-import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.dao.IncorrectResultSizeDataAccessException;
+import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -14,10 +14,10 @@ public class LinkCodeKeyGuardPersistenceAdapter implements LinkCodeKeyGuardPort 
 
     private static final int SINGLETON_GUARD_ID = 1;
 
-    private final JdbcTemplate jdbcTemplate;
+    private final JdbcClient jdbcClient;
 
-    public LinkCodeKeyGuardPersistenceAdapter(JdbcTemplate jdbcTemplate) {
-        this.jdbcTemplate = jdbcTemplate;
+    public LinkCodeKeyGuardPersistenceAdapter(JdbcClient jdbcClient) {
+        this.jdbcClient = jdbcClient;
     }
 
     @Override
@@ -32,18 +32,19 @@ public class LinkCodeKeyGuardPersistenceAdapter implements LinkCodeKeyGuardPort 
             throw new LinkCodeKeyBindingException();
         }
 
-        int updated = jdbcTemplate.update(
-                """
+        int updated = jdbcClient.sql("""
                         UPDATE link_code_key_guard
                         SET derivation_version = ?, key_fingerprint = ?
                         WHERE guard_id = ?
                           AND derivation_version IS NULL
                           AND key_fingerprint IS NULL
-                        """,
-                identity.version(),
-                identity.hmacFingerprint(),
-                SINGLETON_GUARD_ID
-        );
+                        """)
+                .params(
+                        identity.version(),
+                        identity.hmacFingerprint(),
+                        SINGLETON_GUARD_ID
+                )
+                .update();
         if (updated != 1) {
             throw new LinkCodeKeyBindingException();
         }
@@ -60,33 +61,30 @@ public class LinkCodeKeyGuardPersistenceAdapter implements LinkCodeKeyGuardPort 
     }
 
     private GuardRow readGuard(String lockingClause) {
-        List<GuardRow> rows = jdbcTemplate.query(
-                """
-                        SELECT derivation_version, key_fingerprint
-                        FROM link_code_key_guard
-                        WHERE guard_id = ?
-                        """ + lockingClause,
-                (resultSet, rowNumber) -> new GuardRow(
-                        resultSet.getString("derivation_version"),
-                        resultSet.getString("key_fingerprint")
-                ),
-                SINGLETON_GUARD_ID
-        );
-        if (rows.size() != 1) {
+        try {
+            return jdbcClient.sql("""
+                            SELECT derivation_version, key_fingerprint
+                            FROM link_code_key_guard
+                            WHERE guard_id = ?
+                            """ + lockingClause)
+                    .param(SINGLETON_GUARD_ID)
+                    .query((resultSet, rowNumber) -> new GuardRow(
+                            resultSet.getString("derivation_version"),
+                            resultSet.getString("key_fingerprint")
+                    ))
+                    .single();
+        } catch (IncorrectResultSizeDataAccessException exception) {
             throw new LinkCodeKeyBindingException();
         }
-        return rows.getFirst();
     }
 
     private boolean hasStoredLinkData() {
-        Boolean hasData = jdbcTemplate.queryForObject(
-                """
-                        SELECT EXISTS(SELECT 1 FROM smart_links LIMIT 1)
-                            OR EXISTS(SELECT 1 FROM link_creation_requests LIMIT 1)
-                        """,
-                Boolean.class
-        );
-        return Boolean.TRUE.equals(hasData);
+        return jdbcClient.sql("""
+                        SELECT EXISTS(SELECT 1 FROM smart_links)
+                            OR EXISTS(SELECT 1 FROM link_creation_requests)
+                        """)
+                .query(Boolean.class)
+                .single();
     }
 
     private void requireMatchingIdentity(

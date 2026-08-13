@@ -6,7 +6,6 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
-import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -18,7 +17,7 @@ import org.springframework.web.util.pattern.PathPattern;
 import org.springframework.web.util.pattern.PathPatternParser;
 
 @Component
-@Order(Ordered.HIGHEST_PRECEDENCE + 5)
+@Order(RequestIdFilter.ORDER + 5)
 public class PublicResolverRateLimitFilter extends OncePerRequestFilter {
 
     private static final PathPattern PUBLIC_RESOLVER_PATH =

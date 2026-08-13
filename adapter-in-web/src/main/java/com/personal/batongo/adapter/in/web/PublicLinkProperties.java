@@ -6,16 +6,16 @@ import java.net.URI;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @ConfigurationProperties("baton-go")
-public record PublicLinkProperties(
-        URI publicBaseUrl
-) implements PublicLinkOriginPort {
+public final class PublicLinkProperties implements PublicLinkOriginPort {
 
-    public PublicLinkProperties {
-        publicBaseUrl = new PublicLinkOrigin(publicBaseUrl).value();
+    private final PublicLinkOrigin publicLinkOrigin;
+
+    public PublicLinkProperties(URI publicBaseUrl) {
+        this.publicLinkOrigin = new PublicLinkOrigin(publicBaseUrl);
     }
 
     @Override
     public PublicLinkOrigin current() {
-        return new PublicLinkOrigin(publicBaseUrl);
+        return publicLinkOrigin;
     }
 }

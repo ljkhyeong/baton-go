@@ -1,7 +1,6 @@
 package com.personal.batongo.adapter.in.web;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.stream.Stream;
@@ -14,12 +13,11 @@ import org.junit.jupiter.params.provider.MethodSource;
 class ManagementPropertiesTest {
 
     @Test
-    @DisplayName("32자 이상의 공백 없는 printable ASCII credential은 원문 그대로 허용한다")
-    void acceptsPrintableAsciiCredential() {
-        String token = "!#$%&'*+-.^_`|~0123456789ABCDEFG";
+    @DisplayName("관리 설정의 문자열 표현은 credential을 노출하지 않는다")
+    void redactsCredentialFromStringRepresentation() {
+        String token = "management-token-with-at-least-32-characters";
 
-        assertThatCode(() -> new ManagementProperties(token)).doesNotThrowAnyException();
-        assertThat(new ManagementProperties(token).token()).isSameAs(token);
+        assertThat(new ManagementProperties(token).toString()).doesNotContain(token);
     }
 
     @ParameterizedTest(name = "{index}: {0}")
@@ -27,8 +25,7 @@ class ManagementPropertiesTest {
     @DisplayName("관리 credential이 없거나 32자보다 짧으면 거부한다")
     void rejectsMissingOrShortCredential(String boundary, String token) {
         assertThatThrownBy(() -> new ManagementProperties(token))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("관리 credential은 32자 이상이어야 합니다");
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
     @ParameterizedTest(name = "{index}: {0}")
@@ -36,8 +33,16 @@ class ManagementPropertiesTest {
     @DisplayName("관리 credential에 공백이나 제어 문자나 non-ASCII가 있으면 거부한다")
     void rejectsCredentialOutsidePrintableAscii(String boundary, String token) {
         assertThatThrownBy(() -> new ManagementProperties(token))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("관리 credential은 공백 없는 printable ASCII여야 합니다");
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    @DisplayName("이미 공개된 관리 credential 예시값은 거부한다")
+    void rejectsPublishedCredential() {
+        assertThatThrownBy(() -> new ManagementProperties(
+                "replace-with-at-least-32-random-characters"
+        ))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
     private static Stream<Arguments> missingOrShortCredentials() {

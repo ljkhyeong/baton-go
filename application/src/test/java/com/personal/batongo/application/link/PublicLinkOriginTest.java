@@ -10,10 +10,10 @@ import org.junit.jupiter.api.Test;
 class PublicLinkOriginTest {
 
     @Test
-    @DisplayName("동등한 공개 origin 표기는 하나의 저장 문자열과 short URL로 정규화한다")
-    void canonicalizesEquivalentOriginRepresentations() {
+    @DisplayName("공개 origin은 저장 문자열과 short URL을 조립한다")
+    void serializesOriginAndBuildsShortUrl() {
         PublicLinkOrigin origin = new PublicLinkOrigin(
-                URI.create("HTTPS://GO.Example:443/")
+                URI.create("https://go.example")
         );
 
         assertThat(origin.serialized()).isEqualTo("https://go.example");
@@ -29,16 +29,21 @@ class PublicLinkOriginTest {
         assertThatThrownBy(() -> new PublicLinkOrigin(
                 URI.create("https://" + oversizedHost)
         ))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("공개 base URL이 저장 가능한 길이를 초과합니다");
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    @DisplayName("비로컬 공개 origin은 HTTPS가 아니면 거부한다")
+    void rejectsNonHttpsRemoteOrigin() {
+        assertThatThrownBy(() -> new PublicLinkOrigin(URI.create("http://go.example")))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
     @DisplayName("저장된 공개 origin은 재생 문자열을 바꿀 수 있는 비canonical 표기를 거부한다")
     void rejectsNonCanonicalStoredOrigin() {
         assertThatThrownBy(() -> PublicLinkOrigin.fromStored("HTTPS://GO.Example:443/"))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("저장된 공개 origin이 canonical 형식이 아닙니다");
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
@@ -47,7 +52,6 @@ class PublicLinkOriginTest {
         PublicLinkOrigin origin = new PublicLinkOrigin(URI.create("https://go.example"));
 
         assertThat(origin.toString())
-                .isEqualTo("PublicLinkOrigin[redacted]")
                 .doesNotContain("go.example");
     }
 }

@@ -51,7 +51,7 @@ public class SecureLinkCodeAdapter implements LinkCodePort {
         String rawCode = Base64.getUrlEncoder()
                 .withoutPadding()
                 .encodeToString(Arrays.copyOf(digest, CODE_BYTES));
-        return new IssuedLinkCode(rawCode, hash(rawCode));
+        return new IssuedLinkCode(rawCode, sha256(rawCode));
     }
 
     @Override
@@ -88,9 +88,6 @@ public class SecureLinkCodeAdapter implements LinkCodePort {
     }
 
     private String sha256(String value) {
-        if (value == null) {
-            throw new IllegalArgumentException("해시 입력은 필수입니다");
-        }
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             return HexFormat.of().formatHex(digest.digest(value.getBytes(StandardCharsets.US_ASCII)));

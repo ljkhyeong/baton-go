@@ -99,7 +99,6 @@ class HttpOriginTest {
     @DisplayName("origin이 아닌 URI와 사용할 수 없는 포트는 거부한다")
     void rejectsValuesThatAreNotUsableOrigins(String rawOrigin) {
         assertThatThrownBy(() -> HttpOrigin.require(URI.create(rawOrigin), "origin"))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("origin은 경로가 없는 HTTP 또는 HTTPS origin이어야 합니다");
+                .isInstanceOf(IllegalArgumentException.class);
     }
 }

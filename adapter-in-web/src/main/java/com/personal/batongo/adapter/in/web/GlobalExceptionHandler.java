@@ -44,7 +44,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     private final MeterRegistry meterRegistry;
 
     public GlobalExceptionHandler(MeterRegistry meterRegistry) {
-        this.meterRegistry = Objects.requireNonNull(meterRegistry, "meterRegistry");
+        this.meterRegistry = meterRegistry;
     }
 
     @ExceptionHandler(StoredTargetPolicyViolationException.class)
@@ -104,25 +104,13 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return error(HttpStatus.BAD_REQUEST, "INVALID_LINK", exception.getMessage(), request);
     }
 
-    @ExceptionHandler(InvalidTargetContractInventoryRequestException.class)
-    public ResponseEntity<ErrorResponse> handleInvalidTargetContractInventoryRequest(
-            InvalidTargetContractInventoryRequestException exception,
-            HttpServletRequest request
-    ) {
-        return error(HttpStatus.BAD_REQUEST, "INVALID_REQUEST", exception.getMessage(), request);
-    }
-
-    @ExceptionHandler(InvalidCreationTimeException.class)
-    public ResponseEntity<ErrorResponse> handleInvalidCreationTime(
-            InvalidCreationTimeException exception,
-            HttpServletRequest request
-    ) {
-        return error(HttpStatus.BAD_REQUEST, "INVALID_REQUEST", exception.getMessage(), request);
-    }
-
-    @ExceptionHandler(InvalidTargetContractRemediationRequestException.class)
-    public ResponseEntity<ErrorResponse> handleInvalidTargetContractRemediationRequest(
-            InvalidTargetContractRemediationRequestException exception,
+    @ExceptionHandler({
+            InvalidCreationTimeException.class,
+            InvalidTargetContractInventoryRequestException.class,
+            InvalidTargetContractRemediationRequestException.class
+    })
+    public ResponseEntity<ErrorResponse> handleInvalidRequest(
+            RuntimeException exception,
             HttpServletRequest request
     ) {
         return error(HttpStatus.BAD_REQUEST, "INVALID_REQUEST", exception.getMessage(), request);
@@ -283,8 +271,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
             HttpStatusCode status,
             WebRequest request
     ) {
-        HttpHeaders responseHeaders = new HttpHeaders();
-        responseHeaders.putAll(headers);
+        HttpHeaders responseHeaders = HttpHeaders.copyOf(headers);
         responseHeaders.set(HttpHeaders.CACHE_CONTROL, "no-store");
         responseHeaders.set("Referrer-Policy", "no-referrer");
         Object responseBody = body instanceof ErrorResponse

@@ -13,18 +13,9 @@ public class PublicDeploymentTopologyValidator {
             PublicLinkProperties publicLinkProperties,
             TrustedTargetProperties trustedTargetProperties
     ) {
-        HttpOrigin publicOrigin = HttpOrigin.require(
-                publicLinkProperties.publicBaseUrl(),
-                "공개 base URL"
-        );
-        HttpOrigin batonOrigin = HttpOrigin.require(
-                trustedTargetProperties.batonBaseUrl(),
-                "BATON base URL"
-        );
-        HttpOrigin roundOrigin = HttpOrigin.require(
-                trustedTargetProperties.roundBaseUrl(),
-                "ROUND base URL"
-        );
+        HttpOrigin publicOrigin = publicLinkProperties.current().origin();
+        HttpOrigin batonOrigin = trustedTargetProperties.batonOrigin();
+        HttpOrigin roundOrigin = trustedTargetProperties.roundOrigin();
         if (!publicOrigin.isLoopback()
                 && (batonOrigin.isLoopback() || roundOrigin.isLoopback())) {
             throw new IllegalArgumentException(

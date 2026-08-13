@@ -13,8 +13,8 @@ public class ConfiguredTargetUrlAdapter implements TargetUrlPort {
     private final HttpOrigin roundOrigin;
 
     public ConfiguredTargetUrlAdapter(TrustedTargetProperties properties) {
-        this.batonOrigin = HttpOrigin.require(properties.batonBaseUrl(), "BATON base URL");
-        this.roundOrigin = HttpOrigin.require(properties.roundBaseUrl(), "ROUND base URL");
+        this.batonOrigin = properties.batonOrigin();
+        this.roundOrigin = properties.roundOrigin();
     }
 
     @Override

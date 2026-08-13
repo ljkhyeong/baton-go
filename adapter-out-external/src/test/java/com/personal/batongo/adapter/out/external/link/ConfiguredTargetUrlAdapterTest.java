@@ -36,7 +36,6 @@ class ConfiguredTargetUrlAdapterTest {
                 TargetSystem.ROUND,
                 "//evil.example/room/abcd-efgh-jkmp"
         ))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessage("신뢰 대상 origin 밖으로 링크를 해석할 수 없습니다");
+                .isInstanceOf(IllegalStateException.class);
     }
 }

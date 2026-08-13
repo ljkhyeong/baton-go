@@ -28,7 +28,7 @@ final class CreationRequestAdmissionPolicy {
                     ReplayOnlyReason.LEGACY_IDEMPOTENCY_KEY
             );
         }
-        if (!CreationTimeStoragePolicy.isStorable(notBefore, expiresAt)) {
+        if (!CreationTimeStoragePolicy.hasMicrosecondPrecision(notBefore, expiresAt)) {
             return Decision.replayOnly(
                     storedNotBefore,
                     storedExpiresAt,
@@ -81,11 +81,6 @@ final class CreationRequestAdmissionPolicy {
                         "신규 생성 가능한 요청에는 기존 예약이 필수일 수 없습니다"
                 );
             };
-        }
-
-        @Override
-        public String toString() {
-            return "CreationRequestAdmissionPolicy.Decision[redacted]";
         }
     }
 }

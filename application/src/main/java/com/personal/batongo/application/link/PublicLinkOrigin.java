@@ -5,19 +5,19 @@ import java.net.URI;
 import java.util.Objects;
 
 /** 링크 생성 응답에 사용한 공개 origin을 멱등 재생 가능한 값으로 보존합니다. */
-public record PublicLinkOrigin(URI value) {
+public final class PublicLinkOrigin {
 
     private static final int MAXIMUM_STORED_LENGTH = 255;
+    private final HttpOrigin origin;
 
-    public PublicLinkOrigin {
-        HttpOrigin origin = HttpOrigin.require(value, "공개 base URL");
+    public PublicLinkOrigin(URI value) {
+        this.origin = HttpOrigin.require(value, "공개 base URL");
         if (!origin.isLoopback() && !origin.isHttps()) {
             throw new IllegalArgumentException(
                     "비로컬 공개 base URL은 HTTPS origin이어야 합니다"
             );
         }
-        value = origin.value();
-        if (serialized(value).length() > MAXIMUM_STORED_LENGTH) {
+        if (serialized().length() > MAXIMUM_STORED_LENGTH) {
             throw new IllegalArgumentException("공개 base URL이 저장 가능한 길이를 초과합니다");
         }
     }
@@ -31,17 +31,17 @@ public record PublicLinkOrigin(URI value) {
         return origin;
     }
 
+    public HttpOrigin origin() {
+        return origin;
+    }
+
     public String serialized() {
-        return serialized(value);
+        return origin.value().toASCIIString();
     }
 
     public URI shortUrl(String rawCode) {
         Objects.requireNonNull(rawCode, "공개 링크 코드는 필수입니다");
-        return value.resolve("/l/" + rawCode);
-    }
-
-    private static String serialized(URI value) {
-        return value.toASCIIString();
+        return origin.resolve("/l/" + rawCode);
     }
 
     @Override

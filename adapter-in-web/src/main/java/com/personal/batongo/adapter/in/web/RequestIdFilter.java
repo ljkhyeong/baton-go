@@ -14,9 +14,10 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 @Component
-@Order(Ordered.HIGHEST_PRECEDENCE)
+@Order(RequestIdFilter.ORDER)
 public class RequestIdFilter extends OncePerRequestFilter {
 
+    static final int ORDER = Ordered.HIGHEST_PRECEDENCE;
     public static final String HEADER_NAME = "X-Request-Id";
     public static final String REQUEST_ATTRIBUTE = RequestIdFilter.class.getName() + ".requestId";
 

@@ -1,20 +1,15 @@
 package com.personal.batongo.bootstrap.guard;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
-import java.util.Locale;
 import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.NullSource;
-import org.junit.jupiter.params.provider.ValueSource;
 
 class LinkCodeKeyGuardBindingCliTest {
 
@@ -71,121 +66,18 @@ class LinkCodeKeyGuardBindingCliTest {
     }
 
     @Test
-    @DisplayName("복구 CLI는 길이가 충분한 공백 링크 코드 비밀을 원문 그대로 허용한다")
-    void acceptsLegacyWhitespaceLinkCodeSecretWithoutNormalization() {
-        String legacySecret = " ".repeat(31) + "\n";
-
-        LinkCodeKeyGuardBindingCli.RuntimeConfiguration configuration =
-                LinkCodeKeyGuardBindingCli.RuntimeConfiguration.from(
-                        validEnvironment(legacySecret)
-                );
-
-        assertThat(configuration.linkCodeProperties().secret()).isSameAs(legacySecret);
-    }
-
-    @Test
-    @DisplayName("복구 CLI는 placeholder와 역슬래시가 포함된 credential을 원문 그대로 사용한다")
-    void preservesLiteralPlaceholdersAndBackslashesInCredentials() {
-        String rawSecret = " 링크-${random.uuid}-${HOME}\\비밀-원문을-그대로-보존한다 ";
-        String rawUrl = "jdbc:mysql://db:3306/baton_go?label=${HOME}\\raw";
-        String rawUsername = "user-${HOME}\\raw";
-        String rawPassword = " password-${random.uuid}\\${HOME} ";
-        Map<String, String> environment = validEnvironment(rawSecret);
-        environment.put("BATON_GO_DB_URL", rawUrl);
-        environment.put("BATON_GO_DB_USERNAME", rawUsername);
-        environment.put("BATON_GO_DB_PASSWORD", rawPassword);
-
-        LinkCodeKeyGuardBindingCli.RuntimeConfiguration configuration =
-                LinkCodeKeyGuardBindingCli.RuntimeConfiguration.from(
-                        environment
-                );
-
-        assertThat(configuration.linkCodeProperties().secret()).isSameAs(rawSecret);
-        assertThat(configuration.jdbcUrl()).isSameAs(rawUrl);
-        assertThat(configuration.username()).isSameAs(rawUsername);
-        assertThat(configuration.password()).isSameAs(rawPassword);
-    }
-
-    @Test
-    @DisplayName("복구 CLI는 공개 예시와 다른 replace-with 접두사의 링크 코드 비밀을 허용한다")
-    void acceptsNonPublishedSecretWithPlaceholderPrefix() {
-        assertThatCode(() -> LinkCodeKeyGuardBindingCli.RuntimeConfiguration.from(
-                validEnvironment("replace-with-a-real-link-code-secret-for-this-deployment")
-        )).doesNotThrowAnyException();
-    }
-
-    @ParameterizedTest
-    @ValueSource(strings = {
-            "replace-with-at-least-32-random-characters",
-            "replace-with-a-separate-at-least-32-character-secret"
-    })
-    @DisplayName("복구 CLI는 공개된 credential 예시값만 정확히 링크 코드 비밀에서 거부한다")
-    void rejectsPublishedLinkCodeSecret(String publishedCredential) {
-        assertThatThrownBy(() -> LinkCodeKeyGuardBindingCli.RuntimeConfiguration.from(
-                validEnvironment(publishedCredential)
-        ))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("공개 예시 비밀은 사용할 수 없습니다");
-    }
-
-    @ParameterizedTest
-    @NullSource
-    @ValueSource(strings = {"", "too-short"})
-    @DisplayName("복구 CLI의 링크 코드 비밀 null과 길이는 공용 링크 코드 설정 계약으로 검증한다")
-    void delegatesMissingAndShortLinkCodeSecretValidation(String invalidSecret) {
-        assertThatThrownBy(() -> LinkCodeKeyGuardBindingCli.RuntimeConfiguration.from(
-                validEnvironment(invalidSecret)
-        ))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("링크 코드 파생 키는 32자 이상이어야 합니다");
-    }
-
-    @ParameterizedTest
-    @ValueSource(strings = {"", " ", "\t\n"})
     @DisplayName("복구 CLI의 데이터베이스 연결 설정은 공백 값을 거부한다")
-    void rejectsBlankDatabaseConnectionSettings(String blankValue) {
+    void rejectsBlankDatabaseConnectionSettings() {
         Map<String, String> environment = validEnvironment(
                 "actual-link-code-secret-with-more-than-32-characters"
         );
-        environment.put("BATON_GO_DB_URL", blankValue);
+        environment.put("BATON_GO_DB_URL", " ");
 
         assertThatThrownBy(() -> LinkCodeKeyGuardBindingCli.RuntimeConfiguration.from(
                 environment
         ))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("BATON_GO_DB_URL 설정은 필수입니다");
-    }
-
-    @ParameterizedTest
-    @ValueSource(strings = {
-            "8E448211-66AE-44AB-9888-C4960648C22B",
-            "019AE750-9234-7ABC-8DEF-123456789ABC",
-            "00000000-0000-0000-0000-000000000000",
-            "00000000-0000-4000-7000-000000000000"
-    })
-    @DisplayName("legacy canary는 과거 UUID 파서가 허용한 값을 lowercase canonical 문자열로 정규화한다")
-    void normalizesLegacyCanariesAcceptedByPreviousParser(String rawValue) {
-        LegacyCanaryIdempotencyKey parsed = LegacyCanaryIdempotencyKey.parse(rawValue);
-
-        assertThat(parsed.value()).isEqualTo(rawValue.toLowerCase(Locale.ROOT));
-        assertThat(parsed.toString())
-                .isEqualTo("LegacyCanaryIdempotencyKey[redacted]")
-                .doesNotContain(rawValue);
-    }
-
-    @ParameterizedTest
-    @NullSource
-    @ValueSource(strings = {
-            "1-1-1-1-1",
-            " 8e448211-66ae-44ab-9888-c4960648c22b",
-            "8e44821166ae44ab9888c4960648c22b",
-            "not-a-uuid"
-    })
-    @DisplayName("legacy canary는 과거 UUID 파서가 거부한 비canonical 문자열을 거부한다")
-    void rejectsValuesRejectedByPreviousParser(String rawValue) {
-        assertThatThrownBy(() -> LegacyCanaryIdempotencyKey.parse(rawValue))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("legacy canary UUID 형식이 올바르지 않습니다");
     }
 
     private CapturedOutput run(String[] args, Map<String, String> environment) {

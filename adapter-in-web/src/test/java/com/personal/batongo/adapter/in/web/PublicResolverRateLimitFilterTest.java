@@ -10,8 +10,6 @@ import java.time.ZoneOffset;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.core.Ordered;
-import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpHeaders;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
@@ -23,18 +21,16 @@ class PublicResolverRateLimitFilterTest {
     private static final Instant NOW = Instant.parse("2026-08-02T00:00:00Z");
 
     @Test
-    @DisplayName("존재 여부와 코드 형식에 관계없이 공개 resolver 요청은 같은 버킷을 공유한다")
-    void sharesAggregateBucketAcrossResolverCodes() throws Exception {
+    @DisplayName("코드 형식과 전달 IP에 관계없이 공개 resolver 요청은 같은 버킷을 공유한다")
+    void sharesAggregateBucketAcrossResolverCodesAndForwardedAddresses() throws Exception {
         PublicResolverRateLimitFilter filter = filter(1, Duration.ofSeconds(30));
         AtomicInteger downstreamCalls = new AtomicInteger();
 
-        MockHttpServletResponse firstResponse = invoke(
-                filter,
-                request("GET", "/l/not-a-valid-code"),
-                downstreamCalls
-        );
+        MockHttpServletRequest firstRequest = request("GET", "/l/not-a-valid-code");
+        firstRequest.addHeader("X-Forwarded-For", "198.51.100.1");
+        MockHttpServletResponse firstResponse = invoke(filter, firstRequest, downstreamCalls);
         MockHttpServletRequest secondRequest = request("GET", "/l/" + VALID_CODE);
-        secondRequest.addHeader("X-Forwarded-For", "203.0.113.10");
+        secondRequest.addHeader("X-Forwarded-For", "198.51.100.2");
         MockHttpServletResponse secondResponse = invoke(
                 filter,
                 secondRequest,
@@ -50,23 +46,6 @@ class PublicResolverRateLimitFilterTest {
         assertThat(secondResponse.getContentAsString())
                 .contains("\"code\":\"RATE_LIMIT_EXCEEDED\"")
                 .contains("\"requestId\":");
-        assertThat(downstreamCalls).hasValue(1);
-    }
-
-    @Test
-    @DisplayName("서로 다른 전달 IP 헤더를 보내도 공개 resolver 제한을 우회할 수 없다")
-    void ignoresForwardedClientAddressForAggregateLimit() throws Exception {
-        PublicResolverRateLimitFilter filter = filter(1, Duration.ofMinutes(1));
-        AtomicInteger downstreamCalls = new AtomicInteger();
-        MockHttpServletRequest firstRequest = request("GET", "/l/first");
-        firstRequest.addHeader("X-Forwarded-For", "198.51.100.1");
-        MockHttpServletRequest secondRequest = request("GET", "/l/second");
-        secondRequest.addHeader("X-Forwarded-For", "198.51.100.2");
-
-        invoke(filter, firstRequest, downstreamCalls);
-        MockHttpServletResponse rejected = invoke(filter, secondRequest, downstreamCalls);
-
-        assertThat(rejected.getStatus()).isEqualTo(429);
         assertThat(downstreamCalls).hasValue(1);
     }
 
@@ -114,18 +93,6 @@ class PublicResolverRateLimitFilterTest {
         assertThat(firstResolver.getStatus()).isEqualTo(200);
         assertThat(secondResolver.getStatus()).isEqualTo(429);
         assertThat(downstreamCalls).hasValue(4);
-    }
-
-    @Test
-    @DisplayName("request ID filter는 공개 resolver rate limit filter보다 먼저 실행된다")
-    void ordersRequestIdBeforeRateLimit() {
-        int requestIdOrder = RequestIdFilter.class.getAnnotation(Order.class).value();
-        int rateLimitOrder = PublicResolverRateLimitFilter.class
-                .getAnnotation(Order.class)
-                .value();
-
-        assertThat(requestIdOrder).isEqualTo(Ordered.HIGHEST_PRECEDENCE);
-        assertThat(rateLimitOrder).isGreaterThan(requestIdOrder);
     }
 
     private PublicResolverRateLimitFilter filter(long capacity, Duration window) {

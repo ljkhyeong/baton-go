@@ -1,5 +1,6 @@
 package com.personal.batongo.adapter.in.web;
 
+import com.personal.batongo.application.link.PublishedCredentialPolicy;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @ConfigurationProperties("baton-go.management")
@@ -16,6 +17,7 @@ public record ManagementProperties(
                     "관리 credential은 공백 없는 printable ASCII여야 합니다"
             );
         }
+        PublishedCredentialPolicy.requireSafe(token);
     }
 
     private static boolean isNotPrintableAscii(int codePoint) {

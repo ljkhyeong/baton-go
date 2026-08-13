@@ -1,7 +1,5 @@
 package com.personal.batongo.domain.link;
 
-import java.util.Objects;
-
 public final class TrustedTarget {
 
     private final TargetSystem targetSystem;
@@ -13,9 +11,9 @@ public final class TrustedTarget {
             LinkPurpose purpose,
             String targetPath
     ) {
-        this.targetSystem = Objects.requireNonNull(targetSystem, "대상 시스템은 필수입니다");
-        this.purpose = Objects.requireNonNull(purpose, "링크 목적은 필수입니다");
-        this.targetPath = Objects.requireNonNull(targetPath, "대상 경로는 필수입니다");
+        this.targetSystem = targetSystem;
+        this.purpose = purpose;
+        this.targetPath = targetPath;
     }
 
     public TargetSystem targetSystem() {

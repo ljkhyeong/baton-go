@@ -5,18 +5,15 @@ import com.personal.batongo.application.link.port.out.SmartLinkRepository.Stored
 import com.personal.batongo.application.link.port.out.SmartLinkRepository.StoredLinkResolution;
 import com.personal.batongo.application.link.port.out.SmartLinkRepository.StoredLinkSnapshot;
 import com.personal.batongo.domain.link.SmartLink;
-import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.Timestamp;
 import java.time.Instant;
-import java.util.Calendar;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
-import java.util.TimeZone;
 import java.util.UUID;
-import org.springframework.dao.support.DataAccessUtils;
-import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
 @Repository
@@ -41,14 +38,14 @@ public class SmartLinkPersistenceAdapter implements SmartLinkRepository {
             """;
 
     private final SpringDataSmartLinkRepository repository;
-    private final JdbcTemplate jdbcTemplate;
+    private final JdbcClient jdbcClient;
 
     public SmartLinkPersistenceAdapter(
             SpringDataSmartLinkRepository repository,
-            JdbcTemplate jdbcTemplate
+            JdbcClient jdbcClient
     ) {
         this.repository = repository;
-        this.jdbcTemplate = jdbcTemplate;
+        this.jdbcClient = jdbcClient;
     }
 
     @Override
@@ -58,8 +55,7 @@ public class SmartLinkPersistenceAdapter implements SmartLinkRepository {
 
     @Override
     public Optional<StoredLinkReplay> findReplayById(UUID id) {
-        List<StoredLinkReplay> rows = jdbcTemplate.query(
-                """
+        return jdbcClient.sql("""
                         SELECT BIN_TO_UUID(id) AS id,
                                target_system,
                                target_path,
@@ -71,28 +67,26 @@ public class SmartLinkPersistenceAdapter implements SmartLinkRepository {
                                created_at
                         FROM smart_links
                         WHERE id = UUID_TO_BIN(?)
-                        """,
-                (resultSet, rowNumber) -> new StoredLinkReplay(
+                        """)
+                .param(id.toString())
+                .query((resultSet, rowNumber) -> new StoredLinkReplay(
                         UUID.fromString(resultSet.getString("id")),
                         resultSet.getString("target_system"),
                         resultSet.getString("target_path"),
                         resultSet.getString("purpose"),
                         resultSet.getString("code_hash"),
-                        instant(resultSet.getTimestamp("not_before", utcCalendar())),
-                        instant(resultSet.getTimestamp("expires_at", utcCalendar())),
-                        instant(resultSet.getTimestamp("revoked_at", utcCalendar())),
-                        instant(resultSet.getTimestamp("created_at", utcCalendar()))
-                ),
-                id.toString()
-        );
-        return DataAccessUtils.optionalResult(rows);
+                        instant(resultSet, "not_before"),
+                        instant(resultSet, "expires_at"),
+                        instant(resultSet, "revoked_at"),
+                        instant(resultSet, "created_at")
+                ))
+                .optional();
     }
 
     @Override
     public Optional<StoredLinkResolution> findResolutionByCodeHash(String codeHash) {
         // 대상 필드는 enum hydration 전에 raw로 읽어 수동 적재된 알 수 없는 값도 404로 닫는다.
-        List<StoredLinkResolution> rows = jdbcTemplate.query(
-                """
+        return jdbcClient.sql("""
                         SELECT BIN_TO_UUID(id) AS id,
                                target_system,
                                target_path,
@@ -102,19 +96,18 @@ public class SmartLinkPersistenceAdapter implements SmartLinkRepository {
                                revoked_at
                         FROM smart_links
                         WHERE code_hash = ?
-                        """,
-                (resultSet, rowNumber) -> new StoredLinkResolution(
+                        """)
+                .param(codeHash)
+                .query((resultSet, rowNumber) -> new StoredLinkResolution(
                         UUID.fromString(resultSet.getString("id")),
                         resultSet.getString("target_system"),
                         resultSet.getString("target_path"),
                         resultSet.getString("purpose"),
-                        instant(resultSet.getTimestamp("not_before", utcCalendar())),
-                        instant(resultSet.getTimestamp("expires_at", utcCalendar())),
-                        instant(resultSet.getTimestamp("revoked_at", utcCalendar()))
-                ),
-                codeHash
-        );
-        return DataAccessUtils.optionalResult(rows);
+                        instant(resultSet, "not_before"),
+                        instant(resultSet, "expires_at"),
+                        instant(resultSet, "revoked_at")
+                ))
+                .optional();
     }
 
     @Override
@@ -137,20 +130,21 @@ public class SmartLinkPersistenceAdapter implements SmartLinkRepository {
     @Override
     public List<StoredLinkSnapshot> scanStoredAfter(UUID afterLinkId, int limit) {
         if (afterLinkId == null) {
-            return jdbcTemplate.query(
-                    STORED_SNAPSHOT_SELECT + "ORDER BY stored_link.id LIMIT ?",
-                    this::storedSnapshot,
-                    limit
-            );
+            return jdbcClient.sql(
+                            STORED_SNAPSHOT_SELECT + "ORDER BY stored_link.id LIMIT ?"
+                    )
+                    .param(limit)
+                    .query(this::storedSnapshot)
+                    .list();
         }
-        return jdbcTemplate.query(
-                STORED_SNAPSHOT_SELECT
-                        + "WHERE stored_link.id > UUID_TO_BIN(?) "
-                        + "ORDER BY stored_link.id LIMIT ?",
-                this::storedSnapshot,
-                afterLinkId.toString(),
-                limit
-        );
+        return jdbcClient.sql(
+                        STORED_SNAPSHOT_SELECT
+                                + "WHERE stored_link.id > UUID_TO_BIN(?) "
+                                + "ORDER BY stored_link.id LIMIT ?"
+                )
+                .params(afterLinkId.toString(), limit)
+                .query(this::storedSnapshot)
+                .list();
     }
 
     @Override
@@ -159,24 +153,24 @@ public class SmartLinkPersistenceAdapter implements SmartLinkRepository {
             long expectedVersion,
             Instant revokedAt
     ) {
-        if (expectedVersion < 0 || expectedVersion == Long.MAX_VALUE) {
+        if (expectedVersion < 0) {
             throw new IllegalArgumentException("expectedVersion은 증가 가능한 범위여야 합니다");
         }
         long nextVersion = Math.incrementExact(expectedVersion);
-        int updated = jdbcTemplate.update(connection -> {
-            PreparedStatement statement = connection.prepareStatement("""
-                    UPDATE smart_links
-                    SET revoked_at = ?, version = ?
-                    WHERE id = UUID_TO_BIN(?)
-                      AND version = ?
-                      AND revoked_at IS NULL
-                    """);
-            statement.setTimestamp(1, Timestamp.from(revokedAt), utcCalendar());
-            statement.setLong(2, nextVersion);
-            statement.setString(3, id.toString());
-            statement.setLong(4, expectedVersion);
-            return statement;
-        });
+        int updated = jdbcClient.sql("""
+                        UPDATE smart_links
+                        SET revoked_at = ?, version = ?
+                        WHERE id = UUID_TO_BIN(?)
+                          AND version = ?
+                          AND revoked_at IS NULL
+                        """)
+                .params(
+                        LocalDateTime.ofInstant(revokedAt, ZoneOffset.UTC),
+                        nextVersion,
+                        id.toString(),
+                        expectedVersion
+                )
+                .update();
         return updated == 1;
     }
 
@@ -184,12 +178,10 @@ public class SmartLinkPersistenceAdapter implements SmartLinkRepository {
             String sql,
             String linkId
     ) {
-        List<StoredLinkSnapshot> rows = jdbcTemplate.query(
-                sql,
-                this::storedSnapshot,
-                linkId
-        );
-        return DataAccessUtils.optionalResult(rows);
+        return jdbcClient.sql(sql)
+                .param(linkId)
+                .query(this::storedSnapshot)
+                .optional();
     }
 
     private StoredLinkSnapshot storedSnapshot(
@@ -201,20 +193,17 @@ public class SmartLinkPersistenceAdapter implements SmartLinkRepository {
                 resultSet.getString("target_system"),
                 resultSet.getString("target_path"),
                 resultSet.getString("purpose"),
-                instant(resultSet.getTimestamp("not_before", utcCalendar())),
-                instant(resultSet.getTimestamp("expires_at", utcCalendar())),
-                instant(resultSet.getTimestamp("revoked_at", utcCalendar())),
-                instant(resultSet.getTimestamp("created_at", utcCalendar())),
+                instant(resultSet, "not_before"),
+                instant(resultSet, "expires_at"),
+                instant(resultSet, "revoked_at"),
+                instant(resultSet, "created_at"),
                 resultSet.getLong("version"),
                 resultSet.getBoolean("creation_request_present")
         );
     }
 
-    private Calendar utcCalendar() {
-        return Calendar.getInstance(TimeZone.getTimeZone("UTC"));
-    }
-
-    private Instant instant(Timestamp timestamp) {
-        return timestamp == null ? null : timestamp.toInstant();
+    private Instant instant(ResultSet resultSet, String columnName) throws SQLException {
+        LocalDateTime value = resultSet.getObject(columnName, LocalDateTime.class);
+        return value == null ? null : value.toInstant(ZoneOffset.UTC);
     }
 }

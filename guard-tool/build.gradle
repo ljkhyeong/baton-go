@@ -5,6 +5,7 @@ plugins {
 dependencies {
 	implementation project(':application')
 	implementation project(':adapter-out-external')
+	implementation 'org.springframework:spring-jdbc'
 
 	runtimeOnly 'com.mysql:mysql-connector-j'
 

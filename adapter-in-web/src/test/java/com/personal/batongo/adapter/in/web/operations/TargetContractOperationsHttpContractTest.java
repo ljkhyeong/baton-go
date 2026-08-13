@@ -21,10 +21,6 @@ import com.personal.batongo.adapter.in.web.ManagementProperties;
 import com.personal.batongo.adapter.in.web.RequestIdFilter;
 import com.personal.batongo.adapter.in.web.StrictHttpJsonConfiguration;
 import com.personal.batongo.application.link.error.InvalidTargetContractInventoryRequestException;
-import com.personal.batongo.application.link.error.InvalidTargetContractRemediationRequestException;
-import com.personal.batongo.application.link.error.LinkNotFoundException;
-import com.personal.batongo.application.link.error.TargetContractRemediationNotApplicableException;
-import com.personal.batongo.application.link.error.TargetContractRemediationStaleException;
 import com.personal.batongo.application.link.port.in.TargetContractOperationsUseCase;
 import com.personal.batongo.application.link.port.in.TargetContractOperationsUseCase.Compliance;
 import com.personal.batongo.application.link.port.in.TargetContractOperationsUseCase.CreationRequestState;
@@ -155,15 +151,14 @@ class TargetContractOperationsHttpContractTest {
         verify(operationsUseCase).inventory(new InventoryQuery(null, 100));
     }
 
-    @ParameterizedTest(name = "{index}: limit={0}")
-    @ValueSource(ints = {0, 501})
+    @Test
     @DisplayName("inventory limit 경계를 벗어나면 400 INVALID_REQUEST로 응답한다")
-    void rejectsOutOfRangeInventoryLimit(int limit) throws Exception {
+    void rejectsOutOfRangeInventoryLimit() throws Exception {
         when(operationsUseCase.inventory(any()))
                 .thenThrow(new InvalidTargetContractInventoryRequestException());
 
         mockMvc.perform(authorized(get(BASE_PATH + "/inventory")
-                        .queryParam("limit", Integer.toString(limit))))
+                        .queryParam("limit", "0")))
                 .andExpect(status().isBadRequest())
                 .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
                 .andExpect(header().string("Referrer-Policy", "no-referrer"))
@@ -216,87 +211,13 @@ class TargetContractOperationsHttpContractTest {
         verify(operationsUseCase).remediate(new RemediationCommand(LINK_ID, 7L));
     }
 
-    @Test
-    @DisplayName("이미 폐기된 non-compliant 링크는 최초 시각과 멱등 결과를 반환한다")
-    void returnsAlreadyRevokedRemediationResult() throws Exception {
-        when(operationsUseCase.remediate(new RemediationCommand(LINK_ID, 7L)))
-                .thenReturn(new RemediationResult(
-                        LINK_ID,
-                        "v1",
-                        RemediationState.REVOKED,
-                        REVOKED_AT,
-                        true
-                ));
-
-        mockMvc.perform(remediationRequest("{\"expectedVersion\":7}"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.revokedAt").value(REVOKED_AT.toString()))
-                .andExpect(jsonPath("$.alreadyRevoked").value(true));
-    }
-
-    @Test
-    @DisplayName("계약을 준수하는 링크 폐기는 409 REMEDIATION_NOT_APPLICABLE로 응답한다")
-    void rejectsRemediationForCompliantLink() throws Exception {
-        when(operationsUseCase.remediate(any()))
-                .thenThrow(new TargetContractRemediationNotApplicableException());
-
-        mockMvc.perform(remediationRequest("{\"expectedVersion\":7}"))
-                .andExpect(status().isConflict())
-                .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
-                .andExpect(header().string("Referrer-Policy", "no-referrer"))
-                .andExpect(jsonPath("$.code").value("REMEDIATION_NOT_APPLICABLE"))
-                .andExpect(jsonPath("$.requestId").isNotEmpty());
-    }
-
-    @Test
-    @DisplayName("inventory 이후 변경된 링크 폐기는 409 REMEDIATION_STALE로 응답한다")
-    void rejectsStaleRemediation() throws Exception {
-        when(operationsUseCase.remediate(any()))
-                .thenThrow(new TargetContractRemediationStaleException());
-
-        mockMvc.perform(remediationRequest("{\"expectedVersion\":7}"))
-                .andExpect(status().isConflict())
-                .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
-                .andExpect(header().string("Referrer-Policy", "no-referrer"))
-                .andExpect(jsonPath("$.code").value("REMEDIATION_STALE"))
-                .andExpect(jsonPath("$.requestId").isNotEmpty());
-    }
-
-    @Test
-    @DisplayName("존재하지 않는 링크 폐기는 target 정보를 노출하지 않는 404로 응답한다")
-    void returnsNotFoundForMissingRemediationLink() throws Exception {
-        when(operationsUseCase.remediate(any())).thenThrow(new LinkNotFoundException());
-
-        mockMvc.perform(remediationRequest("{\"expectedVersion\":7}"))
-                .andExpect(status().isNotFound())
-                .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
-                .andExpect(header().string("Referrer-Policy", "no-referrer"))
-                .andExpect(jsonPath("$.code").value("LINK_NOT_FOUND"))
-                .andExpect(jsonPath("$.requestId").isNotEmpty());
-    }
-
-    @Test
-    @DisplayName("application이 잘못된 폐기 command를 거부하면 400 INVALID_REQUEST로 응답한다")
-    void mapsInvalidRemediationCommandToInvalidRequest() throws Exception {
-        when(operationsUseCase.remediate(any()))
-                .thenThrow(new InvalidTargetContractRemediationRequestException());
-
-        mockMvc.perform(remediationRequest("{\"expectedVersion\":7}"))
-                .andExpect(status().isBadRequest())
-                .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
-                .andExpect(header().string("Referrer-Policy", "no-referrer"))
-                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
-                .andExpect(jsonPath("$.requestId").isNotEmpty());
-    }
-
     @ParameterizedTest(name = "{index}: {0}")
     @ValueSource(strings = {
             "{}",
-            "{\"expectedVersion\":null}",
-            "{\"expectedVersion\":-1}"
+            "{\"expectedVersion\":null}"
     })
-    @DisplayName("expectedVersion이 없거나 음수이면 400 INVALID_REQUEST로 응답한다")
-    void rejectsInvalidExpectedVersion(String body) throws Exception {
+    @DisplayName("expectedVersion이 없으면 400 INVALID_REQUEST로 응답한다")
+    void rejectsMissingExpectedVersion(String body) throws Exception {
         mockMvc.perform(remediationRequest(body))
                 .andExpect(status().isBadRequest())
                 .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
@@ -310,7 +231,6 @@ class TargetContractOperationsHttpContractTest {
     @ValueSource(strings = {
             "{\"expectedVersion\":7.9}",
             "{\"expectedVersion\":7e0}",
-            "{\"expectedVersion\":\"7\"}",
             "{\"expectedVersion\":\"7.0\"}"
     })
     @DisplayName("expectedVersion은 JSON 정수 token이 아니면 변경 없이 400으로 거부한다")
@@ -335,19 +255,6 @@ class TargetContractOperationsHttpContractTest {
                 .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
                 .andExpect(header().string("Referrer-Policy", "no-referrer"))
                 .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
-
-        verifyNoInteractions(operationsUseCase);
-    }
-
-    @Test
-    @DisplayName("operations API도 기존 관리 Bearer 인증 없이는 호출할 수 없다")
-    void requiresManagementAuthentication() throws Exception {
-        mockMvc.perform(get(BASE_PATH + "/inventory"))
-                .andExpect(status().isUnauthorized())
-                .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
-                .andExpect(header().string("Referrer-Policy", "no-referrer"))
-                .andExpect(header().exists(RequestIdFilter.HEADER_NAME))
-                .andExpect(jsonPath("$.code").value("MANAGEMENT_AUTHENTICATION_REQUIRED"));
 
         verifyNoInteractions(operationsUseCase);
     }

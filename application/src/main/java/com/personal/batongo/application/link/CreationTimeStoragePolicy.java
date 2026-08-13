@@ -1,7 +1,7 @@
 package com.personal.batongo.application.link;
 
-import com.personal.batongo.application.link.error.InvalidCreationTimeException;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 
 public final class CreationTimeStoragePolicy {
 
@@ -9,28 +9,19 @@ public final class CreationTimeStoragePolicy {
     public static final Instant MAXIMUM =
             Instant.parse("9999-12-31T23:59:59.999999Z");
 
-    private static final int NANOS_PER_MICROSECOND = 1_000;
-
     private CreationTimeStoragePolicy() {
-    }
-
-    public static void requireStorable(Instant notBefore, Instant expiresAt) {
-        if (!isStorable(notBefore, expiresAt)) {
-            throw new InvalidCreationTimeException();
-        }
-    }
-
-    public static boolean isStorable(Instant notBefore, Instant expiresAt) {
-        return isStorable(notBefore) && isStorable(expiresAt);
     }
 
     public static boolean isWithinRange(Instant notBefore, Instant expiresAt) {
         return isWithinRange(notBefore) && isWithinRange(expiresAt);
     }
 
-    private static boolean isStorable(Instant value) {
-        return isWithinRange(value)
-                && (value == null || value.getNano() % NANOS_PER_MICROSECOND == 0);
+    static boolean hasMicrosecondPrecision(Instant notBefore, Instant expiresAt) {
+        return hasMicrosecondPrecision(notBefore) && hasMicrosecondPrecision(expiresAt);
+    }
+
+    private static boolean hasMicrosecondPrecision(Instant value) {
+        return value == null || value.equals(value.truncatedTo(ChronoUnit.MICROS));
     }
 
     private static boolean isWithinRange(Instant value) {

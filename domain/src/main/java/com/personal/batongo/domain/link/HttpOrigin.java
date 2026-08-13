@@ -146,11 +146,10 @@ public final class HttpOrigin {
         }
         int firstOctet = -1;
         for (int index = 0; index < octets.length; index++) {
-            String octet = octets[index];
-            if (!isCanonicalDecimalOctet(octet)) {
+            int parsed = parseCanonicalDecimalOctet(octets[index]);
+            if (parsed < 0) {
                 return false;
             }
-            int parsed = Integer.parseInt(octet);
             if (index == 0) {
                 firstOctet = parsed;
             }
@@ -158,22 +157,18 @@ public final class HttpOrigin {
         return firstOctet == 127;
     }
 
-    private static boolean isCanonicalDecimalOctet(String value) {
+    private static int parseCanonicalDecimalOctet(String value) {
         if (value.isEmpty()
-                || value.length() > 3
-                || value.length() > 1 && value.charAt(0) == '0') {
-            return false;
-        }
-        for (int index = 0; index < value.length(); index++) {
-            char character = value.charAt(index);
-            if (character < '0' || character > '9') {
-                return false;
-            }
+                || value.length() > 3) {
+            return -1;
         }
         try {
-            return Integer.parseInt(value) <= 255;
+            int parsed = Integer.parseInt(value);
+            return parsed <= 255 && Integer.toString(parsed).equals(value)
+                    ? parsed
+                    : -1;
         } catch (NumberFormatException exception) {
-            return false;
+            return -1;
         }
     }
 

@@ -13,7 +13,9 @@ import org.junit.jupiter.api.Test;
 class CreationRequestAdmissionPolicyTest {
 
     private static final CreationIdempotencyKey CURRENT_KEY =
-            new CreationIdempotencyKey("8e448211-66ae-44ab-9888-c4960648c22b");
+            CreationIdempotencyKey.parseRequest(
+                    "8e448211-66ae-44ab-9888-c4960648c22b"
+            );
 
     @Test
     @DisplayName("현재 계약의 키와 마이크로초 시각은 신규 예약 진입을 허용한다")
@@ -29,9 +31,6 @@ class CreationRequestAdmissionPolicyTest {
         assertThat(decision.allowsNewReservation()).isTrue();
         assertThat(decision.replayOnlyReason()).isEqualTo(ReplayOnlyReason.NONE);
         assertThat(decision.expiresAt()).isEqualTo(expiresAt);
-        assertThat(decision.toString()).isEqualTo(
-                "CreationRequestAdmissionPolicy.Decision[redacted]"
-        );
     }
 
     @Test

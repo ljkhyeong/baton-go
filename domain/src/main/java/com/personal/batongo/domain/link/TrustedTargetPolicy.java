@@ -32,20 +32,22 @@ public final class TrustedTargetPolicy {
         if (purpose == null) {
             throw new LinkValidationException("링크 목적은 필수입니다");
         }
+        if (targetPath == null) {
+            throw new LinkValidationException("대상 경로는 필수입니다");
+        }
 
-        String validatedPath = TargetPath.requireSafe(targetPath);
         boolean allowed = switch (targetSystem) {
             case BATON -> purpose == LinkPurpose.NAVIGATION
-                    && BATON_NAVIGATION_PATH.matcher(validatedPath).matches();
+                    && BATON_NAVIGATION_PATH.matcher(targetPath).matches();
             case ROUND -> purpose == LinkPurpose.MEETING_ENTRY
-                    && ROUND_MEETING_ENTRY_PATH.matcher(validatedPath).matches();
+                    && ROUND_MEETING_ENTRY_PATH.matcher(targetPath).matches();
         };
         if (!allowed) {
             throw new LinkValidationException(
                     "대상 시스템, 목적과 경로가 v1 신뢰 대상 계약에 맞지 않습니다"
             );
         }
-        return new TrustedTarget(targetSystem, purpose, validatedPath);
+        return new TrustedTarget(targetSystem, purpose, targetPath);
     }
 
     public static TrustedTarget requireAllowed(

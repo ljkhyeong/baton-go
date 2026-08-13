@@ -294,7 +294,7 @@ class TargetContractOperationsIntegrationTest {
     }
 
     @Test
-    @DisplayName("compliant 링크는 remediation으로 변경되지 않고 일반 관리 조회와 멱등 폐기는 유지된다")
+    @DisplayName("compliant 링크는 remediation으로 변경되지 않는다")
     void refusesToRemediateCompliantLink() throws Exception {
         insertStoredLink(
                 VALID_LINK_ID,
@@ -319,27 +319,33 @@ class TargetContractOperationsIntegrationTest {
 
         assertThat(storedRevokedAt(VALID_LINK_ID)).isNull();
         assertThat(storedVersion(VALID_LINK_ID)).isEqualTo(2L);
+    }
 
-        mockMvc.perform(get("/api/v1/links/{linkId}", VALID_LINK_ID)
-                        .header(HttpHeaders.AUTHORIZATION, bearerToken()))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.id").value(VALID_LINK_ID.toString()))
-                .andExpect(jsonPath("$.targetSystem").value("BATON"))
-                .andExpect(jsonPath("$.targetPath").value(VALID_TARGET_PATH))
-                .andExpect(jsonPath("$.purpose").value("NAVIGATION"))
-                .andExpect(jsonPath("$.shortUrl").doesNotExist());
+    @Test
+    @DisplayName("실제 Spring JSON 조립은 문자열 expectedVersion을 변경 전에 거부한다")
+    void rejectsStringVersionWithConfiguredSpringJsonMapper() throws Exception {
+        insertStoredLink(
+                INVALID_LINK_ID,
+                "8".repeat(64),
+                "BATON",
+                INVALID_TARGET_PATH,
+                "NAVIGATION",
+                7,
+                true
+        );
 
-        mockMvc.perform(put("/api/v1/links/{linkId}/revocation", VALID_LINK_ID)
-                        .header(HttpHeaders.AUTHORIZATION, bearerToken()))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.revokedAt").isNotEmpty());
-        Instant firstRevokedAt = storedRevokedAt(VALID_LINK_ID);
+        mockMvc.perform(put(
+                        "/api/v1/operations/link-target-contract-v1/links/{linkId}/revocation",
+                        INVALID_LINK_ID
+                )
+                        .header(HttpHeaders.AUTHORIZATION, bearerToken())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"expectedVersion\":\"7\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
 
-        mockMvc.perform(put("/api/v1/links/{linkId}/revocation", VALID_LINK_ID)
-                        .header(HttpHeaders.AUTHORIZATION, bearerToken()))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.revokedAt").value(firstRevokedAt.toString()));
-        assertThat(storedVersion(VALID_LINK_ID)).isEqualTo(3L);
+        assertThat(storedRevokedAt(INVALID_LINK_ID)).isNull();
+        assertThat(storedVersion(INVALID_LINK_ID)).isEqualTo(7L);
     }
 
     @Test

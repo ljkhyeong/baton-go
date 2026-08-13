@@ -1,8 +1,12 @@
 package com.personal.batongo.adapter.in.web.link;
 
 import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeFormatterBuilder;
 import java.time.format.DateTimeParseException;
-import java.util.regex.Pattern;
+import java.time.format.ResolverStyle;
+import java.time.temporal.ChronoField;
 import tools.jackson.core.JacksonException;
 import tools.jackson.core.JsonParser;
 import tools.jackson.core.JsonToken;
@@ -11,11 +15,24 @@ import tools.jackson.databind.deser.std.StdDeserializer;
 
 public final class StrictUtcInstantDeserializer extends StdDeserializer<Instant> {
 
-    private static final Pattern UTC_INSTANT_PATTERN = Pattern.compile(
-            "^(?:\\d{4}|-\\d{4}|[+-][1-9]\\d{4,9})-\\d{2}-\\d{2}T"
-                    + "(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d"
-                    + "(?:\\.\\d{1,9})?Z$"
-    );
+    private static final DateTimeFormatter UTC_INSTANT_FORMATTER =
+            new DateTimeFormatterBuilder()
+                    .parseCaseSensitive()
+                    .parseStrict()
+                    .append(DateTimeFormatter.ISO_LOCAL_DATE)
+                    .appendLiteral('T')
+                    .appendValue(ChronoField.HOUR_OF_DAY, 2)
+                    .appendLiteral(':')
+                    .appendValue(ChronoField.MINUTE_OF_HOUR, 2)
+                    .appendLiteral(':')
+                    .appendValue(ChronoField.SECOND_OF_MINUTE, 2)
+                    .optionalStart()
+                    .appendFraction(ChronoField.NANO_OF_SECOND, 1, 9, true)
+                    .optionalEnd()
+                    .appendLiteral('Z')
+                    .toFormatter()
+                    .withResolverStyle(ResolverStyle.STRICT)
+                    .withZone(ZoneOffset.UTC);
 
     public StrictUtcInstantDeserializer() {
         super(Instant.class);
@@ -29,11 +46,12 @@ public final class StrictUtcInstantDeserializer extends StdDeserializer<Instant>
         }
 
         String rawValue = parser.getString();
-        if (!UTC_INSTANT_PATTERN.matcher(rawValue).matches()) {
-            return invalidValue(rawValue, context);
-        }
         try {
-            return Instant.parse(rawValue);
+            var parsed = UTC_INSTANT_FORMATTER.parse(rawValue);
+            String canonicalDate = DateTimeFormatter.ISO_LOCAL_DATE.format(parsed);
+            if (rawValue.startsWith(canonicalDate + "T")) {
+                return Instant.from(parsed);
+            }
         } catch (DateTimeParseException ignored) {
             // 아래의 동일한 wire-format 오류로 변환한다.
         }

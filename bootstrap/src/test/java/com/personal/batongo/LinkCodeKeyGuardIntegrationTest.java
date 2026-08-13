@@ -314,7 +314,7 @@ class LinkCodeKeyGuardIntegrationTest {
                 BindingResult result = new ExistingDatabaseLinkCodeKeyBinder().bind(
                         connection,
                         linkCodePort,
-                        canaryIdempotencyKey
+                        CreationIdempotencyKey.parseRequest(canaryIdempotencyKey)
                 );
                 connection.commit();
                 return result;
@@ -364,7 +364,7 @@ class LinkCodeKeyGuardIntegrationTest {
 
     private CreateLinkCommand command(String idempotencyKey) {
         return new CreateLinkCommand(
-                new CreationIdempotencyKey(idempotencyKey),
+                CreationIdempotencyKey.parseRequest(idempotencyKey),
                 TargetSystem.BATON,
                 CANONICAL_BATON_TARGET,
                 LinkPurpose.NAVIGATION,

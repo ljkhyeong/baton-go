@@ -30,7 +30,8 @@ class SensitiveValueToStringTest {
     @Test
     @DisplayName("링크 생성과 해석 값의 문자열 표현은 키·코드·대상을 노출하지 않는다")
     void redactsSensitiveApplicationValuesFromStringRepresentations() {
-        CreationIdempotencyKey idempotencyKey = new CreationIdempotencyKey(IDEMPOTENCY_KEY);
+        CreationIdempotencyKey idempotencyKey =
+                CreationIdempotencyKey.parseRequest(IDEMPOTENCY_KEY);
         LinkResult link = new LinkResult(
                 UUID.fromString("4b6982dc-31aa-4f87-bcc5-a89d0bc101be"),
                 TargetSystem.BATON,

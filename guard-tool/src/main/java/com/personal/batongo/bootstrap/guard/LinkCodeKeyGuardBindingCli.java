@@ -2,6 +2,7 @@ package com.personal.batongo.bootstrap.guard;
 
 import com.personal.batongo.adapter.out.external.link.LinkCodeProperties;
 import com.personal.batongo.adapter.out.external.link.SecureLinkCodeAdapter;
+import com.personal.batongo.application.link.CreationIdempotencyKey;
 import com.personal.batongo.application.link.port.out.LinkCodePort;
 import com.personal.batongo.bootstrap.guard.ExistingDatabaseLinkCodeKeyBinder.BindingResult;
 import java.io.BufferedReader;
@@ -14,7 +15,6 @@ import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.util.Arrays;
 import java.util.Map;
-import java.util.Set;
 
 /** 기존 데이터베이스 HMAC guard 최초 결합을 위한 one-shot CLI입니다. */
 public final class LinkCodeKeyGuardBindingCli {
@@ -22,10 +22,6 @@ public final class LinkCodeKeyGuardBindingCli {
     static final int EXIT_USAGE = 2;
     static final int EXIT_VERIFICATION_FAILED = 3;
     private static final String CONFIRMATION = "--confirm-writers-stopped";
-    private static final Set<String> PUBLISHED_CREDENTIALS = Set.of(
-            "replace-with-at-least-32-random-characters",
-            "replace-with-a-separate-at-least-32-character-secret"
-    );
 
     public static void main(String[] args) {
         LinkCodeKeyGuardBindingCli cli = new LinkCodeKeyGuardBindingCli();
@@ -59,8 +55,8 @@ public final class LinkCodeKeyGuardBindingCli {
         }
 
         try {
-            LegacyCanaryIdempotencyKey canary =
-                    LegacyCanaryIdempotencyKey.parse(canaryIdempotencyKey);
+            CreationIdempotencyKey canary =
+                    CreationIdempotencyKey.parseRequest(canaryIdempotencyKey);
             RuntimeConfiguration configuration = RuntimeConfiguration.from(environment);
             LinkCodePort linkCodePort = new SecureLinkCodeAdapter(
                     configuration.linkCodeProperties()
@@ -132,9 +128,6 @@ public final class LinkCodeKeyGuardBindingCli {
 
         static RuntimeConfiguration from(Map<String, String> environment) {
             String secret = environment.get("BATON_GO_LINK_CODE_SECRET");
-            if (secret != null && PUBLISHED_CREDENTIALS.contains(secret)) {
-                throw new IllegalArgumentException("공개 예시 비밀은 사용할 수 없습니다");
-            }
             LinkCodeProperties linkCodeProperties = new LinkCodeProperties(secret);
             return new RuntimeConfiguration(
                     requireNonBlank(environment, "BATON_GO_DB_URL"),

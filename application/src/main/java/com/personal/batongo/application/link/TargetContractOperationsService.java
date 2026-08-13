@@ -13,7 +13,6 @@ import com.personal.batongo.domain.link.LinkRevocationPolicy;
 import com.personal.batongo.domain.link.TrustedTargetPolicy;
 import java.time.Clock;
 import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -90,7 +89,7 @@ public class TargetContractOperationsService implements TargetContractOperations
 
         Instant revokedAt = LinkRevocationPolicy.requireFirstRevocationAt(
                 storedLink.createdAt(),
-                databaseTime()
+                clock.instant()
         );
         boolean revoked = repository.revokeStoredIfVersion(
                 storedLink.id(),
@@ -153,7 +152,4 @@ public class TargetContractOperationsService implements TargetContractOperations
         }
     }
 
-    private Instant databaseTime() {
-        return clock.instant().truncatedTo(ChronoUnit.MICROS);
-    }
 }

@@ -2,6 +2,7 @@ package com.personal.batongo;
 
 import com.personal.batongo.bootstrap.DatabaseMigrationRunner;
 import java.time.Clock;
+import java.time.Duration;
 import java.util.Arrays;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -34,6 +35,6 @@ public class BatonGoApplication {
 
     @Bean
     Clock clock() {
-        return Clock.systemUTC();
+        return Clock.tick(Clock.systemUTC(), Duration.ofNanos(1_000));
     }
 }

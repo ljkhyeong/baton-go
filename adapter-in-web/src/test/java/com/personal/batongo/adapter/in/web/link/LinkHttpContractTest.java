@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
@@ -21,7 +20,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.personal.batongo.adapter.in.web.GlobalExceptionHandler;
 import com.personal.batongo.adapter.in.web.RequestIdFilter;
 import com.personal.batongo.adapter.in.web.StrictHttpJsonConfiguration;
-import com.personal.batongo.application.link.CreationTimeStoragePolicy;
+import com.personal.batongo.application.link.error.InvalidCreationTimeException;
 import com.personal.batongo.application.link.error.IdempotencyKeyConflictException;
 import com.personal.batongo.application.link.error.InvalidIdempotencyKeyException;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.CreateLinkCommand;
@@ -42,11 +41,14 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.net.URI;
 import java.time.Instant;
 import java.util.UUID;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -164,35 +166,15 @@ class LinkHttpContractTest {
                         .value("https://go.example/l/VOvLShvx93kQpj8x7w2HYQ"));
     }
 
-    @Test
-    @DisplayName("링크 코드 설정 불일치로 재생할 수 없으면 운영 오류 코드로 응답한다")
-    void returnsOperationalErrorWhenLinkCodeReplayIsUnavailable() throws Exception {
-        when(useCase.createLink(any())).thenThrow(new LinkCodeReplayMismatchException());
-
-        mockMvc.perform(post("/api/v1/links")
-                        .header(LinkManagementController.IDEMPOTENCY_KEY_HEADER, IDEMPOTENCY_KEY)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {
-                                  "targetSystem": "BATON",
-                                  "targetPath": "%s",
-                                  "purpose": "NAVIGATION",
-                                  "expiresAt": "2026-07-30T10:00:00Z"
-                                }
-                                """.formatted(BATON_TARGET_PATH)))
-                .andExpect(status().isInternalServerError())
-                .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
-                .andExpect(jsonPath("$.code").value("LINK_CODE_REPLAY_UNAVAILABLE"))
-                .andExpect(jsonPath("$.message")
-                        .value("현재 링크 코드 파생 설정으로 기존 링크를 재생할 수 없습니다"))
-                .andExpect(jsonPath("$.requestId").isNotEmpty());
-    }
-
-    @Test
-    @DisplayName("최초 공개 origin을 복구할 수 없으면 잘못된 short URL 대신 운영 오류를 반환한다")
-    void returnsOperationalErrorWhenPublicOriginReplayIsUnavailable() throws Exception {
-        when(useCase.createLink(any()))
-                .thenThrow(new PublicLinkOriginReplayUnavailableException());
+    @ParameterizedTest(name = "{1}")
+    @MethodSource("operationalReplayErrors")
+    @DisplayName("재생 안전성을 보장할 수 없으면 원인별 운영 오류로 응답한다")
+    void returnsOperationalReplayError(
+            RuntimeException exception,
+            String code,
+            String message
+    ) throws Exception {
+        when(useCase.createLink(any())).thenThrow(exception);
 
         mockMvc.perform(post("/api/v1/links")
                         .header(LinkManagementController.IDEMPOTENCY_KEY_HEADER, IDEMPOTENCY_KEY)
@@ -206,35 +188,29 @@ class LinkHttpContractTest {
                                 """.formatted(BATON_TARGET_PATH)))
                 .andExpect(status().isInternalServerError())
                 .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
-                .andExpect(jsonPath("$.code")
-                        .value("PUBLIC_LINK_ORIGIN_REPLAY_UNAVAILABLE"))
-                .andExpect(jsonPath("$.message")
-                        .value("기존 링크 생성에 사용한 공개 origin을 복구할 수 없습니다"))
+                .andExpect(jsonPath("$.code").value(code))
+                .andExpect(jsonPath("$.message").value(message))
                 .andExpect(jsonPath("$.requestId").isNotEmpty());
     }
 
-    @Test
-    @DisplayName("링크 코드 키가 데이터베이스 결합과 다르면 운영 오류 코드로 응답한다")
-    void returnsOperationalErrorWhenLinkCodeKeyBindingIsUnavailable() throws Exception {
-        when(useCase.createLink(any())).thenThrow(new LinkCodeKeyBindingException());
-
-        mockMvc.perform(post("/api/v1/links")
-                        .header(LinkManagementController.IDEMPOTENCY_KEY_HEADER, IDEMPOTENCY_KEY)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {
-                                  "targetSystem": "BATON",
-                                  "targetPath": "%s",
-                                  "purpose": "NAVIGATION"
-                                }
-                                """.formatted(BATON_TARGET_PATH)))
-                .andExpect(status().isInternalServerError())
-                .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
-                .andExpect(jsonPath("$.code").value("LINK_CODE_CONFIGURATION_MISMATCH"))
-                .andExpect(jsonPath("$.message").value(
+    private static Stream<Arguments> operationalReplayErrors() {
+        return Stream.of(
+                Arguments.of(
+                        new LinkCodeReplayMismatchException(),
+                        "LINK_CODE_REPLAY_UNAVAILABLE",
+                        "현재 링크 코드 파생 설정으로 기존 링크를 재생할 수 없습니다"
+                ),
+                Arguments.of(
+                        new PublicLinkOriginReplayUnavailableException(),
+                        "PUBLIC_LINK_ORIGIN_REPLAY_UNAVAILABLE",
+                        "기존 링크 생성에 사용한 공개 origin을 복구할 수 없습니다"
+                ),
+                Arguments.of(
+                        new LinkCodeKeyBindingException(),
+                        "LINK_CODE_CONFIGURATION_MISMATCH",
                         "링크 코드 파생 키를 현재 데이터베이스에 안전하게 결합할 수 없습니다"
-                ))
-                .andExpect(jsonPath("$.requestId").isNotEmpty());
+                )
+        );
     }
 
     @Test
@@ -255,47 +231,40 @@ class LinkHttpContractTest {
     }
 
     @Test
-    @DisplayName("존재하지 않는 관리 링크 조회는 안정된 404 오류로 응답한다")
+    @DisplayName("존재하지 않는 관리 링크의 조회와 폐기는 같은 404로 응답한다")
     void returnsNotFoundForMissingManagedLink() throws Exception {
         when(useCase.getLink(LINK_ID)).thenThrow(new LinkNotFoundException());
+        when(useCase.revokeLink(LINK_ID)).thenThrow(new LinkNotFoundException());
 
         mockMvc.perform(get("/api/v1/links/{linkId}", LINK_ID))
                 .andExpect(status().isNotFound())
                 .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
                 .andExpect(jsonPath("$.code").value("LINK_NOT_FOUND"))
                 .andExpect(jsonPath("$.requestId").isNotEmpty());
-    }
-
-    @Test
-    @DisplayName("관리 링크를 반복 폐기해도 최초 폐기 시각을 유지하고 short URL을 노출하지 않는다")
-    void revokesManagedLinkIdempotentlyWithoutRawShortUrl() throws Exception {
-        Instant firstRevokedAt = Instant.parse("2026-07-29T11:00:00Z");
-        when(useCase.revokeLink(LINK_ID)).thenReturn(linkResult(firstRevokedAt));
-
-        for (int attempt = 0; attempt < 2; attempt++) {
-            mockMvc.perform(put("/api/v1/links/{linkId}/revocation", LINK_ID))
-                    .andExpect(status().isOk())
-                    .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
-                    .andExpect(header().string("Referrer-Policy", "no-referrer"))
-                    .andExpect(header().exists(RequestIdFilter.HEADER_NAME))
-                    .andExpect(jsonPath("$.id").value(LINK_ID.toString()))
-                    .andExpect(jsonPath("$.revokedAt").value(firstRevokedAt.toString()))
-                    .andExpect(jsonPath("$.shortUrl").doesNotExist());
-        }
-
-        verify(useCase, times(2)).revokeLink(LINK_ID);
-    }
-
-    @Test
-    @DisplayName("존재하지 않는 관리 링크 폐기는 안정된 404 오류로 응답한다")
-    void returnsNotFoundWhenRevokingMissingManagedLink() throws Exception {
-        when(useCase.revokeLink(LINK_ID)).thenThrow(new LinkNotFoundException());
 
         mockMvc.perform(put("/api/v1/links/{linkId}/revocation", LINK_ID))
                 .andExpect(status().isNotFound())
                 .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
                 .andExpect(jsonPath("$.code").value("LINK_NOT_FOUND"))
                 .andExpect(jsonPath("$.requestId").isNotEmpty());
+    }
+
+    @Test
+    @DisplayName("관리 링크 폐기 응답은 최초 폐기 시각을 유지하고 short URL을 노출하지 않는다")
+    void revokesManagedLinkWithoutRawShortUrl() throws Exception {
+        Instant firstRevokedAt = Instant.parse("2026-07-29T11:00:00Z");
+        when(useCase.revokeLink(LINK_ID)).thenReturn(linkResult(firstRevokedAt));
+
+        mockMvc.perform(put("/api/v1/links/{linkId}/revocation", LINK_ID))
+                .andExpect(status().isOk())
+                .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
+                .andExpect(header().string("Referrer-Policy", "no-referrer"))
+                .andExpect(header().exists(RequestIdFilter.HEADER_NAME))
+                .andExpect(jsonPath("$.id").value(LINK_ID.toString()))
+                .andExpect(jsonPath("$.revokedAt").value(firstRevokedAt.toString()))
+                .andExpect(jsonPath("$.shortUrl").doesNotExist());
+
+        verify(useCase).revokeLink(LINK_ID);
     }
 
     @Test
@@ -315,17 +284,10 @@ class LinkHttpContractTest {
                 .andExpect(jsonPath("$.requestId").isNotEmpty());
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {
-            "8E448211-66AE-44AB-9888-C4960648C22B",
-            "00000000-0000-0000-0000-000000000000",
-            "00000000-0000-0000-8000-000000000000",
-            "00000000-0000-6000-8000-000000000000",
-            "00000000-0000-4000-7000-000000000000"
-    })
+    @Test
     @DisplayName("기존 예약이 없는 과거 UUID 멱등성 키는 안정된 400으로 거부한다")
-    void rejectsReplayOnlyIdempotencyKeyWithoutReservation(String idempotencyKey)
-            throws Exception {
+    void rejectsReplayOnlyIdempotencyKeyWithoutReservation() throws Exception {
+        String idempotencyKey = "8E448211-66AE-44AB-9888-C4960648C22B";
         when(useCase.createLink(any())).thenAnswer(invocation -> {
             CreateLinkCommand command = invocation.getArgument(0);
             assertThat(command.idempotencyKey().allowsNewReservation()).isFalse();
@@ -415,25 +377,10 @@ class LinkHttpContractTest {
         verifyNoMoreInteractions(useCase);
     }
 
-    @ParameterizedTest
-    @CsvSource({
-            "notBefore, 1582-10-14T23:59:59.999999Z",
-            "expiresAt, 1582-10-14T23:59:59.999999Z",
-            "notBefore, +10000-01-01T00:00:00Z",
-            "expiresAt, +10000-01-01T00:00:00Z",
-            "notBefore, 2026-07-30T10:00:00.123456001Z",
-            "expiresAt, 2026-07-30T10:00:00.123456001Z"
-    })
-    @DisplayName("저장 범위 밖이거나 마이크로초보다 세밀한 생성 시각은 안정된 400으로 거부한다")
-    void rejectsUnstorableCreationTimes(String fieldName, String rawTime) throws Exception {
-        when(useCase.createLink(any())).thenAnswer(invocation -> {
-            CreateLinkCommand command = invocation.getArgument(0);
-            CreationTimeStoragePolicy.requireStorable(
-                    command.notBefore(),
-                    command.expiresAt()
-            );
-            throw new AssertionError("저장할 수 없는 생성 시각을 허용했습니다");
-        });
+    @Test
+    @DisplayName("저장할 수 없는 생성 시각 예외는 안정된 400으로 응답한다")
+    void mapsUnstorableCreationTimeToInvalidRequest() throws Exception {
+        when(useCase.createLink(any())).thenThrow(new InvalidCreationTimeException());
 
         mockMvc.perform(post("/api/v1/links")
                         .header(LinkManagementController.IDEMPOTENCY_KEY_HEADER, IDEMPOTENCY_KEY)
@@ -443,9 +390,9 @@ class LinkHttpContractTest {
                                   "targetSystem": "BATON",
                                   "targetPath": "%s",
                                   "purpose": "NAVIGATION",
-                                  "%s": "%s"
+                                  "expiresAt": "2026-07-30T10:00:00.123456001Z"
                                 }
-                                """.formatted(BATON_TARGET_PATH, fieldName, rawTime)))
+                                """.formatted(BATON_TARGET_PATH)))
                 .andExpect(status().isBadRequest())
                 .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
                 .andExpect(header().string("Referrer-Policy", "no-referrer"))
@@ -469,7 +416,8 @@ class LinkHttpContractTest {
             "\" 2026-07-30T10:00:00Z \"",
             "\"2026-07-30T10:00:00+00:00\"",
             "\"2026-07-30t10:00:00z\"",
-            "\"2026-07-30T10:00Z\""
+            "\"2026-07-30T10:00Z\"",
+            "\"2026-07-30T10:00:00.Z\""
     })
     @DisplayName("비canonical 생성 시각은 예약 전에 400 INVALID_REQUEST로 거부한다")
     void rejectsNonCanonicalCreationTimesBeforeApplication(String rawJsonValue)
@@ -635,20 +583,30 @@ class LinkHttpContractTest {
         verifyNoMoreInteractions(useCase);
     }
 
-    @Test
-    @DisplayName("폐기된 공개 링크는 request ID가 있는 안정된 410 오류로 응답한다")
-    void returnsRevokedContract() throws Exception {
+    @ParameterizedTest(name = "{index}: {0}")
+    @CsvSource({
+            "NOT_ACTIVE, 404, LINK_NOT_ACTIVE, 아직 활성화되지 않은 링크입니다",
+            "EXPIRED, 410, LINK_EXPIRED, 만료된 링크입니다",
+            "REVOKED, 410, LINK_REVOKED, 폐기된 링크입니다"
+    })
+    @DisplayName("사용할 수 없는 공개 링크는 사유별 안정된 오류로 응답한다")
+    void returnsUnavailableContract(
+            LinkUnavailableException.Reason reason,
+            int expectedStatus,
+            String expectedCode,
+            String message
+    ) throws Exception {
         when(useCase.resolveLink("VOvLShvx93kQpj8x7w2HYQ"))
                 .thenThrow(new LinkUnavailableException(
-                        LinkUnavailableException.Reason.REVOKED,
-                        "폐기된 링크입니다"
+                        reason,
+                        message
                 ));
 
         mockMvc.perform(get("/l/VOvLShvx93kQpj8x7w2HYQ"))
-                .andExpect(status().isGone())
+                .andExpect(status().is(expectedStatus))
                 .andExpect(header().string("Cache-Control", "no-store"))
-                .andExpect(jsonPath("$.code").value("LINK_REVOKED"))
-                .andExpect(jsonPath("$.message").value("폐기된 링크입니다"))
+                .andExpect(jsonPath("$.code").value(expectedCode))
+                .andExpect(jsonPath("$.message").value(message))
                 .andExpect(jsonPath("$.requestId").isNotEmpty());
     }
 

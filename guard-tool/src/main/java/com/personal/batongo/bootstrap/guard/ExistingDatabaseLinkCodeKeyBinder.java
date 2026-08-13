@@ -1,14 +1,15 @@
 package com.personal.batongo.bootstrap.guard;
 
+import com.personal.batongo.application.link.CreationIdempotencyKey;
 import com.personal.batongo.application.link.LinkCodeDerivationIdentity;
 import com.personal.batongo.application.link.port.out.IssuedLinkCode;
 import com.personal.batongo.application.link.port.out.LinkCodePort;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
 import java.sql.SQLException;
+import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.jdbc.datasource.SingleConnectionDataSource;
 
 /** 기존 데이터베이스의 HMAC guard를 검증 후 한 번만 결합하는 JDBC 도구입니다. */
 public final class ExistingDatabaseLinkCodeKeyBinder {
@@ -20,29 +21,16 @@ public final class ExistingDatabaseLinkCodeKeyBinder {
     public BindingResult bind(
             Connection connection,
             LinkCodePort linkCodePort,
-            String rawCanaryIdempotencyKey
-    ) {
-        LegacyCanaryIdempotencyKey canaryIdempotencyKey;
-        try {
-            canaryIdempotencyKey = LegacyCanaryIdempotencyKey.parse(
-                    rawCanaryIdempotencyKey
-            );
-        } catch (RuntimeException exception) {
-            throw unsafeState();
-        }
-        return bind(connection, linkCodePort, canaryIdempotencyKey);
-    }
-
-    BindingResult bind(
-            Connection connection,
-            LinkCodePort linkCodePort,
-            LegacyCanaryIdempotencyKey canaryIdempotencyKey
+            CreationIdempotencyKey canaryIdempotencyKey
     ) {
         try {
             requireTransactionalConnection(connection);
+            JdbcClient jdbcClient = JdbcClient.create(
+                    new SingleConnectionDataSource(connection, true)
+            );
             LinkCodeDerivationIdentity identity = linkCodePort.derivationIdentity();
-            GuardState guardState = lockGuard(connection);
-            verifyCanary(connection, linkCodePort, canaryIdempotencyKey);
+            GuardState guardState = lockGuard(jdbcClient);
+            verifyCanary(jdbcClient, linkCodePort, canaryIdempotencyKey);
 
             if (guardState.isBound()) {
                 requireMatchingIdentity(guardState, identity);
@@ -52,7 +40,7 @@ public final class ExistingDatabaseLinkCodeKeyBinder {
                 throw unsafeState();
             }
 
-            bindGuard(connection, identity);
+            bindGuard(jdbcClient, identity);
             return BindingResult.BOUND;
         } catch (GuardBindingToolException exception) {
             throw exception;
@@ -67,62 +55,43 @@ public final class ExistingDatabaseLinkCodeKeyBinder {
         }
     }
 
-    private GuardState lockGuard(Connection connection) throws SQLException {
-        try (PreparedStatement statement = connection.prepareStatement(
-                """
+    private GuardState lockGuard(JdbcClient jdbcClient) {
+        return jdbcClient.sql("""
                         SELECT derivation_version, key_fingerprint
                         FROM link_code_key_guard
                         WHERE guard_id = ?
                         FOR UPDATE
-                        """
-        )) {
-            statement.setInt(1, SINGLETON_GUARD_ID);
-            try (ResultSet resultSet = statement.executeQuery()) {
-                if (!resultSet.next()) {
-                    throw unsafeState();
-                }
-                GuardState state = new GuardState(
+                        """)
+                .param(SINGLETON_GUARD_ID)
+                .query((resultSet, rowNumber) -> new GuardState(
                         resultSet.getString("derivation_version"),
                         resultSet.getString("key_fingerprint")
-                );
-                if (resultSet.next()) {
-                    throw unsafeState();
-                }
-                return state;
-            }
-        }
+                ))
+                .single();
     }
 
     private void verifyCanary(
-            Connection connection,
+            JdbcClient jdbcClient,
             LinkCodePort linkCodePort,
-            LegacyCanaryIdempotencyKey canaryIdempotencyKey
-    ) throws SQLException {
+            CreationIdempotencyKey canaryIdempotencyKey
+    ) {
         String idempotencyKey = canaryIdempotencyKey.value();
         String idempotencyKeyHash = linkCodePort.hashIdempotencyKey(idempotencyKey);
         IssuedLinkCode issuedLinkCode = linkCodePort.issue(idempotencyKey);
 
-        try (PreparedStatement statement = connection.prepareStatement(
-                """
+        String storedCodeHash = jdbcClient.sql("""
                         SELECT smart_links.code_hash
                         FROM link_creation_requests
                         JOIN smart_links
                           ON smart_links.id = link_creation_requests.link_id
                         WHERE link_creation_requests.idempotency_key_hash = ?
                         FOR SHARE
-                        """
-        )) {
-            statement.setString(1, idempotencyKeyHash);
-            try (ResultSet resultSet = statement.executeQuery()) {
-                if (!resultSet.next()
-                        || !constantTimeEquals(
-                        issuedLinkCode.codeHash(),
-                        resultSet.getString("code_hash")
-                )
-                        || resultSet.next()) {
-                    throw unsafeState();
-                }
-            }
+                        """)
+                .param(idempotencyKeyHash)
+                .query(String.class)
+                .single();
+        if (!constantTimeEquals(issuedLinkCode.codeHash(), storedCodeHash)) {
+            throw unsafeState();
         }
     }
 
@@ -130,31 +99,34 @@ public final class ExistingDatabaseLinkCodeKeyBinder {
             GuardState guardState,
             LinkCodeDerivationIdentity identity
     ) {
-        if (!constantTimeEquals(guardState.version(), identity.version())
-                || !constantTimeEquals(guardState.fingerprint(), identity.hmacFingerprint())) {
+        LinkCodeDerivationIdentity storedIdentity = new LinkCodeDerivationIdentity(
+                guardState.version(),
+                guardState.fingerprint()
+        );
+        if (!storedIdentity.matches(identity)) {
             throw unsafeState();
         }
     }
 
     private void bindGuard(
-            Connection connection,
+            JdbcClient jdbcClient,
             LinkCodeDerivationIdentity identity
-    ) throws SQLException {
-        try (PreparedStatement statement = connection.prepareStatement(
-                """
+    ) {
+        int updated = jdbcClient.sql("""
                         UPDATE link_code_key_guard
                         SET derivation_version = ?, key_fingerprint = ?
                         WHERE guard_id = ?
                           AND derivation_version IS NULL
                           AND key_fingerprint IS NULL
-                        """
-        )) {
-            statement.setString(1, identity.version());
-            statement.setString(2, identity.hmacFingerprint());
-            statement.setInt(3, SINGLETON_GUARD_ID);
-            if (statement.executeUpdate() != 1) {
-                throw unsafeState();
-            }
+                        """)
+                .params(
+                        identity.version(),
+                        identity.hmacFingerprint(),
+                        SINGLETON_GUARD_ID
+                )
+                .update();
+        if (updated != 1) {
+            throw unsafeState();
         }
     }
 

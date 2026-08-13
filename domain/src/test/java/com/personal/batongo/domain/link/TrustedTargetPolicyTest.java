@@ -186,6 +186,12 @@ class TrustedTargetPolicyTest {
     private static Stream<Arguments> nonCanonicalPathShapes() {
         return Stream.of(
                 Arguments.of(
+                        "BATON null",
+                        TargetSystem.BATON,
+                        LinkPurpose.NAVIGATION,
+                        null
+                ),
+                Arguments.of(
                         "BATON 앞 공백",
                         TargetSystem.BATON,
                         LinkPurpose.NAVIGATION,

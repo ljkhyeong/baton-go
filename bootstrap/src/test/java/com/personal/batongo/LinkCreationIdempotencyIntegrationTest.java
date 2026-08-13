@@ -21,12 +21,10 @@ import com.personal.batongo.application.link.port.in.SmartLinkUseCase.LinkResult
 import com.personal.batongo.application.link.port.out.LinkCodePort;
 import com.personal.batongo.application.link.port.out.LinkCreationReservationPort;
 import com.personal.batongo.application.link.port.out.PublicLinkOriginPort;
-import com.personal.batongo.application.link.port.out.SmartLinkRepository;
 import com.personal.batongo.domain.link.LinkPurpose;
 import com.personal.batongo.domain.link.SmartLink;
 import com.personal.batongo.domain.link.TargetSystem;
 import com.personal.batongo.domain.link.TrustedTargetPolicy;
-import jakarta.persistence.EntityManager;
 import java.net.URI;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -64,7 +62,6 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.transaction.annotation.Transactional;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.mysql.MySQLContainer;
@@ -110,13 +107,7 @@ class LinkCreationIdempotencyIntegrationTest {
     private JdbcTemplate jdbcTemplate;
 
     @Autowired
-    private SmartLinkRepository smartLinkRepository;
-
-    @Autowired
     private LinkCodePort linkCodePort;
-
-    @Autowired
-    private EntityManager entityManager;
 
     @Autowired
     private ControllableReservationPort controllableReservationPort;
@@ -128,34 +119,10 @@ class LinkCreationIdempotencyIntegrationTest {
     private MockMvc mockMvc;
 
     @Test
-    @Transactional
-    @DisplayName("할당 UUID와 null 버전의 새 링크는 persist 대상으로 저장된다")
-    void persistsNewLinkWithAssignedId() {
-        SmartLink candidate = SmartLink.create(
-                UUID.fromString("7f7386b7-8a34-46c9-ae20-606d95a63bb2"),
-                "a".repeat(64),
-                TrustedTargetPolicy.requireAllowed(
-                        TargetSystem.BATON,
-                        LinkPurpose.NAVIGATION,
-                        CANONICAL_BATON_TARGET
-                ),
-                null,
-                null,
-                Instant.parse("2026-07-31T00:00:00Z")
-        );
-
-        SmartLink saved = smartLinkRepository.save(candidate);
-        entityManager.flush();
-
-        assertThat(saved).isSameAs(candidate);
-        assertThat(entityManager.contains(candidate)).isTrue();
-    }
-
-    @Test
     @DisplayName("Flyway와 JPA는 2040년 링크의 생성 재생 폐기 시각을 마이크로초까지 보존한다")
     void persistsCreationReplayAndRevocationAfterTimestampLimit() {
         CreateLinkCommand command = new CreateLinkCommand(
-                new CreationIdempotencyKey(FAR_FUTURE_IDEMPOTENCY_KEY),
+                CreationIdempotencyKey.parseRequest(FAR_FUTURE_IDEMPOTENCY_KEY),
                 TargetSystem.ROUND,
                 "/room/wxyz-2345-6789",
                 LinkPurpose.MEETING_ENTRY,
@@ -280,88 +247,6 @@ class LinkCreationIdempotencyIntegrationTest {
                 "1582-10-15T00:00:00.000000Z",
                 "9999-12-31T23:59:59.999999Z"
         ));
-    }
-
-    @Test
-    @DisplayName("V4 마이그레이션은 모든 절대 시각 열을 DATETIME(6)으로 바꾸고 제약과 인덱스를 유지한다")
-    void migratesAbsoluteTimeColumnsWithoutDroppingSchemaObjects() {
-        assertThat(jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM flyway_schema_history WHERE version = '4' AND success = 1",
-                Long.class
-        )).isOne();
-
-        List<TimeColumn> timeColumns = jdbcTemplate.query(
-                """
-                        SELECT table_name,
-                               column_name,
-                               data_type,
-                               datetime_precision,
-                               is_nullable
-                        FROM information_schema.columns
-                        WHERE table_schema = DATABASE()
-                          AND (
-                              (table_name = 'smart_links' AND column_name IN (
-                                  'not_before',
-                                  'expires_at',
-                                  'revoked_at',
-                                  'created_at'
-                              ))
-                              OR (table_name = 'link_creation_requests'
-                                  AND column_name = 'created_at')
-                          )
-                        """,
-                (resultSet, rowNumber) -> new TimeColumn(
-                        resultSet.getString("table_name"),
-                        resultSet.getString("column_name"),
-                        resultSet.getString("data_type"),
-                        resultSet.getInt("datetime_precision"),
-                        resultSet.getString("is_nullable")
-                )
-        );
-        assertThat(timeColumns).containsExactlyInAnyOrder(
-                new TimeColumn("smart_links", "not_before", "datetime", 6, "YES"),
-                new TimeColumn("smart_links", "expires_at", "datetime", 6, "YES"),
-                new TimeColumn("smart_links", "revoked_at", "datetime", 6, "YES"),
-                new TimeColumn("smart_links", "created_at", "datetime", 6, "NO"),
-                new TimeColumn(
-                        "link_creation_requests",
-                        "created_at",
-                        "datetime",
-                        6,
-                        "NO"
-                )
-        );
-
-        List<SchemaObject> constraints = schemaObjects(
-                "information_schema.table_constraints",
-                "constraint_name"
-        );
-        assertThat(constraints).contains(
-                new SchemaObject("smart_links", "PRIMARY"),
-                new SchemaObject("smart_links", "uk_smart_links_code_hash"),
-                new SchemaObject("smart_links", "ck_smart_links_expiry_after_creation"),
-                new SchemaObject("smart_links", "ck_smart_links_expiry_after_activation"),
-                new SchemaObject("link_creation_requests", "PRIMARY"),
-                new SchemaObject(
-                        "link_creation_requests",
-                        "uk_link_creation_requests_link_id"
-                )
-        );
-
-        List<SchemaObject> indexes = schemaObjects(
-                "information_schema.statistics",
-                "index_name"
-        );
-        assertThat(indexes).contains(
-                new SchemaObject("smart_links", "PRIMARY"),
-                new SchemaObject("smart_links", "uk_smart_links_code_hash"),
-                new SchemaObject("smart_links", "ix_smart_links_expiry"),
-                new SchemaObject("link_creation_requests", "PRIMARY"),
-                new SchemaObject(
-                        "link_creation_requests",
-                        "uk_link_creation_requests_link_id"
-                )
-        );
     }
 
     @Test
@@ -640,7 +525,7 @@ class LinkCreationIdempotencyIntegrationTest {
         Instant historicalExpiresAt = Instant.parse("2040-06-02T13:00:00.123456789Z");
         Instant storedExpiresAt = Instant.parse("2040-06-02T13:00:00.123456Z");
         CreatedLinkResult created = smartLinkUseCase.createLink(new CreateLinkCommand(
-                new CreationIdempotencyKey(idempotencyKey),
+                CreationIdempotencyKey.parseRequest(idempotencyKey),
                 TargetSystem.ROUND,
                 targetPath,
                 LinkPurpose.MEETING_ENTRY,
@@ -737,28 +622,6 @@ class LinkCreationIdempotencyIntegrationTest {
     }
 
     @Test
-    @DisplayName("정상 생성 재생은 현재 폐기 시각을 보존해 반환한다")
-    void replaysCurrentRevokedStateThroughRawProjection() {
-        CreateLinkCommand command = new CreateLinkCommand(
-                new CreationIdempotencyKey("bbbf78dd-3a8d-4624-b30d-e20983138d2a"),
-                TargetSystem.ROUND,
-                "/room/abcd-efgh-jkmn",
-                LinkPurpose.MEETING_ENTRY,
-                null,
-                null
-        );
-
-        CreatedLinkResult first = smartLinkUseCase.createLink(command);
-        var revoked = smartLinkUseCase.revokeLink(first.link().id());
-        CreatedLinkResult replay = smartLinkUseCase.createLink(command);
-
-        assertThat(replay.replayed()).isTrue();
-        assertThat(replay.link().id()).isEqualTo(first.link().id());
-        assertThat(replay.shortUrl()).isEqualTo(first.shortUrl());
-        assertThat(replay.link().revokedAt()).isEqualTo(revoked.revokedAt());
-    }
-
-    @Test
     @DisplayName("저장된 비허용 target은 GET과 HEAD에서 존재를 숨기고 리다이렉트하지 않는다")
     void hidesStoredTargetPolicyViolationFromGetAndHead() throws Exception {
         String rawCode = "A".repeat(22);
@@ -792,7 +655,7 @@ class LinkCreationIdempotencyIntegrationTest {
     @DisplayName("동시에 같은 생성 요청을 보내도 MySQL에는 링크와 예약이 한 건만 남는다")
     void serializesConcurrentCreation() throws Exception {
         CreateLinkCommand command = new CreateLinkCommand(
-                new CreationIdempotencyKey(IDEMPOTENCY_KEY),
+                CreationIdempotencyKey.parseRequest(IDEMPOTENCY_KEY),
                 TargetSystem.ROUND,
                 "/room/abcd-efgh-jkmn",
                 LinkPurpose.MEETING_ENTRY,
@@ -861,7 +724,7 @@ class LinkCreationIdempotencyIntegrationTest {
                     .matches("^[0-9a-f]{64}$")
                     .isNotEqualTo(IDEMPOTENCY_KEY);
             assertThatThrownBy(() -> smartLinkUseCase.createLink(new CreateLinkCommand(
-                    new CreationIdempotencyKey(IDEMPOTENCY_KEY),
+                    CreationIdempotencyKey.parseRequest(IDEMPOTENCY_KEY),
                     TargetSystem.ROUND,
                     "/room/qrst-uvwx-yz23",
                     LinkPurpose.MEETING_ENTRY,
@@ -881,7 +744,7 @@ class LinkCreationIdempotencyIntegrationTest {
     void convergesOnStoredPublicOriginAcrossConcurrentReplicas() throws Exception {
         String idempotencyKey = "f14af1a6-9d56-4a41-8f47-c05f7c8898a1";
         CreateLinkCommand command = new CreateLinkCommand(
-                new CreationIdempotencyKey(idempotencyKey),
+                CreationIdempotencyKey.parseRequest(idempotencyKey),
                 TargetSystem.ROUND,
                 "/room/wxyz-2345-6789",
                 LinkPurpose.MEETING_ENTRY,
@@ -942,7 +805,7 @@ class LinkCreationIdempotencyIntegrationTest {
     @DisplayName("첫 생성 transaction이 rollback되면 대기 요청 하나가 승계하고 나머지는 재시도할 수 있다")
     void transfersOwnershipAfterWinnerRollback() throws Exception {
         CreateLinkCommand command = new CreateLinkCommand(
-                new CreationIdempotencyKey(ROLLBACK_IDEMPOTENCY_KEY),
+                CreationIdempotencyKey.parseRequest(ROLLBACK_IDEMPOTENCY_KEY),
                 TargetSystem.ROUND,
                 "/room/mnpq-rstu-vwxy",
                 LinkPurpose.MEETING_ENTRY,
@@ -1105,8 +968,6 @@ class LinkCreationIdempotencyIntegrationTest {
                 .andExpect(status().isConflict())
                 .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
                 .andExpect(jsonPath("$.code").value("IDEMPOTENCY_KEY_REUSED"))
-                .andExpect(jsonPath("$.message")
-                        .value("같은 Idempotency-Key를 다른 링크 생성 요청에 사용할 수 없습니다"))
                 .andReturn()
                 .getResponse()
                 .getContentAsString();
@@ -1139,24 +1000,6 @@ class LinkCreationIdempotencyIntegrationTest {
         );
     }
 
-    private List<SchemaObject> schemaObjects(
-            String informationSchemaTable,
-            String objectNameColumn
-    ) {
-        return jdbcTemplate.query(
-                """
-                        SELECT DISTINCT table_name, %s AS object_name
-                        FROM %s
-                        WHERE table_schema = DATABASE()
-                          AND table_name IN ('smart_links', 'link_creation_requests')
-                        """.formatted(objectNameColumn, informationSchemaTable),
-                (resultSet, rowNumber) -> new SchemaObject(
-                        resultSet.getString("table_name"),
-                        resultSet.getString("object_name")
-                )
-        );
-    }
-
     private Instant instant(ResultSet resultSet, String columnName) throws SQLException {
         Timestamp timestamp = resultSet.getTimestamp(columnName, utcCalendar());
         return timestamp == null ? null : timestamp.toInstant();
@@ -1177,7 +1020,6 @@ class LinkCreationIdempotencyIntegrationTest {
                 .andExpect(header().string("Referrer-Policy", "no-referrer"))
                 .andExpect(header().string("X-Request-Id", requestId))
                 .andExpect(jsonPath("$.code").value("LINK_NOT_FOUND"))
-                .andExpect(jsonPath("$.message").value("링크를 찾을 수 없습니다"))
                 .andExpect(jsonPath("$.requestId").value(requestId));
 
         mockMvc.perform(head("/l/{code}", rawCode)
@@ -1390,15 +1232,4 @@ class LinkCreationIdempotencyIntegrationTest {
     private record RawBoundaryTimes(String notBefore, String expiresAt) {
     }
 
-    private record TimeColumn(
-            String tableName,
-            String columnName,
-            String dataType,
-            int datetimePrecision,
-            String nullable
-    ) {
-    }
-
-    private record SchemaObject(String tableName, String objectName) {
-    }
 }

@@ -93,22 +93,6 @@ public class SmartLink {
         );
     }
 
-    public void requireResolvableAt(Instant now) {
-        LinkAvailabilityPolicy.requireResolvableAt(
-                revokedAt,
-                notBefore,
-                expiresAt,
-                now
-        );
-    }
-
-    public void revoke(Instant now) {
-        Objects.requireNonNull(now, "폐기 시각은 필수입니다");
-        if (revokedAt == null) {
-            revokedAt = LinkRevocationPolicy.requireFirstRevocationAt(createdAt, now);
-        }
-    }
-
     private void validateTimeRange() {
         if (expiresAt != null && !expiresAt.isAfter(createdAt)) {
             throw new LinkValidationException("만료 시각은 생성 시각보다 뒤여야 합니다");
@@ -127,10 +111,6 @@ public class SmartLink {
 
     public UUID getId() {
         return id;
-    }
-
-    public String getCodeHash() {
-        return codeHash;
     }
 
     public TargetSystem getTargetSystem() {

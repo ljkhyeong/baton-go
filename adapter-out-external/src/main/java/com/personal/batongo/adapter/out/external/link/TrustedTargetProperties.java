@@ -5,17 +5,23 @@ import java.net.URI;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @ConfigurationProperties("baton-go.targets")
-public record TrustedTargetProperties(
-        URI batonBaseUrl,
-        URI roundBaseUrl
-) {
+public final class TrustedTargetProperties {
 
-    public TrustedTargetProperties {
-        HttpOrigin batonOrigin = HttpOrigin.require(batonBaseUrl, "BATON base URL");
-        HttpOrigin roundOrigin = HttpOrigin.require(roundBaseUrl, "ROUND base URL");
+    private final HttpOrigin batonOrigin;
+    private final HttpOrigin roundOrigin;
+
+    public TrustedTargetProperties(URI batonBaseUrl, URI roundBaseUrl) {
+        this.batonOrigin = HttpOrigin.require(batonBaseUrl, "BATON base URL");
+        this.roundOrigin = HttpOrigin.require(roundBaseUrl, "ROUND base URL");
         requireDeploymentTopology(batonOrigin, roundOrigin);
-        batonBaseUrl = batonOrigin.value();
-        roundBaseUrl = roundOrigin.value();
+    }
+
+    public HttpOrigin batonOrigin() {
+        return batonOrigin;
+    }
+
+    public HttpOrigin roundOrigin() {
+        return roundOrigin;
     }
 
     private static void requireDeploymentTopology(

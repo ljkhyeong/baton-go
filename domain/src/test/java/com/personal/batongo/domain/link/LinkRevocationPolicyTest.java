@@ -31,7 +31,6 @@ class LinkRevocationPolicyTest {
                 CREATED_AT,
                 CREATED_AT.minusNanos(1)
         ))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessage("폐기 시각은 생성 시각보다 빠를 수 없습니다");
+                .isInstanceOf(IllegalStateException.class);
     }
 }

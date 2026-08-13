@@ -14,9 +14,8 @@ import org.junit.jupiter.api.Test;
 class SensitiveWebValueToStringTest {
 
     @Test
-    @DisplayName("웹 설정과 생성 응답의 문자열 표현은 credential과 short URL을 노출하지 않는다")
-    void redactsCredentialAndShortUrlFromStringRepresentations() {
-        String managementToken = "management-token-that-must-never-be-logged";
+    @DisplayName("생성 응답의 문자열 표현은 short URL과 target path를 노출하지 않는다")
+    void redactsShortUrlAndTargetPathFromStringRepresentation() {
         URI shortUrl = URI.create("https://go.example/l/abcdefghijklmnopqrstuv");
         String targetPath =
                 "/teams/8e448211-66ae-44ab-9888-c4960648c22b"
@@ -33,12 +32,8 @@ class SensitiveWebValueToStringTest {
                 Instant.parse("2026-08-08T00:00:00Z")
         );
 
-        assertThat(new ManagementProperties(managementToken).toString())
-                .doesNotContain(managementToken)
-                .contains("redacted");
         assertThat(response.toString())
                 .doesNotContain(shortUrl.toString())
-                .doesNotContain(targetPath)
-                .contains("redacted");
+                .doesNotContain(targetPath);
     }
 }

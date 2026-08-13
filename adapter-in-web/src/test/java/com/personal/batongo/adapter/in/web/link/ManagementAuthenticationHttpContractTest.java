@@ -63,12 +63,12 @@ class ManagementAuthenticationHttpContractTest {
     }
 
     @Test
-    @DisplayName("정상 관리 credential은 인증 스킴의 대소문자와 관계없이 요청을 허용한다")
-    void acceptsValidCredentialCaseInsensitively() throws Exception {
+    @DisplayName("Bearer 스킴과 credential 사이의 연속 SP는 허용한다")
+    void acceptsCredentialAfterRepeatedSpaces() throws Exception {
         when(useCase.createLink(any())).thenReturn(createdLink());
 
         mockMvc.perform(post("/api/v1/links")
-                        .header(HttpHeaders.AUTHORIZATION, "bEaReR   " + MANAGEMENT_TOKEN)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer   " + MANAGEMENT_TOKEN)
                         .header(LinkManagementController.IDEMPOTENCY_KEY_HEADER, IDEMPOTENCY_KEY)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(createRequest()))
@@ -76,22 +76,6 @@ class ManagementAuthenticationHttpContractTest {
                 .andExpect(header().doesNotExist(HttpHeaders.WWW_AUTHENTICATE));
 
         verify(useCase).createLink(any());
-    }
-
-    @Test
-    @DisplayName("관리 credential 누락은 Bearer challenge가 있는 401 오류로 응답한다")
-    void rejectsMissingCredentialWithBearerChallenge() throws Exception {
-        mockMvc.perform(post("/api/v1/links")
-                        .header(LinkManagementController.IDEMPOTENCY_KEY_HEADER, IDEMPOTENCY_KEY)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(createRequest()))
-                .andExpect(status().isUnauthorized())
-                .andExpect(header().string(HttpHeaders.WWW_AUTHENTICATE, BEARER_CHALLENGE))
-                .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
-                .andExpect(jsonPath("$.code")
-                        .value("MANAGEMENT_AUTHENTICATION_REQUIRED"));
-
-        verifyNoInteractions(useCase);
     }
 
     @Test

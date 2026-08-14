@@ -22,9 +22,6 @@ public interface TargetContractOperationsUseCase {
             UUID nextAfterLinkId,
             boolean hasMore
     ) {
-        public InventoryResult {
-            items = List.copyOf(items);
-        }
     }
 
     record InventoryItem(

@@ -59,16 +59,7 @@ public final class HttpOrigin {
     }
 
     public boolean sameOrigin(HttpOrigin other) {
-        return sameOrigin(other.value);
-    }
-
-    public boolean sameOrigin(URI other) {
-        return other != null
-                && other.getScheme() != null
-                && other.getHost() != null
-                && value.getScheme().equalsIgnoreCase(other.getScheme())
-                && sameHost(value.getHost(), other.getHost())
-                && effectivePort(value) == effectivePort(other);
+        return value.equals(other.value);
     }
 
     public URI resolve(String path) {
@@ -87,7 +78,7 @@ public final class HttpOrigin {
         String scheme = value.getScheme().toLowerCase(Locale.ROOT);
         String host = canonicalHost(value.getHost());
         int port = value.getPort();
-        if (port == defaultPort(scheme)) {
+        if (port == ("https".equals(scheme) ? 443 : 80)) {
             port = -1;
         }
         try {
@@ -117,26 +108,6 @@ public final class HttpOrigin {
             return host.substring(1, host.length() - 1);
         }
         return host;
-    }
-
-    private static boolean sameHost(String left, String right) {
-        if (left.equalsIgnoreCase(right)) {
-            return true;
-        }
-        String leftLiteral = stripIpv6Brackets(left);
-        String rightLiteral = stripIpv6Brackets(right);
-        if (leftLiteral.indexOf(':') < 0
-                || rightLiteral.indexOf(':') < 0
-                || leftLiteral.indexOf('%') >= 0
-                || rightLiteral.indexOf('%') >= 0) {
-            return false;
-        }
-        try {
-            return InetAddress.getByName(leftLiteral)
-                    .equals(InetAddress.getByName(rightLiteral));
-        } catch (UnknownHostException exception) {
-            return false;
-        }
     }
 
     private static boolean isIpv4LoopbackLiteral(String host) {
@@ -172,14 +143,4 @@ public final class HttpOrigin {
         }
     }
 
-    private static int effectivePort(URI value) {
-        if (value.getPort() >= 0) {
-            return value.getPort();
-        }
-        return defaultPort(value.getScheme());
-    }
-
-    private static int defaultPort(String scheme) {
-        return "https".equalsIgnoreCase(scheme) ? 443 : 80;
-    }
 }

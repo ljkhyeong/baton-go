@@ -5,15 +5,18 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import com.personal.batongo.application.link.error.InvalidCreationTimeException;
+import com.personal.batongo.application.link.error.InvalidIdempotencyKeyException;
 import com.personal.batongo.application.link.error.LinkCodeReplayMismatchException;
 import com.personal.batongo.application.link.error.LinkNotFoundException;
 import com.personal.batongo.application.link.error.StoredTargetPolicyViolationException;
@@ -44,6 +47,8 @@ import org.junit.jupiter.api.Test;
 class SmartLinkServiceTest {
 
     private static final Instant NOW = Instant.parse("2026-07-29T10:00:00Z");
+    private static final Instant MAXIMUM_SUPPORTED_TIME =
+            Instant.parse("9999-12-31T23:59:59.999999Z");
     private static final UUID LINK_ID = UUID.fromString(
             "d3014090-bd91-4bfc-8a42-89b7f1800c32"
     );
@@ -118,7 +123,7 @@ class SmartLinkServiceTest {
                 BATON_PATH,
                 LinkPurpose.NAVIGATION,
                 null,
-                CreationTimeStoragePolicy.MAXIMUM.plusSeconds(1)
+                MAXIMUM_SUPPORTED_TIME.plusSeconds(1)
         )))
                 .isExactlyInstanceOf(InvalidCreationTimeException.class);
 
@@ -130,6 +135,33 @@ class SmartLinkServiceTest {
                 publicLinkOriginPort,
                 targetUrlPort
         );
+    }
+
+    @Test
+    @DisplayName("과거 키와 나노초 시각은 기존 예약만 조회하고 새 행을 만들지 않는다")
+    void keepsReplayOnlyRequestsOutOfCreationPorts() {
+        assertThatThrownBy(() -> service.createLink(new CreateLinkCommand(
+                CreationIdempotencyKey.parseRequest(
+                        "8E448211-66AE-44AB-9888-C4960648C22B"
+                ),
+                TargetSystem.BATON,
+                BATON_PATH,
+                LinkPurpose.NAVIGATION,
+                null,
+                null
+        ))).isExactlyInstanceOf(InvalidIdempotencyKeyException.class);
+        assertThatThrownBy(() -> service.createLink(new CreateLinkCommand(
+                IDEMPOTENCY_KEY,
+                TargetSystem.BATON,
+                BATON_PATH,
+                LinkPurpose.NAVIGATION,
+                null,
+                Instant.parse("2026-08-08T01:02:03.123456789Z")
+        ))).isExactlyInstanceOf(InvalidCreationTimeException.class);
+
+        verify(reservationPort, times(2)).find(IDEMPOTENCY_HASH);
+        verify(reservationPort, never()).reserve(anyString(), any(), anyString(), any());
+        verifyNoInteractions(repository, keyGuardPort, publicLinkOriginPort, targetUrlPort);
     }
 
     @Test
@@ -167,20 +199,6 @@ class SmartLinkServiceTest {
     }
 
     @Test
-    @DisplayName("공개 origin 변경 뒤에도 최초 short URL을 재생한다")
-    void replaysOriginalShortUrlAfterPublicOriginChanges() {
-        Instant expiresAt = NOW.plusSeconds(300);
-        configureReplay("https://old.example", expiresAt);
-        when(publicLinkOriginPort.current())
-                .thenReturn(new PublicLinkOrigin(URI.create("https://new.example")));
-
-        var replay = service.createLink(command(expiresAt));
-
-        assertThat(replay.shortUrl())
-                .isEqualTo(URI.create("https://old.example/l/" + RAW_CODE));
-    }
-
-    @Test
     @DisplayName("활성 링크 해석은 신뢰 대상 포트가 만든 URL을 반환한다")
     void resolvesThroughTrustedTargetPort() {
         StoredLinkResolution resolution = new StoredLinkResolution(
@@ -195,13 +213,15 @@ class SmartLinkServiceTest {
         URI destination = URI.create("https://baton.example" + BATON_PATH);
         when(repository.findResolutionByCodeHash(CODE_HASH))
                 .thenReturn(Optional.of(resolution));
-        when(targetUrlPort.resolve(TargetSystem.BATON, BATON_PATH))
+        when(targetUrlPort.resolve(any()))
                 .thenReturn(destination);
 
         var result = service.resolveLink(RAW_CODE);
 
         assertThat(result.destination()).isEqualTo(destination);
-        verify(targetUrlPort).resolve(TargetSystem.BATON, BATON_PATH);
+        verify(targetUrlPort).resolve(argThat(target ->
+                target.targetSystem() == TargetSystem.BATON
+                        && target.targetPath().equals(BATON_PATH)));
     }
 
     @Test

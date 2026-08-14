@@ -4,8 +4,13 @@ import com.personal.batongo.application.link.error.InvalidCreationTimeException;
 import com.personal.batongo.application.link.error.InvalidIdempotencyKeyException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.Objects;
 
 final class CreationRequestAdmissionPolicy {
+
+    private static final Instant MINIMUM = Instant.parse("1582-10-15T00:00:00Z");
+    private static final Instant MAXIMUM =
+            Instant.parse("9999-12-31T23:59:59.999999Z");
 
     private CreationRequestAdmissionPolicy() {
     }
@@ -15,7 +20,7 @@ final class CreationRequestAdmissionPolicy {
             Instant notBefore,
             Instant expiresAt
     ) {
-        if (!CreationTimeStoragePolicy.isWithinRange(notBefore, expiresAt)) {
+        if (!isWithinRange(notBefore) || !isWithinRange(expiresAt)) {
             throw new InvalidCreationTimeException();
         }
 
@@ -28,7 +33,8 @@ final class CreationRequestAdmissionPolicy {
                     ReplayOnlyReason.LEGACY_IDEMPOTENCY_KEY
             );
         }
-        if (!CreationTimeStoragePolicy.hasMicrosecondPrecision(notBefore, expiresAt)) {
+        if (!Objects.equals(notBefore, storedNotBefore)
+                || !Objects.equals(expiresAt, storedExpiresAt)) {
             return Decision.replayOnly(
                     storedNotBefore,
                     storedExpiresAt,
@@ -40,6 +46,10 @@ final class CreationRequestAdmissionPolicy {
 
     private static Instant databaseTime(Instant value) {
         return value == null ? null : value.truncatedTo(ChronoUnit.MICROS);
+    }
+
+    private static boolean isWithinRange(Instant value) {
+        return value == null || !value.isBefore(MINIMUM) && !value.isAfter(MAXIMUM);
     }
 
     enum ReplayOnlyReason {

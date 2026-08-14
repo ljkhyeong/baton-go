@@ -55,11 +55,6 @@ public final class StrictUtcInstantDeserializer extends StdDeserializer<Instant>
         } catch (DateTimeParseException ignored) {
             // 아래의 동일한 wire-format 오류로 변환한다.
         }
-        return invalidValue(rawValue, context);
-    }
-
-    private Instant invalidValue(String rawValue, DeserializationContext context)
-            throws JacksonException {
         return (Instant) context.handleWeirdStringValue(
                 Instant.class,
                 rawValue,

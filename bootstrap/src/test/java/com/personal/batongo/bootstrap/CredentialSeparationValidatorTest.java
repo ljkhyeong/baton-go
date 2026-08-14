@@ -14,15 +14,11 @@ class CredentialSeparationValidatorTest {
     void rejectsSharedCredential() {
         String sharedCredential = "shared-credential-with-more-than-32-characters";
 
-        assertThatThrownBy(() -> validate(sharedCredential, sharedCredential))
+        assertThatThrownBy(() -> new CredentialSeparationValidator(
+                new ManagementProperties(sharedCredential),
+                new LinkCodeProperties(sharedCredential)
+        ))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageNotContaining(sharedCredential);
-    }
-
-    private void validate(String managementToken, String linkCodeSecret) {
-        new CredentialSeparationValidator(
-                new ManagementProperties(managementToken),
-                new LinkCodeProperties(linkCodeSecret)
-        );
     }
 }

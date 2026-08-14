@@ -1,7 +1,7 @@
 package com.personal.batongo.adapter.out.external.link;
 
 import com.personal.batongo.application.link.LinkCodeDerivationIdentity;
-import com.personal.batongo.application.link.error.InvalidLinkCodeException;
+import com.personal.batongo.application.link.error.LinkNotFoundException;
 import com.personal.batongo.application.link.port.out.IssuedLinkCode;
 import com.personal.batongo.application.link.port.out.LinkCodePort;
 import java.nio.charset.StandardCharsets;
@@ -57,7 +57,7 @@ public class SecureLinkCodeAdapter implements LinkCodePort {
     @Override
     public String hash(String rawCode) {
         if (rawCode == null || !RAW_CODE.matcher(rawCode).matches()) {
-            throw new InvalidLinkCodeException();
+            throw new LinkNotFoundException();
         }
         return sha256(rawCode);
     }

@@ -239,8 +239,7 @@ class TargetContractOperationsHttpContractTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
                 .andExpect(header().string("Referrer-Policy", "no-referrer"))
-                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
-                .andExpect(jsonPath("$.message").value("요청 형식이 올바르지 않습니다"));
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
 
         verifyNoInteractions(operationsUseCase);
     }

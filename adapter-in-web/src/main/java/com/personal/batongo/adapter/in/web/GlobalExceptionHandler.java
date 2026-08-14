@@ -2,7 +2,6 @@ package com.personal.batongo.adapter.in.web;
 
 import com.personal.batongo.application.link.error.InvalidCreationTimeException;
 import com.personal.batongo.application.link.error.InvalidIdempotencyKeyException;
-import com.personal.batongo.application.link.error.InvalidLinkCodeException;
 import com.personal.batongo.application.link.error.InvalidTargetContractInventoryRequestException;
 import com.personal.batongo.application.link.error.InvalidTargetContractRemediationRequestException;
 import com.personal.batongo.application.link.error.IdempotencyKeyConflictException;
@@ -20,13 +19,11 @@ import jakarta.servlet.http.HttpServletRequest;
 import java.util.Objects;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.TypeMismatchException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
-import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -53,12 +50,11 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
             HttpServletRequest request
     ) {
         recordStoredTargetPolicyViolation(exception, request);
-        return handleNotFound(exception, request);
+        return handleNotFound(request);
     }
 
-    @ExceptionHandler({InvalidLinkCodeException.class, LinkNotFoundException.class})
+    @ExceptionHandler(LinkNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleNotFound(
-            RuntimeException exception,
             HttpServletRequest request
     ) {
         return error(
@@ -225,38 +221,6 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return handleExceptionInternal(
                 exception,
                 errorBody("INVALID_REQUEST", message, request),
-                headers,
-                status,
-                request
-        );
-    }
-
-    @Override
-    protected ResponseEntity<Object> handleHttpMessageNotReadable(
-            HttpMessageNotReadableException exception,
-            HttpHeaders headers,
-            HttpStatusCode status,
-            WebRequest request
-    ) {
-        return handleExceptionInternal(
-                exception,
-                errorBody("INVALID_REQUEST", "요청 형식이 올바르지 않습니다", request),
-                headers,
-                status,
-                request
-        );
-    }
-
-    @Override
-    protected ResponseEntity<Object> handleTypeMismatch(
-            TypeMismatchException exception,
-            HttpHeaders headers,
-            HttpStatusCode status,
-            WebRequest request
-    ) {
-        return handleExceptionInternal(
-                exception,
-                errorBody("INVALID_REQUEST", "요청 형식이 올바르지 않습니다", request),
                 headers,
                 status,
                 request

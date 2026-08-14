@@ -121,17 +121,25 @@ public class SmartLinkService implements SmartLinkUseCase {
             );
         }
 
-        SmartLink smartLink = SmartLink.create(
+        repository.save(new SmartLink(
                 reservation.linkId(),
                 issuedCode.codeHash(),
                 requestedTarget,
                 prepared.admission().notBefore(),
                 prepared.admission().expiresAt(),
                 now
-        );
-        SmartLink saved = repository.save(smartLink);
+        ));
         return new CreatedLinkResult(
-                toResult(saved),
+                new LinkResult(
+                        reservation.linkId(),
+                        requestedTarget.targetSystem(),
+                        requestedTarget.targetPath(),
+                        requestedTarget.purpose(),
+                        prepared.admission().notBefore(),
+                        prepared.admission().expiresAt(),
+                        null,
+                        now
+                ),
                 currentOrigin.shortUrl(issuedCode.rawCode()),
                 false
         );
@@ -165,14 +173,17 @@ public class SmartLinkService implements SmartLinkUseCase {
             Instant expiresAt,
             IssuedLinkCode issuedCode
     ) {
-        StoredLinkReplay existing = findReplayLink(reservation.linkId());
+        StoredLinkReplay existing = repository.findReplayById(reservation.linkId())
+                .orElseThrow(LinkNotFoundException::new);
         TrustedTarget trustedTarget = requireSameCreationRequest(
                 existing,
                 requestedTarget,
                 notBefore,
                 expiresAt
         );
-        requireReplayableCode(existing, issuedCode);
+        if (!existing.codeHash().equals(issuedCode.codeHash())) {
+            throw new LinkCodeReplayMismatchException();
+        }
         PublicLinkOrigin storedOrigin = requireReplayOrigin(reservation.publicOrigin());
         return new CreatedLinkResult(
                 toResult(existing, trustedTarget),
@@ -222,10 +233,7 @@ public class SmartLinkService implements SmartLinkUseCase {
         );
         return new ResolvedLinkResult(
                 storedLink.id(),
-                targetUrlPort.resolve(
-                        trustedTarget.targetSystem(),
-                        trustedTarget.targetPath()
-                )
+                targetUrlPort.resolve(trustedTarget)
         );
     }
 
@@ -249,10 +257,6 @@ public class SmartLinkService implements SmartLinkUseCase {
             throw new IllegalStateException("링크 폐기 상태를 저장할 수 없습니다");
         }
         return toResult(storedLink, trustedTarget, revokedAt);
-    }
-
-    private StoredLinkReplay findReplayLink(UUID linkId) {
-        return repository.findReplayById(linkId).orElseThrow(LinkNotFoundException::new);
     }
 
     private TrustedTarget requireSameCreationRequest(
@@ -280,28 +284,6 @@ public class SmartLinkService implements SmartLinkUseCase {
             throw new IdempotencyKeyConflictException();
         }
         return trustedTarget;
-    }
-
-    private void requireReplayableCode(
-            StoredLinkReplay existing,
-            IssuedLinkCode issuedCode
-    ) {
-        if (!existing.codeHash().equals(issuedCode.codeHash())) {
-            throw new LinkCodeReplayMismatchException();
-        }
-    }
-
-    private LinkResult toResult(SmartLink smartLink) {
-        return new LinkResult(
-                smartLink.getId(),
-                smartLink.getTargetSystem(),
-                smartLink.getTargetPath(),
-                smartLink.getPurpose(),
-                smartLink.getNotBefore(),
-                smartLink.getExpiresAt(),
-                smartLink.getRevokedAt(),
-                smartLink.getCreatedAt()
-        );
     }
 
     private LinkResult toResult(

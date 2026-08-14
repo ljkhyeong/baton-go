@@ -49,8 +49,8 @@ public class SmartLinkPersistenceAdapter implements SmartLinkRepository {
     }
 
     @Override
-    public SmartLink save(SmartLink smartLink) {
-        return repository.save(smartLink);
+    public void save(SmartLink smartLink) {
+        repository.save(smartLink);
     }
 
     @Override
@@ -153,9 +153,6 @@ public class SmartLinkPersistenceAdapter implements SmartLinkRepository {
             long expectedVersion,
             Instant revokedAt
     ) {
-        if (expectedVersion < 0) {
-            throw new IllegalArgumentException("expectedVersion은 증가 가능한 범위여야 합니다");
-        }
         long nextVersion = Math.incrementExact(expectedVersion);
         int updated = jdbcClient.sql("""
                         UPDATE smart_links

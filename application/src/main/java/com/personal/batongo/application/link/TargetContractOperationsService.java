@@ -40,7 +40,9 @@ public class TargetContractOperationsService implements TargetContractOperations
     @Override
     @Transactional(readOnly = true)
     public InventoryResult inventory(InventoryQuery query) {
-        requireValidInventoryQuery(query);
+        if (query == null || query.limit() < 1 || query.limit() > MAX_INVENTORY_LIMIT) {
+            throw new InvalidTargetContractInventoryRequestException();
+        }
         List<StoredLinkSnapshot> scanned = repository.scanStoredAfter(
                 query.afterLinkId(),
                 query.limit() + 1
@@ -106,12 +108,6 @@ public class TargetContractOperationsService implements TargetContractOperations
                 revokedAt,
                 false
         );
-    }
-
-    private void requireValidInventoryQuery(InventoryQuery query) {
-        if (query == null || query.limit() < 1 || query.limit() > MAX_INVENTORY_LIMIT) {
-            throw new InvalidTargetContractInventoryRequestException();
-        }
     }
 
     private InventoryItem toInventoryItem(StoredLinkSnapshot storedLink) {

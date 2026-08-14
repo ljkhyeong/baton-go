@@ -16,7 +16,7 @@ public record PublicResolverRateLimitProperties(
         if (window == null) {
             throw new IllegalArgumentException("공개 resolver rate limit window가 필요합니다");
         }
-        if (window.isZero() || window.isNegative()) {
+        if (!window.isPositive()) {
             throw new IllegalArgumentException("공개 resolver rate limit window는 양수여야 합니다");
         }
     }

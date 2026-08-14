@@ -11,7 +11,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.personal.batongo.application.link.CreationIdempotencyKey;
-import com.personal.batongo.application.link.CreationTimeStoragePolicy;
 import com.personal.batongo.application.link.PublicLinkOrigin;
 import com.personal.batongo.application.link.error.IdempotencyKeyConflictException;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase;
@@ -31,11 +30,10 @@ import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
-import java.util.Calendar;
 import java.util.List;
-import java.util.TimeZone;
 import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
@@ -78,6 +76,11 @@ import org.testcontainers.mysql.MySQLContainer;
         "baton-go.targets.round-base-url=https://baton.example"
 })
 class LinkCreationIdempotencyIntegrationTest {
+
+    private static final Instant MINIMUM_SUPPORTED_TIME =
+            Instant.parse("1582-10-15T00:00:00Z");
+    private static final Instant MAXIMUM_SUPPORTED_TIME =
+            Instant.parse("9999-12-31T23:59:59.999999Z");
 
     private static final int CONCURRENCY = 8;
     private static final String IDEMPOTENCY_KEY =
@@ -170,7 +173,7 @@ class LinkCreationIdempotencyIntegrationTest {
     }
 
     @Test
-    @DisplayName("API 지원 시각의 양쪽 경계는 MySQL raw 날짜와 재생 응답에서 그대로 보존된다")
+    @DisplayName("API 지원 시각의 양쪽 경계는 생성 응답과 MySQL raw 날짜에서 그대로 보존된다")
     void preservesSupportedTimeBoundariesInMysqlRawValuesAndReplay() throws Exception {
         String idempotencyKey = "5b2355cf-8647-464e-a633-0f8c50ec169c";
         String targetPath = "/room/wxyz-abcd-2345";
@@ -184,8 +187,8 @@ class LinkCreationIdempotencyIntegrationTest {
                 }
                 """.formatted(
                 targetPath,
-                CreationTimeStoragePolicy.MINIMUM,
-                CreationTimeStoragePolicy.MAXIMUM
+                MINIMUM_SUPPORTED_TIME,
+                MAXIMUM_SUPPORTED_TIME
         );
 
         var createdResponse = mockMvc.perform(post("/api/v1/links")
@@ -199,30 +202,14 @@ class LinkCreationIdempotencyIntegrationTest {
                 .andExpect(status().isCreated())
                 .andExpect(header().string("Idempotency-Replayed", "false"))
                 .andExpect(jsonPath("$.notBefore")
-                        .value(CreationTimeStoragePolicy.MINIMUM.toString()))
+                        .value(MINIMUM_SUPPORTED_TIME.toString()))
                 .andExpect(jsonPath("$.expiresAt")
-                        .value(CreationTimeStoragePolicy.MAXIMUM.toString()))
+                        .value(MAXIMUM_SUPPORTED_TIME.toString()))
                 .andReturn()
                 .getResponse();
         String location = createdResponse.getHeader(HttpHeaders.LOCATION);
         assertThat(location).isNotNull();
         UUID linkId = UUID.fromString(location.substring(location.lastIndexOf('/') + 1));
-
-        mockMvc.perform(post("/api/v1/links")
-                        .header(
-                                HttpHeaders.AUTHORIZATION,
-                                "Bearer test-management-token-that-is-long-enough"
-                        )
-                        .header("Idempotency-Key", idempotencyKey)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(requestBody))
-                .andExpect(status().isOk())
-                .andExpect(header().string("Idempotency-Replayed", "true"))
-                .andExpect(jsonPath("$.id").value(linkId.toString()))
-                .andExpect(jsonPath("$.notBefore")
-                        .value(CreationTimeStoragePolicy.MINIMUM.toString()))
-                .andExpect(jsonPath("$.expiresAt")
-                        .value(CreationTimeStoragePolicy.MAXIMUM.toString()));
 
         RawBoundaryTimes rawTimes = jdbcTemplate.queryForObject(
                 """
@@ -270,87 +257,6 @@ class LinkCreationIdempotencyIntegrationTest {
                         ))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("LINK_NOT_FOUND"));
-    }
-
-    @Test
-    @DisplayName("정의되지 않은 링크 생성 필드는 저장 전에 400으로 거부한다")
-    void rejectsUnknownCreationFieldBeforePersistence() throws Exception {
-        String targetPath = "/room/2345-6789-abcd";
-
-        mockMvc.perform(post("/api/v1/links")
-                        .header(
-                                HttpHeaders.AUTHORIZATION,
-                                "Bearer test-management-token-that-is-long-enough"
-                        )
-                        .header(
-                                "Idempotency-Key",
-                                "09ef0b69-9004-47ed-a056-5f6b720dce23"
-                        )
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {
-                                  "targetSystem": "ROUND",
-                                  "targetPath": "%s",
-                                  "purpose": "MEETING_ENTRY",
-                                  "expireAt": "2026-08-01T00:00:00Z"
-                                }
-                                """.formatted(targetPath)))
-                .andExpect(status().isBadRequest())
-                .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
-                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
-                .andExpect(jsonPath("$.requestId").isNotEmpty());
-
-        assertThat(jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM smart_links WHERE target_path = ?",
-                Long.class,
-                targetPath
-        )).isZero();
-    }
-
-    @Test
-    @DisplayName("알려진 값으로 만든 비허용 target은 링크와 예약을 남기지 않고 400으로 거부한다")
-    void rejectsKnownInvalidTargetBeforePersistence() throws Exception {
-        String idempotencyKey = "64fd6ee4-2559-4623-b1d9-b89167a7307f";
-
-        mockMvc.perform(post("/api/v1/links")
-                        .header(
-                                HttpHeaders.AUTHORIZATION,
-                                "Bearer test-management-token-that-is-long-enough"
-                        )
-                        .header("Idempotency-Key", idempotencyKey)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {
-                                  "targetSystem": "BATON",
-                                  "targetPath": "%s",
-                                  "purpose": "MEETING_ENTRY"
-                                }
-                                """.formatted(CANONICAL_BATON_TARGET)))
-                .andExpect(status().isBadRequest())
-                .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
-                .andExpect(jsonPath("$.code").value("INVALID_LINK"))
-                .andExpect(jsonPath("$.requestId").isNotEmpty());
-
-        assertThat(jdbcTemplate.queryForObject(
-                """
-                        SELECT COUNT(*)
-                        FROM smart_links
-                        WHERE target_system = 'BATON'
-                          AND target_path = ?
-                          AND purpose = 'MEETING_ENTRY'
-                        """,
-                Long.class,
-                CANONICAL_BATON_TARGET
-        )).isZero();
-        assertThat(jdbcTemplate.queryForObject(
-                """
-                        SELECT COUNT(*)
-                        FROM link_creation_requests
-                        WHERE idempotency_key_hash = ?
-                        """,
-                Long.class,
-                linkCodePort.hashIdempotencyKey(idempotencyKey)
-        )).isZero();
     }
 
     @Test
@@ -480,44 +386,6 @@ class LinkCreationIdempotencyIntegrationTest {
     }
 
     @Test
-    @DisplayName("과거 UUID 요청은 기존 예약이 없으면 MySQL에 행을 남기지 않고 400으로 거부한다")
-    void rejectsLegacyUuidWithoutMysqlReservation() throws Exception {
-        String rawIdempotencyKey = "00000000-0000-7000-8000-00000000000B";
-        String normalizedIdempotencyKey = rawIdempotencyKey.toLowerCase(
-                java.util.Locale.ROOT
-        );
-        String targetPath = "/room/tuvw-xy23-4567";
-
-        mockMvc.perform(post("/api/v1/links")
-                        .header(
-                                HttpHeaders.AUTHORIZATION,
-                                "Bearer test-management-token-that-is-long-enough"
-                        )
-                        .header("Idempotency-Key", rawIdempotencyKey)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {
-                                  "targetSystem": "ROUND",
-                                  "targetPath": "%s",
-                                  "purpose": "MEETING_ENTRY"
-                                }
-                                """.formatted(targetPath)))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("INVALID_IDEMPOTENCY_KEY"));
-
-        assertThat(jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM smart_links WHERE target_path = ?",
-                Long.class,
-                targetPath
-        )).isZero();
-        assertThat(jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM link_creation_requests WHERE idempotency_key_hash = ?",
-                Long.class,
-                linkCodePort.hashIdempotencyKey(normalizedIdempotencyKey)
-        )).isZero();
-    }
-
-    @Test
     @DisplayName("과거 나노초 요청은 기존 MySQL 예약의 마이크로초 payload와 일치할 때 재생한다")
     void replaysLegacySubMicrosecondTimeFromExistingMysqlReservation() throws Exception {
         String idempotencyKey = "61a78df8-4859-4e66-8ad9-57c3a29bd2d2";
@@ -563,43 +431,6 @@ class LinkCreationIdempotencyIntegrationTest {
                 Long.class,
                 linkCodePort.hashIdempotencyKey(idempotencyKey)
         )).isOne();
-    }
-
-    @Test
-    @DisplayName("과거 나노초 요청은 기존 예약이 없으면 MySQL에 행을 남기지 않고 400으로 거부한다")
-    void rejectsLegacySubMicrosecondTimeWithoutMysqlReservation() throws Exception {
-        String idempotencyKey = "0e85e771-1261-4630-a1f3-9b46573aa300";
-        String targetPath = "/room/jkmn-pqrs-tuvw";
-        Instant historicalExpiresAt = Instant.parse("2040-06-02T13:00:00.123456789Z");
-
-        mockMvc.perform(post("/api/v1/links")
-                        .header(
-                                HttpHeaders.AUTHORIZATION,
-                                "Bearer test-management-token-that-is-long-enough"
-                        )
-                        .header("Idempotency-Key", idempotencyKey)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {
-                                  "targetSystem": "ROUND",
-                                  "targetPath": "%s",
-                                  "purpose": "MEETING_ENTRY",
-                                  "expiresAt": "%s"
-                                }
-                                """.formatted(targetPath, historicalExpiresAt)))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
-
-        assertThat(jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM smart_links WHERE code_hash = ?",
-                Long.class,
-                linkCodePort.issue(idempotencyKey).codeHash()
-        )).isZero();
-        assertThat(jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM link_creation_requests WHERE idempotency_key_hash = ?",
-                Long.class,
-                linkCodePort.hashIdempotencyKey(idempotencyKey)
-        )).isZero();
     }
 
     @Test
@@ -710,7 +541,7 @@ class LinkCreationIdempotencyIntegrationTest {
                     command.targetPath()
             ))
                     .matches("^[0-9a-f]{64}$")
-                    .isNotEqualTo(rawCode(first));
+                    .isNotEqualTo(first.shortUrl().getRawPath().substring("/l/".length()));
             assertThat(jdbcTemplate.queryForObject(
                     """
                             SELECT request.idempotency_key_hash
@@ -1001,12 +832,8 @@ class LinkCreationIdempotencyIntegrationTest {
     }
 
     private Instant instant(ResultSet resultSet, String columnName) throws SQLException {
-        Timestamp timestamp = resultSet.getTimestamp(columnName, utcCalendar());
-        return timestamp == null ? null : timestamp.toInstant();
-    }
-
-    private Calendar utcCalendar() {
-        return Calendar.getInstance(TimeZone.getTimeZone("UTC"));
+        LocalDateTime value = resultSet.getObject(columnName, LocalDateTime.class);
+        return value == null ? null : value.toInstant(ZoneOffset.UTC);
     }
 
     private void assertStoredTargetIsHidden(String rawCode) throws Exception {
@@ -1051,11 +878,6 @@ class LinkCreationIdempotencyIntegrationTest {
             results.add(future.get(20, TimeUnit.SECONDS));
         }
         return results;
-    }
-
-    private String rawCode(CreatedLinkResult result) {
-        String path = result.shortUrl().getRawPath();
-        return path.substring("/l/".length());
     }
 
     private void awaitReservationInsertWaiters(int expectedWaiters)

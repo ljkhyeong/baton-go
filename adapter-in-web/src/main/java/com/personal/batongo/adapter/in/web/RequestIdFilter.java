@@ -29,7 +29,10 @@ public class RequestIdFilter extends OncePerRequestFilter {
             HttpServletResponse response,
             FilterChain filterChain
     ) throws ServletException, IOException {
-        String requestId = normalize(request.getHeader(HEADER_NAME));
+        String candidate = request.getHeader(HEADER_NAME);
+        String requestId = candidate != null && SAFE_REQUEST_ID.matcher(candidate).matches()
+                ? candidate
+                : UUID.randomUUID().toString();
         request.setAttribute(REQUEST_ATTRIBUTE, requestId);
         response.setHeader(HEADER_NAME, requestId);
 
@@ -43,10 +46,4 @@ public class RequestIdFilter extends OncePerRequestFilter {
         return value instanceof String requestId ? requestId : null;
     }
 
-    private String normalize(String candidate) {
-        if (candidate != null && SAFE_REQUEST_ID.matcher(candidate).matches()) {
-            return candidate;
-        }
-        return UUID.randomUUID().toString();
-    }
 }

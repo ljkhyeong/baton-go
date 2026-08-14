@@ -78,11 +78,15 @@ class ManagementAuthenticationHttpContractTest {
         verify(useCase).createLink(any());
     }
 
-    @Test
+    @ParameterizedTest(name = "{index}: {0}")
+    @ValueSource(strings = {
+            "Bearer invalid-management-token",
+            "Bearer\tmanagement-token-with-at-least-32-characters"
+    })
     @DisplayName("잘못된 관리 credential은 Bearer challenge가 있는 401 오류로 응답한다")
-    void rejectsInvalidCredentialWithBearerChallenge() throws Exception {
+    void rejectsInvalidCredentialWithBearerChallenge(String authorization) throws Exception {
         mockMvc.perform(post("/api/v1/links")
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer invalid-management-token")
+                        .header(HttpHeaders.AUTHORIZATION, authorization)
                         .header(LinkManagementController.IDEMPOTENCY_KEY_HEADER, IDEMPOTENCY_KEY)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(createRequest()))

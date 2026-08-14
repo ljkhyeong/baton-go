@@ -2,7 +2,7 @@ package com.personal.batongo.adapter.out.external.link;
 
 import com.personal.batongo.application.link.port.out.TargetUrlPort;
 import com.personal.batongo.domain.link.HttpOrigin;
-import com.personal.batongo.domain.link.TargetSystem;
+import com.personal.batongo.domain.link.TrustedTarget;
 import java.net.URI;
 import org.springframework.stereotype.Component;
 
@@ -18,15 +18,11 @@ public class ConfiguredTargetUrlAdapter implements TargetUrlPort {
     }
 
     @Override
-    public URI resolve(TargetSystem targetSystem, String targetPath) {
-        HttpOrigin origin = switch (targetSystem) {
+    public URI resolve(TrustedTarget target) {
+        HttpOrigin origin = switch (target.targetSystem()) {
             case BATON -> batonOrigin;
             case ROUND -> roundOrigin;
         };
-        URI destination = origin.resolve(targetPath);
-        if (!origin.sameOrigin(destination)) {
-            throw new IllegalStateException("신뢰 대상 origin 밖으로 링크를 해석할 수 없습니다");
-        }
-        return destination;
+        return origin.resolve(target.targetPath());
     }
 }

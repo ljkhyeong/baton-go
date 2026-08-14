@@ -84,7 +84,7 @@ class SmartLinkPolicyTest {
     }
 
     private SmartLink link(Instant notBefore, Instant expiresAt) {
-        return SmartLink.create(
+        return new SmartLink(
                 UUID.randomUUID(),
                 CODE_HASH,
                 TrustedTargetPolicy.requireAllowed(

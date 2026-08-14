@@ -7,11 +7,13 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import com.personal.batongo.application.link.error.InvalidTargetContractInventoryRequestException;
 import com.personal.batongo.application.link.error.InvalidTargetContractRemediationRequestException;
 import com.personal.batongo.application.link.error.LinkNotFoundException;
+import com.personal.batongo.application.link.error.TargetContractRemediationNotApplicableException;
 import com.personal.batongo.application.link.error.TargetContractRemediationStaleException;
 import com.personal.batongo.application.link.port.in.TargetContractOperationsUseCase.InventoryQuery;
 import com.personal.batongo.application.link.port.in.TargetContractOperationsUseCase.RemediationCommand;
@@ -80,6 +82,31 @@ class TargetContractOperationsServiceTest {
                 .isExactlyInstanceOf(LinkNotFoundException.class);
 
         verify(repository).findStoredByIdForUpdate(LINK_ID);
+    }
+
+    @Test
+    @DisplayName("계약을 준수하는 링크는 remediation 대상이 아니다")
+    void rejectsCompliantLink() {
+        when(repository.findStoredByIdForUpdate(LINK_ID)).thenReturn(Optional.of(
+                new StoredLinkSnapshot(
+                        LINK_ID,
+                        "ROUND",
+                        ROUND_PATH,
+                        "MEETING_ENTRY",
+                        null,
+                        NOW.plusSeconds(3600),
+                        null,
+                        NOW.minusSeconds(3600),
+                        2L,
+                        true
+                )
+        ));
+
+        assertThatThrownBy(() -> service.remediate(new RemediationCommand(LINK_ID, 2L)))
+                .isExactlyInstanceOf(TargetContractRemediationNotApplicableException.class);
+
+        verify(repository).findStoredByIdForUpdate(LINK_ID);
+        verifyNoMoreInteractions(repository);
     }
 
     @Test

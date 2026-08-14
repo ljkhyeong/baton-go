@@ -8,7 +8,7 @@ import java.util.UUID;
 
 public interface SmartLinkRepository {
 
-    SmartLink save(SmartLink smartLink);
+    void save(SmartLink smartLink);
 
     Optional<StoredLinkReplay> findReplayById(UUID id);
 

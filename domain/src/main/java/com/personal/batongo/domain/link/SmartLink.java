@@ -10,13 +10,10 @@ import jakarta.persistence.Version;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
-import java.util.regex.Pattern;
 
 @Entity
 @Table(name = "smart_links")
 public class SmartLink {
-
-    private static final Pattern SHA_256_HEX = Pattern.compile("^[0-9a-f]{64}$");
 
     @Id
     @Column(name = "id", nullable = false, columnDefinition = "binary(16)")
@@ -55,7 +52,7 @@ public class SmartLink {
     protected SmartLink() {
     }
 
-    private SmartLink(
+    public SmartLink(
             UUID id,
             String codeHash,
             TrustedTarget trustedTarget,
@@ -64,7 +61,7 @@ public class SmartLink {
             Instant createdAt
     ) {
         this.id = Objects.requireNonNull(id, "링크 식별자는 필수입니다");
-        this.codeHash = requireCodeHash(codeHash);
+        this.codeHash = Objects.requireNonNull(codeHash, "링크 코드 해시는 필수입니다");
         Objects.requireNonNull(trustedTarget, "신뢰 대상은 필수입니다");
         this.targetSystem = trustedTarget.targetSystem();
         this.purpose = trustedTarget.purpose();
@@ -72,28 +69,6 @@ public class SmartLink {
         this.notBefore = notBefore;
         this.expiresAt = expiresAt;
         this.createdAt = Objects.requireNonNull(createdAt, "생성 시각은 필수입니다");
-        validateTimeRange();
-    }
-
-    public static SmartLink create(
-            UUID id,
-            String codeHash,
-            TrustedTarget trustedTarget,
-            Instant notBefore,
-            Instant expiresAt,
-            Instant createdAt
-    ) {
-        return new SmartLink(
-                id,
-                codeHash,
-                trustedTarget,
-                notBefore,
-                expiresAt,
-                createdAt
-        );
-    }
-
-    private void validateTimeRange() {
         if (expiresAt != null && !expiresAt.isAfter(createdAt)) {
             throw new LinkValidationException("만료 시각은 생성 시각보다 뒤여야 합니다");
         }
@@ -102,42 +77,4 @@ public class SmartLink {
         }
     }
 
-    private static String requireCodeHash(String value) {
-        if (value == null || !SHA_256_HEX.matcher(value).matches()) {
-            throw new LinkValidationException("링크 코드 해시는 SHA-256 lowercase hex여야 합니다");
-        }
-        return value;
-    }
-
-    public UUID getId() {
-        return id;
-    }
-
-    public TargetSystem getTargetSystem() {
-        return targetSystem;
-    }
-
-    public String getTargetPath() {
-        return targetPath;
-    }
-
-    public LinkPurpose getPurpose() {
-        return purpose;
-    }
-
-    public Instant getNotBefore() {
-        return notBefore;
-    }
-
-    public Instant getExpiresAt() {
-        return expiresAt;
-    }
-
-    public Instant getRevokedAt() {
-        return revokedAt;
-    }
-
-    public Instant getCreatedAt() {
-        return createdAt;
-    }
 }

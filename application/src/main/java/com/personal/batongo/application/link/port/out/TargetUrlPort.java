@@ -1,9 +1,9 @@
 package com.personal.batongo.application.link.port.out;
 
-import com.personal.batongo.domain.link.TargetSystem;
+import com.personal.batongo.domain.link.TrustedTarget;
 import java.net.URI;
 
 public interface TargetUrlPort {
 
-    URI resolve(TargetSystem targetSystem, String targetPath);
+    URI resolve(TrustedTarget target);
 }

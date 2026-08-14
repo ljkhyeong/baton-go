@@ -12,16 +12,12 @@ public record ManagementProperties(
         if (token == null || token.length() < 32) {
             throw new IllegalArgumentException("관리 credential은 32자 이상이어야 합니다");
         }
-        if (token.codePoints().anyMatch(ManagementProperties::isNotPrintableAscii)) {
+        if (token.codePoints().anyMatch(codePoint -> codePoint < '!' || codePoint > '~')) {
             throw new IllegalArgumentException(
                     "관리 credential은 공백 없는 printable ASCII여야 합니다"
             );
         }
         PublishedCredentialPolicy.requireSafe(token);
-    }
-
-    private static boolean isNotPrintableAscii(int codePoint) {
-        return codePoint < '!' || codePoint > '~';
     }
 
     @Override

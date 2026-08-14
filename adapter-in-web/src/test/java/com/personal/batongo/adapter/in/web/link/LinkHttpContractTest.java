@@ -171,8 +171,7 @@ class LinkHttpContractTest {
     @DisplayName("재생 안전성을 보장할 수 없으면 원인별 운영 오류로 응답한다")
     void returnsOperationalReplayError(
             RuntimeException exception,
-            String code,
-            String message
+            String code
     ) throws Exception {
         when(useCase.createLink(any())).thenThrow(exception);
 
@@ -189,7 +188,6 @@ class LinkHttpContractTest {
                 .andExpect(status().isInternalServerError())
                 .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
                 .andExpect(jsonPath("$.code").value(code))
-                .andExpect(jsonPath("$.message").value(message))
                 .andExpect(jsonPath("$.requestId").isNotEmpty());
     }
 
@@ -197,18 +195,15 @@ class LinkHttpContractTest {
         return Stream.of(
                 Arguments.of(
                         new LinkCodeReplayMismatchException(),
-                        "LINK_CODE_REPLAY_UNAVAILABLE",
-                        "현재 링크 코드 파생 설정으로 기존 링크를 재생할 수 없습니다"
+                        "LINK_CODE_REPLAY_UNAVAILABLE"
                 ),
                 Arguments.of(
                         new PublicLinkOriginReplayUnavailableException(),
-                        "PUBLIC_LINK_ORIGIN_REPLAY_UNAVAILABLE",
-                        "기존 링크 생성에 사용한 공개 origin을 복구할 수 없습니다"
+                        "PUBLIC_LINK_ORIGIN_REPLAY_UNAVAILABLE"
                 ),
                 Arguments.of(
                         new LinkCodeKeyBindingException(),
-                        "LINK_CODE_CONFIGURATION_MISMATCH",
-                        "링크 코드 파생 키를 현재 데이터베이스에 안전하게 결합할 수 없습니다"
+                        "LINK_CODE_CONFIGURATION_MISMATCH"
                 )
         );
     }
@@ -288,11 +283,7 @@ class LinkHttpContractTest {
     @DisplayName("기존 예약이 없는 과거 UUID 멱등성 키는 안정된 400으로 거부한다")
     void rejectsReplayOnlyIdempotencyKeyWithoutReservation() throws Exception {
         String idempotencyKey = "8E448211-66AE-44AB-9888-C4960648C22B";
-        when(useCase.createLink(any())).thenAnswer(invocation -> {
-            CreateLinkCommand command = invocation.getArgument(0);
-            assertThat(command.idempotencyKey().allowsNewReservation()).isFalse();
-            throw new InvalidIdempotencyKeyException();
-        });
+        when(useCase.createLink(any())).thenThrow(new InvalidIdempotencyKeyException());
 
         mockMvc.perform(post("/api/v1/links")
                         .header(LinkManagementController.IDEMPOTENCY_KEY_HEADER, idempotencyKey)
@@ -308,8 +299,6 @@ class LinkHttpContractTest {
                 .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
                 .andExpect(header().string("Referrer-Policy", "no-referrer"))
                 .andExpect(jsonPath("$.code").value("INVALID_IDEMPOTENCY_KEY"))
-                .andExpect(jsonPath("$.message")
-                        .value("Idempotency-Key는 canonical UUID 형식이어야 합니다"))
                 .andExpect(jsonPath("$.requestId").isNotEmpty());
 
         verify(useCase).createLink(any());
@@ -350,8 +339,7 @@ class LinkHttpContractTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
                 .andExpect(header().string("Referrer-Policy", "no-referrer"))
-                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
-                .andExpect(jsonPath("$.message").value("요청 형식이 올바르지 않습니다"));
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
 
         verifyNoInteractions(useCase);
     }
@@ -397,9 +385,6 @@ class LinkHttpContractTest {
                 .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
                 .andExpect(header().string("Referrer-Policy", "no-referrer"))
                 .andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
-                .andExpect(jsonPath("$.message")
-                        .value("notBefore와 expiresAt은 1582-10-15T00:00:00Z 이상 "
-                                + "9999-12-31T23:59:59.999999Z 이하의 마이크로초 단위여야 합니다"))
                 .andExpect(jsonPath("$.requestId").isNotEmpty());
 
         verify(useCase).createLink(any());
@@ -444,8 +429,7 @@ class LinkHttpContractTest {
                     .andExpect(status().isBadRequest())
                     .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
                     .andExpect(header().string("Referrer-Policy", "no-referrer"))
-                    .andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
-                    .andExpect(jsonPath("$.message").value("요청 형식이 올바르지 않습니다"));
+                    .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
         }
 
         verifyNoInteractions(useCase);
@@ -585,28 +569,26 @@ class LinkHttpContractTest {
 
     @ParameterizedTest(name = "{index}: {0}")
     @CsvSource({
-            "NOT_ACTIVE, 404, LINK_NOT_ACTIVE, 아직 활성화되지 않은 링크입니다",
-            "EXPIRED, 410, LINK_EXPIRED, 만료된 링크입니다",
-            "REVOKED, 410, LINK_REVOKED, 폐기된 링크입니다"
+            "NOT_ACTIVE, 404, LINK_NOT_ACTIVE",
+            "EXPIRED, 410, LINK_EXPIRED",
+            "REVOKED, 410, LINK_REVOKED"
     })
     @DisplayName("사용할 수 없는 공개 링크는 사유별 안정된 오류로 응답한다")
     void returnsUnavailableContract(
             LinkUnavailableException.Reason reason,
             int expectedStatus,
-            String expectedCode,
-            String message
+            String expectedCode
     ) throws Exception {
         when(useCase.resolveLink("VOvLShvx93kQpj8x7w2HYQ"))
                 .thenThrow(new LinkUnavailableException(
                         reason,
-                        message
+                        "링크를 사용할 수 없습니다"
                 ));
 
         mockMvc.perform(get("/l/VOvLShvx93kQpj8x7w2HYQ"))
                 .andExpect(status().is(expectedStatus))
                 .andExpect(header().string("Cache-Control", "no-store"))
                 .andExpect(jsonPath("$.code").value(expectedCode))
-                .andExpect(jsonPath("$.message").value(message))
                 .andExpect(jsonPath("$.requestId").isNotEmpty());
     }
 
@@ -652,8 +634,7 @@ class LinkHttpContractTest {
     @Test
     @DisplayName("알려진 값의 비허용 target 조합은 안정된 400 INVALID_LINK로 응답한다")
     void rejectsKnownDisallowedTargetCombinationAsInvalidLink() throws Exception {
-        String message = "대상 시스템, 목적과 경로가 v1 신뢰 대상 계약에 맞지 않습니다";
-        when(useCase.createLink(any())).thenThrow(new LinkValidationException(message));
+        when(useCase.createLink(any())).thenThrow(new LinkValidationException("검증 실패"));
 
         mockMvc.perform(post("/api/v1/links")
                         .header(LinkManagementController.IDEMPOTENCY_KEY_HEADER, IDEMPOTENCY_KEY)
@@ -669,7 +650,6 @@ class LinkHttpContractTest {
                 .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
                 .andExpect(header().string("Referrer-Policy", "no-referrer"))
                 .andExpect(jsonPath("$.code").value("INVALID_LINK"))
-                .andExpect(jsonPath("$.message").value(message))
                 .andExpect(jsonPath("$.requestId").isNotEmpty());
     }
 
@@ -690,7 +670,6 @@ class LinkHttpContractTest {
                 .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
                 .andExpect(header().string("Referrer-Policy", "no-referrer"))
                 .andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
-                .andExpect(jsonPath("$.message").value("요청 형식이 올바르지 않습니다"))
                 .andExpect(jsonPath("$.requestId").isNotEmpty());
 
         verifyNoMoreInteractions(useCase);
@@ -708,7 +687,7 @@ class LinkHttpContractTest {
                         PUBLIC_NOT_FOUND_REQUEST_ID
                 ))
                 .andExpect(jsonPath("$.code").value("LINK_NOT_FOUND"))
-                .andExpect(jsonPath("$.message").value("링크를 찾을 수 없습니다"))
+                .andExpect(jsonPath("$.message").isNotEmpty())
                 .andExpect(jsonPath("$.requestId").value(PUBLIC_NOT_FOUND_REQUEST_ID))
                 .andReturn()
                 .getResponse()

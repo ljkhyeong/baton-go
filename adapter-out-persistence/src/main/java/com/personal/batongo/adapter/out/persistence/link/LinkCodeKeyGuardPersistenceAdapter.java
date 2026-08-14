@@ -96,7 +96,7 @@ public class LinkCodeKeyGuardPersistenceAdapter implements LinkCodeKeyGuardPort 
                     guard.derivationVersion(),
                     guard.keyFingerprint()
             );
-            if (!storedIdentity.matches(currentIdentity)) {
+            if (!storedIdentity.equals(currentIdentity)) {
                 throw new LinkCodeKeyBindingException();
             }
         } catch (IllegalArgumentException exception) {

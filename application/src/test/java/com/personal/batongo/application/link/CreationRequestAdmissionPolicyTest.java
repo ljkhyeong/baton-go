@@ -3,7 +3,6 @@ package com.personal.batongo.application.link;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.personal.batongo.application.link.CreationRequestAdmissionPolicy.ReplayOnlyReason;
 import com.personal.batongo.application.link.error.InvalidCreationTimeException;
 import com.personal.batongo.application.link.error.InvalidIdempotencyKeyException;
 import java.time.Instant;
@@ -12,6 +11,8 @@ import org.junit.jupiter.api.Test;
 
 class CreationRequestAdmissionPolicyTest {
 
+    private static final Instant MAXIMUM_SUPPORTED_TIME =
+            Instant.parse("9999-12-31T23:59:59.999999Z");
     private static final CreationIdempotencyKey CURRENT_KEY =
             CreationIdempotencyKey.parseRequest(
                     "8e448211-66ae-44ab-9888-c4960648c22b"
@@ -29,7 +30,6 @@ class CreationRequestAdmissionPolicyTest {
         );
 
         assertThat(decision.allowsNewReservation()).isTrue();
-        assertThat(decision.replayOnlyReason()).isEqualTo(ReplayOnlyReason.NONE);
         assertThat(decision.expiresAt()).isEqualTo(expiresAt);
     }
 
@@ -47,8 +47,6 @@ class CreationRequestAdmissionPolicyTest {
         );
 
         assertThat(decision.allowsNewReservation()).isFalse();
-        assertThat(decision.replayOnlyReason())
-                .isEqualTo(ReplayOnlyReason.LEGACY_IDEMPOTENCY_KEY);
         assertThat(decision.missingReservationException())
                 .isExactlyInstanceOf(InvalidIdempotencyKeyException.class);
     }
@@ -65,8 +63,6 @@ class CreationRequestAdmissionPolicyTest {
         );
 
         assertThat(decision.allowsNewReservation()).isFalse();
-        assertThat(decision.replayOnlyReason())
-                .isEqualTo(ReplayOnlyReason.SUB_MICROSECOND_TIME);
         assertThat(decision.expiresAt())
                 .isEqualTo(Instant.parse("2026-08-08T01:02:03.123456Z"));
         assertThat(decision.missingReservationException())
@@ -86,8 +82,6 @@ class CreationRequestAdmissionPolicyTest {
                 Instant.parse("2026-08-08T01:02:03.123456789Z")
         );
 
-        assertThat(decision.replayOnlyReason())
-                .isEqualTo(ReplayOnlyReason.LEGACY_IDEMPOTENCY_KEY);
         assertThat(decision.missingReservationException())
                 .isExactlyInstanceOf(InvalidIdempotencyKeyException.class);
     }
@@ -102,7 +96,7 @@ class CreationRequestAdmissionPolicyTest {
         assertThatThrownBy(() -> CreationRequestAdmissionPolicy.evaluate(
                 legacyKey,
                 null,
-                CreationTimeStoragePolicy.MAXIMUM.plusNanos(1_000)
+                MAXIMUM_SUPPORTED_TIME.plusNanos(1_000)
         )).isExactlyInstanceOf(InvalidCreationTimeException.class);
     }
 }

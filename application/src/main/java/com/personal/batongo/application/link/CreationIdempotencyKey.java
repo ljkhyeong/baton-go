@@ -17,17 +17,22 @@ public final class CreationIdempotencyKey {
     }
 
     public static CreationIdempotencyKey parseRequest(String value) {
-        UUID parsed = requireCanonicalUuid(value);
+        UUID parsed;
+        try {
+            parsed = UUID.fromString(value);
+        } catch (IllegalArgumentException | NullPointerException exception) {
+            throw new InvalidIdempotencyKeyException();
+        }
         String canonicalValue = parsed.toString();
-        if (canonicalValue.equals(value) && matchesCurrentContract(parsed)) {
-            return new CreationIdempotencyKey(
-                    canonicalValue,
-                    true
-            );
+        if (!canonicalValue.equalsIgnoreCase(value)) {
+            throw new InvalidIdempotencyKeyException();
         }
         return new CreationIdempotencyKey(
                 canonicalValue,
-                false
+                canonicalValue.equals(value)
+                        && parsed.version() >= 1
+                        && parsed.version() <= 5
+                        && parsed.variant() == 2
         );
     }
 
@@ -35,27 +40,8 @@ public final class CreationIdempotencyKey {
         return value;
     }
 
-    public boolean allowsNewReservation() {
+    boolean allowsNewReservation() {
         return allowsNewReservation;
-    }
-
-    private static UUID requireCanonicalUuid(String value) {
-        UUID parsed;
-        try {
-            parsed = UUID.fromString(value);
-        } catch (IllegalArgumentException | NullPointerException exception) {
-            throw new InvalidIdempotencyKeyException();
-        }
-        if (!parsed.toString().equalsIgnoreCase(value)) {
-            throw new InvalidIdempotencyKeyException();
-        }
-        return parsed;
-    }
-
-    private static boolean matchesCurrentContract(UUID value) {
-        return value.version() >= 1
-                && value.version() <= 5
-                && value.variant() == 2;
     }
 
     @Override

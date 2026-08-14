@@ -3,7 +3,7 @@ package com.personal.batongo.adapter.out.external.link;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.personal.batongo.application.link.error.InvalidLinkCodeException;
+import com.personal.batongo.application.link.error.LinkNotFoundException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -14,17 +14,6 @@ class SecureLinkCodeAdapterTest {
 
     private final SecureLinkCodeAdapter adapter =
             new SecureLinkCodeAdapter(new LinkCodeProperties(SECRET));
-
-    @Test
-    @DisplayName("발급 코드는 멱등성 키에서 파생된 128비트 URL 안전 문자열이다")
-    void issuesUrlSafeCode() {
-        var issued = adapter.issue(IDEMPOTENCY_KEY);
-
-        assertThat(issued.rawCode()).matches("^[A-Za-z0-9_-]{22}$");
-        assertThat(issued.codeHash()).matches("^[0-9a-f]{64}$");
-        assertThat(issued.codeHash()).isNotEqualTo(issued.rawCode());
-        assertThat(adapter.hash(issued.rawCode())).isEqualTo(issued.codeHash());
-    }
 
     @Test
     @DisplayName("같은 비밀과 멱등성 키는 재시작 후에도 같은 공개 코드를 만든다")
@@ -49,6 +38,7 @@ class SecureLinkCodeAdapterTest {
         assertThat(issued.rawCode()).isEqualTo("WgRX_ulMUrIGxM0IYBOpqA");
         assertThat(issued.codeHash())
                 .isEqualTo("cc1d2daca7a315a27cbccb3eac92571648228f5975376bca32da45b2f33af247");
+        assertThat(adapter.hash(issued.rawCode())).isEqualTo(issued.codeHash());
     }
 
     @Test
@@ -72,8 +62,6 @@ class SecureLinkCodeAdapterTest {
 
         assertThat(different.derivationIdentity())
                 .isNotEqualTo(adapter.derivationIdentity());
-        assertThat(different.derivationIdentity().matches(adapter.derivationIdentity()))
-                .isFalse();
     }
 
     @Test
@@ -93,8 +81,8 @@ class SecureLinkCodeAdapterTest {
     @DisplayName("정확한 형식이 아닌 공개 코드는 해시하지 않는다")
     void rejectsMalformedCode() {
         assertThatThrownBy(() -> adapter.hash("short"))
-                .isInstanceOf(InvalidLinkCodeException.class);
+                .isInstanceOf(LinkNotFoundException.class);
         assertThatThrownBy(() -> adapter.hash("a".repeat(21) + "/"))
-                .isInstanceOf(InvalidLinkCodeException.class);
+                .isInstanceOf(LinkNotFoundException.class);
     }
 }

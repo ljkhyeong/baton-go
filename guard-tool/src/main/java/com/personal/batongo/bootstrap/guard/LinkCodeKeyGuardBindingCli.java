@@ -137,17 +137,9 @@ public final class LinkCodeKeyGuardBindingCli {
             );
         }
 
-        private static String requirePresent(Map<String, String> environment, String name) {
-            String value = environment.get(name);
-            if (value == null) {
-                throw new IllegalArgumentException(name + " 설정은 필수입니다");
-            }
-            return value;
-        }
-
         private static String requireNonBlank(Map<String, String> environment, String name) {
-            String value = requirePresent(environment, name);
-            if (value.isBlank()) {
+            String value = environment.get(name);
+            if (value == null || value.isBlank()) {
                 throw new IllegalArgumentException(name + " 설정은 필수입니다");
             }
             return value;

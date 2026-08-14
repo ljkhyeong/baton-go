@@ -1,7 +1,5 @@
 package com.personal.batongo.application.link;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.util.Objects;
 import java.util.regex.Pattern;
 
@@ -22,15 +20,6 @@ public record LinkCodeDerivationIdentity(
         if (!FINGERPRINT.matcher(hmacFingerprint).matches()) {
             throw new IllegalArgumentException("HMAC fingerprint 형식이 올바르지 않습니다");
         }
-    }
-
-    public boolean matches(LinkCodeDerivationIdentity other) {
-        return other != null
-                && version.equals(other.version)
-                && MessageDigest.isEqual(
-                        hmacFingerprint.getBytes(StandardCharsets.US_ASCII),
-                        other.hmacFingerprint.getBytes(StandardCharsets.US_ASCII)
-                );
     }
 
     @Override

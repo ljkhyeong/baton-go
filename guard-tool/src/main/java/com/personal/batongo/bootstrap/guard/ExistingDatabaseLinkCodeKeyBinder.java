@@ -42,8 +42,6 @@ public final class ExistingDatabaseLinkCodeKeyBinder {
 
             bindGuard(jdbcClient, identity);
             return BindingResult.BOUND;
-        } catch (GuardBindingToolException exception) {
-            throw exception;
         } catch (SQLException | RuntimeException exception) {
             throw unsafeState();
         }
@@ -90,7 +88,10 @@ public final class ExistingDatabaseLinkCodeKeyBinder {
                 .param(idempotencyKeyHash)
                 .query(String.class)
                 .single();
-        if (!constantTimeEquals(issuedLinkCode.codeHash(), storedCodeHash)) {
+        if (!MessageDigest.isEqual(
+                issuedLinkCode.codeHash().getBytes(StandardCharsets.US_ASCII),
+                storedCodeHash.getBytes(StandardCharsets.US_ASCII)
+        )) {
             throw unsafeState();
         }
     }
@@ -103,7 +104,7 @@ public final class ExistingDatabaseLinkCodeKeyBinder {
                 guardState.version(),
                 guardState.fingerprint()
         );
-        if (!storedIdentity.matches(identity)) {
+        if (!storedIdentity.equals(identity)) {
             throw unsafeState();
         }
     }
@@ -130,18 +131,8 @@ public final class ExistingDatabaseLinkCodeKeyBinder {
         }
     }
 
-    private boolean constantTimeEquals(String left, String right) {
-        if (left == null || right == null) {
-            return false;
-        }
-        return MessageDigest.isEqual(
-                left.getBytes(StandardCharsets.US_ASCII),
-                right.getBytes(StandardCharsets.US_ASCII)
-        );
-    }
-
-    private GuardBindingToolException unsafeState() {
-        return new GuardBindingToolException(SAFE_MESSAGE);
+    private IllegalStateException unsafeState() {
+        return new IllegalStateException(SAFE_MESSAGE);
     }
 
     public enum BindingResult {
@@ -165,11 +156,4 @@ public final class ExistingDatabaseLinkCodeKeyBinder {
         }
     }
 
-    public static final class GuardBindingToolException extends RuntimeException {
-
-        private GuardBindingToolException(String message) {
-            super(message);
-        }
-
-    }
 }

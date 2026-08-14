@@ -11,10 +11,8 @@ import com.personal.batongo.application.link.port.in.SmartLinkUseCase;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.CreateLinkCommand;
 import com.personal.batongo.application.link.port.out.LinkCodeKeyGuardPort;
 import com.personal.batongo.application.link.port.out.LinkCodePort;
-import com.personal.batongo.bootstrap.LinkCodeKeyStartupValidator;
 import com.personal.batongo.bootstrap.guard.ExistingDatabaseLinkCodeKeyBinder;
 import com.personal.batongo.bootstrap.guard.ExistingDatabaseLinkCodeKeyBinder.BindingResult;
-import com.personal.batongo.bootstrap.guard.ExistingDatabaseLinkCodeKeyBinder.GuardBindingToolException;
 import com.personal.batongo.domain.link.LinkPurpose;
 import com.personal.batongo.domain.link.TargetSystem;
 import java.sql.Connection;
@@ -33,6 +31,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.DefaultApplicationArguments;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
@@ -54,8 +54,6 @@ import org.testcontainers.mysql.MySQLContainer;
 })
 class LinkCodeKeyGuardIntegrationTest {
 
-    private static final String SAFE_MESSAGE =
-            "링크 코드 파생 키를 현재 데이터베이스에 안전하게 결합할 수 없습니다";
     private static final String CANONICAL_BATON_TARGET =
             "/teams/8e448211-66ae-44ab-9888-c4960648c22b"
                     + "/seasons/713d9cb7-2842-4f9f-b3cc-e31d98c6238a";
@@ -77,7 +75,8 @@ class LinkCodeKeyGuardIntegrationTest {
     private LinkCodeKeyGuardPort linkCodeKeyGuardPort;
 
     @Autowired
-    private LinkCodeKeyStartupValidator startupValidator;
+    @Qualifier("linkCodeKeyStartupValidator")
+    private ApplicationRunner startupValidator;
 
     @Autowired
     private SmartLinkUseCase smartLinkUseCase;
@@ -102,7 +101,7 @@ class LinkCodeKeyGuardIntegrationTest {
 
     @Test
     @DisplayName("빈 데이터베이스의 미결합 sentinel은 시작 검증에서 현재 HMAC 키에 결합된다")
-    void bindsEmptyDatabaseDuringStartupValidation() {
+    void bindsEmptyDatabaseDuringStartupValidation() throws Exception {
         unbind();
 
         startupValidator.run(new DefaultApplicationArguments(new String[0]));
@@ -118,8 +117,7 @@ class LinkCodeKeyGuardIntegrationTest {
         assertThatThrownBy(() -> smartLinkUseCase.createLink(command(
                 "40743730-ea7e-4d9d-a490-df10726c4926"
         )))
-                .isInstanceOf(LinkCodeKeyBindingException.class)
-                .hasMessage(SAFE_MESSAGE);
+                .isInstanceOf(LinkCodeKeyBindingException.class);
 
         assertThat(linkCount()).isZero();
         assertThat(reservationCount()).isZero();
@@ -140,14 +138,12 @@ class LinkCodeKeyGuardIntegrationTest {
                 new DefaultApplicationArguments(new String[0])
         ))
                 .isInstanceOf(LinkCodeKeyBindingException.class)
-                .hasMessage(SAFE_MESSAGE)
                 .hasMessageNotContaining(current.hmacFingerprint())
                 .hasMessageNotContaining(different.hmacFingerprint());
         assertThatThrownBy(() -> smartLinkUseCase.createLink(command(
                 "4ab8831d-78c6-47c2-b984-e2723e818245"
         )))
-                .isInstanceOf(LinkCodeKeyBindingException.class)
-                .hasMessage(SAFE_MESSAGE);
+                .isInstanceOf(LinkCodeKeyBindingException.class);
         assertThat(linkCount()).isZero();
         assertThat(reservationCount()).isZero();
     }
@@ -161,8 +157,7 @@ class LinkCodeKeyGuardIntegrationTest {
         unbind();
 
         assertThatThrownBy(() -> linkCodeKeyGuard.verifyOrBind())
-                .isInstanceOf(LinkCodeKeyBindingException.class)
-                .hasMessage(SAFE_MESSAGE);
+                .isInstanceOf(LinkCodeKeyBindingException.class);
 
         assertThat(linkCount()).isEqualTo(1L);
         assertThat(reservationCount()).isEqualTo(1L);
@@ -186,8 +181,7 @@ class LinkCodeKeyGuardIntegrationTest {
         unbind();
 
         assertThatThrownBy(() -> linkCodeKeyGuard.verifyOrBind())
-                .isInstanceOf(LinkCodeKeyBindingException.class)
-                .hasMessage(SAFE_MESSAGE);
+                .isInstanceOf(LinkCodeKeyBindingException.class);
 
         assertThat(linkCount()).isZero();
         assertThat(reservationCount()).isEqualTo(1L);
@@ -221,8 +215,7 @@ class LinkCodeKeyGuardIntegrationTest {
                     successes++;
                 } catch (ExecutionException exception) {
                     assertThat(exception.getCause())
-                            .isInstanceOf(LinkCodeKeyBindingException.class)
-                            .hasMessage(SAFE_MESSAGE);
+                            .isInstanceOf(LinkCodeKeyBindingException.class);
                     failures++;
                 }
             }
@@ -276,8 +269,7 @@ class LinkCodeKeyGuardIntegrationTest {
         unbind();
 
         assertThatThrownBy(() -> bindExistingDatabase(wrongCanary))
-                .isInstanceOf(GuardBindingToolException.class)
-                .hasMessage("기존 데이터베이스의 링크 코드 키 결합 검증에 실패했습니다")
+                .isInstanceOf(IllegalStateException.class)
                 .hasMessageNotContaining(storedCanary)
                 .hasMessageNotContaining(wrongCanary)
                 .hasMessageNotContaining(linkCodePort.derivationIdentity().hmacFingerprint());

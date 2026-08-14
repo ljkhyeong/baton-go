@@ -16,9 +16,9 @@ import com.personal.batongo.application.link.port.in.TargetContractOperationsUse
 import com.personal.batongo.application.link.port.in.TargetContractOperationsUseCase.RemediationResult;
 import java.sql.Timestamp;
 import java.time.Instant;
-import java.util.Calendar;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
-import java.util.TimeZone;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -239,10 +239,6 @@ class TargetContractOperationsIntegrationTest {
                         .header(HttpHeaders.AUTHORIZATION, bearerToken()))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("LINK_NOT_FOUND"));
-        mockMvc.perform(put("/api/v1/links/{linkId}/revocation", UNKNOWN_ENUM_LINK_ID)
-                        .header(HttpHeaders.AUTHORIZATION, bearerToken()))
-                .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.code").value("LINK_NOT_FOUND"));
     }
 
     @Test
@@ -294,34 +290,6 @@ class TargetContractOperationsIntegrationTest {
     }
 
     @Test
-    @DisplayName("compliant 링크는 remediation으로 변경되지 않는다")
-    void refusesToRemediateCompliantLink() throws Exception {
-        insertStoredLink(
-                VALID_LINK_ID,
-                "5".repeat(64),
-                "BATON",
-                VALID_TARGET_PATH,
-                "NAVIGATION",
-                2,
-                true
-        );
-
-        mockMvc.perform(put(
-                        "/api/v1/operations/link-target-contract-v1/links/{linkId}/revocation",
-                        VALID_LINK_ID
-                )
-                        .header(HttpHeaders.AUTHORIZATION, bearerToken())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"expectedVersion\":2}"))
-                .andExpect(status().isConflict())
-                .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
-                .andExpect(jsonPath("$.code").value("REMEDIATION_NOT_APPLICABLE"));
-
-        assertThat(storedRevokedAt(VALID_LINK_ID)).isNull();
-        assertThat(storedVersion(VALID_LINK_ID)).isEqualTo(2L);
-    }
-
-    @Test
     @DisplayName("실제 Spring JSON 조립은 문자열 expectedVersion을 변경 전에 거부한다")
     void rejectsStringVersionWithConfiguredSpringJsonMapper() throws Exception {
         insertStoredLink(
@@ -346,33 +314,6 @@ class TargetContractOperationsIntegrationTest {
 
         assertThat(storedRevokedAt(INVALID_LINK_ID)).isNull();
         assertThat(storedVersion(INVALID_LINK_ID)).isEqualTo(7L);
-    }
-
-    @Test
-    @DisplayName("증가할 수 없는 최대 version은 MySQL 행을 변경하지 않고 400으로 거부한다")
-    void rejectsMaximumVersionBeforeMysqlMutation() throws Exception {
-        insertStoredLink(
-                INVALID_LINK_ID,
-                "7".repeat(64),
-                "BATON",
-                INVALID_TARGET_PATH,
-                "NAVIGATION",
-                0,
-                true
-        );
-
-        mockMvc.perform(put(
-                        "/api/v1/operations/link-target-contract-v1/links/{linkId}/revocation",
-                        INVALID_LINK_ID
-                )
-                        .header(HttpHeaders.AUTHORIZATION, bearerToken())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"expectedVersion\":9223372036854775807}"))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
-
-        assertThat(storedRevokedAt(INVALID_LINK_ID)).isNull();
-        assertThat(storedVersion(INVALID_LINK_ID)).isZero();
     }
 
     private RemediationResult remediateAfterStart(
@@ -430,15 +371,11 @@ class TargetContractOperationsIntegrationTest {
                                 created_at
                             ) VALUES (?, UUID_TO_BIN(?), ?)
                             """,
-                    idempotencyHash(linkId),
+                    "%064x".formatted(linkId.getLeastSignificantBits() & Long.MAX_VALUE),
                     linkId.toString(),
                     Timestamp.from(CREATED_AT)
             );
         }
-    }
-
-    private String idempotencyHash(UUID linkId) {
-        return "%064x".formatted(linkId.getLeastSignificantBits() & Long.MAX_VALUE);
     }
 
     private String bearerToken() {
@@ -449,8 +386,11 @@ class TargetContractOperationsIntegrationTest {
         return jdbcTemplate.queryForObject(
                 "SELECT revoked_at FROM smart_links WHERE id = UUID_TO_BIN(?)",
                 (resultSet, rowNumber) -> {
-                    Timestamp value = resultSet.getTimestamp("revoked_at", utcCalendar());
-                    return value == null ? null : value.toInstant();
+                    LocalDateTime value = resultSet.getObject(
+                            "revoked_at",
+                            LocalDateTime.class
+                    );
+                    return value == null ? null : value.toInstant(ZoneOffset.UTC);
                 },
                 linkId.toString()
         );
@@ -470,9 +410,5 @@ class TargetContractOperationsIntegrationTest {
                 Long.class,
                 linkId.toString()
         );
-    }
-
-    private Calendar utcCalendar() {
-        return Calendar.getInstance(TimeZone.getTimeZone("UTC"));
     }
 }

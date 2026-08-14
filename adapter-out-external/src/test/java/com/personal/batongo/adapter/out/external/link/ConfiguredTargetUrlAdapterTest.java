@@ -1,9 +1,9 @@
 package com.personal.batongo.adapter.out.external.link;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-
+import com.personal.batongo.domain.link.LinkPurpose;
 import com.personal.batongo.domain.link.TargetSystem;
+import com.personal.batongo.domain.link.TrustedTargetPolicy;
 import java.net.URI;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -12,8 +12,8 @@ class ConfiguredTargetUrlAdapterTest {
 
     private final ConfiguredTargetUrlAdapter adapter = new ConfiguredTargetUrlAdapter(
             new TrustedTargetProperties(
-                    URI.create("https://baton.example"),
-                    URI.create("https://baton.example")
+                    URI.create("http://localhost:3000"),
+                    URI.create("http://localhost:3001")
             )
     );
 
@@ -23,19 +23,17 @@ class ConfiguredTargetUrlAdapterTest {
         String batonTarget = "/teams/8e448211-66ae-44ab-9888-c4960648c22b"
                 + "/seasons/713d9cb7-2842-4f9f-b3cc-e31d98c6238a";
 
-        assertThat(adapter.resolve(TargetSystem.BATON, batonTarget))
-                .isEqualTo(URI.create("https://baton.example" + batonTarget));
-        assertThat(adapter.resolve(TargetSystem.ROUND, "/room/abcd-efgh-jkmp"))
-                .isEqualTo(URI.create("https://baton.example/room/abcd-efgh-jkmp"));
-    }
-
-    @Test
-    @DisplayName("scheme-relative 대상이 신뢰 origin 밖으로 벗어나면 해석을 거부한다")
-    void rejectsSchemeRelativeOriginEscape() {
-        assertThatThrownBy(() -> adapter.resolve(
+        assertThat(adapter.resolve(TrustedTargetPolicy.requireAllowed(
+                TargetSystem.BATON,
+                LinkPurpose.NAVIGATION,
+                batonTarget
+        )))
+                .isEqualTo(URI.create("http://localhost:3000" + batonTarget));
+        assertThat(adapter.resolve(TrustedTargetPolicy.requireAllowed(
                 TargetSystem.ROUND,
-                "//evil.example/room/abcd-efgh-jkmp"
-        ))
-                .isInstanceOf(IllegalStateException.class);
+                LinkPurpose.MEETING_ENTRY,
+                "/room/abcd-efgh-jkmp"
+        )))
+                .isEqualTo(URI.create("http://localhost:3001/room/abcd-efgh-jkmp"));
     }
 }

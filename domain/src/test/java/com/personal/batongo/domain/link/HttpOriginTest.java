@@ -38,9 +38,17 @@ class HttpOriginTest {
     @DisplayName("기본 HTTPS 포트와 명시적 443 포트는 같은 origin이다")
     void comparesOriginsUsingEffectivePorts() {
         HttpOrigin origin = HttpOrigin.require(URI.create("https://go.example"), "origin");
+        HttpOrigin explicitDefault = HttpOrigin.require(
+                URI.create("https://GO.example:443/"),
+                "origin"
+        );
+        HttpOrigin differentPort = HttpOrigin.require(
+                URI.create("https://go.example:444"),
+                "origin"
+        );
 
-        assertThat(origin.sameOrigin(URI.create("https://GO.example:443/l/code"))).isTrue();
-        assertThat(origin.sameOrigin(URI.create("https://go.example:444/l/code"))).isFalse();
+        assertThat(origin.sameOrigin(explicitDefault)).isTrue();
+        assertThat(origin.sameOrigin(differentPort)).isFalse();
     }
 
     @Test

@@ -1,12 +1,12 @@
 package com.personal.batongo.bootstrap.guard;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -49,35 +49,28 @@ class LinkCodeKeyGuardBindingCliTest {
     }
 
     @Test
-    @DisplayName("필수 설정이 없으면 canary와 설정값을 노출하지 않고 안전하게 실패한다")
-    void hidesSensitiveInputWhenConfigurationIsMissing() {
-        CapturedOutput output = run(
-                new String[]{"--confirm-writers-stopped"},
-                Map.of("BATON_GO_LINK_CODE_SECRET", "secret-value-that-must-not-be-printed")
-        );
+    @DisplayName("필수 설정이 없거나 공백이면 비밀값을 노출하지 않고 안전하게 실패한다")
+    void hidesSensitiveInputWhenConfigurationIsMissingOrBlank() {
+        String secret = "secret-value-that-must-not-be-printed";
+        Map<String, String> blankEnvironment = validEnvironment(secret);
+        blankEnvironment.put("BATON_GO_DB_URL", " ");
 
-        assertThat(output.exitCode())
-                .isEqualTo(LinkCodeKeyGuardBindingCli.EXIT_VERIFICATION_FAILED);
-        assertThat(output.standardError()).contains("설정, canary와 DB 상태를 확인하세요");
-        assertThat(output.combined())
-                .doesNotContain(CANARY)
-                .doesNotContain("secret-value-that-must-not-be-printed")
-                .doesNotContain("BATON_GO_DB_URL");
-    }
+        for (Map<String, String> environment : List.of(
+                Map.of("BATON_GO_LINK_CODE_SECRET", secret),
+                blankEnvironment
+        )) {
+            CapturedOutput output = run(
+                    new String[]{"--confirm-writers-stopped"},
+                    environment
+            );
 
-    @Test
-    @DisplayName("복구 CLI의 데이터베이스 연결 설정은 공백 값을 거부한다")
-    void rejectsBlankDatabaseConnectionSettings() {
-        Map<String, String> environment = validEnvironment(
-                "actual-link-code-secret-with-more-than-32-characters"
-        );
-        environment.put("BATON_GO_DB_URL", " ");
-
-        assertThatThrownBy(() -> LinkCodeKeyGuardBindingCli.RuntimeConfiguration.from(
-                environment
-        ))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("BATON_GO_DB_URL 설정은 필수입니다");
+            assertThat(output.exitCode())
+                    .isEqualTo(LinkCodeKeyGuardBindingCli.EXIT_VERIFICATION_FAILED);
+            assertThat(output.combined())
+                    .doesNotContain(CANARY)
+                    .doesNotContain(secret)
+                    .doesNotContain("database-password");
+        }
     }
 
     private CapturedOutput run(String[] args, Map<String, String> environment) {

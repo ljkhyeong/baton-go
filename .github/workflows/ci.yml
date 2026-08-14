@@ -106,22 +106,30 @@ jobs:
           test ! -s "$smoke_dir/usage.out"
           test -s "$smoke_dir/usage.err"
 
+          printf '%s\n' '00000000-0000-4000-8000-000000000000' \
+            >"$smoke_dir/canary.in"
           canary_status=0
           env \
             BATON_GO_LINK_CODE_SECRET=ci-guard-smoke-secret-000000000000 \
             'BATON_GO_DB_URL=jdbc:mysql://127.0.0.1:1/guard_smoke?connectTimeout=100' \
             BATON_GO_DB_USERNAME=guard_smoke \
             BATON_GO_DB_PASSWORD=guard_smoke \
-            java -jar "$guard_jar" --confirm-writers-stopped </dev/null \
+            java -jar "$guard_jar" --confirm-writers-stopped \
+            <"$smoke_dir/canary.in" \
             >"$smoke_dir/canary.out" 2>"$smoke_dir/canary.err" \
             || canary_status=$?
 
           test "$canary_status" -eq 3
           test ! -s "$smoke_dir/canary.out"
           test -s "$smoke_dir/canary.err"
+          for sensitive_value in \
+            '00000000-0000-4000-8000-000000000000' \
+            'ci-guard-smoke-secret-000000000000' \
+            'jdbc:mysql://127.0.0.1:1/guard_smoke?connectTimeout=100' \
+            guard_smoke; do
+            ! grep -F -- "$sensitive_value" "$smoke_dir/canary.err"
+          done
 
-          printf '%s\n' '00000000-0000-4000-8000-000000000000' \
-            >"$smoke_dir/canary.in"
           configuration_status=0
           env \
             -u BATON_GO_LINK_CODE_SECRET \

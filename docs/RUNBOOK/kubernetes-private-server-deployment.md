@@ -158,7 +158,7 @@ baton-go-mysql-client-tls
 로컬 root socket으로 DML 전용 권한을 만든다. 마이그레이션·root 비밀번호도 같은 파서 안전
 알파벳으로 생성한다. 인증서/키 쌍과 SAN은 발급 PKI에서 검증하고, 실제 배포에서는
 mysqld startup·TLS readiness와 Connector/J `VERIFY_IDENTITY`가 잘못된 값을 거부한다. CI는
-동일한 초기화 스크립트로 런타임 계정의 DML 4종과 DDL 거부를 검증한다.
+동일한 초기화 스크립트로 런타임 계정의 정확한 DML 권한 집합과 DDL 거부를 검증한다.
 
 ```text
 jdbc:mysql://baton-go-mysql:3306/baton_go?sslMode=VERIFY_IDENTITY&trustCertificateKeyStoreUrl=file:/etc/baton-go/mysql-tls/truststore.p12&trustCertificateKeyStoreType=PKCS12&fallbackToSystemTrustStore=false&serverTimezone=UTC

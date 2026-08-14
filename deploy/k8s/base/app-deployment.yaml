@@ -8,11 +8,6 @@ metadata:
 spec:
   replicas: 1
   revisionHistoryLimit: 3
-  strategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxSurge: 1
-      maxUnavailable: 0
   selector:
     matchLabels:
       app.kubernetes.io/name: baton-go
@@ -36,7 +31,6 @@ spec:
       containers:
         - name: application
           image: baton-go:local
-          imagePullPolicy: IfNotPresent
           envFrom:
             - configMapRef:
                 name: baton-go-config
@@ -88,7 +82,6 @@ spec:
             httpGet:
               path: /actuator/health/readiness
               port: actuator
-            periodSeconds: 10
             timeoutSeconds: 3
             failureThreshold: 30
           livenessProbe:
@@ -97,14 +90,12 @@ spec:
               port: actuator
             periodSeconds: 15
             timeoutSeconds: 3
-            failureThreshold: 3
           readinessProbe:
             httpGet:
               path: /actuator/health/readiness
               port: actuator
             periodSeconds: 5
             timeoutSeconds: 3
-            failureThreshold: 3
           volumeMounts:
             - name: tmp
               mountPath: /tmp

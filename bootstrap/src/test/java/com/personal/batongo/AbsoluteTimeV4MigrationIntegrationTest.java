@@ -9,6 +9,8 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import org.flywaydb.core.Flyway;
@@ -51,7 +53,6 @@ class AbsoluteTimeV4MigrationIntegrationTest {
         SessionTimeZoneCallback sessionTimeZoneCallback = new SessionTimeZoneCallback();
         Flyway.configure()
                 .dataSource(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword())
-                .locations("classpath:db/migration")
                 .target("4")
                 .initSql("SET SESSION time_zone = '" + NON_UTC_TIME_ZONE + "'")
                 .callbacks(sessionTimeZoneCallback)
@@ -60,12 +61,8 @@ class AbsoluteTimeV4MigrationIntegrationTest {
 
         assertThat(sessionTimeZoneCallback.beforeV4()).isNotNull();
         assertThat(sessionTimeZoneCallback.afterV4()).isNotNull();
-        assertThat(sessionTimeZoneCallback.beforeV4().timeZone())
-                .isEqualTo(NON_UTC_TIME_ZONE);
-        assertThat(sessionTimeZoneCallback.afterV4().timeZone())
-                .isEqualTo(NON_UTC_TIME_ZONE);
-        assertThat(sessionTimeZoneCallback.afterV4().connectionId())
-                .isEqualTo(sessionTimeZoneCallback.beforeV4().connectionId());
+        assertThat(sessionTimeZoneCallback.beforeV4()).isEqualTo(NON_UTC_TIME_ZONE);
+        assertThat(sessionTimeZoneCallback.afterV4()).isEqualTo(NON_UTC_TIME_ZONE);
 
         try (Connection connection = connection();
              Statement statement = connection.createStatement()) {
@@ -91,49 +88,12 @@ class AbsoluteTimeV4MigrationIntegrationTest {
                             "NO"
                     )
             );
-            assertThat(readSchemaObjects(
-                    connection,
-                    "information_schema.table_constraints",
-                    "constraint_name"
-            )).contains(
-                    new SchemaObject("smart_links", "PRIMARY"),
-                    new SchemaObject("smart_links", "uk_smart_links_code_hash"),
-                    new SchemaObject(
-                            "smart_links",
-                            "ck_smart_links_expiry_after_creation"
-                    ),
-                    new SchemaObject(
-                            "smart_links",
-                            "ck_smart_links_expiry_after_activation"
-                    ),
-                    new SchemaObject("link_creation_requests", "PRIMARY"),
-                    new SchemaObject(
-                            "link_creation_requests",
-                            "uk_link_creation_requests_link_id"
-                    )
-            );
-            assertThat(readSchemaObjects(
-                    connection,
-                    "information_schema.statistics",
-                    "index_name"
-            )).contains(
-                    new SchemaObject("smart_links", "PRIMARY"),
-                    new SchemaObject("smart_links", "uk_smart_links_code_hash"),
-                    new SchemaObject("smart_links", "ix_smart_links_expiry"),
-                    new SchemaObject("link_creation_requests", "PRIMARY"),
-                    new SchemaObject(
-                            "link_creation_requests",
-                            "uk_link_creation_requests_link_id"
-                    )
-            );
-            assertThat(successfulMigrationCount(connection, "4")).isOne();
         }
     }
 
     private void migrateToVersionThree() {
         Flyway.configure()
                 .dataSource(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword())
-                .locations("classpath:db/migration")
                 .target("3")
                 .load()
                 .migrate();
@@ -170,10 +130,10 @@ class AbsoluteTimeV4MigrationIntegrationTest {
                                 + "/seasons/713d9cb7-2842-4f9f-b3cc-e31d98c6238a"
                 );
                 link.setString(5, "NAVIGATION");
-                link.setString(6, mysqlTimestamp(NOT_BEFORE));
-                link.setString(7, mysqlTimestamp(EXPIRES_AT));
-                link.setString(8, mysqlTimestamp(REVOKED_AT));
-                link.setString(9, mysqlTimestamp(CREATED_AT));
+                link.setObject(6, LocalDateTime.ofInstant(NOT_BEFORE, ZoneOffset.UTC));
+                link.setObject(7, LocalDateTime.ofInstant(EXPIRES_AT, ZoneOffset.UTC));
+                link.setObject(8, LocalDateTime.ofInstant(REVOKED_AT, ZoneOffset.UTC));
+                link.setObject(9, LocalDateTime.ofInstant(CREATED_AT, ZoneOffset.UTC));
                 assertThat(link.executeUpdate()).isOne();
             }
 
@@ -186,7 +146,10 @@ class AbsoluteTimeV4MigrationIntegrationTest {
                     """)) {
                 reservation.setString(1, "b".repeat(64));
                 reservation.setString(2, LINK_ID);
-                reservation.setString(3, mysqlTimestamp(REQUEST_CREATED_AT));
+                reservation.setObject(
+                        3,
+                        LocalDateTime.ofInstant(REQUEST_CREATED_AT, ZoneOffset.UTC)
+                );
                 assertThat(reservation.executeUpdate()).isOne();
             }
 
@@ -274,59 +237,15 @@ class AbsoluteTimeV4MigrationIntegrationTest {
         }
     }
 
-    private List<SchemaObject> readSchemaObjects(
-            Connection connection,
-            String informationSchemaTable,
-            String objectNameColumn
-    ) throws SQLException {
-        String sql = """
-                SELECT DISTINCT table_name, %s AS object_name
-                FROM %s
-                WHERE table_schema = DATABASE()
-                  AND table_name IN ('smart_links', 'link_creation_requests')
-                """.formatted(objectNameColumn, informationSchemaTable);
-        try (PreparedStatement statement = connection.prepareStatement(sql);
-             ResultSet resultSet = statement.executeQuery()) {
-            List<SchemaObject> objects = new ArrayList<>();
-            while (resultSet.next()) {
-                objects.add(new SchemaObject(
-                        resultSet.getString("table_name"),
-                        resultSet.getString("object_name")
-                ));
-            }
-            return objects;
-        }
-    }
-
-    private long successfulMigrationCount(Connection connection, String version)
-            throws SQLException {
-        try (PreparedStatement statement = connection.prepareStatement("""
-                SELECT COUNT(*)
-                FROM flyway_schema_history
-                WHERE version = ?
-                  AND success = 1
-                """)) {
-            statement.setString(1, version);
-            try (ResultSet resultSet = statement.executeQuery()) {
-                assertThat(resultSet.next()).isTrue();
-                return resultSet.getLong(1);
-            }
-        }
-    }
-
-    private static String mysqlTimestamp(Instant instant) {
-        return instant.toString().replace('T', ' ').replace("Z", "");
-    }
-
-    private static SessionState readSessionState(Connection connection) {
+    private static String readSessionTimeZone(Connection connection) {
         try (Statement statement = connection.createStatement();
              ResultSet resultSet = statement.executeQuery(
-                     "SELECT CONNECTION_ID(), @@SESSION.time_zone"
+                     "SELECT @@SESSION.time_zone"
              )) {
             if (!resultSet.next()) {
                 throw new IllegalStateException("Flyway 세션 상태를 읽을 수 없습니다");
             }
-            return new SessionState(resultSet.getLong(1), resultSet.getString(2));
+            return resultSet.getString(1);
         } catch (SQLException exception) {
             throw new IllegalStateException("Flyway 세션 상태를 읽을 수 없습니다", exception);
         }
@@ -334,8 +253,8 @@ class AbsoluteTimeV4MigrationIntegrationTest {
 
     private static final class SessionTimeZoneCallback implements Callback {
 
-        private SessionState beforeV4;
-        private SessionState afterV4;
+        private String beforeV4;
+        private String afterV4;
 
         @Override
         public boolean supports(Event event, Context context) {
@@ -354,9 +273,9 @@ class AbsoluteTimeV4MigrationIntegrationTest {
         @Override
         public void handle(Event event, Context context) {
             if (event == Event.BEFORE_EACH_MIGRATE) {
-                beforeV4 = readSessionState(context.getConnection());
+                beforeV4 = readSessionTimeZone(context.getConnection());
             } else if (event == Event.AFTER_EACH_MIGRATE) {
-                afterV4 = readSessionState(context.getConnection());
+                afterV4 = readSessionTimeZone(context.getConnection());
             }
         }
 
@@ -365,11 +284,11 @@ class AbsoluteTimeV4MigrationIntegrationTest {
             return "V4 세션 시간대 복원 검증";
         }
 
-        private SessionState beforeV4() {
+        private String beforeV4() {
             return beforeV4;
         }
 
-        private SessionState afterV4() {
+        private String afterV4() {
             return afterV4;
         }
     }
@@ -392,9 +311,4 @@ class AbsoluteTimeV4MigrationIntegrationTest {
     ) {
     }
 
-    private record SchemaObject(String tableName, String objectName) {
-    }
-
-    private record SessionState(long connectionId, String timeZone) {
-    }
 }

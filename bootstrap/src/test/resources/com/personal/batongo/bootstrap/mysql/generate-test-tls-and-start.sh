@@ -34,7 +34,7 @@ cat >"${tls_dir}/server.ext" <<'EOF'
 basicConstraints=critical,CA:FALSE
 keyUsage=critical,digitalSignature,keyEncipherment
 extendedKeyUsage=serverAuth
-subjectAltName=DNS:baton-go-mysql,DNS:localhost
+subjectAltName=DNS:baton-go-mysql
 EOF
 openssl x509 \
   -req \

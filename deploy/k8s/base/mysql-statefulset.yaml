@@ -29,7 +29,6 @@ spec:
       containers:
         - name: mysql
           image: mysql:8.4
-          imagePullPolicy: IfNotPresent
           args:
             - --character-set-server=utf8mb4
             - --collation-server=utf8mb4_unicode_ci
@@ -38,7 +37,6 @@ spec:
             - --ssl-ca=/etc/mysql/tls/ca.pem
             - --ssl-cert=/etc/mysql/tls/tls.crt
             - --ssl-key=/etc/mysql/tls/tls.key
-            - --tls-version=TLSv1.2,TLSv1.3
           env:
             - name: MYSQL_DATABASE
               value: baton_go
@@ -93,7 +91,6 @@ spec:
                   mysql --protocol=TCP --host=127.0.0.1 --ssl-mode=REQUIRED
                   --user="${BATON_GO_DB_USERNAME}" --database="${MYSQL_DATABASE}"
                   --execute='SELECT 1' >/dev/null 2>&1
-            periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 30
           livenessProbe:
@@ -114,7 +111,6 @@ spec:
                   --execute='SELECT 1' >/dev/null 2>&1
             periodSeconds: 5
             timeoutSeconds: 5
-            failureThreshold: 3
           volumeMounts:
             - name: data
               mountPath: /var/lib/mysql

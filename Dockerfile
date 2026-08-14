@@ -16,18 +16,15 @@ COPY adapter-out-external/build.gradle adapter-out-external/build.gradle
 COPY guard-tool/build.gradle guard-tool/build.gradle
 COPY bootstrap/build.gradle bootstrap/build.gradle
 
-RUN chmod 0755 gradlew
-
-COPY domain/src domain/src
-COPY application/src application/src
-COPY adapter-in-web/src adapter-in-web/src
-COPY adapter-out-persistence/src adapter-out-persistence/src
-COPY adapter-out-external/src adapter-out-external/src
-COPY bootstrap/src bootstrap/src
+COPY domain/src/main domain/src/main
+COPY application/src/main application/src/main
+COPY adapter-in-web/src/main adapter-in-web/src/main
+COPY adapter-out-persistence/src/main adapter-out-persistence/src/main
+COPY adapter-out-external/src/main adapter-out-external/src/main
+COPY bootstrap/src/main bootstrap/src/main
 
 RUN --mount=type=cache,target=/root/.gradle \
-    ./gradlew --no-daemon :bootstrap:bootJar \
-    && cp bootstrap/build/libs/baton-go.jar /workspace/baton-go.jar
+    ./gradlew --no-daemon :bootstrap:bootJar
 
 FROM ${JAVA_RUNTIME_IMAGE} AS runtime
 
@@ -35,12 +32,12 @@ RUN addgroup -S -g 10001 batongo \
     && adduser -S -D -H -u 10001 -G batongo batongo
 
 WORKDIR /opt/baton-go
-COPY --from=build --chown=0:0 --chmod=0444 /workspace/baton-go.jar ./baton-go.jar
+COPY --from=build --chmod=0444 \
+    /workspace/bootstrap/build/libs/baton-go.jar ./baton-go.jar
 
 ENV JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=75.0 -XX:+ExitOnOutOfMemoryError -Djava.io.tmpdir=/tmp"
 USER 10001:10001
 EXPOSE 8080 8081
-STOPSIGNAL SIGTERM
 ENTRYPOINT ["java", "-jar", "/opt/baton-go/baton-go.jar"]
 HEALTHCHECK --interval=15s --timeout=3s --start-period=30s --retries=5 \
     CMD wget -q -T 2 -O /dev/null http://127.0.0.1:8081/actuator/health || exit 1

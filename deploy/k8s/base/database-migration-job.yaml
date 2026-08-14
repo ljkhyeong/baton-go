@@ -28,7 +28,6 @@ spec:
       containers:
         - name: migration
           image: baton-go:local
-          imagePullPolicy: IfNotPresent
           args:
             - --baton-go.migration-only=true
           env:

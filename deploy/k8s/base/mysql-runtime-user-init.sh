@@ -20,6 +20,13 @@ if [ "${#BATON_GO_DB_PASSWORD}" -lt 32 ]; then
   exit 1
 fi
 
+if [ "${BATON_GO_DB_PASSWORD}" = "${MYSQL_PASSWORD}" ] \
+  || [ "${BATON_GO_DB_PASSWORD}" = "${MYSQL_ROOT_PASSWORD}" ] \
+  || [ "${MYSQL_PASSWORD}" = "${MYSQL_ROOT_PASSWORD}" ]; then
+  echo >&2 'runtime, migration, and root database passwords must be distinct'
+  exit 1
+fi
+
 MYSQL_PWD="${MYSQL_ROOT_PASSWORD}" mysql --protocol=SOCKET --user=root <<EOSQL
 CREATE USER '${BATON_GO_DB_USERNAME}'@'%' IDENTIFIED BY '${BATON_GO_DB_PASSWORD}';
 GRANT SELECT, INSERT, UPDATE, DELETE ON baton_go.* TO '${BATON_GO_DB_USERNAME}'@'%';

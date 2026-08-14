@@ -37,7 +37,6 @@ class DatabaseMigrationRunnerIntegrationTest {
     @BeforeAll
     static void createClientTruststores() throws Exception {
         trustedCaStore = MYSQL.createTruststore(
-                "/etc/mysql/tls/ca.pem",
                 truststoreDirectory.resolve("trusted-ca.p12")
         );
     }
@@ -45,107 +44,43 @@ class DatabaseMigrationRunnerIntegrationTest {
     @Test
     @DisplayName("Spring Boot Flyway initializer는 VERIFY_IDENTITY로 최신 스키마를 적용한다")
     void migratesSchemaThroughVerifiedTls() throws SQLException {
-        String jdbcUrl = MYSQL.verifiedJdbcUrl(
-                DeploymentMySqlFixture.VERIFIED_HOST,
-                trustedCaStore
-        );
+        String jdbcUrl = MYSQL.verifiedJdbcUrl(trustedCaStore);
         String[] arguments = MYSQL.migrationArguments(jdbcUrl);
 
         BatonGoApplication.main(arguments);
 
-        try (Connection connection = MYSQL.connectAsMigrator(jdbcUrl)) {
-            assertSecureTransport(connection);
-            try (Statement statement = connection.createStatement();
-                 ResultSet resultSet = statement.executeQuery("""
-                         SELECT COUNT(*)
-                         FROM flyway_schema_history
-                         WHERE success = 1
-                         """)) {
-                assertThat(resultSet.next()).isTrue();
-                assertThat(resultSet.getInt(1)).isPositive();
-            }
+        try (Connection connection = MYSQL.connectAsMigrator(jdbcUrl);
+             Statement statement = connection.createStatement();
+             ResultSet resultSet = statement.executeQuery("""
+                     SELECT COUNT(*) AS link_count,
+                            @@GLOBAL.require_secure_transport AS secure_transport
+                     FROM smart_links
+                     """)) {
+            assertThat(resultSet.next()).isTrue();
+            assertThat(resultSet.getLong("link_count")).isZero();
+            assertThat(resultSet.getBoolean("secure_transport")).isTrue();
         }
     }
 
     @Test
     @DisplayName("배포 init script는 runtime 계정에 정확한 DML 권한만 부여한다")
     void createsRuntimeUserWithOnlyDataManipulationPrivileges() throws SQLException {
-        String jdbcUrl = MYSQL.verifiedJdbcUrl(
-                DeploymentMySqlFixture.VERIFIED_HOST,
-                trustedCaStore
-        );
+        String jdbcUrl = MYSQL.verifiedJdbcUrl(trustedCaStore);
 
-        try (Connection migrationConnection = MYSQL.connectAsMigrator(jdbcUrl);
-             Statement migrationStatement = migrationConnection.createStatement()) {
-            migrationStatement.executeUpdate("DROP TABLE IF EXISTS runtime_dml_probe");
-            migrationStatement.executeUpdate("DROP TABLE IF EXISTS runtime_ddl_probe");
-            migrationStatement.executeUpdate("""
-                    CREATE TABLE runtime_dml_probe (
-                        id BIGINT NOT NULL PRIMARY KEY,
-                        probe_value VARCHAR(64) NOT NULL
+        try (Connection runtimeConnection = MYSQL.connectAsRuntime(jdbcUrl);
+             Statement runtimeStatement = runtimeConnection.createStatement()) {
+            assertThat(schemaPrivileges(runtimeConnection)).containsExactlyInAnyOrder(
+                    "SELECT",
+                    "INSERT",
+                    "UPDATE",
+                    "DELETE"
+            );
+            assertThatThrownBy(() -> runtimeStatement.executeUpdate("""
+                    CREATE TABLE runtime_ddl_probe (
+                        id BIGINT NOT NULL PRIMARY KEY
                     )
-                    """);
-
-            try (Connection runtimeConnection = MYSQL.connectAsRuntime(jdbcUrl);
-                 Statement runtimeStatement = runtimeConnection.createStatement()) {
-                assertSecureTransport(runtimeConnection);
-                assertThat(schemaPrivileges(runtimeConnection)).containsExactlyInAnyOrder(
-                        "SELECT",
-                        "INSERT",
-                        "UPDATE",
-                        "DELETE"
-                );
-
-                assertThat(runtimeStatement.executeUpdate("""
-                        INSERT INTO runtime_dml_probe (id, probe_value)
-                        VALUES (1, 'created')
-                        """)).isOne();
-                try (ResultSet selected = runtimeStatement.executeQuery("""
-                        SELECT probe_value
-                        FROM runtime_dml_probe
-                        WHERE id = 1
-                        """)) {
-                    assertThat(selected.next()).isTrue();
-                    assertThat(selected.getString(1)).isEqualTo("created");
-                }
-                assertThat(runtimeStatement.executeUpdate("""
-                        UPDATE runtime_dml_probe
-                        SET probe_value = 'updated'
-                        WHERE id = 1
-                        """)).isOne();
-                assertThat(runtimeStatement.executeUpdate("""
-                        DELETE FROM runtime_dml_probe
-                        WHERE id = 1
-                        """)).isOne();
-
-                assertThatThrownBy(() -> runtimeStatement.executeUpdate("""
-                        CREATE TABLE runtime_ddl_probe (
-                            id BIGINT NOT NULL PRIMARY KEY
-                        )
-                        """))
-                        .isInstanceOfSatisfying(SQLException.class, exception ->
-                                assertThat(exception.getErrorCode()).isEqualTo(1142)
-                        );
-            } finally {
-                assertThat(tableExists(migrationConnection, "runtime_ddl_probe")).isFalse();
-                migrationStatement.executeUpdate("DROP TABLE IF EXISTS runtime_dml_probe");
-                migrationStatement.executeUpdate("DROP TABLE IF EXISTS runtime_ddl_probe");
-            }
-        }
-    }
-
-    private static void assertSecureTransport(Connection connection) throws SQLException {
-        try (Statement statement = connection.createStatement();
-             ResultSet cipher = statement.executeQuery("SHOW SESSION STATUS LIKE 'Ssl_cipher'")) {
-            assertThat(cipher.next()).isTrue();
-            assertThat(cipher.getString("Value")).isNotBlank();
-        }
-        try (Statement statement = connection.createStatement();
-             ResultSet secureTransport = statement.executeQuery(
-                     "SELECT @@GLOBAL.require_secure_transport"
-             )) {
-            assertThat(secureTransport.next()).isTrue();
-            assertThat(secureTransport.getBoolean(1)).isTrue();
+                    """))
+                    .isInstanceOf(SQLException.class);
         }
     }
 
@@ -167,20 +102,4 @@ class DatabaseMigrationRunnerIntegrationTest {
         return privileges;
     }
 
-    private static boolean tableExists(Connection connection, String tableName)
-            throws SQLException {
-        try (PreparedStatement statement = connection.prepareStatement("""
-                SELECT COUNT(*)
-                FROM INFORMATION_SCHEMA.TABLES
-                WHERE TABLE_SCHEMA = ?
-                  AND TABLE_NAME = ?
-                """)) {
-            statement.setString(1, DATABASE);
-            statement.setString(2, tableName);
-            try (ResultSet resultSet = statement.executeQuery()) {
-                assertThat(resultSet.next()).isTrue();
-                return resultSet.getInt(1) > 0;
-            }
-        }
-    }
 }

@@ -18,9 +18,9 @@ import org.testcontainers.utility.MountableFile;
 
 final class DeploymentMySqlFixture extends GenericContainer<DeploymentMySqlFixture> {
 
-    static final String VERIFIED_HOST = "baton-go-mysql";
-
     private static final int MYSQL_PORT = 3306;
+    private static final String VERIFIED_HOST = "baton-go-mysql";
+    private static final String CA_CERTIFICATE_PATH = "/etc/mysql/tls/ca.pem";
     private static final String DATABASE = "baton_go";
     private static final String MIGRATION_USERNAME = "baton_go_migrator";
     private static final String MIGRATION_PASSWORD =
@@ -66,8 +66,7 @@ final class DeploymentMySqlFixture extends GenericContainer<DeploymentMySqlFixtu
                 "--require-secure-transport=ON",
                 "--ssl-ca=/etc/mysql/tls/ca.pem",
                 "--ssl-cert=/etc/mysql/tls/tls.crt",
-                "--ssl-key=/etc/mysql/tls/tls.key",
-                "--tls-version=TLSv1.2,TLSv1.3"
+                "--ssl-key=/etc/mysql/tls/tls.key"
         );
         waitingFor(Wait.forSuccessfulCommand("""
                 MYSQL_PWD="${BATON_GO_DB_PASSWORD}" \
@@ -78,7 +77,6 @@ final class DeploymentMySqlFixture extends GenericContainer<DeploymentMySqlFixtu
                   --database="${MYSQL_DATABASE}" \
                   --execute='SELECT 1' >/dev/null 2>&1
                 """).withStartupTimeout(Duration.ofMinutes(3)));
-        withStartupTimeout(Duration.ofMinutes(3));
     }
 
     String[] migrationArguments(String jdbcUrl) {
@@ -87,16 +85,14 @@ final class DeploymentMySqlFixture extends GenericContainer<DeploymentMySqlFixtu
                 "--spring.datasource.url=" + jdbcUrl,
                 "--spring.datasource.username=" + MIGRATION_USERNAME,
                 "--spring.datasource.password=" + MIGRATION_PASSWORD,
-                "--spring.flyway.enabled=true",
-                "--spring.flyway.locations=classpath:db/migration",
                 "--logging.level.root=OFF"
         };
     }
 
-    Path createTruststore(String certificatePath, Path truststorePath)
+    Path createTruststore(Path truststorePath)
             throws Exception {
         byte[] certificatePem = copyFileFromContainer(
-                certificatePath,
+                CA_CERTIFICATE_PATH,
                 inputStream -> inputStream.readAllBytes()
         );
         CertificateFactory certificateFactory = CertificateFactory.getInstance("X.509");
@@ -115,8 +111,8 @@ final class DeploymentMySqlFixture extends GenericContainer<DeploymentMySqlFixtu
         return truststorePath;
     }
 
-    String verifiedJdbcUrl(String host, Path truststore) {
-        return "jdbc:mysql://" + host + ":" + getMappedPort(MYSQL_PORT)
+    String verifiedJdbcUrl(Path truststore) {
+        return "jdbc:mysql://" + VERIFIED_HOST + ":" + getMappedPort(MYSQL_PORT)
                 + "/" + DATABASE
                 + "?sslMode=VERIFY_IDENTITY"
                 + "&trustCertificateKeyStoreUrl=" + truststore.toUri()

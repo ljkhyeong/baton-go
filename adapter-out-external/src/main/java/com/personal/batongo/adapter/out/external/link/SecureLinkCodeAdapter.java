@@ -47,7 +47,10 @@ public class SecureLinkCodeAdapter implements LinkCodePort {
 
     @Override
     public IssuedLinkCode issue(String idempotencyKey) {
-        byte[] digest = hmac(idempotencyKey);
+        byte[] digest = hmac(
+                DERIVATION_CONTEXT,
+                idempotencyKey.getBytes(StandardCharsets.US_ASCII)
+        );
         String rawCode = Base64.getUrlEncoder()
                 .withoutPadding()
                 .encodeToString(Arrays.copyOf(digest, CODE_BYTES));
@@ -65,13 +68,6 @@ public class SecureLinkCodeAdapter implements LinkCodePort {
     @Override
     public String hashIdempotencyKey(String idempotencyKey) {
         return sha256(idempotencyKey);
-    }
-
-    private byte[] hmac(String idempotencyKey) {
-        return hmac(
-                DERIVATION_CONTEXT,
-                idempotencyKey.getBytes(StandardCharsets.US_ASCII)
-        );
     }
 
     private byte[] hmac(byte[]... parts) {

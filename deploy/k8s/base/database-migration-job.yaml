@@ -31,8 +31,6 @@ spec:
           args:
             - --baton-go.migration-only=true
           env:
-            - name: SPRING_FLYWAY_ENABLED
-              value: "true"
             - name: BATON_GO_DB_URL
               valueFrom:
                 secretKeyRef:
@@ -68,7 +66,6 @@ spec:
               mountPath: /tmp
             - name: mysql-client-tls
               mountPath: /etc/baton-go/mysql-tls
-              readOnly: true
       volumes:
         - name: tmp
           emptyDir:

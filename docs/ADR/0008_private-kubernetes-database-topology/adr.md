@@ -29,7 +29,7 @@ BATON MySQL을 공유하면 초기 인프라 수는 줄지만 백업, 장애, �
   받아 스키마를 적용한다. Spring Boot의 표준 `FlywayMigrationInitializer`가 컨텍스트 시작 중
   마이그레이션과 검증을 수행하며 Flyway 예외는 Job의 0이 아닌 종료 코드로 전파된다. 저장소는
   마이그레이션 이름 검증과 위치 설정 누락 실패만 명시하고 나머지 실행 수명주기는 Flyway와
-  Spring Boot 기본 동작을 따른다. Job은 Flyway를 명시적으로 활성화하고 마이그레이션 전용 실행기는
+  Spring Boot 기본 동작을 따른다. 마이그레이션 전용 실행기는
   Flyway 빈이 없으면 성공으로 종료하지 않는다.
   root 비밀번호는 MySQL Pod에만 주입한다.
 - TLS JDBC URL, 런타임 비밀번호, 마이그레이션 비밀번호와 root 비밀번호는 서로 다른 네 Secret에

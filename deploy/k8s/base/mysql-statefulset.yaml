@@ -30,7 +30,6 @@ spec:
         - name: mysql
           image: mysql:8.4
           args:
-            - --character-set-server=utf8mb4
             - --collation-server=utf8mb4_unicode_ci
             - --default-time-zone=+00:00
             - --require-secure-transport=ON
@@ -116,10 +115,8 @@ spec:
               mountPath: /var/lib/mysql
             - name: runtime-user-init
               mountPath: /docker-entrypoint-initdb.d
-              readOnly: true
             - name: mysql-server-tls
               mountPath: /etc/mysql/tls
-              readOnly: true
       volumes:
         - name: runtime-user-init
           configMap:

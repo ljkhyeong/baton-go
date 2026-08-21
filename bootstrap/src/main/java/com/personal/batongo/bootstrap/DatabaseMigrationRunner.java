@@ -17,7 +17,7 @@ import org.springframework.context.ConfigurableApplicationContext;
  */
 public final class DatabaseMigrationRunner {
 
-    static final String MIGRATION_ONLY_ARGUMENT = "--baton-go.migration-only=true";
+    private static final String MIGRATION_ONLY_ARGUMENT = "--baton-go.migration-only=true";
 
     private DatabaseMigrationRunner() {
     }

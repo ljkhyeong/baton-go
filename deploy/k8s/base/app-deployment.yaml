@@ -101,7 +101,6 @@ spec:
               mountPath: /tmp
             - name: mysql-client-tls
               mountPath: /etc/baton-go/mysql-tls
-              readOnly: true
       volumes:
         - name: tmp
           emptyDir:

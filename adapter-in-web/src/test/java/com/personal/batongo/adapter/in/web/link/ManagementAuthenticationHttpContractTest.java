@@ -63,12 +63,12 @@ class ManagementAuthenticationHttpContractTest {
     }
 
     @Test
-    @DisplayName("Bearer 스킴과 credential 사이의 연속 SP는 허용한다")
-    void acceptsCredentialAfterRepeatedSpaces() throws Exception {
+    @DisplayName("Bearer 스킴은 대소문자를 구분하지 않고 연속 SP를 허용한다")
+    void acceptsCaseInsensitiveSchemeAndRepeatedSpaces() throws Exception {
         when(useCase.createLink(any())).thenReturn(createdLink());
 
         mockMvc.perform(post("/api/v1/links")
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer   " + MANAGEMENT_TOKEN)
+                        .header(HttpHeaders.AUTHORIZATION, "bEaReR   " + MANAGEMENT_TOKEN)
                         .header("Idempotency-Key", IDEMPOTENCY_KEY)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(createRequest()))

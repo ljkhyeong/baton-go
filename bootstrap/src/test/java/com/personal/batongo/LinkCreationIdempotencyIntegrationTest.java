@@ -230,29 +230,16 @@ class LinkCreationIdempotencyIntegrationTest {
     @Test
     @DisplayName("실제 Spring 조립은 관리 인증을 비활성 운영 경로의 404보다 먼저 적용한다")
     void assemblesManagementAuthenticationFilters() throws Exception {
-        UUID missingLinkId = UUID.fromString("27e436c8-e696-4477-9fa2-45e4cf37a942");
-
-        mockMvc.perform(get("/api/v1/links/{linkId}", missingLinkId))
+        mockMvc.perform(get("/api/v1/operations/link-target-contract-v1/inventory"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(header().string(
                         HttpHeaders.WWW_AUTHENTICATE,
                         "Bearer realm=\"baton-go-management\""
                 ))
                 .andExpect(header().exists("X-Request-Id"))
-                .andExpect(jsonPath("$.requestId").isNotEmpty());
-
-        mockMvc.perform(get("/api/v1/links/{linkId}", missingLinkId)
-                        .header(
-                                HttpHeaders.AUTHORIZATION,
-                                "bEaReR test-management-token-that-is-long-enough"
-                        ))
-                .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.code").value("LINK_NOT_FOUND"));
-
-        mockMvc.perform(get("/api/v1/operations/link-target-contract-v1/inventory"))
-                .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code")
-                        .value("MANAGEMENT_AUTHENTICATION_REQUIRED"));
+                        .value("MANAGEMENT_AUTHENTICATION_REQUIRED"))
+                .andExpect(jsonPath("$.requestId").isNotEmpty());
 
         mockMvc.perform(get("/api/v1/operations/link-target-contract-v1/inventory")
                         .header(

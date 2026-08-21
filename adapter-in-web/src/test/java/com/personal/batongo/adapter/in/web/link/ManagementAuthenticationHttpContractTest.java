@@ -69,7 +69,7 @@ class ManagementAuthenticationHttpContractTest {
 
         mockMvc.perform(post("/api/v1/links")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer   " + MANAGEMENT_TOKEN)
-                        .header(LinkManagementController.IDEMPOTENCY_KEY_HEADER, IDEMPOTENCY_KEY)
+                        .header("Idempotency-Key", IDEMPOTENCY_KEY)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(createRequest()))
                 .andExpect(status().isCreated())
@@ -87,7 +87,7 @@ class ManagementAuthenticationHttpContractTest {
     void rejectsInvalidCredentialWithBearerChallenge(String authorization) throws Exception {
         mockMvc.perform(post("/api/v1/links")
                         .header(HttpHeaders.AUTHORIZATION, authorization)
-                        .header(LinkManagementController.IDEMPOTENCY_KEY_HEADER, IDEMPOTENCY_KEY)
+                        .header("Idempotency-Key", IDEMPOTENCY_KEY)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(createRequest()))
                 .andExpect(status().isUnauthorized())
@@ -110,7 +110,7 @@ class ManagementAuthenticationHttpContractTest {
         when(useCase.createLink(any())).thenReturn(createdLink());
 
         mockMvc.perform(post(URI.create(path))
-                        .header(LinkManagementController.IDEMPOTENCY_KEY_HEADER, IDEMPOTENCY_KEY)
+                        .header("Idempotency-Key", IDEMPOTENCY_KEY)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {

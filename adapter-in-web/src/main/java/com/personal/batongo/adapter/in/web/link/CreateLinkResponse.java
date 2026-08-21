@@ -19,7 +19,7 @@ public record CreateLinkResponse(
         Instant createdAt
 ) {
 
-    public static CreateLinkResponse from(CreatedLinkResult result) {
+    static CreateLinkResponse from(CreatedLinkResult result) {
         return new CreateLinkResponse(
                 result.link().id(),
                 result.shortUrl(),

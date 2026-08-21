@@ -21,7 +21,7 @@ public class FilterErrorResponseWriter {
         this.objectMapper = objectMapper;
     }
 
-    public void write(
+    void write(
             HttpServletRequest request,
             HttpServletResponse response,
             int status,

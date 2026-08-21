@@ -18,10 +18,11 @@ import org.springframework.web.filter.OncePerRequestFilter;
 public class RequestIdFilter extends OncePerRequestFilter {
 
     static final int ORDER = Ordered.HIGHEST_PRECEDENCE;
-    public static final String HEADER_NAME = "X-Request-Id";
-    public static final String REQUEST_ATTRIBUTE = RequestIdFilter.class.getName() + ".requestId";
+    private static final String HEADER_NAME = "X-Request-Id";
+    private static final String REQUEST_ATTRIBUTE =
+            RequestIdFilter.class.getName() + ".requestId";
 
-    private static final Pattern SAFE_REQUEST_ID = Pattern.compile("^[A-Za-z0-9._-]{1,64}$");
+    private static final Pattern SAFE_REQUEST_ID = Pattern.compile("[A-Za-z0-9._-]{1,64}");
 
     @Override
     protected void doFilterInternal(
@@ -41,7 +42,7 @@ public class RequestIdFilter extends OncePerRequestFilter {
         }
     }
 
-    public static String requestId(HttpServletRequest request) {
+    static String requestId(HttpServletRequest request) {
         Object value = request.getAttribute(REQUEST_ATTRIBUTE);
         return value instanceof String requestId ? requestId : null;
     }

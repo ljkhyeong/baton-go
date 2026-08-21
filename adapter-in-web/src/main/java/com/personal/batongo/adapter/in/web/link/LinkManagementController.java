@@ -23,8 +23,8 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/links")
 public class LinkManagementController {
 
-    public static final String IDEMPOTENCY_KEY_HEADER = "Idempotency-Key";
-    public static final String IDEMPOTENCY_REPLAYED_HEADER = "Idempotency-Replayed";
+    private static final String IDEMPOTENCY_KEY_HEADER = "Idempotency-Key";
+    private static final String IDEMPOTENCY_REPLAYED_HEADER = "Idempotency-Replayed";
     private static final String REFERRER_POLICY = "Referrer-Policy";
 
     private final SmartLinkUseCase smartLinkUseCase;

@@ -17,7 +17,7 @@ public record LinkResponse(
         Instant createdAt
 ) {
 
-    public static LinkResponse from(LinkResult result) {
+    static LinkResponse from(LinkResult result) {
         return new LinkResponse(
                 result.id(),
                 result.targetSystem(),

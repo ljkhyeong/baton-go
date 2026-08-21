@@ -19,10 +19,10 @@ import org.springframework.stereotype.Component;
 @Component
 public class SecureLinkCodeAdapter implements LinkCodePort {
 
-    static final int CODE_BYTES = 16;
+    private static final int CODE_BYTES = 16;
 
     private static final String DERIVATION_VERSION = "hmac-sha256-link-code-v1";
-    private static final Pattern RAW_CODE = Pattern.compile("^[A-Za-z0-9_-]{22}$");
+    private static final Pattern RAW_CODE = Pattern.compile("[A-Za-z0-9_-]{22}");
     private static final byte[] DERIVATION_CONTEXT =
             "baton-go-link-code:v1\u0000".getBytes(StandardCharsets.US_ASCII);
     private static final byte[] FINGERPRINT_CONTEXT =

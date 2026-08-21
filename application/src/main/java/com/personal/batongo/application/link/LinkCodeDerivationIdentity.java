@@ -8,8 +8,8 @@ public record LinkCodeDerivationIdentity(
         String hmacFingerprint
 ) {
 
-    private static final Pattern VERSION = Pattern.compile("^[a-z0-9][a-z0-9-]{0,63}$");
-    private static final Pattern FINGERPRINT = Pattern.compile("^[0-9a-f]{64}$");
+    private static final Pattern VERSION = Pattern.compile("[a-z0-9][a-z0-9-]{0,63}");
+    private static final Pattern FINGERPRINT = Pattern.compile("[0-9a-f]{64}");
 
     public LinkCodeDerivationIdentity {
         Objects.requireNonNull(version, "링크 코드 파생 버전은 필수입니다");

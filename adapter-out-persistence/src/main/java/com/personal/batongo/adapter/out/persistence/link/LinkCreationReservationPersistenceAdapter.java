@@ -41,10 +41,14 @@ public class LinkCreationReservationPersistenceAdapter
                 publicOrigin,
                 createdAt
         );
+        if (inserted == 1) {
+            return new Reservation(proposedLinkId, publicOrigin, true);
+        }
+
         LinkCreationRequestEntity request = repository
                 .findById(idempotencyKeyHash)
                 .orElseThrow(() -> new IllegalStateException("링크 생성 예약을 찾을 수 없습니다"));
-        return toReservation(request, inserted == 1);
+        return toReservation(request, false);
     }
 
     private Reservation toReservation(LinkCreationRequestEntity request, boolean owner) {

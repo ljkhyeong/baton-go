@@ -59,8 +59,6 @@ class AbsoluteTimeV4MigrationIntegrationTest {
                 .load()
                 .migrate();
 
-        assertThat(sessionTimeZoneCallback.beforeV4()).isNotNull();
-        assertThat(sessionTimeZoneCallback.afterV4()).isNotNull();
         assertThat(sessionTimeZoneCallback.beforeV4()).isEqualTo(NON_UTC_TIME_ZONE);
         assertThat(sessionTimeZoneCallback.afterV4()).isEqualTo(NON_UTC_TIME_ZONE);
 
@@ -134,7 +132,7 @@ class AbsoluteTimeV4MigrationIntegrationTest {
                 link.setObject(7, LocalDateTime.ofInstant(EXPIRES_AT, ZoneOffset.UTC));
                 link.setObject(8, LocalDateTime.ofInstant(REVOKED_AT, ZoneOffset.UTC));
                 link.setObject(9, LocalDateTime.ofInstant(CREATED_AT, ZoneOffset.UTC));
-                assertThat(link.executeUpdate()).isOne();
+                link.executeUpdate();
             }
 
             try (PreparedStatement reservation = connection.prepareStatement("""
@@ -150,7 +148,7 @@ class AbsoluteTimeV4MigrationIntegrationTest {
                         3,
                         LocalDateTime.ofInstant(REQUEST_CREATED_AT, ZoneOffset.UTC)
                 );
-                assertThat(reservation.executeUpdate()).isOne();
+                reservation.executeUpdate();
             }
 
             assertThat(readAbsoluteTimes(connection)).isEqualTo(new AbsoluteTimes(

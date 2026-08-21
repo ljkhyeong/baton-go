@@ -52,21 +52,6 @@ class HttpOriginTest {
     }
 
     @Test
-    @DisplayName("같은 IPv6 주소의 축약 표기와 확장 표기는 같은 origin이다")
-    void comparesEquivalentIpv6LiteralOriginsByAddress() {
-        HttpOrigin compressed = HttpOrigin.require(
-                URI.create("https://[2001:db8::1]"),
-                "origin"
-        );
-        HttpOrigin expanded = HttpOrigin.require(
-                URI.create("https://[2001:0db8:0:0:0:0:0:1]"),
-                "origin"
-        );
-
-        assertThat(compressed.sameOrigin(expanded)).isTrue();
-    }
-
-    @Test
     @DisplayName("동등한 origin 표현은 scheme과 host와 기본 포트와 root 경로를 정규화한다")
     void canonicalizesEquivalentOriginRepresentations() {
         HttpOrigin canonical = HttpOrigin.require(

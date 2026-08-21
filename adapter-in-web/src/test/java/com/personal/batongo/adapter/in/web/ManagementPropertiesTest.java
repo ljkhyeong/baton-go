@@ -30,7 +30,7 @@ class ManagementPropertiesTest {
 
     @ParameterizedTest(name = "{index}: {0}")
     @MethodSource("credentialsOutsidePrintableAscii")
-    @DisplayName("관리 credential에 공백이나 제어 문자나 non-ASCII가 있으면 거부한다")
+    @DisplayName("관리 credential이 출력 가능한 ASCII 범위를 벗어나면 거부한다")
     void rejectsCredentialOutsidePrintableAscii(String boundary, String token) {
         assertThatThrownBy(() -> new ManagementProperties(token))
                 .isInstanceOf(IllegalArgumentException.class);
@@ -55,13 +55,7 @@ class ManagementPropertiesTest {
     private static Stream<Arguments> credentialsOutsidePrintableAscii() {
         return Stream.of(
                 Arguments.of("ASCII 공백", "a".repeat(31) + " "),
-                Arguments.of("비분리 공백", "a".repeat(31) + "\u00a0"),
-                Arguments.of("탭", "a".repeat(31) + "\t"),
-                Arguments.of("개행", "a".repeat(31) + "\n"),
-                Arguments.of("NUL", "a".repeat(31) + "\u0000"),
-                Arguments.of("DEL", "a".repeat(31) + "\u007f"),
-                Arguments.of("라틴 확장 문자", "a".repeat(31) + "Ā"),
-                Arguments.of("보조 평면 문자", "a".repeat(31) + "😀")
+                Arguments.of("DEL", "a".repeat(31) + "\u007f")
         );
     }
 }

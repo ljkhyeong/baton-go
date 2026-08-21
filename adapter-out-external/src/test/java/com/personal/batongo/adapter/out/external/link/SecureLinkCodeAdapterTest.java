@@ -33,8 +33,7 @@ class SecureLinkCodeAdapterTest {
 
         assertThat(identity.version()).isEqualTo("hmac-sha256-link-code-v1");
         assertThat(identity.hmacFingerprint())
-                .isEqualTo("11dd631d8939f29fdaea9662caead21123dc1fa154068d8be607f3add28e4daa")
-                .doesNotContain(SECRET);
+                .isEqualTo("11dd631d8939f29fdaea9662caead21123dc1fa154068d8be607f3add28e4daa");
         assertThat(identity.toString()).doesNotContain(identity.hmacFingerprint());
     }
 

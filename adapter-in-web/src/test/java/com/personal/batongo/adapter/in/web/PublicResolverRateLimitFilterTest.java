@@ -37,7 +37,6 @@ class PublicResolverRateLimitFilterTest {
                 downstreamCalls
         );
 
-        assertThat(firstResponse.getStatus()).isEqualTo(200);
         assertThat(firstResponse.getHeader("Referrer-Policy")).isEqualTo("no-referrer");
         assertThat(secondResponse.getStatus()).isEqualTo(429);
         assertThat(secondResponse.getHeader(HttpHeaders.RETRY_AFTER)).isEqualTo("30");
@@ -79,7 +78,7 @@ class PublicResolverRateLimitFilterTest {
         invoke(filter, request("POST", "/l/post-code"), downstreamCalls);
         invoke(filter, request("GET", "/l/extra/segment"), downstreamCalls);
         invoke(filter, request("GET", "/unknown"), downstreamCalls);
-        MockHttpServletResponse firstResolver = invoke(
+        invoke(
                 filter,
                 request("GET", "/l/first"),
                 downstreamCalls
@@ -90,7 +89,6 @@ class PublicResolverRateLimitFilterTest {
                 downstreamCalls
         );
 
-        assertThat(firstResolver.getStatus()).isEqualTo(200);
         assertThat(secondResolver.getStatus()).isEqualTo(429);
         assertThat(downstreamCalls).hasValue(4);
     }

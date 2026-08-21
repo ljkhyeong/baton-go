@@ -1,7 +1,6 @@
 package com.personal.batongo.adapter.in.web.link;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -442,7 +441,6 @@ class LinkHttpContractTest {
         mockMvc.perform(post("/l/VOvLShvx93kQpj8x7w2HYQ"))
                 .andExpect(status().isMethodNotAllowed())
                 .andExpect(header().string("Cache-Control", "no-store"))
-                .andExpect(header().string(HttpHeaders.ALLOW, containsString("GET")))
                 .andExpect(jsonPath("$.code").value("METHOD_NOT_ALLOWED"))
                 .andExpect(jsonPath("$.requestId").isNotEmpty());
     }

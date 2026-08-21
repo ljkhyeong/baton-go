@@ -107,8 +107,6 @@ class ManagementAuthenticationHttpContractTest {
     })
     @DisplayName("Spring MVC가 관리 API로 해석하는 경로 변형은 인증 없이 호출할 수 없다")
     void rejectsMappedPathVariantWithoutCredential(String path) throws Exception {
-        when(useCase.createLink(any())).thenReturn(createdLink());
-
         mockMvc.perform(post(URI.create(path))
                         .header("Idempotency-Key", IDEMPOTENCY_KEY)
                         .contentType(MediaType.APPLICATION_JSON)

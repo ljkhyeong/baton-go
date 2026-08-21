@@ -20,7 +20,7 @@ public final class TrustedTargetProperties {
         return batonOrigin;
     }
 
-    public HttpOrigin roundOrigin() {
+    HttpOrigin roundOrigin() {
         return roundOrigin;
     }
 

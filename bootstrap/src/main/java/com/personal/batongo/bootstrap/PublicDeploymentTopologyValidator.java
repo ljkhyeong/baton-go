@@ -15,9 +15,7 @@ public class PublicDeploymentTopologyValidator {
     ) {
         HttpOrigin publicOrigin = publicLinkProperties.current().origin();
         HttpOrigin batonOrigin = trustedTargetProperties.batonOrigin();
-        HttpOrigin roundOrigin = trustedTargetProperties.roundOrigin();
-        if (!publicOrigin.isLoopback()
-                && (batonOrigin.isLoopback() || roundOrigin.isLoopback())) {
+        if (!publicOrigin.isLoopback() && batonOrigin.isLoopback()) {
             throw new IllegalArgumentException(
                     "비로컬 공개 base URL에는 loopback 신뢰 target을 사용할 수 없습니다"
             );

@@ -24,7 +24,11 @@ public class LinkCreationReservationPersistenceAdapter
     @Transactional(propagation = Propagation.MANDATORY)
     public Optional<Reservation> find(String idempotencyKeyHash) {
         return repository.findById(idempotencyKeyHash)
-                .map(request -> toReservation(request, false));
+                .map(request -> new Reservation(
+                        request.getLinkId(),
+                        request.getPublicOrigin(),
+                        false
+                ));
     }
 
     @Override
@@ -45,13 +49,7 @@ public class LinkCreationReservationPersistenceAdapter
             return new Reservation(proposedLinkId, publicOrigin, true);
         }
 
-        LinkCreationRequestEntity request = repository
-                .findById(idempotencyKeyHash)
+        return find(idempotencyKeyHash)
                 .orElseThrow(() -> new IllegalStateException("링크 생성 예약을 찾을 수 없습니다"));
-        return toReservation(request, false);
-    }
-
-    private Reservation toReservation(LinkCreationRequestEntity request, boolean owner) {
-        return new Reservation(request.getLinkId(), request.getPublicOrigin(), owner);
     }
 }

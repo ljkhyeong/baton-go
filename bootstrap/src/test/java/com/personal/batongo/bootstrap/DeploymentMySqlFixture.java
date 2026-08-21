@@ -120,10 +120,6 @@ final class DeploymentMySqlFixture extends GenericContainer<DeploymentMySqlFixtu
                 + "&serverTimezone=UTC";
     }
 
-    Connection connectAsMigrator(String jdbcUrl) throws SQLException {
-        return connect(jdbcUrl, MIGRATION_USERNAME, MIGRATION_PASSWORD);
-    }
-
     Connection connectAsRuntime(String jdbcUrl) throws SQLException {
         return connect(jdbcUrl, RUNTIME_USERNAME, RUNTIME_PASSWORD);
     }

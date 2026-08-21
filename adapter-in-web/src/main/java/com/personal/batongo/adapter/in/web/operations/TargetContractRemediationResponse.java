@@ -13,7 +13,7 @@ public record TargetContractRemediationResponse(
         boolean alreadyRevoked
 ) {
 
-    public static TargetContractRemediationResponse from(RemediationResult result) {
+    static TargetContractRemediationResponse from(RemediationResult result) {
         return new TargetContractRemediationResponse(
                 result.linkId(),
                 result.contractVersion(),

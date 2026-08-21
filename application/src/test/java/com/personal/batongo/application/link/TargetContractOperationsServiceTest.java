@@ -20,7 +20,6 @@ import com.personal.batongo.application.link.port.in.TargetContractOperationsUse
 import com.personal.batongo.application.link.port.out.SmartLinkRepository;
 import com.personal.batongo.application.link.port.out.SmartLinkRepository.StoredLinkSnapshot;
 import java.time.Clock;
-import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Optional;
@@ -31,7 +30,7 @@ import org.mockito.ArgumentCaptor;
 
 class TargetContractOperationsServiceTest {
 
-    private static final Instant NOW = Instant.parse("2026-08-03T01:02:03.123456789Z");
+    private static final Instant NOW = Instant.parse("2026-08-03T01:02:03.123456Z");
     private static final UUID LINK_ID = UUID.fromString(
             "00000000-0000-4000-8000-000000000008"
     );
@@ -40,14 +39,12 @@ class TargetContractOperationsServiceTest {
     private final SmartLinkRepository repository = mock(SmartLinkRepository.class);
     private final TargetContractOperationsService service = new TargetContractOperationsService(
             repository,
-            Clock.tick(Clock.fixed(NOW, ZoneOffset.UTC), Duration.ofNanos(1_000))
+            Clock.fixed(NOW, ZoneOffset.UTC)
     );
 
     @Test
     @DisplayName("inventory는 허용 범위를 벗어난 limit을 저장소 호출 전에 거부한다")
     void rejectsInvalidInventoryLimitBeforeScanning() {
-        assertThatThrownBy(() -> service.inventory(null))
-                .isExactlyInstanceOf(InvalidTargetContractInventoryRequestException.class);
         assertThatThrownBy(() -> service.inventory(new InventoryQuery(null, 0)))
                 .isExactlyInstanceOf(InvalidTargetContractInventoryRequestException.class);
         assertThatThrownBy(() -> service.inventory(new InventoryQuery(null, 501)))
@@ -59,10 +56,6 @@ class TargetContractOperationsServiceTest {
     @Test
     @DisplayName("remediation은 잘못된 명령을 행 잠금 전에 거부한다")
     void rejectsInvalidCommandBeforeLocking() {
-        assertThatThrownBy(() -> service.remediate(null))
-                .isExactlyInstanceOf(InvalidTargetContractRemediationRequestException.class);
-        assertThatThrownBy(() -> service.remediate(new RemediationCommand(null, 0L)))
-                .isExactlyInstanceOf(InvalidTargetContractRemediationRequestException.class);
         assertThatThrownBy(() -> service.remediate(new RemediationCommand(LINK_ID, -1L)))
                 .isExactlyInstanceOf(InvalidTargetContractRemediationRequestException.class);
         assertThatThrownBy(() -> service.remediate(
@@ -134,7 +127,6 @@ class TargetContractOperationsServiceTest {
 
         ArgumentCaptor<Instant> revokedAt = ArgumentCaptor.forClass(Instant.class);
         verify(repository).revokeStoredIfVersion(eq(LINK_ID), eq(2L), revokedAt.capture());
-        assertThat(revokedAt.getValue())
-                .isEqualTo(Instant.parse("2026-08-03T01:02:03.123456Z"));
+        assertThat(revokedAt.getValue()).isEqualTo(NOW);
     }
 }

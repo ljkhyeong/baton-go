@@ -7,10 +7,10 @@ import tools.jackson.databind.cfg.CoercionAction;
 import tools.jackson.databind.cfg.CoercionInputShape;
 
 @Configuration(proxyBeanMethods = false)
-public class StrictHttpJsonConfiguration {
+class StrictHttpJsonConfiguration {
 
     @Bean
-    public JsonMapperBuilderCustomizer strictHttpJsonCustomizer() {
+    JsonMapperBuilderCustomizer strictHttpJsonCustomizer() {
         return builder -> builder.withCoercionConfig(Long.class, coercion -> {
             coercion.setCoercion(CoercionInputShape.Float, CoercionAction.Fail);
             coercion.setCoercion(CoercionInputShape.String, CoercionAction.Fail);

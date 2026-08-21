@@ -183,8 +183,10 @@ Idempotency-Key: 8e448211-66ae-44ab-9888-c4960648c22b
 모두 요구한다.
 
 모든 성공·실패 응답은 `Cache-Control: no-store`, `Referrer-Policy: no-referrer`와
-`X-Request-Id`를 반환한다. 비활성 상태에서는 일반 미등록 경로와 같은
-`404 RESOURCE_NOT_FOUND`다.
+`X-Request-Id`를 반환한다. 관리 인증은 운영 컨트롤러의 등록 여부보다 먼저 적용한다.
+따라서 비활성 상태에서 관리 인증이 없거나 올바르지 않은 요청은
+`401 MANAGEMENT_AUTHENTICATION_REQUIRED`다. 유효한 관리 인증을 통과한 요청은 일반
+미등록 경로와 같은 `404 RESOURCE_NOT_FOUND`다.
 
 ### GET `/api/v1/operations/link-target-contract-v1/inventory`
 

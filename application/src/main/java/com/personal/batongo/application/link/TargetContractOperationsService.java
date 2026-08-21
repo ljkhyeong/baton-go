@@ -40,7 +40,7 @@ public class TargetContractOperationsService implements TargetContractOperations
     @Override
     @Transactional(readOnly = true)
     public InventoryResult inventory(InventoryQuery query) {
-        if (query == null || query.limit() < 1 || query.limit() > MAX_INVENTORY_LIMIT) {
+        if (query.limit() < 1 || query.limit() > MAX_INVENTORY_LIMIT) {
             throw new InvalidTargetContractInventoryRequestException();
         }
         List<StoredLinkSnapshot> scanned = repository.scanStoredAfter(
@@ -65,9 +65,7 @@ public class TargetContractOperationsService implements TargetContractOperations
 
     @Override
     public RemediationResult remediate(RemediationCommand command) {
-        if (command == null
-                || command.linkId() == null
-                || command.expectedVersion() < 0
+        if (command.expectedVersion() < 0
                 || command.expectedVersion() > MAX_REVOCABLE_VERSION) {
             throw new InvalidTargetContractRemediationRequestException();
         }

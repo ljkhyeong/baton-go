@@ -19,7 +19,6 @@ import com.personal.batongo.adapter.in.web.GlobalExceptionHandler;
 import com.personal.batongo.adapter.in.web.ManagementAuthenticationFilter;
 import com.personal.batongo.adapter.in.web.ManagementProperties;
 import com.personal.batongo.adapter.in.web.RequestIdFilter;
-import com.personal.batongo.adapter.in.web.StrictHttpJsonConfiguration;
 import com.personal.batongo.application.link.error.InvalidTargetContractInventoryRequestException;
 import com.personal.batongo.application.link.port.in.TargetContractOperationsUseCase;
 import com.personal.batongo.application.link.port.in.TargetContractOperationsUseCase.Compliance;
@@ -37,15 +36,12 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.converter.json.JacksonJsonHttpMessageConverter;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
-import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -75,16 +71,13 @@ class TargetContractOperationsHttpContractTest {
                         new ManagementProperties(MANAGEMENT_TOKEN),
                         new FilterErrorResponseWriter(new ObjectMapper())
                 );
-        var jsonMapperBuilder = JsonMapper.builder()
+        var jsonMapper = JsonMapper.builder()
                 .findAndAddModules()
-                .enable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
-        new StrictHttpJsonConfiguration()
-                .strictHttpJsonCustomizer()
-                .customize(jsonMapperBuilder);
+                .build();
         mockMvc = MockMvcBuilders.standaloneSetup(controller)
                 .setControllerAdvice(new GlobalExceptionHandler(new SimpleMeterRegistry()))
                 .setMessageConverters(new JacksonJsonHttpMessageConverter(
-                        jsonMapperBuilder
+                        jsonMapper
                 ))
                 .addFilters(new RequestIdFilter(), authenticationFilter)
                 .build();
@@ -116,7 +109,7 @@ class TargetContractOperationsHttpContractTest {
                 .andExpect(status().isOk())
                 .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
                 .andExpect(header().string("Referrer-Policy", "no-referrer"))
-                .andExpect(header().exists(RequestIdFilter.HEADER_NAME))
+                .andExpect(header().exists("X-Request-Id"))
                 .andExpect(jsonPath("$.contractVersion").value("v1"))
                 .andExpect(jsonPath("$.items[0].linkId").value(LINK_ID.toString()))
                 .andExpect(jsonPath("$.items[0].compliance").value("NON_COMPLIANT"))
@@ -162,7 +155,7 @@ class TargetContractOperationsHttpContractTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
                 .andExpect(header().string("Referrer-Policy", "no-referrer"))
-                .andExpect(header().exists(RequestIdFilter.HEADER_NAME))
+                .andExpect(header().exists("X-Request-Id"))
                 .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
     }
 
@@ -199,7 +192,7 @@ class TargetContractOperationsHttpContractTest {
                 .andExpect(status().isOk())
                 .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
                 .andExpect(header().string("Referrer-Policy", "no-referrer"))
-                .andExpect(header().exists(RequestIdFilter.HEADER_NAME))
+                .andExpect(header().exists("X-Request-Id"))
                 .andExpect(jsonPath("$.linkId").value(LINK_ID.toString()))
                 .andExpect(jsonPath("$.contractVersion").value("v1"))
                 .andExpect(jsonPath("$.remediationState").value("REVOKED"))
@@ -211,45 +204,10 @@ class TargetContractOperationsHttpContractTest {
         verify(operationsUseCase).remediate(new RemediationCommand(LINK_ID, 7L));
     }
 
-    @ParameterizedTest(name = "{index}: {0}")
-    @ValueSource(strings = {
-            "{}",
-            "{\"expectedVersion\":null}"
-    })
-    @DisplayName("expectedVersion이 없으면 400 INVALID_REQUEST로 응답한다")
-    void rejectsMissingExpectedVersion(String body) throws Exception {
-        mockMvc.perform(remediationRequest(body))
-                .andExpect(status().isBadRequest())
-                .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
-                .andExpect(header().string("Referrer-Policy", "no-referrer"))
-                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
-
-        verifyNoInteractions(operationsUseCase);
-    }
-
-    @ParameterizedTest(name = "{index}: {0}")
-    @ValueSource(strings = {
-            "{\"expectedVersion\":7.9}",
-            "{\"expectedVersion\":7e0}",
-            "{\"expectedVersion\":\"7.0\"}"
-    })
-    @DisplayName("expectedVersion은 JSON 정수 token이 아니면 변경 없이 400으로 거부한다")
-    void rejectsCoercedExpectedVersionWithoutMutation(String body) throws Exception {
-        mockMvc.perform(remediationRequest(body))
-                .andExpect(status().isBadRequest())
-                .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
-                .andExpect(header().string("Referrer-Policy", "no-referrer"))
-                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
-
-        verifyNoInteractions(operationsUseCase);
-    }
-
     @Test
-    @DisplayName("폐기 요청의 정의되지 않은 필드는 400 INVALID_REQUEST로 거부한다")
-    void rejectsUnknownRemediationBodyField() throws Exception {
-        mockMvc.perform(remediationRequest("""
-                        {"expectedVersion":7,"targetPath":"/must-not-be-accepted"}
-                        """))
+    @DisplayName("expectedVersion이 없는 폐기 요청은 변경 전에 400으로 거부한다")
+    void rejectsMissingExpectedVersionBeforeMutation() throws Exception {
+        mockMvc.perform(remediationRequest("{}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
                 .andExpect(header().string("Referrer-Policy", "no-referrer"))

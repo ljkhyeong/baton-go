@@ -16,7 +16,7 @@ public record TargetContractInventoryResponse(
         boolean hasMore
 ) {
 
-    public static TargetContractInventoryResponse from(InventoryResult result) {
+    static TargetContractInventoryResponse from(InventoryResult result) {
         return new TargetContractInventoryResponse(
                 result.contractVersion(),
                 result.items().stream().map(Item::from).toList(),

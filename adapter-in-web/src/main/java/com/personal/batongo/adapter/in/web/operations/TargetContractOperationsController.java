@@ -5,7 +5,7 @@ import com.personal.batongo.application.link.port.in.TargetContractOperationsUse
 import com.personal.batongo.application.link.port.in.TargetContractOperationsUseCase.RemediationCommand;
 import jakarta.validation.Valid;
 import java.util.UUID;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
 import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -18,10 +18,9 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/v1/operations/link-target-contract-v1")
-@ConditionalOnProperty(
+@ConditionalOnBooleanProperty(
         prefix = "baton-go.target-contract-operations",
-        name = {"enabled", "private-ingress-confirmed"},
-        havingValue = "true"
+        name = {"enabled", "private-ingress-confirmed"}
 )
 public class TargetContractOperationsController {
 

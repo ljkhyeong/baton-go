@@ -19,6 +19,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import java.util.Objects;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.CacheControl;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
@@ -236,7 +237,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
             WebRequest request
     ) {
         HttpHeaders responseHeaders = HttpHeaders.copyOf(headers);
-        responseHeaders.set(HttpHeaders.CACHE_CONTROL, "no-store");
+        responseHeaders.setCacheControl(CacheControl.noStore());
         responseHeaders.set("Referrer-Policy", "no-referrer");
         Object responseBody = body instanceof ErrorResponse
                 ? body
@@ -281,7 +282,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                         RequestIdFilter.requestId(request)
                 );
         return ResponseEntity.status(status)
-                .header(HttpHeaders.CACHE_CONTROL, "no-store")
+                .cacheControl(CacheControl.noStore())
                 .header("Referrer-Policy", "no-referrer")
                 .body(body);
     }

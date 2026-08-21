@@ -12,10 +12,10 @@ public final class TrustedTargetPolicy {
                     + "-[abcdefghjkmnpqrstuvwxyz23456789]{4}";
 
     private static final Pattern BATON_NAVIGATION_PATH = Pattern.compile(
-            "\\A/teams/" + CANONICAL_UUID + "/seasons/" + CANONICAL_UUID + "\\z"
+            "/teams/" + CANONICAL_UUID + "/seasons/" + CANONICAL_UUID
     );
     private static final Pattern ROUND_MEETING_ENTRY_PATH = Pattern.compile(
-            "\\A/room/" + ROUND_ROOM_ID + "\\z"
+            "/room/" + ROUND_ROOM_ID
     );
 
     private TrustedTargetPolicy() {

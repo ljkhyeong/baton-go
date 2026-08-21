@@ -19,7 +19,11 @@ public final class StrictUtcInstantDeserializer extends StdDeserializer<Instant>
             new DateTimeFormatterBuilder()
                     .parseCaseSensitive()
                     .parseStrict()
-                    .append(DateTimeFormatter.ISO_LOCAL_DATE)
+                    .appendValue(ChronoField.YEAR, 4)
+                    .appendLiteral('-')
+                    .appendValue(ChronoField.MONTH_OF_YEAR, 2)
+                    .appendLiteral('-')
+                    .appendValue(ChronoField.DAY_OF_MONTH, 2)
                     .appendLiteral('T')
                     .appendValue(ChronoField.HOUR_OF_DAY, 2)
                     .appendLiteral(':')
@@ -47,11 +51,7 @@ public final class StrictUtcInstantDeserializer extends StdDeserializer<Instant>
 
         String rawValue = parser.getString();
         try {
-            var parsed = UTC_INSTANT_FORMATTER.parse(rawValue);
-            String canonicalDate = DateTimeFormatter.ISO_LOCAL_DATE.format(parsed);
-            if (rawValue.startsWith(canonicalDate + "T")) {
-                return Instant.from(parsed);
-            }
+            return Instant.from(UTC_INSTANT_FORMATTER.parse(rawValue));
         } catch (DateTimeParseException ignored) {
             // 아래의 동일한 wire-format 오류로 변환한다.
         }

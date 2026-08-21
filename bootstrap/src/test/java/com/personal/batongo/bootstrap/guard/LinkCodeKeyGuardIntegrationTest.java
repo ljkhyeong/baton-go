@@ -1,8 +1,9 @@
-package com.personal.batongo;
+package com.personal.batongo.bootstrap.guard;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.personal.batongo.BatonGoApplication;
 import com.personal.batongo.application.link.CreationIdempotencyKey;
 import com.personal.batongo.application.link.LinkCodeDerivationIdentity;
 import com.personal.batongo.application.link.LinkCodeKeyGuard;
@@ -11,7 +12,6 @@ import com.personal.batongo.application.link.port.in.SmartLinkUseCase;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.CreateLinkCommand;
 import com.personal.batongo.application.link.port.out.LinkCodeKeyGuardPort;
 import com.personal.batongo.application.link.port.out.LinkCodePort;
-import com.personal.batongo.bootstrap.guard.ExistingDatabaseLinkCodeKeyBinder;
 import com.personal.batongo.bootstrap.guard.ExistingDatabaseLinkCodeKeyBinder.BindingResult;
 import com.personal.batongo.domain.link.LinkPurpose;
 import com.personal.batongo.domain.link.TargetSystem;
@@ -24,6 +24,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -45,7 +46,7 @@ import org.testcontainers.mysql.MySQLContainer;
 
 @Tag("mysql")
 @Testcontainers
-@SpringBootTest(properties = {
+@SpringBootTest(classes = BatonGoApplication.class, properties = {
         "baton-go.management.token=test-management-token-that-is-long-enough",
         "baton-go.link-code.secret=test-link-code-secret-that-is-separate-and-long-enough",
         "baton-go.public-base-url=https://go.example",
@@ -211,7 +212,7 @@ class LinkCodeKeyGuardIntegrationTest {
             int failures = 0;
             for (Future<LinkCodeDerivationIdentity> future : futures) {
                 try {
-                    future.get();
+                    future.get(20, TimeUnit.SECONDS);
                     successes++;
                 } catch (ExecutionException exception) {
                     assertThat(exception.getCause())
@@ -292,7 +293,11 @@ class LinkCodeKeyGuardIntegrationTest {
             CountDownLatch start,
             LinkCodeDerivationIdentity identity
     ) throws InterruptedException {
-        start.await();
+        if (!start.await(10, TimeUnit.SECONDS)) {
+            throw new IllegalStateException(
+                    "HMAC identity 동시 결합 시작 신호를 기다리지 못했습니다"
+            );
+        }
         new TransactionTemplate(transactionManager).executeWithoutResult(
                 status -> linkCodeKeyGuardPort.verifyOrBind(identity)
         );

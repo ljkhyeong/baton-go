@@ -12,13 +12,13 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.jdbc.datasource.SingleConnectionDataSource;
 
 /** 기존 데이터베이스의 HMAC guard를 검증 후 한 번만 결합하는 JDBC 도구입니다. */
-public final class ExistingDatabaseLinkCodeKeyBinder {
+final class ExistingDatabaseLinkCodeKeyBinder {
 
     private static final int SINGLETON_GUARD_ID = 1;
     private static final String SAFE_MESSAGE =
             "기존 데이터베이스의 링크 코드 키 결합 검증에 실패했습니다";
 
-    public BindingResult bind(
+    BindingResult bind(
             Connection connection,
             LinkCodePort linkCodePort,
             CreationIdempotencyKey canaryIdempotencyKey
@@ -55,16 +55,14 @@ public final class ExistingDatabaseLinkCodeKeyBinder {
 
     private GuardState lockGuard(JdbcClient jdbcClient) {
         return jdbcClient.sql("""
-                        SELECT derivation_version, key_fingerprint
+                        SELECT derivation_version AS version,
+                               key_fingerprint AS fingerprint
                         FROM link_code_key_guard
                         WHERE guard_id = ?
                         FOR UPDATE
                         """)
                 .param(SINGLETON_GUARD_ID)
-                .query((resultSet, rowNumber) -> new GuardState(
-                        resultSet.getString("derivation_version"),
-                        resultSet.getString("key_fingerprint")
-                ))
+                .query(GuardState.class)
                 .single();
     }
 
@@ -100,11 +98,8 @@ public final class ExistingDatabaseLinkCodeKeyBinder {
             GuardState guardState,
             LinkCodeDerivationIdentity identity
     ) {
-        LinkCodeDerivationIdentity storedIdentity = new LinkCodeDerivationIdentity(
-                guardState.version(),
-                guardState.fingerprint()
-        );
-        if (!storedIdentity.equals(identity)) {
+        if (!identity.version().equals(guardState.version())
+                || !identity.hmacFingerprint().equals(guardState.fingerprint())) {
             throw unsafeState();
         }
     }
@@ -135,7 +130,7 @@ public final class ExistingDatabaseLinkCodeKeyBinder {
         return new IllegalStateException(SAFE_MESSAGE);
     }
 
-    public enum BindingResult {
+    enum BindingResult {
         BOUND,
         ALREADY_BOUND
     }

@@ -20,7 +20,7 @@ class LinkCodeKeyGuardBindingCliTest {
     void requiresExplicitWriterStopConfirmation() {
         CapturedOutput output = run(new String[0], Map.of());
 
-        assertThat(output.exitCode()).isEqualTo(LinkCodeKeyGuardBindingCli.EXIT_USAGE);
+        assertThat(output.exitCode()).isEqualTo(2);
         assertThat(output.standardError()).contains("--confirm-writers-stopped");
         assertThat(output.combined()).doesNotContain(CANARY);
     }
@@ -42,7 +42,7 @@ class LinkCodeKeyGuardBindingCliTest {
         );
 
         assertThat(output.exitCode())
-                .isEqualTo(LinkCodeKeyGuardBindingCli.EXIT_VERIFICATION_FAILED);
+                .isEqualTo(3);
         assertThat(output.standardOutput()).isEmpty();
         assertThat(output.standardError())
                 .contains("설정, canary와 DB 상태를 확인하세요");
@@ -65,7 +65,7 @@ class LinkCodeKeyGuardBindingCliTest {
             );
 
             assertThat(output.exitCode())
-                    .isEqualTo(LinkCodeKeyGuardBindingCli.EXIT_VERIFICATION_FAILED);
+                    .isEqualTo(3);
             assertThat(output.combined())
                     .doesNotContain(CANARY)
                     .doesNotContain(secret)

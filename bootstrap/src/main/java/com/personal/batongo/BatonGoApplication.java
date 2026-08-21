@@ -27,7 +27,7 @@ public class BatonGoApplication {
         SpringApplication.run(BatonGoApplication.class, args);
     }
 
-    static void requireNormalApplicationArguments(String[] args) {
+    private static void requireNormalApplicationArguments(String[] args) {
         if (Arrays.asList(args).contains(GUARD_BINDING_CONFIRMATION)) {
             throw new IllegalArgumentException(
                     "guard 결합 확인 인자는 전용 guard binding 도구에서만 사용할 수 있습니다"

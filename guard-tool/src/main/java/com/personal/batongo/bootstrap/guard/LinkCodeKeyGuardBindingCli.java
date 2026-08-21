@@ -19,8 +19,8 @@ import java.util.Map;
 /** 기존 데이터베이스 HMAC guard 최초 결합을 위한 one-shot CLI입니다. */
 public final class LinkCodeKeyGuardBindingCli {
 
-    static final int EXIT_USAGE = 2;
-    static final int EXIT_VERIFICATION_FAILED = 3;
+    private static final int EXIT_USAGE = 2;
+    private static final int EXIT_VERIFICATION_FAILED = 3;
     private static final String CONFIRMATION = "--confirm-writers-stopped";
 
     public static void main(String[] args) {

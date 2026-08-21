@@ -16,17 +16,10 @@ allprojects {
 
 subprojects {
 	apply plugin: 'java-library'
-	apply plugin: 'io.spring.dependency-management'
 
 	java {
 		toolchain {
 			languageVersion = JavaLanguageVersion.of(21)
-		}
-	}
-
-	dependencyManagement {
-		imports {
-			mavenBom SpringBootPlugin.BOM_COORDINATES
 		}
 	}
 
@@ -43,6 +36,8 @@ subprojects {
 	}
 
 	dependencies {
+		implementation enforcedPlatform(SpringBootPlugin.BOM_COORDINATES)
+		annotationProcessor enforcedPlatform(SpringBootPlugin.BOM_COORDINATES)
 		testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 	}
 }

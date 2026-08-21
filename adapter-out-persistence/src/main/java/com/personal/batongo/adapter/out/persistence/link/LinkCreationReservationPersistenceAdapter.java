@@ -21,7 +21,7 @@ public class LinkCreationReservationPersistenceAdapter
     }
 
     @Override
-    @Transactional(propagation = Propagation.MANDATORY, readOnly = true)
+    @Transactional(propagation = Propagation.MANDATORY)
     public Optional<Reservation> find(String idempotencyKeyHash) {
         return repository.findById(idempotencyKeyHash)
                 .map(request -> toReservation(request, false));

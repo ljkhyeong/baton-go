@@ -157,8 +157,7 @@ baton-go-mysql-client-tls
 런타임 사용자 초기화 스크립트는 런타임 사용자 이름과 비밀번호의 안전한 SQL 알파벳을 확인한 뒤
 로컬 root socket으로 DML 전용 권한을 만든다. 마이그레이션·root 비밀번호도 같은 파서 안전
 알파벳으로 생성한다. 인증서/키 쌍과 SAN은 발급 PKI에서 검증하고, 실제 배포에서는
-mysqld startup·TLS readiness와 Connector/J `VERIFY_IDENTITY`가 잘못된 값을 거부한다. CI는
-동일한 초기화 스크립트로 런타임 계정의 정확한 DML 권한 집합과 DDL 거부를 검증한다.
+mysqld startup·TLS readiness와 Connector/J `VERIFY_IDENTITY`가 잘못된 값을 거부한다.
 
 ```text
 jdbc:mysql://baton-go-mysql:3306/baton_go?sslMode=VERIFY_IDENTITY&trustCertificateKeyStoreUrl=file:/etc/baton-go/mysql-tls/truststore.p12&trustCertificateKeyStoreType=PKCS12&fallbackToSystemTrustStore=false&serverTimezone=UTC
@@ -257,12 +256,8 @@ Job은 DB가 준비될 때까지 실패를 재시도하고 애플리케이션은
 되지 않는다. Job이 `Complete`가 되지 않으면 애플리케이션 배포를 성공으로 판단하지 말고
 Job Pod의 종료 원인과 MySQL TLS·자격 증명을 먼저 확인한다.
 
-마이그레이션 전용 실행기는 일반 컴포넌트 탐색 없이 DataSource와 Flyway 자동 설정만
-연다. Spring Boot의 표준 `FlywayMigrationInitializer`가 컨텍스트 시작 중 마이그레이션을 수행하고,
-마이그레이션·검증 예외는 Job의 0이 아닌 종료 코드로 전파된다. Job에 임의 대상, 기준선 또는
-건너뛰기 설정을 추가하지 않는다. Flyway 빈이 없으면
-마이그레이션 전용 실행기도 성공으로 종료하지 않는다. 저장소는 마이그레이션 이름 검증과 위치 설정
-누락 실패를 명시한다.
+마이그레이션 Job의 구조와 안전 차단 정책은
+[ADR-0008](../ADR/0008_private-kubernetes-database-topology/adr.md)을 따른다.
 
 MySQL 기동 실패는 주 컨테이너 로그에서 확인한다. 출력에는 자격 증명 원문, 인증서나
 JDBC URL을 복사하지 않는다. 공식 진입점이 데이터 디렉터리를 건드린 뒤 실패했을 수 있으므로

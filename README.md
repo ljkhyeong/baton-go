@@ -189,9 +189,6 @@ GitHub 실행기를 기준으로 하며, 원격 `DOCKER_HOST`는 현재 지원�
 ./gradlew --no-daemon :bootstrap:mysqlTest
 ```
 
-CI의 필수 검증 Job은 일반 테스트, 패키징된 보호 도구의 안전 차단 실행, 운영 이미지와
-MySQL 통합 테스트를 모두 검증한다.
-
 ## MVP 링크 생성
 
 생성 의도마다 UUID를 한 번 만들고 재시도에도 같은 `Idempotency-Key`를 사용한다.

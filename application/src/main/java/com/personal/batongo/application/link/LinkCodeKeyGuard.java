@@ -3,7 +3,6 @@ package com.personal.batongo.application.link;
 import com.personal.batongo.application.link.port.out.LinkCodeKeyGuardPort;
 import com.personal.batongo.application.link.port.out.LinkCodePort;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Component
@@ -25,8 +24,7 @@ public class LinkCodeKeyGuard {
         guardPort.verifyOrBind(linkCodePort.derivationIdentity());
     }
 
-    @Transactional(propagation = Propagation.MANDATORY)
-    public void verifyBound() {
+    void verifyBound() {
         guardPort.verifyBound(linkCodePort.derivationIdentity());
     }
 }

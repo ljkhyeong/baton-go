@@ -51,7 +51,7 @@ public class LinkCodeKeyGuardPersistenceAdapter implements LinkCodeKeyGuardPort 
     }
 
     @Override
-    @Transactional(propagation = Propagation.MANDATORY, readOnly = true)
+    @Transactional(propagation = Propagation.MANDATORY)
     public void verifyBound(LinkCodeDerivationIdentity identity) {
         GuardRow guard = readGuard(" FOR SHARE");
         if (!guard.isBound()) {
@@ -68,10 +68,7 @@ public class LinkCodeKeyGuardPersistenceAdapter implements LinkCodeKeyGuardPort 
                             WHERE guard_id = ?
                             """ + lockingClause)
                     .param(SINGLETON_GUARD_ID)
-                    .query((resultSet, rowNumber) -> new GuardRow(
-                            resultSet.getString("derivation_version"),
-                            resultSet.getString("key_fingerprint")
-                    ))
+                    .query(GuardRow.class)
                     .single();
         } catch (IncorrectResultSizeDataAccessException exception) {
             throw new LinkCodeKeyBindingException();
@@ -91,15 +88,8 @@ public class LinkCodeKeyGuardPersistenceAdapter implements LinkCodeKeyGuardPort 
             GuardRow guard,
             LinkCodeDerivationIdentity currentIdentity
     ) {
-        try {
-            LinkCodeDerivationIdentity storedIdentity = new LinkCodeDerivationIdentity(
-                    guard.derivationVersion(),
-                    guard.keyFingerprint()
-            );
-            if (!storedIdentity.equals(currentIdentity)) {
-                throw new LinkCodeKeyBindingException();
-            }
-        } catch (IllegalArgumentException exception) {
+        if (!currentIdentity.version().equals(guard.derivationVersion())
+                || !currentIdentity.hmacFingerprint().equals(guard.keyFingerprint())) {
             throw new LinkCodeKeyBindingException();
         }
     }

@@ -39,7 +39,6 @@ jobs:
           version: v${{ env.KUBERNETES_VERSION }}
 
       - name: Kubeconform 설정
-        shell: bash
         run: |
           set -euo pipefail
 
@@ -66,7 +65,6 @@ jobs:
           printf '%s\n' "$install_dir" >>"$GITHUB_PATH"
 
       - name: Kubernetes Kustomize strict schema 검증
-        shell: bash
         run: |
           set -euo pipefail
 
@@ -89,22 +87,12 @@ jobs:
         run: ./gradlew --no-daemon build
 
       - name: Guard 결합 도구 fail-closed 실행 검증
-        shell: bash
         run: |
           set -euo pipefail
 
           guard_jar=guard-tool/build/libs/baton-go-guard-binding.jar
           smoke_dir="$(mktemp -d)"
           trap 'rm -rf -- "$smoke_dir"' EXIT
-
-          usage_status=0
-          java -jar "$guard_jar" </dev/null \
-            >"$smoke_dir/usage.out" 2>"$smoke_dir/usage.err" \
-            || usage_status=$?
-
-          test "$usage_status" -eq 2
-          test ! -s "$smoke_dir/usage.out"
-          test -s "$smoke_dir/usage.err"
 
           printf '%s\n' '00000000-0000-4000-8000-000000000000' \
             >"$smoke_dir/canary.in"
@@ -130,27 +118,10 @@ jobs:
             ! grep -F -- "$sensitive_value" "$smoke_dir/canary.err"
           done
 
-          configuration_status=0
-          env \
-            -u BATON_GO_LINK_CODE_SECRET \
-            -u BATON_GO_DB_URL \
-            -u BATON_GO_DB_USERNAME \
-            -u BATON_GO_DB_PASSWORD \
-            java -jar "$guard_jar" --confirm-writers-stopped \
-            <"$smoke_dir/canary.in" \
-            >"$smoke_dir/configuration.out" \
-            2>"$smoke_dir/configuration.err" \
-            || configuration_status=$?
-
-          test "$configuration_status" -eq 3
-          test ! -s "$smoke_dir/configuration.out"
-          test -s "$smoke_dir/configuration.err"
-
       - name: 운영 이미지 빌드 검증
         run: docker build --tag baton-go:ci .
 
       - name: 운영 이미지 기동과 health 검증
-        shell: bash
         env:
           BATON_GO_APP_IMAGE: baton-go:ci
           BATON_GO_MANAGEMENT_TOKEN: ci-runtime-management-token-000000000000

@@ -60,7 +60,6 @@ final class DeploymentMySqlFixture extends GenericContainer<DeploymentMySqlFixtu
                 command.withEntrypoint("/baton-go-test-entrypoint.sh")
         );
         withCommand(
-                "--character-set-server=utf8mb4",
                 "--collation-server=utf8mb4_unicode_ci",
                 "--default-time-zone=+00:00",
                 "--require-secure-transport=ON",

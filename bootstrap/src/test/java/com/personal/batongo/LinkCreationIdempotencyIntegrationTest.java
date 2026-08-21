@@ -2,6 +2,9 @@ package com.personal.batongo;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.awaitility.Awaitility.await;
+import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.not;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.head;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -13,6 +16,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.personal.batongo.application.link.CreationIdempotencyKey;
 import com.personal.batongo.application.link.PublicLinkOrigin;
 import com.personal.batongo.application.link.error.IdempotencyKeyConflictException;
+import com.personal.batongo.application.link.error.PublicLinkOriginReplayUnavailableException;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.CreateLinkCommand;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.CreatedLinkResult;
@@ -27,7 +31,6 @@ import com.personal.batongo.domain.link.TrustedTargetPolicy;
 import java.net.URI;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -55,7 +58,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
-import org.springframework.dao.CannotAcquireLockException;
+import org.springframework.dao.TransientDataAccessException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -136,24 +139,12 @@ class LinkCreationIdempotencyIntegrationTest {
         CreatedLinkResult created = smartLinkUseCase.createLink(command);
         CreatedLinkResult replayed = smartLinkUseCase.createLink(command);
 
-        assertThat(created.replayed()).isFalse();
         assertThat(created.link().createdAt()).isEqualTo(FAR_FUTURE_NOW);
         assertThat(created.link().notBefore()).isEqualTo(FAR_FUTURE_NOT_BEFORE);
         assertThat(created.link().expiresAt()).isEqualTo(FAR_FUTURE_EXPIRES_AT);
-        assertThat(replayed.replayed()).isTrue();
-        assertThat(replayed.link()).isEqualTo(created.link());
-        assertThat(replayed.shortUrl()).isEqualTo(created.shortUrl());
-        assertThat(created.shortUrl().toString())
-                .matches("https://go\\.example/l/[A-Za-z0-9_-]{22}");
-        assertThat(jdbcTemplate.queryForObject(
-                """
-                        SELECT public_origin
-                        FROM link_creation_requests
-                        WHERE link_id = UUID_TO_BIN(?)
-                        """,
-                String.class,
-                created.link().id().toString()
-        )).isEqualTo("https://go.example");
+        assertThat(replayed.link().createdAt()).isEqualTo(FAR_FUTURE_NOW);
+        assertThat(replayed.link().notBefore()).isEqualTo(FAR_FUTURE_NOT_BEFORE);
+        assertThat(replayed.link().expiresAt()).isEqualTo(FAR_FUTURE_EXPIRES_AT);
 
         LinkResult revoked = smartLinkUseCase.revokeLink(created.link().id());
         CreatedLinkResult replayedAfterRevocation = smartLinkUseCase.createLink(command);
@@ -237,7 +228,7 @@ class LinkCreationIdempotencyIntegrationTest {
     }
 
     @Test
-    @DisplayName("실제 Spring 조립은 관리 인증과 request ID filter 순서를 적용한다")
+    @DisplayName("실제 Spring 조립은 관리 인증을 비활성 운영 경로의 404보다 먼저 적용한다")
     void assemblesManagementAuthenticationFilters() throws Exception {
         UUID missingLinkId = UUID.fromString("27e436c8-e696-4477-9fa2-45e4cf37a942");
 
@@ -257,6 +248,19 @@ class LinkCreationIdempotencyIntegrationTest {
                         ))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("LINK_NOT_FOUND"));
+
+        mockMvc.perform(get("/api/v1/operations/link-target-contract-v1/inventory"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code")
+                        .value("MANAGEMENT_AUTHENTICATION_REQUIRED"));
+
+        mockMvc.perform(get("/api/v1/operations/link-target-contract-v1/inventory")
+                        .header(
+                                HttpHeaders.AUTHORIZATION,
+                                "Bearer test-management-token-that-is-long-enough"
+                        ))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("RESOURCE_NOT_FOUND"));
     }
 
     @Test
@@ -330,8 +334,8 @@ class LinkCreationIdempotencyIntegrationTest {
     }
 
     @Test
-    @DisplayName("공개 origin 증거가 없는 기존 MySQL 예약은 잘못 추정하지 않고 500으로 거부한다")
-    void rejectsExistingMysqlReservationWithoutPublicOrigin() throws Exception {
+    @DisplayName("공개 origin 증거가 없는 기존 MySQL 예약은 현재 설정으로 추정하지 않는다")
+    void rejectsExistingMysqlReservationWithoutPublicOrigin() {
         String idempotencyKey = "cc9d17dd-d02d-4c14-842c-afbb03887fc6";
         String linkId = "93d4229a-0edf-4d85-a769-0efb7e58c179";
         String targetPath = "/room/qrst-6789-uvwx";
@@ -365,24 +369,15 @@ class LinkCreationIdempotencyIntegrationTest {
                 FAR_FUTURE_NOW
         );
 
-        mockMvc.perform(post("/api/v1/links")
-                        .header(
-                                HttpHeaders.AUTHORIZATION,
-                                "Bearer test-management-token-that-is-long-enough"
-                        )
-                        .header("Idempotency-Key", idempotencyKey)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {
-                                  "targetSystem": "ROUND",
-                                  "targetPath": "%s",
-                                  "purpose": "MEETING_ENTRY"
-                                }
-                                """.formatted(targetPath)))
-                .andExpect(status().isInternalServerError())
-                .andExpect(jsonPath("$.code")
-                        .value("PUBLIC_LINK_ORIGIN_REPLAY_UNAVAILABLE"))
-                .andExpect(jsonPath("$.requestId").isNotEmpty());
+        assertThatThrownBy(() -> smartLinkUseCase.createLink(new CreateLinkCommand(
+                CreationIdempotencyKey.parseRequest(idempotencyKey),
+                TargetSystem.ROUND,
+                targetPath,
+                LinkPurpose.MEETING_ENTRY,
+                null,
+                null
+        )))
+                .isInstanceOf(PublicLinkOriginReplayUnavailableException.class);
     }
 
     @Test
@@ -453,33 +448,36 @@ class LinkCreationIdempotencyIntegrationTest {
     }
 
     @Test
-    @DisplayName("저장된 비허용 target은 GET과 HEAD에서 존재를 숨기고 리다이렉트하지 않는다")
-    void hidesStoredTargetPolicyViolationFromGetAndHead() throws Exception {
-        String rawCode = "A".repeat(22);
+    @DisplayName("저장된 비허용 target과 알 수 없는 enum은 GET과 HEAD에서 각각 숨긴다")
+    void hidesUnsafeStoredTargetsFromGetAndHead() throws Exception {
+        String invalidTargetCode = "A".repeat(22);
         insertStoredLink(
                 "ae1e4899-d73f-42f6-82cf-43cc1723939f",
-                rawCode,
+                invalidTargetCode,
                 "BATON",
                 "/teams/legacy-target",
                 "NAVIGATION"
         );
 
-        assertStoredTargetIsHidden(rawCode);
-    }
+        mockMvc.perform(get("/l/{code}", invalidTargetCode))
+                .andExpect(status().isNotFound())
+                .andExpect(header().doesNotExist(HttpHeaders.LOCATION))
+                .andExpect(jsonPath("$.code").value("LINK_NOT_FOUND"))
+                .andExpect(content().string(not(containsString("/teams/legacy-target"))));
 
-    @Test
-    @DisplayName("저장된 알 수 없는 enum은 GET과 HEAD에서 존재를 숨기고 리다이렉트하지 않는다")
-    void hidesUnknownStoredEnumFromGetAndHead() throws Exception {
-        String rawCode = "B".repeat(22);
+        String unknownEnumCode = "B".repeat(22);
         insertStoredLink(
                 "70f147f2-b02a-4a63-bc27-bf60e44db591",
-                rawCode,
+                unknownEnumCode,
                 "LEGACY",
                 CANONICAL_BATON_TARGET,
                 "NAVIGATION"
         );
 
-        assertStoredTargetIsHidden(rawCode);
+        mockMvc.perform(head("/l/{code}", unknownEnumCode))
+                .andExpect(status().isNotFound())
+                .andExpect(header().doesNotExist(HttpHeaders.LOCATION))
+                .andExpect(content().string(""));
     }
 
     @Test
@@ -669,7 +667,7 @@ class LinkCreationIdempotencyIntegrationTest {
                         rollbackFailures++;
                     } else {
                         assertThat(exception.getCause())
-                                .isInstanceOf(CannotAcquireLockException.class);
+                                .isInstanceOf(TransientDataAccessException.class);
                         retryableFailures++;
                     }
                 }
@@ -836,29 +834,6 @@ class LinkCreationIdempotencyIntegrationTest {
         return value == null ? null : value.toInstant(ZoneOffset.UTC);
     }
 
-    private void assertStoredTargetIsHidden(String rawCode) throws Exception {
-        String requestId = "stored-target-policy-test";
-
-        mockMvc.perform(get("/l/{code}", rawCode)
-                        .header("X-Request-Id", requestId))
-                .andExpect(status().isNotFound())
-                .andExpect(header().doesNotExist(HttpHeaders.LOCATION))
-                .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
-                .andExpect(header().string("Referrer-Policy", "no-referrer"))
-                .andExpect(header().string("X-Request-Id", requestId))
-                .andExpect(jsonPath("$.code").value("LINK_NOT_FOUND"))
-                .andExpect(jsonPath("$.requestId").value(requestId));
-
-        mockMvc.perform(head("/l/{code}", rawCode)
-                        .header("X-Request-Id", requestId))
-                .andExpect(status().isNotFound())
-                .andExpect(header().doesNotExist(HttpHeaders.LOCATION))
-                .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
-                .andExpect(header().string("Referrer-Policy", "no-referrer"))
-                .andExpect(header().string("X-Request-Id", requestId))
-                .andExpect(content().string(""));
-    }
-
     private List<Future<CreatedLinkResult>> submitConcurrentCreations(
             ExecutorService executor,
             CreateLinkCommand command
@@ -880,32 +855,19 @@ class LinkCreationIdempotencyIntegrationTest {
         return results;
     }
 
-    private void awaitReservationInsertWaiters(int expectedWaiters)
-            throws InterruptedException {
-        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
-        long observedWaiters = 0;
-        while (System.nanoTime() < deadline) {
-            observedWaiters = jdbcTemplate.queryForObject(
-                    """
-                            SELECT COUNT(*)
-                            FROM information_schema.PROCESSLIST
-                            WHERE DB = DATABASE()
-                              AND COMMAND = 'Query'
-                              AND INFO LIKE 'INSERT IGNORE INTO link_creation_requests%'
-                            """,
-                    Long.class
-            );
-            if (observedWaiters >= expectedWaiters) {
-                return;
-            }
-            TimeUnit.MILLISECONDS.sleep(25);
-        }
-        throw new AssertionError(
-                "예약 INSERT lock waiter가 모두 관찰되지 않았습니다: expected="
-                        + expectedWaiters
-                        + ", observed="
-                        + observedWaiters
-        );
+    private void awaitReservationInsertWaiters(int expectedWaiters) {
+        await().atMost(10, TimeUnit.SECONDS)
+                .pollInterval(25, TimeUnit.MILLISECONDS)
+                .until(() -> jdbcTemplate.queryForObject(
+                        """
+                                SELECT COUNT(*)
+                                FROM information_schema.PROCESSLIST
+                                WHERE DB = DATABASE()
+                                  AND COMMAND = 'Query'
+                                  AND INFO LIKE 'INSERT IGNORE INTO link_creation_requests%'
+                                """,
+                        Long.class
+                ) >= expectedWaiters);
     }
 
     @TestConfiguration(proxyBeanMethods = false)

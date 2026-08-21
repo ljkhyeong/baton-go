@@ -148,7 +148,6 @@ jobs:
           trap cleanup EXIT
 
           "${compose[@]}" up \
-            --detach \
             --no-build \
             --pull missing \
             --wait \

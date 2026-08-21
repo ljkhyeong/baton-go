@@ -60,27 +60,21 @@ public class SmartLinkService implements SmartLinkUseCase {
 
     @Override
     public CreatedLinkResult createLink(CreateLinkCommand command) {
-        PreparedCreation prepared = prepareCreation(command);
-        if (!prepared.admission().allowsNewReservation()) {
-            return replayExistingOnly(prepared);
-        }
-        return reserveCreateOrReplay(prepared);
-    }
-
-    private PreparedCreation prepareCreation(CreateLinkCommand command) {
         CreationRequestAdmissionPolicy.Decision admission =
                 CreationRequestAdmissionPolicy.evaluate(
                         command.idempotencyKey(),
                         command.notBefore(),
                         command.expiresAt()
                 );
-        String idempotencyKey = command.idempotencyKey().value();
-        return new PreparedCreation(
+        PreparedCreation prepared = new PreparedCreation(
                 command,
                 admission,
-                idempotencyKey,
-                linkCodePort.hashIdempotencyKey(idempotencyKey)
+                linkCodePort.hashIdempotencyKey(command.idempotencyKey().value())
         );
+        if (!prepared.admission().allowsNewReservation()) {
+            return replayExistingOnly(prepared);
+        }
+        return reserveCreateOrReplay(prepared);
     }
 
     private CreatedLinkResult replayExistingOnly(PreparedCreation prepared) {
@@ -94,7 +88,7 @@ public class SmartLinkService implements SmartLinkUseCase {
                 requestedTarget,
                 prepared.admission().notBefore(),
                 prepared.admission().expiresAt(),
-                linkCodePort.issue(prepared.idempotencyKey())
+                linkCodePort.issue(prepared.command().idempotencyKey().value())
         );
     }
 
@@ -109,7 +103,9 @@ public class SmartLinkService implements SmartLinkUseCase {
                 currentOrigin.serialized(),
                 now
         );
-        IssuedLinkCode issuedCode = linkCodePort.issue(prepared.idempotencyKey());
+        IssuedLinkCode issuedCode = linkCodePort.issue(
+                prepared.command().idempotencyKey().value()
+        );
 
         if (!reservation.owner()) {
             return replayCreation(
@@ -148,7 +144,6 @@ public class SmartLinkService implements SmartLinkUseCase {
     private record PreparedCreation(
             CreateLinkCommand command,
             CreationRequestAdmissionPolicy.Decision admission,
-            String idempotencyKey,
             String idempotencyKeyHash
     ) {
 
@@ -231,10 +226,7 @@ public class SmartLinkService implements SmartLinkUseCase {
                 storedLink.expiresAt(),
                 clock.instant()
         );
-        return new ResolvedLinkResult(
-                storedLink.id(),
-                targetUrlPort.resolve(trustedTarget)
-        );
+        return new ResolvedLinkResult(targetUrlPort.resolve(trustedTarget));
     }
 
     @Override

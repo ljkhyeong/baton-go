@@ -44,6 +44,7 @@ class SensitiveValueToStringTest {
         );
         List<Object> values = List.of(
                 idempotencyKey,
+                new PublicLinkOrigin(URI.create("https://go.example")),
                 new CreateLinkCommand(
                         idempotencyKey,
                         TargetSystem.BATON,
@@ -59,7 +60,7 @@ class SensitiveValueToStringTest {
                         false
                 ),
                 link,
-                new ResolvedLinkResult(link.id(), URI.create("https://baton.example" + TARGET_PATH))
+                new ResolvedLinkResult(URI.create("https://baton.example" + TARGET_PATH))
         );
 
         assertThat(values.toString())
@@ -67,6 +68,7 @@ class SensitiveValueToStringTest {
                 .doesNotContain(RAW_CODE)
                 .doesNotContain(CODE_HASH)
                 .doesNotContain(SHORT_URL.toString())
+                .doesNotContain("go.example")
                 .doesNotContain(TARGET_PATH);
     }
 }

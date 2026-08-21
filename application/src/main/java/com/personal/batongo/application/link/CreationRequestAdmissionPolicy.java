@@ -27,7 +27,7 @@ final class CreationRequestAdmissionPolicy {
         Instant storedNotBefore = databaseTime(notBefore);
         Instant storedExpiresAt = databaseTime(expiresAt);
         if (!idempotencyKey.allowsNewReservation()) {
-            return Decision.replayOnly(
+            return new Decision(
                     storedNotBefore,
                     storedExpiresAt,
                     ReplayOnlyReason.LEGACY_IDEMPOTENCY_KEY
@@ -35,13 +35,13 @@ final class CreationRequestAdmissionPolicy {
         }
         if (!Objects.equals(notBefore, storedNotBefore)
                 || !Objects.equals(expiresAt, storedExpiresAt)) {
-            return Decision.replayOnly(
+            return new Decision(
                     storedNotBefore,
                     storedExpiresAt,
                     ReplayOnlyReason.SUB_MICROSECOND_TIME
             );
         }
-        return Decision.createOrReplay(storedNotBefore, storedExpiresAt);
+        return new Decision(storedNotBefore, storedExpiresAt, ReplayOnlyReason.NONE);
     }
 
     private static Instant databaseTime(Instant value) {
@@ -63,22 +63,6 @@ final class CreationRequestAdmissionPolicy {
             Instant expiresAt,
             ReplayOnlyReason replayOnlyReason
     ) {
-
-        private static Decision createOrReplay(
-                Instant notBefore,
-                Instant expiresAt
-        ) {
-            return new Decision(notBefore, expiresAt, ReplayOnlyReason.NONE);
-        }
-
-        private static Decision replayOnly(
-                Instant notBefore,
-                Instant expiresAt,
-                ReplayOnlyReason reason
-        ) {
-            return new Decision(notBefore, expiresAt, reason);
-        }
-
         boolean allowsNewReservation() {
             return replayOnlyReason == ReplayOnlyReason.NONE;
         }

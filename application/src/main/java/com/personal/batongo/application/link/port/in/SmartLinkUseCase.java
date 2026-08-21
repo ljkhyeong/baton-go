@@ -44,14 +44,11 @@ public interface SmartLinkUseCase {
         }
     }
 
-    record ResolvedLinkResult(
-            UUID id,
-            URI destination
-    ) {
+    record ResolvedLinkResult(URI destination) {
 
         @Override
         public String toString() {
-            return "ResolvedLinkResult[id=" + id + ", destination=redacted]";
+            return "ResolvedLinkResult[destination=redacted]";
         }
     }
 

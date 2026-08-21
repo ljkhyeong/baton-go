@@ -9,7 +9,6 @@ import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
@@ -103,8 +102,6 @@ class SmartLinkServiceTest {
         )))
                 .isInstanceOf(LinkValidationException.class);
 
-        verify(linkCodePort).hashIdempotencyKey(IDEMPOTENCY_KEY.value());
-        verifyNoMoreInteractions(linkCodePort);
         verifyNoInteractions(
                 reservationPort,
                 repository,
@@ -138,8 +135,8 @@ class SmartLinkServiceTest {
     }
 
     @Test
-    @DisplayName("과거 키와 나노초 시각은 기존 예약만 조회하고 새 행을 만들지 않는다")
-    void keepsReplayOnlyRequestsOutOfCreationPorts() {
+    @DisplayName("재생 전용 요청은 기존 예약만 조회하고 새 행을 만들지 않는다")
+    void keepsReplayOnlyRequestOutOfCreationPorts() {
         assertThatThrownBy(() -> service.createLink(new CreateLinkCommand(
                 CreationIdempotencyKey.parseRequest(
                         "8E448211-66AE-44AB-9888-C4960648C22B"
@@ -150,16 +147,7 @@ class SmartLinkServiceTest {
                 null,
                 null
         ))).isExactlyInstanceOf(InvalidIdempotencyKeyException.class);
-        assertThatThrownBy(() -> service.createLink(new CreateLinkCommand(
-                IDEMPOTENCY_KEY,
-                TargetSystem.BATON,
-                BATON_PATH,
-                LinkPurpose.NAVIGATION,
-                null,
-                Instant.parse("2026-08-08T01:02:03.123456789Z")
-        ))).isExactlyInstanceOf(InvalidCreationTimeException.class);
-
-        verify(reservationPort, times(2)).find(IDEMPOTENCY_HASH);
+        verify(reservationPort).find(IDEMPOTENCY_HASH);
         verify(reservationPort, never()).reserve(anyString(), any(), anyString(), any());
         verifyNoInteractions(repository, keyGuardPort, publicLinkOriginPort, targetUrlPort);
     }

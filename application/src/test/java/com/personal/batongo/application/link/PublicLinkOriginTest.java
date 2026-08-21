@@ -46,12 +46,4 @@ class PublicLinkOriginTest {
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
-    @Test
-    @DisplayName("공개 origin의 문자열 표현은 운영 주소를 노출하지 않는다")
-    void redactsOriginFromStringRepresentation() {
-        PublicLinkOrigin origin = new PublicLinkOrigin(URI.create("https://go.example"));
-
-        assertThat(origin.toString())
-                .doesNotContain("go.example");
-    }
 }

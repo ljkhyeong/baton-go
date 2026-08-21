@@ -8,6 +8,8 @@ import org.springframework.stereotype.Component;
 @Component
 public class PublicResolverRateLimiter {
 
+    private static final RateLimitDecision PERMITTED = new RateLimitDecision(true, 0);
+
     private final Clock clock;
     private final long capacity;
     private final Duration window;
@@ -24,7 +26,7 @@ public class PublicResolverRateLimiter {
         this.window = properties.window();
     }
 
-    public synchronized RateLimitDecision acquire() {
+    synchronized RateLimitDecision acquire() {
         Instant now = clock.instant();
         if (windowStartedAt == null) {
             return startWindow(now);
@@ -36,16 +38,16 @@ public class PublicResolverRateLimiter {
         }
         if (permitsUsed < capacity) {
             permitsUsed++;
-            return RateLimitDecision.permitted();
+            return PERMITTED;
         }
 
-        return RateLimitDecision.rejected(retryAfterSeconds(window.minus(elapsed)));
+        return new RateLimitDecision(false, retryAfterSeconds(window.minus(elapsed)));
     }
 
     private RateLimitDecision startWindow(Instant now) {
         windowStartedAt = now;
         permitsUsed = 1;
-        return RateLimitDecision.permitted();
+        return PERMITTED;
     }
 
     private long retryAfterSeconds(Duration remaining) {
@@ -56,17 +58,9 @@ public class PublicResolverRateLimiter {
         return Math.max(1, seconds);
     }
 
-    public record RateLimitDecision(
+    record RateLimitDecision(
             boolean allowed,
             long retryAfterSeconds
     ) {
-
-        private static RateLimitDecision permitted() {
-            return new RateLimitDecision(true, 0);
-        }
-
-        private static RateLimitDecision rejected(long retryAfterSeconds) {
-            return new RateLimitDecision(false, retryAfterSeconds);
-        }
     }
 }

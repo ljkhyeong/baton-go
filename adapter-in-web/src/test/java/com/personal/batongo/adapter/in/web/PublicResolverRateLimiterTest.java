@@ -1,12 +1,13 @@
 package com.personal.batongo.adapter.in.web;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import com.personal.batongo.adapter.in.web.PublicResolverRateLimiter.RateLimitDecision;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.concurrent.Callable;
@@ -24,13 +25,17 @@ class PublicResolverRateLimiterTest {
     @Test
     @DisplayName("설정한 용량까지 허용하고 초과 요청에는 남은 window를 초 단위로 안내한다")
     void rejectsAfterCapacityWithRoundedRetryAfter() {
-        MutableClock clock = new MutableClock(START);
+        Clock clock = mock(Clock.class);
+        when(clock.instant()).thenReturn(
+                START,
+                START,
+                START.plusMillis(1_500)
+        );
         PublicResolverRateLimiter limiter = limiter(clock, 2, Duration.ofSeconds(10));
 
         assertThat(limiter.acquire().allowed()).isTrue();
         assertThat(limiter.acquire().allowed()).isTrue();
 
-        clock.advance(Duration.ofMillis(1_500));
         RateLimitDecision rejected = limiter.acquire();
 
         assertThat(rejected.allowed()).isFalse();
@@ -40,13 +45,16 @@ class PublicResolverRateLimiterTest {
     @Test
     @DisplayName("window 경계 시각부터 용량을 새로 부여한다")
     void resetsCapacityAtWindowBoundary() {
-        MutableClock clock = new MutableClock(START);
+        Clock clock = mock(Clock.class);
+        when(clock.instant()).thenReturn(
+                START,
+                START,
+                START.plusSeconds(10)
+        );
         PublicResolverRateLimiter limiter = limiter(clock, 1, Duration.ofSeconds(10));
 
         assertThat(limiter.acquire().allowed()).isTrue();
         assertThat(limiter.acquire().allowed()).isFalse();
-
-        clock.advance(Duration.ofSeconds(10));
 
         assertThat(limiter.acquire().allowed()).isTrue();
     }
@@ -54,12 +62,11 @@ class PublicResolverRateLimiterTest {
     @Test
     @DisplayName("시스템 시계가 뒤로 이동해도 이전 window에 영구적으로 갇히지 않는다")
     void resetsWindowWhenClockMovesBackward() {
-        MutableClock clock = new MutableClock(START);
+        Clock clock = mock(Clock.class);
+        when(clock.instant()).thenReturn(START, START.minusSeconds(1));
         PublicResolverRateLimiter limiter = limiter(clock, 1, Duration.ofSeconds(10));
 
         assertThat(limiter.acquire().allowed()).isTrue();
-        clock.advance(Duration.ofSeconds(-1));
-
         assertThat(limiter.acquire().allowed()).isTrue();
     }
 
@@ -103,31 +110,4 @@ class PublicResolverRateLimiterTest {
         );
     }
 
-    private static final class MutableClock extends Clock {
-
-        private Instant current;
-
-        private MutableClock(Instant current) {
-            this.current = current;
-        }
-
-        private void advance(Duration duration) {
-            current = current.plus(duration);
-        }
-
-        @Override
-        public ZoneId getZone() {
-            return ZoneOffset.UTC;
-        }
-
-        @Override
-        public Clock withZone(ZoneId zone) {
-            return Clock.fixed(current, zone);
-        }
-
-        @Override
-        public Instant instant() {
-            return current;
-        }
-    }
 }

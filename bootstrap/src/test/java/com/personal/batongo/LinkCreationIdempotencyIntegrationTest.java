@@ -493,7 +493,10 @@ class LinkCreationIdempotencyIntegrationTest {
             assertThat(futures).allMatch(future -> !future.isDone());
 
             controllableReservationPort.releaseFirstOwner();
-            List<CreatedLinkResult> results = successfulResults(futures);
+            List<CreatedLinkResult> results = new ArrayList<>();
+            for (Future<CreatedLinkResult> future : futures) {
+                results.add(future.get(20, TimeUnit.SECONDS));
+            }
 
             CreatedLinkResult first = results.getFirst();
             assertThat(results)
@@ -828,16 +831,6 @@ class LinkCreationIdempotencyIntegrationTest {
             futures.add(executor.submit(() -> smartLinkUseCase.createLink(command)));
         }
         return futures;
-    }
-
-    private List<CreatedLinkResult> successfulResults(
-            List<Future<CreatedLinkResult>> futures
-    ) throws Exception {
-        List<CreatedLinkResult> results = new ArrayList<>();
-        for (Future<CreatedLinkResult> future : futures) {
-            results.add(future.get(20, TimeUnit.SECONDS));
-        }
-        return results;
     }
 
     private void awaitReservationInsertWaiters(int expectedWaiters) {

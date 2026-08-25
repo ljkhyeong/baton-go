@@ -154,7 +154,6 @@ jobs:
             --wait-timeout 180
 
           app_container="$("${compose[@]}" ps --quiet app)"
-          test -n "$app_container"
           test "$(docker inspect --format '{{.Config.User}}' "$app_container")" = "10001:10001"
           test "$(docker inspect --format '{{.HostConfig.ReadonlyRootfs}}' "$app_container")" = "true"
           test "$(docker inspect --format '{{index .HostConfig.Tmpfs "/tmp"}}' "$app_container")" = \

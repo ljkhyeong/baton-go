@@ -26,6 +26,10 @@ tasks.named('bootJar') {
 	archiveFileName = 'baton-go.jar'
 }
 
+tasks.named('jar') {
+	enabled = false
+}
+
 tasks.named('test') {
 	useJUnitPlatform {
 		excludeTags 'mysql'

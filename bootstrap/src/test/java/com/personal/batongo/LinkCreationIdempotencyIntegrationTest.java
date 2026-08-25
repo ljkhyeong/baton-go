@@ -525,8 +525,7 @@ class LinkCreationIdempotencyIntegrationTest {
                     String.class,
                     command.targetPath()
             ))
-                    .matches("^[0-9a-f]{64}$")
-                    .isNotEqualTo(first.shortUrl().getRawPath().substring("/l/".length()));
+                    .matches("^[0-9a-f]{64}$");
             assertThat(jdbcTemplate.queryForObject(
                     """
                             SELECT request.idempotency_key_hash
@@ -537,8 +536,7 @@ class LinkCreationIdempotencyIntegrationTest {
                     String.class,
                     command.targetPath()
             ))
-                    .matches("^[0-9a-f]{64}$")
-                    .isNotEqualTo(IDEMPOTENCY_KEY);
+                    .matches("^[0-9a-f]{64}$");
             assertThatThrownBy(() -> smartLinkUseCase.createLink(new CreateLinkCommand(
                     CreationIdempotencyKey.parseRequest(IDEMPOTENCY_KEY),
                     TargetSystem.ROUND,

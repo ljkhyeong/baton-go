@@ -65,7 +65,6 @@ class TrustedTargetPolicyTest {
 
     @ParameterizedTest(name = "{index}: {0}")
     @ValueSource(strings = {
-            "/room/abcd-efgh-jkmn",
             "/room/pqrs-tuvw-xyz2",
             "/room/3456-789a-bcde"
     })

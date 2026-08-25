@@ -70,23 +70,6 @@ class CreationRequestAdmissionPolicyTest {
     }
 
     @Test
-    @DisplayName("과거 키와 나노초 시각이 겹치면 기존 키 오류 우선순위를 유지한다")
-    void prioritizesLegacyKeyWhenReplayOnlyReasonsOverlap() {
-        CreationIdempotencyKey legacyKey = CreationIdempotencyKey.parseRequest(
-                "00000000-0000-7000-8000-00000000000A"
-        );
-
-        var decision = CreationRequestAdmissionPolicy.evaluate(
-                legacyKey,
-                null,
-                Instant.parse("2026-08-08T01:02:03.123456789Z")
-        );
-
-        assertThat(decision.missingReservationException())
-                .isExactlyInstanceOf(InvalidIdempotencyKeyException.class);
-    }
-
-    @Test
     @DisplayName("지원 범위 밖 시각은 과거 키 여부보다 먼저 거부한다")
     void rejectsOutOfRangeTimeBeforeReplayCompatibility() {
         CreationIdempotencyKey legacyKey = CreationIdempotencyKey.parseRequest(

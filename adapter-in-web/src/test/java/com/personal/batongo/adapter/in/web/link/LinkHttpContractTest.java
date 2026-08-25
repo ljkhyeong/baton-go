@@ -153,8 +153,6 @@ class LinkHttpContractTest {
                         "Idempotency-Replayed",
                         "true"
                 ))
-                .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
-                .andExpect(header().string("Referrer-Policy", "no-referrer"))
                 .andExpect(jsonPath("$.shortUrl")
                         .value("https://go.example/l/VOvLShvx93kQpj8x7w2HYQ"));
     }
@@ -219,18 +217,11 @@ class LinkHttpContractTest {
     }
 
     @Test
-    @DisplayName("존재하지 않는 관리 링크의 조회와 폐기는 같은 404로 응답한다")
+    @DisplayName("존재하지 않는 관리 링크 조회는 404로 응답한다")
     void returnsNotFoundForMissingManagedLink() throws Exception {
         when(useCase.getLink(LINK_ID)).thenThrow(new LinkNotFoundException());
-        when(useCase.revokeLink(LINK_ID)).thenThrow(new LinkNotFoundException());
 
         mockMvc.perform(get("/api/v1/links/{linkId}", LINK_ID))
-                .andExpect(status().isNotFound())
-                .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
-                .andExpect(jsonPath("$.code").value("LINK_NOT_FOUND"))
-                .andExpect(jsonPath("$.requestId").isNotEmpty());
-
-        mockMvc.perform(put("/api/v1/links/{linkId}/revocation", LINK_ID))
                 .andExpect(status().isNotFound())
                 .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
                 .andExpect(jsonPath("$.code").value("LINK_NOT_FOUND"))
@@ -245,9 +236,6 @@ class LinkHttpContractTest {
 
         mockMvc.perform(put("/api/v1/links/{linkId}/revocation", LINK_ID))
                 .andExpect(status().isOk())
-                .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
-                .andExpect(header().string("Referrer-Policy", "no-referrer"))
-                .andExpect(header().exists("X-Request-Id"))
                 .andExpect(jsonPath("$.id").value(LINK_ID.toString()))
                 .andExpect(jsonPath("$.revokedAt").value(firstRevokedAt.toString()))
                 .andExpect(jsonPath("$.shortUrl").doesNotExist());

@@ -5,6 +5,7 @@ import com.personal.batongo.application.link.port.out.SmartLinkRepository.Stored
 import com.personal.batongo.application.link.port.out.SmartLinkRepository.StoredLinkResolution;
 import com.personal.batongo.application.link.port.out.SmartLinkRepository.StoredLinkSnapshot;
 import com.personal.batongo.domain.link.SmartLink;
+import jakarta.persistence.EntityManager;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
@@ -37,20 +38,20 @@ public class SmartLinkPersistenceAdapter implements SmartLinkRepository {
             FROM smart_links stored_link
             """;
 
-    private final SpringDataSmartLinkRepository repository;
+    private final EntityManager entityManager;
     private final JdbcClient jdbcClient;
 
     public SmartLinkPersistenceAdapter(
-            SpringDataSmartLinkRepository repository,
+            EntityManager entityManager,
             JdbcClient jdbcClient
     ) {
-        this.repository = repository;
+        this.entityManager = entityManager;
         this.jdbcClient = jdbcClient;
     }
 
     @Override
     public void save(SmartLink smartLink) {
-        repository.save(smartLink);
+        entityManager.persist(smartLink);
     }
 
     @Override

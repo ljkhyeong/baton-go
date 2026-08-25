@@ -47,7 +47,7 @@ public class SmartLink {
 
     @Version
     @Column(name = "version", nullable = false)
-    private Long version;
+    private long version;
 
     protected SmartLink() {
     }

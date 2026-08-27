@@ -44,13 +44,6 @@
    장애 대응과 이미지 되돌리기 훈련을 완료한다.
 7. 외부 소비 계약을 고정할 REST Docs/OpenAPI 산출물을 연결한다.
 
-## 운영 안전선
-
-- 기존 데이터가 있는 DB에서 HMAC 비밀값만 회전하거나 DB와 비밀값을 서로 다른 시점으로
-  복구하지 않는다.
-- PVC는 [비공개 Kubernetes 배포 실행서](docs/RUNBOOK/kubernetes-private-server-deployment.md)의
-  신규 빈 DB 부분 초기화 조건을 모두 증명한 경우 외에는 삭제하지 않는다.
-- `MYSQL_ROOT_HOST=localhost`와 역할별 DB 자격 증명, TLS `VERIFY_IDENTITY`, 경로별 외부 경계,
-  NetworkPolicy와 probe는 중복 설정이 아니라 독립된 보안·운영 경계로 유지한다.
-- 기존 데이터베이스에 HMAC 보호 장치를 처음 결합할 때는
-  [보호 장치 최초 결합 실행서](docs/RUNBOOK/link-code-key-guard-binding.md)를 사용한다.
+운영 실행과 복구 안전선은
+[비공개 Kubernetes 배포 실행서](docs/RUNBOOK/kubernetes-private-server-deployment.md)와
+[HMAC 키·DB 결합 결정](docs/ADR/0004_link-code-key-binding/adr.md)을 따른다.

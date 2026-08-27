@@ -640,15 +640,11 @@ StatefulSet 삭제는 기본적으로 PVC를 보존하지만 Namespace 삭제는
 대상 계약 목록 조사가 필요한 유지 보수 시간에만 비공개 외부 경계 차단 증거와 쓰기 경로
 중지를 먼저 확인한 뒤 운영 기능 두 설정값을 함께 활성화한다. 설정값은 네트워크 경계가
 아니며 작업 직후 다시 `false`로 배포한다. 상세 절차는
-`docs/RUNBOOK/target-contract-v1-remediation.md`를 따른다.
+[대상 계약 v1 정리 실행서](target-contract-v1-remediation.md)를 따른다.
 
-최종 공개 운영 전에는 다음이 여전히 별도 완료 조건이다.
-
-- 배포 DB 전체 목록 조사와 `unrevoked non-compliant=0`, 미승인 `HOLD=0` 증거
-- BATON 세션·CSRF·참여 허가와 회의실 매핑/종료 표식
-- 공개 `/l` Prefix 전용 외부 경계, 비공개 `/api/v1` Prefix 경계와 접근 로그 마스킹
-- 호출자 아웃박스/취소 표식과 분산 요청 제한
-- 실제 백업·복원 훈련과 장애·되돌리기 훈련
+이 실행서의 완료만으로 공개 운영을 승인하지 않는다. 장기 완료 조건은
+[교차 서비스 링크 계약의 공개 운영 관문](../PRD/0003_cross-service-link-contract/spec.md#9-공개-운영-관문),
+현재 남은 작업은 [인수인계](../../HANDOFF.md#공개-운영-전-남은-관문)를 따른다.
 
 참고:
 

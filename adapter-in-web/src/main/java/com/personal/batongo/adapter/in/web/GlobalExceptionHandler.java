@@ -16,11 +16,13 @@ import com.personal.batongo.domain.link.LinkUnavailableException;
 import com.personal.batongo.domain.link.LinkValidationException;
 import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.servlet.http.HttpServletRequest;
-import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
@@ -329,30 +331,27 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     private List<String> causeTypes(Exception exception) {
         Set<Throwable> visited = Collections.newSetFromMap(new IdentityHashMap<>());
         visited.add(exception);
-        List<String> types = new ArrayList<>();
-        Throwable current = exception.getCause();
-        while (current != null
-                && types.size() < MAX_LOGGED_CAUSE_TYPES
-                && visited.add(current)) {
-            types.add(current.getClass().getName());
-            current = current.getCause();
-        }
-        return List.copyOf(types);
+        return Stream.iterate(
+                        (Throwable) exception,
+                        Objects::nonNull,
+                        Throwable::getCause
+                )
+                .skip(1)
+                .takeWhile(visited::add)
+                .limit(MAX_LOGGED_CAUSE_TYPES)
+                .map(cause -> cause.getClass().getName())
+                .toList();
     }
 
     private List<String> stackFrames(Exception exception) {
-        StackTraceElement[] stackTrace = exception.getStackTrace();
-        int length = Math.min(stackTrace.length, MAX_LOGGED_STACK_FRAMES);
-        List<String> frames = new ArrayList<>(length);
-        for (int index = 0; index < length; index++) {
-            StackTraceElement frame = stackTrace[index];
-            frames.add(frame.getClassName()
-                    + "#"
-                    + frame.getMethodName()
-                    + ":"
-                    + frame.getLineNumber());
-        }
-        return List.copyOf(frames);
+        return Arrays.stream(exception.getStackTrace())
+                .limit(MAX_LOGGED_STACK_FRAMES)
+                .map(frame -> frame.getClassName()
+                        + "#"
+                        + frame.getMethodName()
+                        + ":"
+                        + frame.getLineNumber())
+                .toList();
     }
 
     private void recordStoredTargetPolicyViolation(

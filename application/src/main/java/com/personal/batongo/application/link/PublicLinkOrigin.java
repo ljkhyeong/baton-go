@@ -23,7 +23,6 @@ public final class PublicLinkOrigin {
     }
 
     public static PublicLinkOrigin fromStored(String value) {
-        Objects.requireNonNull(value, "저장된 공개 origin은 필수입니다");
         PublicLinkOrigin origin = new PublicLinkOrigin(URI.create(value));
         if (!origin.serialized().equals(value)) {
             throw new IllegalArgumentException("저장된 공개 origin이 canonical 형식이 아닙니다");

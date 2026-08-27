@@ -34,7 +34,7 @@ public final class DatabaseMigrationRunner {
         application.setWebApplicationType(WebApplicationType.NONE);
 
         try (ConfigurableApplicationContext context = application.run(args)) {
-            // Spring Boot's FlywayMigrationInitializer completes before startup returns.
+            // Spring Boot의 FlywayMigrationInitializer는 애플리케이션 시작 전에 완료됩니다.
             context.getBean(Flyway.class);
         }
     }

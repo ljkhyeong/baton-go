@@ -1,9 +1,12 @@
 package com.personal.batongo.bootstrap;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.NoSuchBeanDefinitionException;
 
 class DatabaseMigrationConfigurationTest {
 
@@ -16,6 +19,9 @@ class DatabaseMigrationConfigurationTest {
                 "--spring.datasource.username=baton_go_migrator",
                 "--spring.datasource.password=migration-password"
         }))
-                .isInstanceOf(RuntimeException.class);
+                .isInstanceOfSatisfying(
+                        NoSuchBeanDefinitionException.class,
+                        exception -> assertThat(exception.getBeanType()).isEqualTo(Flyway.class)
+                );
     }
 }

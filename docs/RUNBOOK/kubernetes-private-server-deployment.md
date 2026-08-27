@@ -34,8 +34,9 @@
 4. 사용하는 CNI가 Kubernetes NetworkPolicy와 노드-to-Pod kubelet probe를 어떻게 집행하는지
    확인한다. 지원하지 않으면 애플리케이션·MySQL 접근 제한을 방화벽 또는 CNI 정책으로 별도
    보완한다. host-network ingress controller를 쓰면 출처 selector 적용 여부도 확인한다.
-5. DB 백업 대상, 보존 기간, 복원 담당자와 HMAC Secret 버전의 공동 복구 단위를
-   확정한다.
+5. 플랫폼 운영 담당자가 소유할 DB 백업 정책을 확정한다. 정책에는 RPO, RTO, 실행 주기,
+   보존 기간, 담당자, 실패 경보와 증거 저장 위치를 포함하고 HMAC Secret 버전을 DB와 같은
+   복구 단위로 관리한다.
 6. Kubernetes Secret의 저장 시 암호화를 활성화한다. `baton-go` Namespace의 Secret
    `get/list/watch`, Pod `exec/attach/ephemeralcontainers`, Pod·Deployment·StatefulSet·Job의
    `create/update/patch`는 직접 또는 워크로드 마운트를 통해 Secret을 읽을 수 있는 권한으로
@@ -596,6 +597,12 @@ Flyway 마이그레이션은 자동으로 역적용되지 않는다. DB 스키�
 수정하거나 PVC를 과거 스냅샷으로 단독 복구하지 않는다.
 
 ## 8. 백업과 복원
+
+정기 백업 작업의 실행·보존·실패 경보·접근 통제는 배포 환경의 플랫폼 운영 담당자가
+소유한다. 이 저장소는 특정 백업 스케줄러나 원격 저장소를 제공하지 않고, 복구 세트의 구성과
+복원 검증 절차를 소유한다. 공개 운영 전에는 환경별 플랫폼 백업 정책의 위치와 RPO, RTO,
+실행 주기, 보존 기간, 담당자, 실패 경보를 운영 증거에 기록한다. 정책이나 증거 위치가
+확정되지 않았으면 공개 운영 관문은 닫힌 상태로 유지한다.
 
 각 백업 증거는 최소한 다음을 하나의 식별 가능한 복구 세트로 묶는다.
 

@@ -39,7 +39,8 @@
    `/l/{code}` 접근 로그 마스킹을 적용한다.
 5. 실제 비공개 클러스터에서 DNS·TLS·CNI·NetworkPolicy·startup/liveness/readiness probe,
    PVC와 Secret 수명주기를 검증한다.
-6. DB와 같은 버전의 `BATON_GO_LINK_CODE_SECRET`을 한 복구 단위로 사용해 백업·복원,
+6. 플랫폼 백업 정책에 RPO·RTO·주기·보존 기간·담당자·실패 경보·증거 위치를 명시하고,
+   DB와 같은 버전의 `BATON_GO_LINK_CODE_SECRET`을 한 복구 단위로 사용한 격리 복원,
    장애 대응과 이미지 되돌리기 훈련을 완료한다.
 7. 외부 소비 계약을 고정할 REST Docs/OpenAPI 산출물을 연결한다.
 

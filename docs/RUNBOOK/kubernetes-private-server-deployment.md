@@ -32,8 +32,11 @@
 2. 레지스트리에서 노드가 가져올 수 있는 변경 불가 BATON GO 배포 이미지를 준비한다.
 3. 공개 HTTPS 출처와 BATON·ROUND의 공용 HTTPS 출처를 확정한다.
 4. 사용하는 CNI가 Kubernetes NetworkPolicy와 노드-to-Pod kubelet probe를 어떻게 집행하는지
-   확인한다. 지원하지 않으면 애플리케이션·MySQL 접근 제한을 방화벽 또는 CNI 정책으로 별도
-   보완한다. host-network ingress controller를 쓰면 출처 selector 적용 여부도 확인한다.
+   확인한다. 현재 저장소 정책은 ingress만 제한하므로 클러스터 DNS와 MySQL 외의
+   egress를 기본 차단할지, DNS selector·IP·포트를 해당 CNI에서 어떻게 표현할지
+   결정한다. NetworkPolicy를 지원하지 않으면 애플리케이션·MySQL 접근 제한을
+   방화벽 또는 CNI 정책으로 별도 보완한다. host-network ingress controller를 쓰면
+   출처 selector 적용 여부도 확인한다.
 5. 플랫폼 운영 담당자가 소유할 DB 백업 정책을 확정한다. 정책에는 RPO, RTO, 실행 주기,
    보존 기간, 담당자, 실패 경보와 증거 저장 위치를 포함하고 HMAC Secret 버전을 DB와 같은
    복구 단위로 관리한다.
@@ -46,6 +49,11 @@
    JDBC URL의 host인 `baton-go-mysql`을 반드시 넣고, 필요하면
    `baton-go-mysql.baton-go.svc`와 클러스터 도메인 FQDN도 함께 넣는다. IP SAN만으로 대체하지
    않는다.
+8. 멱등 생성 요청, 만료·폐기 링크의 보존 기간과 자동 정리 후 HTTP 의미,
+   백업·감사 요구, PVC 경보·증설 기준을 하나의 데이터 수명주기 정책으로 결정한다.
+   이 결정 전에는 만료·폐기를 자동 삭제 조건으로 사용하지 않는다.
+9. Prometheus 수집 구성, 경보 규칙, 알림 경로와 응답 담당자를 확정한다. Actuator
+   endpoint 노출이 실제 수집·경보 연결을 대신하지 않는다.
 
 다음 명령은 Secret 값을 출력하지 않는다.
 
@@ -79,6 +87,11 @@ fragment와 userinfo를 넣지 않는다. 운영 기능 두 설정값은 평상�
 제거하고 같은 이미지 항목에 `digest: sha256:<검증한 digest>`를 사용한다. digest 문자열을
 `newTag` 값에 넣지 않는다. 오버레이는 선택한 공식 MySQL 8.4.10 다중 아키텍처 이미지
 다이제스트로 고정하며, 변경은 백업·복원 검증을 포함한 별도 DB 업그레이드로 다룬다.
+
+릴리스마다 애플리케이션 이미지 다이제스트와 함께 SBOM, 취약점 검사 결과,
+서명·provenance 검증 결과를 배포 증거에 보존한다. 조직의 취약점 수용 정책을 통과하지
+못했거나 서명 주체·소스 커밋·빌드 정보를 대조할 수 없는 이미지는 배포하지 않는다.
+이미지 태그, 로컬 빌드 성공과 레지스트리 화면만은 변경 불가 증거가 아니다.
 
 비공개 레지스트리를 사용하는 기본 오버레이는 `imagePullSecret` 이름
 `baton-go-registry`를 참조한다. 노드 수준 레지스트리 인증이나 미리 적재한 이미지를 쓰는
@@ -469,6 +482,37 @@ MySQL NetworkPolicy는 같은 Namespace의 BATON GO 애플리케이션과 databa
 `VERIFY_IDENTITY`로 서버 DNS를 검증한다. NetworkPolicy를 집행하지 않는 CNI에서는 selector
 차단 효과가 없지만 TLS를 비활성화해 보완하지 않는다.
 
+현재 기본 NetworkPolicy에는 `policyTypes: Egress`가 없으므로 선택된 Pod의 외부 연결은
+차단되지 않는다. 공개 운영 전에 환경별 overlay 또는 CNI 정책으로 다음 최소 흐름을
+표현하고, 허용 흐름과 임의 외부 주소 차단을 모두 실제 Pod에서 검증한다.
+
+- 애플리케이션·마이그레이션 Job: 클러스터 DNS와 `baton-go-mysql:3306`
+- MySQL: 필수 egress가 없음을 확인하되, 환경이 외부 복제·백업을 사용하면 승인된
+  목적지와 포트만 별도 허용
+- 이미지 pull·노드 DNS·kubelet probe: Pod egress와 노드 흐름을 구분해 CNI별로 검증
+
+DNS Namespace·Pod label, Service IP와 host-network 처리는 클러스터마다 다르므로 저장소
+기본본에 예시 selector를 고정하지 않는다. DNS 증거 없이 egress 기본 차단만 적용해
+시작·준비 탐지를 깨뜨리지 않는다.
+
+### 수집과 경보 관문
+
+`/actuator/prometheus`와 health endpoint가 켜져 있다는 사실만으로는 운영 감시가 완료되지
+않는다. 공개 운영 전에 실제 수집기의 target이 `UP`인지 확인하고, 임계치·지속 시간·
+알림 경로·응답 담당자를 명시한 최소 경보를 연결한다.
+
+- `Job/baton-go-database-migration` 실패·시간 초과
+- 애플리케이션·MySQL Pod `NotReady`, 재시작과 배포 상태 이상
+- HTTP 5xx 오류율과 공개 해석 429 지속 증가
+- DB를 포함한 readiness 실패
+- `baton.go.public.resolver.target.contract.violations` 증가
+- PVC 사용률·증가 추세·확장 실패
+- 백업 실패와 정책에서 정한 시간 동안 성공 백업 부재
+
+각 경보는 데이터를 조작하지 않는 방식으로 시험하고 규칙 버전, 발화 시각, 알림
+수신·확인 결과와 담당자를 운영 증거에 남긴다. 대시보드 화면만 있거나 알림을
+실제로 전송하지 않은 규칙은 관문 통과 증거가 아니다.
+
 ## 6. 배포 검증
 
 다음 상태를 확인한다.
@@ -768,7 +812,29 @@ StatefulSet 삭제는 기본적으로 PVC를 보존하지만 Namespace 삭제는
 삭제하고 StorageClass 회수 정책에 따라 실제 볼륨까지 잃을 수 있다. Namespace 매니페스트를
 워크로드 Kustomization에서 분리한 이유도 이 연쇄 삭제를 줄이기 위해서다.
 
-## 9. 운영 기능 유지 보수와 운영 공개 관문
+## 9. 데이터 보존과 용량
+
+현재 시스템은 만료·폐기된 `smart_links`와 멱등 재생 근거인
+`link_creation_requests`를 자동 삭제하지 않는다. `expires_at` 인덱스가 있다는 사실은
+정리 정책이나 정리 Job이 있다는 뜻이 아니다. 임의 TTL을 추가하면 다음 계약이
+함께 바뀌므로 공개 운영 전에 제품·운영·보안 소유자가 같이 결정한다.
+
+- `Idempotency-Key` 재사용에 대한 동일 단축 URL 재생과 `IDEMPOTENCY_KEY_REUSED`
+  보장 기간
+- 만료·폐기 후 `410 LINK_EXPIRED`·`410 LINK_REVOKED`를 유지할 기간과
+  삭제 후 `404` 전환 허용 여부
+- 링크와 멱등 예약을 함께 정리하거나 최소 증거를 남길 tombstone 모델,
+  중단 후 재시작·동시 생성·백업 동안의 일관성
+- 법정·감사·사고 조사 보존 기간과 백업에서의 최종 제거 시점
+- 실제 행 증가율과 백업 크기를 기준으로 한 PVC 사용률·증가 추세 경보,
+  StorageClass 확장 가능 여부, 증설 승인·실패 복구 절차
+
+보존 기간과 외부 HTTP 의미를 문서로 승인하고, 정리 알고리즘·멱등성·부하·
+복구를 검증하며, 복원 본에서도 같은 정책이 유지됨을 확인하기 전에는 자동 삭제를
+배포하지 않는다. 현재 10Gi를 무제한 보존 승인으로 해석하지 않고, 정책 확정 전에는
+용량 경보와 승인된 PVC 증설로 대응한다.
+
+## 10. 운영 기능 유지 보수와 운영 공개 관문
 
 대상 계약 목록 조사가 필요한 유지 보수 시간에만 비공개 외부 경계 차단 증거와 쓰기 경로
 중지를 먼저 확인한 뒤 운영 기능 두 설정값을 함께 활성화한다. 설정값은 네트워크 경계가

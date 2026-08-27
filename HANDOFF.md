@@ -32,17 +32,30 @@
 1. 배포 DB 전체를 [대상 계약 v1 정리 실행서](docs/RUNBOOK/target-contract-v1-remediation.md)로
    조사하고 `unrevoked non-compliant=0`, 미승인 `HOLD=0` 증거를 확보한다.
 2. 확인한 BATON·ROUND 인증 경계를 실제 릴리스 이미지와 공개 HTTPS, 외부 coturn에 연결하고
-   세션·CSRF·쿠키·JWK 회전·TURN·WebSocket 경계 증거를 확보한다.
+   세션·CSRF·쿠키·JWK 회전·TURN·WebSocket 경계 증거를 확보한다. GO 관리 API도
+   단일 정적 Bearer를 최종 운영 인증으로 유지할지, 호출자별 신원·scope·회전·감사 가능한
+   인증으로 전환할지 결정하고 검증한다.
 3. BATON 호출자에 GO 원격 생성·폐기 의도와 같은 `Idempotency-Key`를 소유 트랜잭션의
    순서 보장 아웃박스로 저장하고, 취소 표식과 생성 후 폐기 수렴을 구현한다.
 4. 공개 `/l`과 비공개 `/api/v1` 외부 경계를 분리하고, 분산 요청률 제한과
    `/l/{code}` 접근 로그 마스킹을 적용한다.
 5. 실제 비공개 클러스터에서 DNS·TLS·CNI·NetworkPolicy·startup/liveness/readiness probe,
-   PVC와 Secret 수명주기를 검증한다.
-6. 플랫폼 백업 정책에 RPO·RTO·주기·보존 기간·담당자·실패 경보·증거 위치를 명시하고,
+   PVC와 Secret 수명주기를 검증한다. 현재 ingress 전용 NetworkPolicy에 더해 환경별 DNS·MySQL
+   egress 허용 목록과 기본 차단 정책을 정하고 실제 CNI에서 허용·차단 증거를 확보한다.
+6. 릴리스 이미지 다이제스트, SBOM, 취약점 검사, 서명·provenance 검증 결과를 보존하고
+   승인된 이미지만 배포되는지 확인한다.
+7. Prometheus 실제 수집, 경보 규칙, 알림 경로와 담당자를 연결하고 마이그레이션 실패,
+   Pod 비정상, 5xx·429, DB 준비 상태, 저장 대상 계약 위반, PVC 용량과 백업 실패 경보의
+   시험 증거를 확보한다.
+8. 멱등 재생 보장 기간과 만료·폐기 링크 보존 기간, 자동 정리 뒤 HTTP 의미, 백업·감사
+   보존과 PVC 경보·증설 기준을 함께 결정한다. 이 결정과 정리 구현 전에는 업무 행을
+   자동 삭제하지 않는다.
+9. 플랫폼 백업 정책에 RPO·RTO·주기·보존 기간·담당자·실패 경보·증거 위치를 명시하고,
    DB와 같은 버전의 `BATON_GO_LINK_CODE_SECRET`을 한 복구 단위로 사용한 격리 복원,
    장애 대응과 이미지 되돌리기 훈련을 완료한다.
-7. 외부 소비 계약을 고정할 REST Docs/OpenAPI 산출물을 연결한다.
+10. HMAC 비밀값 유출 시 임의 Secret 회전 없이 쓰기·공개 경계를 차단하고, 기존 링크
+    폐기·재발급 또는 버전별 키 묶음 도입 중 복구 방식을 결정해 훈련한다.
+11. 외부 소비 계약을 고정할 REST Docs/OpenAPI 산출물을 연결한다.
 
 운영 실행과 복구 안전선은
 [비공개 Kubernetes 배포 실행서](docs/RUNBOOK/kubernetes-private-server-deployment.md)와

@@ -29,4 +29,9 @@ public record LinkResponse(
                 result.createdAt()
         );
     }
+
+    @Override
+    public String toString() {
+        return "LinkResponse[id=" + id + ", target=redacted]";
+    }
 }

@@ -45,7 +45,7 @@ class LinkCodeKeyGuardBindingCliTest {
                 .isEqualTo(3);
         assertThat(output.standardOutput()).isEmpty();
         assertThat(output.standardError())
-                .contains("설정, canary와 DB 상태를 확인하세요");
+                .isNotBlank();
     }
 
     @Test

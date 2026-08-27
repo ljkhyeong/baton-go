@@ -14,6 +14,7 @@
 ```
 
 - 입력 형식 오류: `400 INVALID_REQUEST`
+- 멱등성 키 누락·형식 오류: `400 INVALID_IDEMPOTENCY_KEY`
 - 생성 시각이 Java/JDBC의 UTC 지원 저장 범위나 정밀도를 벗어남: `400 INVALID_REQUEST`
 - 관리 인증 누락·실패: `401 MANAGEMENT_AUTHENTICATION_REQUIRED`
 - 링크 없음: `404 LINK_NOT_FOUND`

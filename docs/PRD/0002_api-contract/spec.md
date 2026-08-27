@@ -3,13 +3,22 @@
 - 상태: 초기 기준선
 - 기본 경로: `/api/v1`
 
+## 공통 응답
+
+이 문서에 정의한 API의 모든 성공·오류 응답은 `Cache-Control: no-store`,
+`Referrer-Policy: no-referrer`와 `X-Request-Id`를 포함한다.
+
+클라이언트가 `^[A-Za-z0-9._-]{1,64}$` 형식의 `X-Request-Id`를 보내면 서버는 같은 값을
+응답한다. 헤더가 없거나 형식이 다르면 서버가 새 UUID를 발급한다. 오류 응답 본문의
+`requestId`는 응답 헤더와 같은 값이다.
+
 ## 공통 오류
 
 ```json
 {
   "code": "UPPER_SNAKE_CASE",
   "message": "사용자가 취할 행동을 설명하는 메시지",
-  "requestId": "optional-request-id"
+  "requestId": "request-id"
 }
 ```
 
@@ -62,6 +71,7 @@ Idempotency-Key: 8e448211-66ae-44ab-9888-c4960648c22b
 ```
 
 - 호출자는 하나의 생성 의도에 같은 키를 사용하고 원본 도메인 상태와 함께 영속화한다.
+- 성공 응답의 `Location`은 `/api/v1/links/{id}`다.
 - 최초 성공은 `201 Created`와 `Idempotency-Replayed: false`를 반환한다.
 - 같은 키와 같은 요청 내용의 재시도는 동일한 `id`, `shortUrl`, `Location`을
   `200 OK`와 `Idempotency-Replayed: true`로 반환한다.
@@ -86,8 +96,6 @@ Idempotency-Key: 8e448211-66ae-44ab-9888-c4960648c22b
   `500 LINK_CODE_REPLAY_UNAVAILABLE`로 실패한다. 이 오류는 같은 설정에서 반복해도
   복구되지 않으므로 자동 재시도하지 않는다. 운영자가 생성 당시 비밀을 복구하거나
   버전별 키 묶음을 배포한 뒤 같은 키와 요청 내용으로 다시 요청한다.
-- 성공과 재생 응답에는 `Cache-Control: no-store`와
-  `Referrer-Policy: no-referrer`를 포함한다.
 
 요청:
 
@@ -150,7 +158,6 @@ Idempotency-Key: 8e448211-66ae-44ab-9888-c4960648c22b
 
 관리용 Bearer 자격 증명이 필요하다. 원문 공개 코드나 `shortUrl`은 반환하지 않는다.
 성공 시 `200 OK`와 다음 형태의 현재 링크 상태를 반환한다.
-성공 응답에는 `Cache-Control: no-store`와 `Referrer-Policy: no-referrer`를 포함한다.
 
 ```json
 {
@@ -170,7 +177,6 @@ Idempotency-Key: 8e448211-66ae-44ab-9888-c4960648c22b
 관리용 Bearer 자격 증명이 필요하다. 폐기는 멱등이며 같은 링크를 다시 폐기해도 최초
 `revokedAt`을 유지한 현재 상태를 `200 OK`로 반환한다. 응답 형식은 관리 조회와 같고
 원문 공개 코드나 `shortUrl`은 포함하지 않는다.
-성공 응답에는 `Cache-Control: no-store`와 `Referrer-Policy: no-referrer`를 포함한다.
 
 저장 대상이 현재 v1 계약을 위반하면 일반 관리 조회와 폐기도 원문 대상을 응답하지 않고
 `404 LINK_NOT_FOUND`로 숨긴다. 계약 전 데이터 정리는 아래의 별도 운영 기능 계약만 사용한다.
@@ -184,8 +190,7 @@ Idempotency-Key: 8e448211-66ae-44ab-9888-c4960648c22b
 확인 값은 네트워크 차단을 대신하지 않으며, 기존 관리 Bearer 자격 증명과 비공개 Ingress를
 모두 요구한다.
 
-모든 성공·실패 응답은 `Cache-Control: no-store`, `Referrer-Policy: no-referrer`와
-`X-Request-Id`를 반환한다. 관리 인증은 운영 컨트롤러의 등록 여부보다 먼저 적용한다.
+관리 인증은 운영 컨트롤러의 등록 여부보다 먼저 적용한다.
 따라서 비활성 상태에서 관리 인증이 없거나 올바르지 않은 요청은
 `401 MANAGEMENT_AUTHENTICATION_REQUIRED`다. 유효한 관리 인증을 통과한 요청은 일반
 미등록 경로와 같은 `404 RESOURCE_NOT_FOUND`다.
@@ -270,18 +275,12 @@ DB 기본 키 순서의 키셋 페이지 나누기로 모든 링크를 원문 �
 공개 엔드포인트다. 활성 링크이면 신뢰 대상 URL로 `302 Found`를 반환한다. `HEAD`는 `GET`과
 같은 상태와 헤더를 반환하되 응답 본문이 없으며 두 메서드 모두 링크 상태를 변경하지 않는다.
 
-응답에는 다음 헤더를 포함한다.
-
-- `Location`
-- `Cache-Control: no-store`
-- `Referrer-Policy: no-referrer`
-- `X-Request-Id`
+성공 응답은 공통 헤더 외에 신뢰 대상 URL을 담은 `Location`을 포함한다.
 
 이 요청은 링크 소비 횟수나 권한 상태를 변경하지 않는다.
 
 DB에 저장된 대상이 현재 PRD-0003 계약을 위반하면 존재 여부를 공개하지 않고
 `404 LINK_NOT_FOUND`로 응답한다. `GET`과 `HEAD` 모두 `Location`을 포함하지 않으며
-`Cache-Control: no-store`, `Referrer-Policy: no-referrer`, `X-Request-Id`를 반환한다.
 `HEAD`에는 본문이 없다. 내부 지표와 안전한 로그로 운영 경보를 남기되 공개 코드,
 대상 경로와 전체 단축 URL은 기록하지 않는다.
 
@@ -293,11 +292,8 @@ DB에 저장된 대상이 현재 PRD-0003 계약을 위반하면 존재 여부�
 경계로 사용하지 않는다.
 
 용량과 시간 구간은 배포 환경이 명시적으로 설정하는 운영 안전값이며 사용자별 제품 할당량이
-아니다. 한도를 초과하면 `429 RATE_LIMIT_EXCEEDED`와 다음 헤더를 반환한다.
-
-- `Retry-After`: 현재 시간 구간이 갱신될 때까지의 초 단위 대기 시간
-- `Cache-Control: no-store`
-- `X-Request-Id`
+아니다. 한도를 초과하면 `429 RATE_LIMIT_EXCEEDED`와 현재 시간 구간이 갱신될 때까지의
+초 단위 대기 시간을 담은 `Retry-After`를 반환한다.
 
 `HEAD`의 `429`도 같은 상태와 헤더를 반환하지만 응답 본문은 없다. 이 안전장치는
 인스턴스 메모리만 사용하므로 여러 복제본의 합산 요청량을 제한하지 않는다. 운영 공개

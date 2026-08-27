@@ -17,20 +17,31 @@
 - GO 전용 MySQL과 비공개 Kubernetes 기본 구성은 준비되어 있다. 이는 배포 기반일 뿐 실제
   클러스터 검증이나 공개 운영 승인 증거가 아니다.
 
+## 외부 저장소 확인 기준
+
+- 2026-08-27 BATON `2ddfed0bd6fbd5c4a4e1595110d3b46bb6ab32dd`에서 계정 세션,
+  구성원 연결, ROUND 방 매핑·참여권·JWK와 선택 실행 경계 검증 구현을 확인했다.
+- 2026-08-27 ROUND `a67df4ba89e935b623d58f2ce7542a5dbbbaea7f`에서 BATON 모드
+  브라우저 진입, 참여권 검증, TURN·WebSocket 방 경계 구현을 확인했다.
+- 위 커밋 확인은 실제 릴리스 이미지, 공개 HTTPS, 외부 coturn과 운영 자격 증명 검증을
+  대신하지 않는다. BATON 저장소에서는 GO 원격 생성·폐기 호출과 순서 보장 아웃박스 구현을
+  확인하지 못했다.
+
 ## 공개 운영 전 남은 관문
 
 1. 배포 DB 전체를 [대상 계약 v1 정리 실행서](docs/RUNBOOK/target-contract-v1-remediation.md)로
    조사하고 `unrevoked non-compliant=0`, 미승인 `HOLD=0` 증거를 확보한다.
-2. BATON 세션·CSRF·참여 허가, 권위 있는 회의실 매핑과 종료 표식, 호출자
-   outbox·취소 표식을 PRD-0003의 소유 서비스에 연결한다. BATON과 ROUND 저장소에는 아직 이
-   통합을 완료한 코드가 없다고 본다.
-3. 공개 `/l`과 비공개 `/api/v1` 외부 경계를 분리하고, 분산 요청률 제한과
+2. 확인한 BATON·ROUND 인증 경계를 실제 릴리스 이미지와 공개 HTTPS, 외부 coturn에 연결하고
+   세션·CSRF·쿠키·JWK 회전·TURN·WebSocket 경계 증거를 확보한다.
+3. BATON 호출자에 GO 원격 생성·폐기 의도와 같은 `Idempotency-Key`를 소유 트랜잭션의
+   순서 보장 아웃박스로 저장하고, 취소 표식과 생성 후 폐기 수렴을 구현한다.
+4. 공개 `/l`과 비공개 `/api/v1` 외부 경계를 분리하고, 분산 요청률 제한과
    `/l/{code}` 접근 로그 마스킹을 적용한다.
-4. 실제 비공개 클러스터에서 DNS·TLS·CNI·NetworkPolicy·startup/liveness/readiness probe,
+5. 실제 비공개 클러스터에서 DNS·TLS·CNI·NetworkPolicy·startup/liveness/readiness probe,
    PVC와 Secret 수명주기를 검증한다.
-5. DB와 같은 버전의 `BATON_GO_LINK_CODE_SECRET`을 한 복구 단위로 사용해 백업·복원,
+6. DB와 같은 버전의 `BATON_GO_LINK_CODE_SECRET`을 한 복구 단위로 사용해 백업·복원,
    장애 대응과 이미지 되돌리기 훈련을 완료한다.
-6. 외부 소비 계약을 고정할 REST Docs/OpenAPI 산출물을 연결한다.
+7. 외부 소비 계약을 고정할 REST Docs/OpenAPI 산출물을 연결한다.
 
 ## 운영 안전선
 

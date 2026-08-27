@@ -13,14 +13,15 @@
 }
 ```
 
-- 입력 형식 오류: `400`
+- 입력 형식 오류: `400 INVALID_REQUEST`
 - 생성 시각이 Java/JDBC의 UTC 지원 저장 범위나 정밀도를 벗어남: `400 INVALID_REQUEST`
-- 관리 인증 누락·실패: `401`
+- 관리 인증 누락·실패: `401 MANAGEMENT_AUTHENTICATION_REQUIRED`
 - 링크 없음: `404 LINK_NOT_FOUND`
 - 저장된 대상이 현재 신뢰 계약을 위반함: 존재를 숨기는 `404 LINK_NOT_FOUND`
-- 아직 활성화되지 않음: `404`
-- 만료·폐기: `410`
-- 같은 멱등성 키를 다른 요청 내용에 재사용: `409`
+- 아직 활성화되지 않음: `404 LINK_NOT_ACTIVE`
+- 만료: `410 LINK_EXPIRED`
+- 폐기: `410 LINK_REVOKED`
+- 같은 멱등성 키를 다른 요청 내용에 재사용: `409 IDEMPOTENCY_KEY_REUSED`
 - 링크 코드 파생 설정 불일치로 기존 생성 요청을 재생할 수 없음:
   `500 LINK_CODE_REPLAY_UNAVAILABLE`
 - 최초 생성에 사용한 정규 공개 출처를 기존 예약에서 복구할 수 없음:
@@ -35,7 +36,7 @@
 - 대상 계약 운영 기능의 목록 조사 요청 값 오류: `400 INVALID_REQUEST`
 - 준수 링크에 정리 폐기를 요청함: `409 REMEDIATION_NOT_APPLICABLE`
 - 목록 조사 뒤 변경된 링크에 정리 폐기를 요청함: `409 REMEDIATION_STALE`
-- 예상하지 못한 오류: `500`
+- 예상하지 못한 오류: `500 INTERNAL_ERROR`
 
 관리 인증 `401` 응답에는
 `WWW-Authenticate: Bearer realm="baton-go-management"`를 포함하며 Bearer 스킴은

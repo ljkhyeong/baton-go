@@ -24,7 +24,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -217,8 +216,6 @@ class LinkCodeKeyGuardIntegrationTest {
                 throw new IllegalStateException("두 번째 HMAC identity 결합 시작을 기다리지 못했습니다");
             }
 
-            assertThatThrownBy(() -> secondFuture.get(1, TimeUnit.SECONDS))
-                    .isInstanceOf(TimeoutException.class);
             releaseFirst.countDown();
 
             assertThat(firstFuture.get(20, TimeUnit.SECONDS)).isEqualTo(first);

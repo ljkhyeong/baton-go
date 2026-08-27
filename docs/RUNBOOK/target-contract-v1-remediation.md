@@ -27,10 +27,11 @@ BATON_GO_TARGET_CONTRACT_OPERATIONS_PRIVATE_INGRESS_CONFIRMED=true
 관리 자격 증명을 셸 기록, 프로세스 인자와 터미널 녹화에 남기지 않는다. 토큰은
 비밀값 관리자에서 현재 셸의 export하지 않은 변수로 읽고, curl 인자가 아니라 표준 입력 헤더로
 전달한다. 헤더 파일 입력은 curl 설정 문자열 문법을 거치지 않으므로 허용된 출력 가능
-ASCII의 따옴표와 백슬래시도 토큰 원문 그대로 보존한다. 다음 `read` 입력값은 화면에
-표시되지 않는다.
+ASCII의 따옴표와 백슬래시도 토큰 원문 그대로 보존한다. 기존 작업과 분리한 전용 유지보수
+셸에서 종료·인터럽트 정리 `trap`을 먼저 등록한다. 다음 `read` 입력값은 화면에 표시되지 않는다.
 
 ```bash
+trap 'unset BATON_GO_OPS_TOKEN' EXIT HUP INT TERM
 read -r -s BATON_GO_OPS_TOKEN
 printf '\n'
 printf 'Authorization: Bearer %s\n' "$BATON_GO_OPS_TOKEN" | \
@@ -104,10 +105,11 @@ printf 'Authorization: Bearer %s\n' "$BATON_GO_OPS_TOKEN" | \
 8. 목록 조사 실행 시각, 배포 SHA, 승인 명세 다이제스트, 결과 집계와 검증 결과만 배포
    증거에 남긴다.
 
-마지막 운영 API 호출 뒤 현재 셸에서 토큰 변수를 제거한다.
+마지막 운영 API 호출 뒤 토큰 변수를 제거하고 전용 유지보수 셸의 정리 `trap`을 해제한다.
 
 ```bash
 unset BATON_GO_OPS_TOKEN
+trap - EXIT HUP INT TERM
 ```
 
 비허용 대상에 자격 증명이 포함됐을 가능성이 있으면 이 절차의 성공과 별개로 자격 증명을

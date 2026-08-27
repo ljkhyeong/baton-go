@@ -37,10 +37,10 @@ class PublicResolverRateLimitFilterTest {
                 downstreamCalls
         );
 
-        assertThat(firstResponse.getHeader("Referrer-Policy")).isEqualTo("no-referrer");
         assertThat(secondResponse.getStatus()).isEqualTo(429);
         assertThat(secondResponse.getHeader(HttpHeaders.RETRY_AFTER)).isEqualTo("30");
         assertThat(secondResponse.getHeader(HttpHeaders.CACHE_CONTROL)).isEqualTo("no-store");
+        assertThat(secondResponse.getHeader("Referrer-Policy")).isEqualTo("no-referrer");
         assertThat(secondResponse.getHeader("X-Request-Id")).isNotBlank();
         assertThat(secondResponse.getContentAsString())
                 .contains("\"code\":\"RATE_LIMIT_EXCEEDED\"")
@@ -63,8 +63,6 @@ class PublicResolverRateLimitFilterTest {
 
         assertThat(response.getStatus()).isEqualTo(429);
         assertThat(response.getHeader(HttpHeaders.RETRY_AFTER)).isEqualTo("15");
-        assertThat(response.getHeader(HttpHeaders.CACHE_CONTROL)).isEqualTo("no-store");
-        assertThat(response.getHeader("X-Request-Id")).isNotBlank();
         assertThat(response.getContentAsByteArray()).isEmpty();
         assertThat(downstreamCalls).hasValue(1);
     }

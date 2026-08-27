@@ -93,6 +93,8 @@ class ManagementAuthenticationHttpContractTest {
                 .andExpect(status().isUnauthorized())
                 .andExpect(header().string(HttpHeaders.WWW_AUTHENTICATE, BEARER_CHALLENGE))
                 .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
+                .andExpect(header().string("Referrer-Policy", "no-referrer"))
+                .andExpect(header().exists("X-Request-Id"))
                 .andExpect(jsonPath("$.code")
                         .value("MANAGEMENT_AUTHENTICATION_REQUIRED"));
 

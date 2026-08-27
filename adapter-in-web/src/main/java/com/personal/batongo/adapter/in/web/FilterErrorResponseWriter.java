@@ -31,8 +31,6 @@ public class FilterErrorResponseWriter {
         response.setStatus(status);
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         response.setCharacterEncoding("UTF-8");
-        response.setHeader(HttpHeaders.CACHE_CONTROL, "no-store");
-        response.setHeader("Referrer-Policy", "no-referrer");
         if (status == HttpServletResponse.SC_UNAUTHORIZED) {
             response.setHeader(HttpHeaders.WWW_AUTHENTICATE, MANAGEMENT_BEARER_CHALLENGE);
         }

@@ -10,6 +10,7 @@ import java.util.regex.Pattern;
 import org.slf4j.MDC;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
+import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
@@ -36,6 +37,8 @@ public class RequestIdFilter extends OncePerRequestFilter {
                 : UUID.randomUUID().toString();
         request.setAttribute(REQUEST_ATTRIBUTE, requestId);
         response.setHeader(HEADER_NAME, requestId);
+        response.setHeader(HttpHeaders.CACHE_CONTROL, "no-store");
+        response.setHeader("Referrer-Policy", "no-referrer");
 
         try (MDC.MDCCloseable ignored = MDC.putCloseable("requestId", requestId)) {
             filterChain.doFilter(request, response);

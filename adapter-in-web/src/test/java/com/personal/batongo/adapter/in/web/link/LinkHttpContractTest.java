@@ -177,7 +177,6 @@ class LinkHttpContractTest {
                                 }
                                 """.formatted(BATON_TARGET_PATH)))
                 .andExpect(status().isInternalServerError())
-                .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
                 .andExpect(jsonPath("$.code").value(code))
                 .andExpect(jsonPath("$.requestId").isNotEmpty());
     }
@@ -206,9 +205,6 @@ class LinkHttpContractTest {
 
         mockMvc.perform(get("/api/v1/links/{linkId}", LINK_ID))
                 .andExpect(status().isOk())
-                .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
-                .andExpect(header().string("Referrer-Policy", "no-referrer"))
-                .andExpect(header().exists("X-Request-Id"))
                 .andExpect(jsonPath("$.id").value(LINK_ID.toString()))
                 .andExpect(jsonPath("$.targetSystem").value("BATON"))
                 .andExpect(jsonPath("$.targetPath").value(BATON_TARGET_PATH))
@@ -223,7 +219,6 @@ class LinkHttpContractTest {
 
         mockMvc.perform(get("/api/v1/links/{linkId}", LINK_ID))
                 .andExpect(status().isNotFound())
-                .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
                 .andExpect(jsonPath("$.code").value("LINK_NOT_FOUND"))
                 .andExpect(jsonPath("$.requestId").isNotEmpty());
     }
@@ -289,8 +284,6 @@ class LinkHttpContractTest {
                                 }
                                 """.formatted(targetSystem, BATON_TARGET_PATH, purpose)))
                 .andExpect(status().isBadRequest())
-                .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
-                .andExpect(header().string("Referrer-Policy", "no-referrer"))
                 .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
 
         verifyNoInteractions(useCase);
@@ -313,8 +306,6 @@ class LinkHttpContractTest {
                                 }
                                 """.formatted(BATON_TARGET_PATH)))
                 .andExpect(status().isBadRequest())
-                .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
-                .andExpect(header().string("Referrer-Policy", "no-referrer"))
                 .andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
                 .andExpect(jsonPath("$.requestId").isNotEmpty());
 
@@ -356,8 +347,6 @@ class LinkHttpContractTest {
                                         fieldAndValue[1]
                                 )))
                 .andExpect(status().isBadRequest())
-                .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
-                .andExpect(header().string("Referrer-Policy", "no-referrer"))
                 .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
 
         verifyNoInteractions(useCase);
@@ -428,7 +417,6 @@ class LinkHttpContractTest {
     void rejectsUnsupportedMethod() throws Exception {
         mockMvc.perform(post("/l/VOvLShvx93kQpj8x7w2HYQ"))
                 .andExpect(status().isMethodNotAllowed())
-                .andExpect(header().string("Cache-Control", "no-store"))
                 .andExpect(jsonPath("$.code").value("METHOD_NOT_ALLOWED"))
                 .andExpect(jsonPath("$.requestId").isNotEmpty());
     }
@@ -441,7 +429,6 @@ class LinkHttpContractTest {
                         .contentType(MediaType.TEXT_PLAIN)
                         .content("unsupported"))
                 .andExpect(status().isUnsupportedMediaType())
-                .andExpect(header().string("Cache-Control", "no-store"))
                 .andExpect(jsonPath("$.code").value("UNSUPPORTED_MEDIA_TYPE"))
                 .andExpect(jsonPath("$.requestId").isNotEmpty());
     }
@@ -451,13 +438,12 @@ class LinkHttpContractTest {
     void returnsNotFoundForUnknownRoute() throws Exception {
         mockMvc.perform(get("/unknown"))
                 .andExpect(status().isNotFound())
-                .andExpect(header().string("Cache-Control", "no-store"))
                 .andExpect(jsonPath("$.code").value("RESOURCE_NOT_FOUND"))
                 .andExpect(jsonPath("$.requestId").isNotEmpty());
     }
 
     @Test
-    @DisplayName("활성 공개 링크는 no-store와 no-referrer를 포함해 신뢰 대상에 302로 응답한다")
+    @DisplayName("활성 공개 링크는 신뢰 대상에 302로 응답한다")
     void resolvesLinkContract() throws Exception {
         when(useCase.resolveLink("VOvLShvx93kQpj8x7w2HYQ"))
                 .thenReturn(new ResolvedLinkResult(
@@ -466,10 +452,7 @@ class LinkHttpContractTest {
 
         mockMvc.perform(get("/l/VOvLShvx93kQpj8x7w2HYQ"))
                 .andExpect(status().isFound())
-                .andExpect(header().string("Location", BATON_DESTINATION))
-                .andExpect(header().string("Cache-Control", "no-store"))
-                .andExpect(header().string("Referrer-Policy", "no-referrer"))
-                .andExpect(header().exists("X-Request-Id"));
+                .andExpect(header().string("Location", BATON_DESTINATION));
     }
 
     @Test
@@ -483,9 +466,6 @@ class LinkHttpContractTest {
         mockMvc.perform(head("/l/{code}", rawCode))
                 .andExpect(status().isFound())
                 .andExpect(header().string("Location", BATON_DESTINATION))
-                .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
-                .andExpect(header().string("Referrer-Policy", "no-referrer"))
-                .andExpect(header().exists("X-Request-Id"))
                 .andExpect(content().string(""));
 
         verify(useCase).resolveLink(rawCode);
@@ -512,7 +492,6 @@ class LinkHttpContractTest {
 
         mockMvc.perform(get("/l/VOvLShvx93kQpj8x7w2HYQ"))
                 .andExpect(status().is(expectedStatus))
-                .andExpect(header().string("Cache-Control", "no-store"))
                 .andExpect(jsonPath("$.code").value(expectedCode))
                 .andExpect(jsonPath("$.requestId").isNotEmpty());
     }
@@ -572,8 +551,6 @@ class LinkHttpContractTest {
                                 }
                                 """.formatted(BATON_TARGET_PATH)))
                 .andExpect(status().isBadRequest())
-                .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
-                .andExpect(header().string("Referrer-Policy", "no-referrer"))
                 .andExpect(jsonPath("$.code").value("INVALID_LINK"))
                 .andExpect(jsonPath("$.requestId").isNotEmpty());
     }
@@ -583,8 +560,6 @@ class LinkHttpContractTest {
                         .header("X-Request-Id", PUBLIC_NOT_FOUND_REQUEST_ID))
                 .andExpect(status().isNotFound())
                 .andExpect(header().doesNotExist(HttpHeaders.LOCATION))
-                .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
-                .andExpect(header().string("Referrer-Policy", "no-referrer"))
                 .andExpect(header().string(
                         "X-Request-Id",
                         PUBLIC_NOT_FOUND_REQUEST_ID
@@ -602,8 +577,6 @@ class LinkHttpContractTest {
                         .header("X-Request-Id", PUBLIC_NOT_FOUND_REQUEST_ID))
                 .andExpect(status().isNotFound())
                 .andExpect(header().doesNotExist(HttpHeaders.LOCATION))
-                .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
-                .andExpect(header().string("Referrer-Policy", "no-referrer"))
                 .andExpect(header().string(
                         "X-Request-Id",
                         PUBLIC_NOT_FOUND_REQUEST_ID

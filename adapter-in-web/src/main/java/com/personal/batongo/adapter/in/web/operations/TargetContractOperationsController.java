@@ -6,7 +6,6 @@ import com.personal.batongo.application.link.port.in.TargetContractOperationsUse
 import jakarta.validation.Valid;
 import java.util.UUID;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
-import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -24,8 +23,6 @@ import org.springframework.web.bind.annotation.RestController;
 )
 public class TargetContractOperationsController {
 
-    private static final String REFERRER_POLICY = "Referrer-Policy";
-
     private final TargetContractOperationsUseCase operationsUseCase;
 
     public TargetContractOperationsController(TargetContractOperationsUseCase operationsUseCase) {
@@ -40,7 +37,7 @@ public class TargetContractOperationsController {
         TargetContractInventoryResponse response = TargetContractInventoryResponse.from(
                 operationsUseCase.inventory(new InventoryQuery(afterLinkId, limit))
         );
-        return noStore(response);
+        return ResponseEntity.ok(response);
     }
 
     @PutMapping("/links/{linkId}/revocation")
@@ -54,13 +51,6 @@ public class TargetContractOperationsController {
                         request.expectedVersion()
                 ))
         );
-        return noStore(response);
-    }
-
-    private <T> ResponseEntity<T> noStore(T body) {
-        return ResponseEntity.ok()
-                .cacheControl(CacheControl.noStore())
-                .header(REFERRER_POLICY, "no-referrer")
-                .body(body);
+        return ResponseEntity.ok(response);
     }
 }

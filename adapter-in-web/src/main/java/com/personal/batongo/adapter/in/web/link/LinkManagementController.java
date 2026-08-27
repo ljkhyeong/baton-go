@@ -7,7 +7,6 @@ import com.personal.batongo.application.link.port.in.SmartLinkUseCase.CreatedLin
 import jakarta.validation.Valid;
 import java.net.URI;
 import java.util.UUID;
-import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -25,7 +24,6 @@ public class LinkManagementController {
 
     private static final String IDEMPOTENCY_KEY_HEADER = "Idempotency-Key";
     private static final String IDEMPOTENCY_REPLAYED_HEADER = "Idempotency-Replayed";
-    private static final String REFERRER_POLICY = "Referrer-Policy";
 
     private final SmartLinkUseCase smartLinkUseCase;
 
@@ -51,26 +49,17 @@ public class LinkManagementController {
         HttpStatus status = result.replayed() ? HttpStatus.OK : HttpStatus.CREATED;
         return ResponseEntity.status(status)
                 .location(location)
-                .cacheControl(CacheControl.noStore())
-                .header(REFERRER_POLICY, "no-referrer")
                 .header(IDEMPOTENCY_REPLAYED_HEADER, Boolean.toString(result.replayed()))
                 .body(CreateLinkResponse.from(result));
     }
 
     @GetMapping("/{linkId}")
     public ResponseEntity<LinkResponse> getLink(@PathVariable UUID linkId) {
-        return noStore(LinkResponse.from(smartLinkUseCase.getLink(linkId)));
+        return ResponseEntity.ok(LinkResponse.from(smartLinkUseCase.getLink(linkId)));
     }
 
     @PutMapping("/{linkId}/revocation")
     public ResponseEntity<LinkResponse> revokeLink(@PathVariable UUID linkId) {
-        return noStore(LinkResponse.from(smartLinkUseCase.revokeLink(linkId)));
-    }
-
-    private <T> ResponseEntity<T> noStore(T body) {
-        return ResponseEntity.ok()
-                .cacheControl(CacheControl.noStore())
-                .header(REFERRER_POLICY, "no-referrer")
-                .body(body);
+        return ResponseEntity.ok(LinkResponse.from(smartLinkUseCase.revokeLink(linkId)));
     }
 }

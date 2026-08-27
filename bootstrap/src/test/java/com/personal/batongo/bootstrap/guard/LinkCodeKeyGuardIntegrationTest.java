@@ -16,7 +16,6 @@ import com.personal.batongo.bootstrap.guard.ExistingDatabaseLinkCodeKeyBinder.Bi
 import com.personal.batongo.domain.link.LinkPurpose;
 import com.personal.batongo.domain.link.TargetSystem;
 import java.sql.Connection;
-import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
@@ -25,6 +24,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -198,33 +198,37 @@ class LinkCodeKeyGuardIntegrationTest {
                 first.version(),
                 "e".repeat(64)
         );
-        CountDownLatch start = new CountDownLatch(1);
+        CountDownLatch firstBound = new CountDownLatch(1);
+        CountDownLatch releaseFirst = new CountDownLatch(1);
+        CountDownLatch secondStarted = new CountDownLatch(1);
         ExecutorService executor = Executors.newFixedThreadPool(2);
 
         try {
-            List<Future<LinkCodeDerivationIdentity>> futures = List.of(
-                    executor.submit(() -> bindInTransactionAfter(start, first)),
-                    executor.submit(() -> bindInTransactionAfter(start, second))
+            Future<LinkCodeDerivationIdentity> firstFuture = executor.submit(
+                    () -> bindAndHoldTransaction(first, firstBound, releaseFirst)
             );
-            start.countDown();
-
-            int successes = 0;
-            int failures = 0;
-            for (Future<LinkCodeDerivationIdentity> future : futures) {
-                try {
-                    future.get(20, TimeUnit.SECONDS);
-                    successes++;
-                } catch (ExecutionException exception) {
-                    assertThat(exception.getCause())
-                            .isInstanceOf(LinkCodeKeyBindingException.class);
-                    failures++;
-                }
+            if (!firstBound.await(10, TimeUnit.SECONDS)) {
+                throw new IllegalStateException("첫 HMAC identity 결합을 기다리지 못했습니다");
+            }
+            Future<LinkCodeDerivationIdentity> secondFuture = executor.submit(
+                    () -> bindInTransaction(second, secondStarted)
+            );
+            if (!secondStarted.await(10, TimeUnit.SECONDS)) {
+                throw new IllegalStateException("두 번째 HMAC identity 결합 시작을 기다리지 못했습니다");
             }
 
-            assertThat(successes).isEqualTo(1);
-            assertThat(failures).isEqualTo(1);
-            assertThat(storedIdentity()).isIn(first, second);
+            assertThatThrownBy(() -> secondFuture.get(1, TimeUnit.SECONDS))
+                    .isInstanceOf(TimeoutException.class);
+            releaseFirst.countDown();
+
+            assertThat(firstFuture.get(20, TimeUnit.SECONDS)).isEqualTo(first);
+            assertThatThrownBy(() -> secondFuture.get(20, TimeUnit.SECONDS))
+                    .isInstanceOf(ExecutionException.class)
+                    .cause()
+                    .isInstanceOf(LinkCodeKeyBindingException.class);
+            assertThat(storedIdentity()).isEqualTo(first);
         } finally {
+            releaseFirst.countDown();
             executor.shutdownNow();
         }
     }
@@ -289,17 +293,42 @@ class LinkCodeKeyGuardIntegrationTest {
         assertThat(storedIdentity()).isEqualTo(linkCodePort.derivationIdentity());
     }
 
-    private LinkCodeDerivationIdentity bindInTransactionAfter(
-            CountDownLatch start,
-            LinkCodeDerivationIdentity identity
-    ) throws InterruptedException {
-        if (!start.await(10, TimeUnit.SECONDS)) {
-            throw new IllegalStateException(
-                    "HMAC identity 동시 결합 시작 신호를 기다리지 못했습니다"
-            );
-        }
+    private LinkCodeDerivationIdentity bindAndHoldTransaction(
+            LinkCodeDerivationIdentity identity,
+            CountDownLatch bound,
+            CountDownLatch release
+    ) {
         new TransactionTemplate(transactionManager).executeWithoutResult(
-                status -> linkCodeKeyGuardPort.verifyOrBind(identity)
+                status -> {
+                    linkCodeKeyGuardPort.verifyOrBind(identity);
+                    bound.countDown();
+                    try {
+                        if (!release.await(10, TimeUnit.SECONDS)) {
+                            throw new IllegalStateException(
+                                    "첫 HMAC identity 결합 트랜잭션을 해제하지 못했습니다"
+                            );
+                        }
+                    } catch (InterruptedException exception) {
+                        Thread.currentThread().interrupt();
+                        throw new IllegalStateException(
+                                "첫 HMAC identity 결합 트랜잭션 대기가 중단됐습니다",
+                                exception
+                        );
+                    }
+                }
+        );
+        return identity;
+    }
+
+    private LinkCodeDerivationIdentity bindInTransaction(
+            LinkCodeDerivationIdentity identity,
+            CountDownLatch started
+    ) {
+        new TransactionTemplate(transactionManager).executeWithoutResult(
+                status -> {
+                    started.countDown();
+                    linkCodeKeyGuardPort.verifyOrBind(identity);
+                }
         );
         return identity;
     }

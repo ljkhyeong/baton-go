@@ -179,6 +179,10 @@ Docker는 Actuator 포트의 종합 `/actuator/health`를 계속 사용한다. �
 ./gradlew --no-daemon build
 ```
 
+Gradle은 `gradle/verification-metadata.xml`의 SHA-256으로 내려받은 의존성을 검증한다.
+의존성을 변경할 때는 검증 메타데이터를 삭제하거나 검증을 끄지 말고, 새 아티팩트의 출처와
+체크섬을 검토한 뒤 같은 변경에서 메타데이터를 갱신한다.
+
 Flyway/JPA와 동시 생성 동작을 포함한 MySQL 통합 검증은 Docker가 실행 중인 환경에서
 별도로 수행한다. 이 테스트 묶음은 Kubernetes 배포용 MySQL 초기화 스크립트, TLS
 `VERIFY_IDENTITY`, 실행 계정의 DML 전용 권한과 마이그레이션 전용 실행기도 함께 검증한다.
@@ -206,18 +210,26 @@ curl -i http://localhost:8080/api/v1/links \
 
 ## 문서
 
+### 제품과 HTTP 계약
+
 - [제품 기준선](docs/PRD/0001_product-baseline/spec.md)
 - [API 계약](docs/PRD/0002_api-contract/spec.md)
 - [BATON·ROUND 교차 서비스 링크 계약](docs/PRD/0003_cross-service-link-contract/spec.md)
-- [비공개 Kubernetes DB 구성](docs/ADR/0008_private-kubernetes-database-topology/adr.md)
-- [비공개 Kubernetes 배포 실행서](docs/RUNBOOK/kubernetes-private-server-deployment.md)
+
+### 장기 설계 결정
+
 - [마이크로서비스 경계](docs/ADR/0001_microservice-boundary/adr.md)
 - [링크 보안 모델](docs/ADR/0002_link-security/adr.md)
 - [멱등한 링크 생성](docs/ADR/0003_idempotent-link-creation/adr.md)
-- [멱등 생성의 공개 출처 보존](docs/ADR/0009_idempotent-public-origin-replay/adr.md)
 - [링크 코드 HMAC 키와 DB 결합](docs/ADR/0004_link-code-key-binding/adr.md)
 - [형식화한 대상 위치 식별자](docs/ADR/0005_trusted-target-locator/adr.md)
 - [계약 전 대상 정리](docs/ADR/0006_target-contract-remediation/adr.md)
 - [MySQL 절대 시각 저장 형식](docs/ADR/0007_mysql-instant-storage/adr.md)
+- [비공개 Kubernetes DB 구성](docs/ADR/0008_private-kubernetes-database-topology/adr.md)
+- [멱등 생성의 공개 출처 보존](docs/ADR/0009_idempotent-public-origin-replay/adr.md)
+
+### 운영 절차
+
+- [비공개 Kubernetes 배포 실행서](docs/RUNBOOK/kubernetes-private-server-deployment.md)
 - [기존 DB HMAC 보호 장치 최초 결합 실행서](docs/RUNBOOK/link-code-key-guard-binding.md)
 - [대상 계약 v1 정리 실행서](docs/RUNBOOK/target-contract-v1-remediation.md)

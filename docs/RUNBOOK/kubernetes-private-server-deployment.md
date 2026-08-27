@@ -255,7 +255,9 @@ Kubernetes는 애플리케이션, 마이그레이션 Job과 MySQL의 생성 순�
 Job은 DB가 준비될 때까지 실패를 재시도하고 애플리케이션은 마이그레이션 전 스키마 검증에
 실패하면 Pod 재시작 정책으로 재시도한다. 준비 상태가 성공하기 전에는 Service 엔드포인트가
 되지 않는다. Job이 `Complete`가 되지 않으면 애플리케이션 배포를 성공으로 판단하지 말고
-Job Pod의 종료 원인과 MySQL TLS·자격 증명을 먼저 확인한다.
+Job Pod의 종료 원인과 MySQL TLS·자격 증명을 먼저 확인한다. DDL이 시작된 가능성이
+있거나 실패 위치가 불명확하면 Job을 바로 삭제·재생성하지 않고
+[7절의 마이그레이션 Job 실패 복구](#마이그레이션-job-실패-복구)를 따른다.
 
 마이그레이션 Job의 구조와 안전 차단 정책은
 [ADR-0008](../ADR/0008_private-kubernetes-database-topology/adr.md)을 따른다.
@@ -500,13 +502,17 @@ kubectl -n baton-go get events --sort-by=.lastTimestamp
 
 애플리케이션 이미지와 비밀값 제외 ConfigMap 변경은 Kustomize를 다시 적용한다. ConfigMap 이름에
 내용 해시가 붙어 Pod 템플릿이 바뀌므로 설정 변경도 새 배포를 만든다. 마이그레이션 Job의
-Pod 템플릿은 변경 불가이고 같은 배포 이미지를 사용한다. 이전 Job이 남아 있으면 먼저
-완료·실패 상태와 필요한 비밀값 제외 메타데이터를 보존하고, 실행 중이 아님을 확인한 뒤 Job만
-삭제한다. `ttlSecondsAfterFinished=3600`은 보조 정리이며 배포 직전 삭제 확인을 대신하지
-않는다.
+Pod 템플릿은 변경 불가이고 같은 배포 이미지를 사용한다. 이전 Job이 `Complete`이면
+필요한 비밀값 제외 메타데이터를 보존하고 Job만 삭제한다. `Failed`이거나 성공 여부가
+불명확하면 아래 실패 복구 절차 전에 Job을 삭제·재생성하지 않는다.
+`ttlSecondsAfterFinished=3600`은 보조 정리이며 실패 증거 보존을 대신하지 않는다.
 
 ```bash
-kubectl -n baton-go get job baton-go-database-migration
+test "$(kubectl -n baton-go get job baton-go-database-migration \
+  -o jsonpath='{.status.conditions[?(@.type=="Complete")].status}')" = "True" || {
+  echo "마이그레이션 Job이 Complete가 아니므로 삭제하지 않습니다." >&2
+  exit 1
+}
 kubectl -n baton-go delete job baton-go-database-migration --wait=true
 kubectl diff -k deploy/k8s/overlays/private-server
 kubectl apply -k deploy/k8s/overlays/private-server
@@ -515,13 +521,137 @@ kubectl -n baton-go wait --for=condition=complete \
 kubectl -n baton-go rollout status deployment/baton-go --timeout=10m
 ```
 
-위 삭제는 완료되거나 실패한 마이그레이션 Job 객체만 대상으로 하며 StatefulSet, PVC, Namespace와
+위 삭제는 `Complete`인 마이그레이션 Job 객체만 대상으로 하며 StatefulSet, PVC, Namespace와
 Secret에는 사용하지 않는다. Job이 아직 실행 중이면 중단하지 말고 원인을 확인한다. 한 번의
 Kustomize 적용은 Job과 Deployment 순서를 보장하지 않으므로 모든 Flyway 변경은 구 애플리케이션과
 구 스키마에 호환되는 확장 단계여야 한다. Job `Complete` 확인 뒤 새 애플리케이션을 검증하고,
 열/테이블 제거 같은 축소 단계는 모든 구 Pod와 읽기 프로세스가 사라진 후 별도 배포에서
 수행한다. 애플리케이션이 마이그레이션보다 먼저 시작해 스키마 검증에 실패하는 짧은 구간은
 재시작으로 복구되지만, 이를 파괴적 마이그레이션 허용 근거로 사용하지 않는다.
+
+### 마이그레이션 Job 실패 복구
+
+MySQL 8.4의 InnoDB `ALTER TABLE`은 **각 DDL 문장 단위**로 전체 적용 또는 롤백되는
+원자적 DDL이다. 하지만 여러 DDL이 든 Flyway SQL 파일 전체가 하나의 트랜잭션은 아니다.
+V4는 `smart_links`의 시각 열을 바꾸는 첫 `ALTER TABLE`과
+`link_creation_requests.created_at`을 바꾸는 둘째 `ALTER TABLE`로 구성되므로 첫 문장만
+커밋된 혼합 상태가 가능하다. V5는 `public_origin` 열을 추가하는 한 문장이지만,
+열 추가 커밋 후 Flyway 성공 이력 기록 전에 프로세스가 종료될 수 있다.
+
+Job이 `Failed`이거나 결과가 불명확하면 다음 순서를 지킨다.
+
+1. 비공개 `/api/v1` 경계와 BATON 호출자 아웃박스 전송을 차단하고 처리 중인
+   쓰기가 없음을 확인한다. 애플리케이션을 복제본 `0`으로 축소하고 스키마 분류가
+   끝날 때까지 공개 `/l`도 계획 중단 상태로 유지한다. Job Pod가 아직 DDL을
+   실행 중이면 강제 삭제하지 않고 현재 시도의 종료 상태를 확인한다.
+
+   ```bash
+   kubectl -n baton-go scale deployment/baton-go --replicas=0
+   kubectl -n baton-go wait --for=delete \
+     pod -l app.kubernetes.io/name=baton-go,app.kubernetes.io/component=application \
+     --timeout=10m
+   kubectl -n baton-go get job baton-go-database-migration \
+     -o 'custom-columns=NAME:.metadata.name,SUCCEEDED:.status.succeeded,FAILED:.status.failed,ACTIVE:.status.active'
+   ```
+
+2. `ttlSecondsAfterFinished=3600`이 Job과 Pod를 정리하기 전에 접근이 제한된 사고
+   저장소에 비밀값 제외 증거를 보존한다. 아래 변수는 새 빈 디렉터리로 지정하고,
+   저장 후 로그에 JDBC URL, 인증서 경로나 자격 증명 원문이 없는지 제한된
+   환경에서 검토한다. 검토 전 파일을 티켓·채팅·CI 산출물로 복사하지 않는다.
+
+   ```bash
+   if test -z "${BATON_GO_MIGRATION_EVIDENCE_DIR:-}" \
+     || ! test -d "${BATON_GO_MIGRATION_EVIDENCE_DIR}" \
+     || test -n "$(find "${BATON_GO_MIGRATION_EVIDENCE_DIR}" \
+       -mindepth 1 -maxdepth 1 -print -quit)"; then
+     echo "마이그레이션 증거 디렉터리는 비어 있는 기존 디렉터리여야 합니다." >&2
+     exit 1
+   fi
+   (
+     umask 077
+     kubectl -n baton-go get job baton-go-database-migration -o yaml \
+       >"${BATON_GO_MIGRATION_EVIDENCE_DIR}/job.yaml"
+     kubectl -n baton-go get pod \
+       -l app.kubernetes.io/name=baton-go,app.kubernetes.io/component=database-migration \
+       -o yaml >"${BATON_GO_MIGRATION_EVIDENCE_DIR}/pods.yaml"
+     kubectl -n baton-go logs \
+       -l app.kubernetes.io/name=baton-go,app.kubernetes.io/component=database-migration \
+       --all-containers=true --prefix=true --tail=-1 --max-log-requests=20 \
+       >"${BATON_GO_MIGRATION_EVIDENCE_DIR}/pods.log"
+     kubectl -n baton-go get events --sort-by=.lastTimestamp \
+       >"${BATON_GO_MIGRATION_EVIDENCE_DIR}/events.txt"
+   )
+   ```
+
+3. Job을 삭제하거나 다시 적용하기 전에 승인된 읽기 전용 DB 관리 채널에서
+   `flyway_schema_history`와 실제 열 모양을 같은 시점에 대조한다. 조회 결과도 위 사고
+   저장소에 보존하고 자격 증명은 SQL 인자·셸 기록에 넣지 않는다.
+
+   ```sql
+   SELECT installed_rank, version, description, script, checksum, installed_on, success
+   FROM flyway_schema_history
+   WHERE version IN ('4', '5')
+   ORDER BY installed_rank;
+
+   SELECT table_name, column_name, column_type, is_nullable,
+          character_set_name, collation_name
+   FROM information_schema.columns
+   WHERE table_schema = DATABASE()
+     AND (
+       (table_name = 'smart_links'
+        AND column_name IN ('not_before', 'expires_at', 'revoked_at', 'created_at'))
+       OR (table_name = 'link_creation_requests'
+           AND column_name IN ('created_at', 'public_origin'))
+     )
+   ORDER BY table_name, ordinal_position;
+   ```
+
+4. V4의 완료 모양은 `smart_links` 네 열과 `link_creation_requests.created_at`이
+   모두 `datetime(6)`이고, `smart_links.created_at`과
+   `link_creation_requests.created_at`만 `NOT NULL`인 상태다. V4 성공 이력이 없을 때는
+   다음처럼 분기한다.
+
+   - 모두 기존 `timestamp(6)`: DDL 적용 전 실패다. 원인을 제거하고 백업을 확보한
+     뒤 변경하지 않은 V4 재실행을 검토한다.
+   - `smart_links`만 완료 모양이고 `link_creation_requests.created_at`이
+     `timestamp(6)`: 첫 `ALTER TABLE`만 커밋된 V4 혼합 상태다. 즉시 일관된 백업을
+     확보하고 첫 `ALTER` 재실행의 잠금·시간 영향과 둘째 `ALTER` 완료를 격리
+     환경에서 시험한 뒤 변경하지 않은 V4를 전진 재실행할지, 이전 일관된
+     백업으로 복원할지 DBA와 결정한다.
+   - 모두 완료 모양: DDL은 완료됐지만 성공 이력 기록 전에 종료됐을 수 있다.
+     일관된 백업을 확보하고 동일 `MODIFY` 재실행의 잠금·시간 영향을 검증한 뒤
+     변경하지 않은 V4 재실행 또는 이전 일관된 백업 복원을 선택한다.
+   - 위 세 모양 외의 조합: 수동 변경이나 추가 drift로 분류하고 재실행하지 않는다.
+
+5. V5 성공 이력이 없을 때 `public_origin`이 없으면 DDL 전 실패로 분류한다.
+   열이 `varchar(255)`, `ascii`, `ascii_bin`, `NULL` 허용으로 존재하면 DDL 커밋과
+   Flyway 이력 사이 실패로 분류하고 다음 조회로 쓰기 여부를 확인한다.
+
+   ```sql
+   SELECT COUNT(*) AS rows_with_public_origin
+   FROM link_creation_requests
+   WHERE public_origin IS NOT NULL;
+   ```
+
+   이 집계만으로는 실패 구간의 쓰기 부재를 증명할 수 없다. Job 시작 시각, 구 Pod
+   종료, 외부 경계·아웃박스 차단 증거와 해당 구간 `created_at` 행 수를 함께 대조한다.
+   V5 실행 전부터 쓰기 차단이 유지됐고 값이 한 건도 없음을 증명한 경우에만 일관된 백업 후
+   격리된 복구 환경에서 Flyway 성공 이력 없는 열 제거·변경하지 않은 V5 재실행 절차를
+   검증한다. 값이 있거나 쓰기 차단을 증명할 수 없으면 열을 삭제하지 않고 이전 일관된 백업
+   복원 또는 데이터를 보존하는 별도 DBA 복구 계획을 사용한다. 열 모양이 다르면
+   drift로 분류한다.
+
+6. `flyway_schema_history.success=1`인데 실제 열 모양이 기대와 다르면 적용된
+   마이그레이션을 수정하지 않고 백업 복원 또는 다음 버전 전진 마이그레이션으로
+   교정한다. Flyway `repair`는 스키마를 복구하지 않는다. 실패 이력이 있고 실제
+   스키마 모양, 백업·복구 선택과 재실행 절차를 확정한 경우에만 DBA와
+   서비스 소유자가 해당 실패 이력 정리를 승인한다. 조사 전 무조건 `repair`를
+   실행하거나 `flyway_schema_history`를 SQL로 수정·삭제·추가하지 않는다.
+
+7. 확정한 복구를 격리 환경에서 먼저 재현한다. 실제 환경에서는 Job `Complete`,
+   Flyway 이력과 실제 열 모양 일치, 애플리케이션 준비 상태, 새 생성·동일 요청
+   재생·공개 해석·폐기를 순서대로 확인한 뒤에만 호출자 쓰기와 공개 경계를
+   다시 연다.
 
 단, V5의 `public_origin` 추가는 열 모양만 확장 호환이고 구 쓰기 프로세스와 동작까지
 온라인 호환되지는 않는다. V5 적용 뒤 구 Pod가 생성한 예약은 `public_origin`이 `NULL`인 채
@@ -657,4 +787,6 @@ StatefulSet 삭제는 기본적으로 PVC를 보존하지만 Namespace 삭제는
 - [Kubernetes NetworkPolicy](https://kubernetes.io/docs/concepts/services-networking/network-policies/)
 - [Kubernetes Secret 보안 권고](https://kubernetes.io/docs/concepts/security/secrets-good-practices/)
 - [MySQL 공식 이미지 초기화 변수](https://hub.docker.com/_/mysql)
+- [MySQL 8.4 원자적 DDL](https://dev.mysql.com/doc/refman/8.4/en/atomic-ddl.html)
 - [MySQL Connector/J TLS 설정](https://dev.mysql.com/doc/connectors/en/connector-j-connp-props-security.html)
+- [Flyway 스키마 이력 테이블](https://documentation.red-gate.com/fd/flyway-schema-history-table-273973417.html)

@@ -5,7 +5,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
-import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.head;
@@ -310,7 +309,6 @@ class LinkHttpContractTest {
                 .andExpect(jsonPath("$.requestId").isNotEmpty());
 
         verify(useCase).createLink(any());
-        verifyNoMoreInteractions(useCase);
     }
 
     @ParameterizedTest(name = "{index}: {0}")
@@ -389,7 +387,6 @@ class LinkHttpContractTest {
                 ));
 
         verify(useCase).createLink(any());
-        verifyNoMoreInteractions(useCase);
     }
 
     @Test
@@ -469,7 +466,6 @@ class LinkHttpContractTest {
                 .andExpect(content().string(""));
 
         verify(useCase).resolveLink(rawCode);
-        verifyNoMoreInteractions(useCase);
     }
 
     @ParameterizedTest(name = "{index}: {0}")

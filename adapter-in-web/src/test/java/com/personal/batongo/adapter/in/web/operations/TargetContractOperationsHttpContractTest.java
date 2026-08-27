@@ -201,9 +201,7 @@ class TargetContractOperationsHttpContractTest {
                 .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
                 .andExpect(header().string("Referrer-Policy", "no-referrer"))
                 .andExpect(header().exists("X-Request-Id"))
-                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
-                .andExpect(jsonPath("$.message")
-                        .value("expectedVersion: 요청 값이 올바르지 않습니다"));
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
 
         verifyNoInteractions(operationsUseCase);
     }

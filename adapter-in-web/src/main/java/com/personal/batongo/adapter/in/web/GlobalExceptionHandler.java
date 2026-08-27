@@ -319,7 +319,11 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     private void logUnexpected(Exception exception, HttpServletRequest request) {
         String requestId = request == null ? null : RequestIdFilter.requestId(request);
-        LOG.error("예상하지 못한 요청 처리 오류 requestId={}", requestId, exception);
+        LOG.error(
+                "예상하지 못한 요청 처리 오류 requestId={} exceptionType={}",
+                requestId,
+                exception.getClass().getName()
+        );
     }
 
     private void recordStoredTargetPolicyViolation(

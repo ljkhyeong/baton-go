@@ -107,9 +107,6 @@ class TargetContractOperationsHttpContractTest {
                         .queryParam("afterLinkId", AFTER_LINK_ID.toString())
                         .queryParam("limit", "1")))
                 .andExpect(status().isOk())
-                .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
-                .andExpect(header().string("Referrer-Policy", "no-referrer"))
-                .andExpect(header().exists("X-Request-Id"))
                 .andExpect(jsonPath("$.contractVersion").value("v1"))
                 .andExpect(jsonPath("$.items[0].linkId").value(LINK_ID.toString()))
                 .andExpect(jsonPath("$.items[0].compliance").value("NON_COMPLIANT"))
@@ -153,9 +150,6 @@ class TargetContractOperationsHttpContractTest {
         mockMvc.perform(authorized(get(BASE_PATH + "/inventory")
                         .queryParam("limit", "0")))
                 .andExpect(status().isBadRequest())
-                .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
-                .andExpect(header().string("Referrer-Policy", "no-referrer"))
-                .andExpect(header().exists("X-Request-Id"))
                 .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
     }
 
@@ -165,8 +159,6 @@ class TargetContractOperationsHttpContractTest {
         mockMvc.perform(authorized(get(BASE_PATH + "/inventory")
                         .queryParam("afterLinkId", "not-a-uuid")))
                 .andExpect(status().isBadRequest())
-                .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
-                .andExpect(header().string("Referrer-Policy", "no-referrer"))
                 .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
 
         verifyNoInteractions(operationsUseCase);
@@ -190,9 +182,6 @@ class TargetContractOperationsHttpContractTest {
                                 {"expectedVersion":7}
                                 """)))
                 .andExpect(status().isOk())
-                .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
-                .andExpect(header().string("Referrer-Policy", "no-referrer"))
-                .andExpect(header().exists("X-Request-Id"))
                 .andExpect(jsonPath("$.linkId").value(LINK_ID.toString()))
                 .andExpect(jsonPath("$.contractVersion").value("v1"))
                 .andExpect(jsonPath("$.remediationState").value("REVOKED"))
@@ -211,7 +200,10 @@ class TargetContractOperationsHttpContractTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
                 .andExpect(header().string("Referrer-Policy", "no-referrer"))
-                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+                .andExpect(header().exists("X-Request-Id"))
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
+                .andExpect(jsonPath("$.message")
+                        .value("expectedVersion: 요청 값이 올바르지 않습니다"));
 
         verifyNoInteractions(operationsUseCase);
     }

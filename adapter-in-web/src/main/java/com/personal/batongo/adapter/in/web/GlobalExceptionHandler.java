@@ -16,10 +16,13 @@ import com.personal.batongo.domain.link.LinkUnavailableException;
 import com.personal.batongo.domain.link.LinkValidationException;
 import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.servlet.http.HttpServletRequest;
-import java.util.Objects;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.IdentityHashMap;
+import java.util.List;
+import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.http.CacheControl;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
@@ -38,6 +41,8 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     private static final Logger LOG = LoggerFactory.getLogger(GlobalExceptionHandler.class);
     private static final String TARGET_POLICY_VIOLATION_METRIC =
             "baton.go.public.resolver.target.contract.violations";
+    private static final int MAX_LOGGED_CAUSE_TYPES = 8;
+    private static final int MAX_LOGGED_STACK_FRAMES = 12;
 
     private final MeterRegistry meterRegistry;
 
@@ -216,8 +221,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     ) {
         String message = exception.getBindingResult().getFieldErrors().stream()
                 .findFirst()
-                .map(fieldError -> fieldError.getField() + ": "
-                        + Objects.requireNonNullElse(fieldError.getDefaultMessage(), "잘못된 값입니다"))
+                .map(fieldError -> fieldError.getField() + ": 요청 값이 올바르지 않습니다")
                 .orElse("요청 값이 올바르지 않습니다");
         return handleExceptionInternal(
                 exception,
@@ -236,9 +240,6 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
             HttpStatusCode status,
             WebRequest request
     ) {
-        HttpHeaders responseHeaders = HttpHeaders.copyOf(headers);
-        responseHeaders.setCacheControl(CacheControl.noStore());
-        responseHeaders.set("Referrer-Policy", "no-referrer");
         Object responseBody = body instanceof ErrorResponse
                 ? body
                 : frameworkError(status, request);
@@ -248,7 +249,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return super.handleExceptionInternal(
                 exception,
                 responseBody,
-                responseHeaders,
+                headers,
                 status,
                 request
         );
@@ -281,10 +282,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                         message,
                         RequestIdFilter.requestId(request)
                 );
-        return ResponseEntity.status(status)
-                .cacheControl(CacheControl.noStore())
-                .header("Referrer-Policy", "no-referrer")
-                .body(body);
+        return ResponseEntity.status(status).body(body);
     }
 
     private ErrorResponse frameworkError(HttpStatusCode status, WebRequest request) {
@@ -320,10 +318,41 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     private void logUnexpected(Exception exception, HttpServletRequest request) {
         String requestId = request == null ? null : RequestIdFilter.requestId(request);
         LOG.error(
-                "예상하지 못한 요청 처리 오류 requestId={} exceptionType={}",
+                "예상하지 못한 요청 처리 오류 requestId={} exceptionType={} causeTypes={} stackFrames={}",
                 requestId,
-                exception.getClass().getName()
+                exception.getClass().getName(),
+                causeTypes(exception),
+                stackFrames(exception)
         );
+    }
+
+    private List<String> causeTypes(Exception exception) {
+        Set<Throwable> visited = Collections.newSetFromMap(new IdentityHashMap<>());
+        visited.add(exception);
+        List<String> types = new ArrayList<>();
+        Throwable current = exception.getCause();
+        while (current != null
+                && types.size() < MAX_LOGGED_CAUSE_TYPES
+                && visited.add(current)) {
+            types.add(current.getClass().getName());
+            current = current.getCause();
+        }
+        return List.copyOf(types);
+    }
+
+    private List<String> stackFrames(Exception exception) {
+        StackTraceElement[] stackTrace = exception.getStackTrace();
+        int length = Math.min(stackTrace.length, MAX_LOGGED_STACK_FRAMES);
+        List<String> frames = new ArrayList<>(length);
+        for (int index = 0; index < length; index++) {
+            StackTraceElement frame = stackTrace[index];
+            frames.add(frame.getClassName()
+                    + "#"
+                    + frame.getMethodName()
+                    + ":"
+                    + frame.getLineNumber());
+        }
+        return List.copyOf(frames);
     }
 
     private void recordStoredTargetPolicyViolation(

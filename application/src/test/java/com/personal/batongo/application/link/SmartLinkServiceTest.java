@@ -264,6 +264,30 @@ class SmartLinkServiceTest {
     }
 
     @Test
+    @DisplayName("이미 폐기한 링크는 최초 폐기 시각을 유지하고 다시 갱신하지 않는다")
+    void preservesFirstRevocationWithoutAnotherUpdate() {
+        Instant firstRevokedAt = NOW.minusSeconds(30);
+        StoredLinkSnapshot snapshot = new StoredLinkSnapshot(
+                LINK_ID,
+                TargetSystem.BATON.name(),
+                BATON_PATH,
+                LinkPurpose.NAVIGATION.name(),
+                null,
+                NOW.plusSeconds(300),
+                firstRevokedAt,
+                NOW.minusSeconds(60),
+                3L,
+                true
+        );
+        when(repository.findStoredByIdForUpdate(LINK_ID)).thenReturn(Optional.of(snapshot));
+
+        var result = service.revokeLink(LINK_ID);
+
+        assertThat(result.revokedAt()).isEqualTo(firstRevokedAt);
+        verify(repository, never()).revokeStoredIfVersion(any(), anyLong(), any());
+    }
+
+    @Test
     @DisplayName("관리 폐기의 조건부 갱신 실패는 성공으로 보정하지 않는다")
     void rejectsWhenManagedRevocationUpdateFails() {
         when(repository.findStoredByIdForUpdate(LINK_ID))

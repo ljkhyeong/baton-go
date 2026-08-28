@@ -38,12 +38,12 @@ spec:
             - name: BATON_GO_MANAGEMENT_TOKEN
               valueFrom:
                 secretKeyRef:
-                  name: baton-go-runtime-credentials
+                  name: baton-go-management-credentials
                   key: BATON_GO_MANAGEMENT_TOKEN
             - name: BATON_GO_LINK_CODE_SECRET
               valueFrom:
                 secretKeyRef:
-                  name: baton-go-runtime-credentials
+                  name: baton-go-link-code-secret
                   key: BATON_GO_LINK_CODE_SECRET
             - name: BATON_GO_DB_USERNAME
               valueFrom:

@@ -11,7 +11,8 @@
 | `StatefulSet/baton-go-mysql` | GO 전용 `baton_go` 데이터베이스 | 헤드리스 `ClusterIP:3306` |
 | `PVC/data-baton-go-mysql-0` | GO MySQL 데이터 디렉터리 | `ReadWriteOnce`, 10Gi |
 | `ConfigMap/baton-go-database-identity` | 변경 불가 런타임·마이그레이션 사용자 이름 | 애플리케이션·Job·MySQL이 참조 |
-| `Secret/baton-go-runtime-credentials` | 관리 Bearer 토큰, 링크 HMAC 비밀값 | 애플리케이션 Pod만 참조 |
+| `Secret/baton-go-management-credentials` | 관리 Bearer 토큰 | 애플리케이션 Pod만 참조 |
+| `Secret/baton-go-link-code-secret` | 링크 HMAC 비밀값 | 애플리케이션 Pod만 참조 |
 | `Secret/baton-go-database-client-config` | 비밀 쿼리가 없는 TLS JDBC URL | 애플리케이션·마이그레이션 Job만 참조 |
 | `Secret/baton-go-database-runtime-credentials` | DML 런타임 비밀번호 | 애플리케이션·MySQL만 참조 |
 | `Secret/baton-go-database-migration-credentials` | DDL 마이그레이션 비밀번호 | 마이그레이션 Job·MySQL 초기화만 참조 |
@@ -122,8 +123,10 @@ kubectl apply -k deploy/k8s/bootstrap
 비밀값 관리자 또는 External Secrets controller를 사용한다면 다음 이름과 키로 구체화한다.
 
 ```text
-baton-go-runtime-credentials
+baton-go-management-credentials
   BATON_GO_MANAGEMENT_TOKEN
+
+baton-go-link-code-secret
   BATON_GO_LINK_CODE_SECRET
 
 baton-go-database-client-config
@@ -182,9 +185,10 @@ jdbc:mysql://baton-go-mysql:3306/baton_go?sslMode=VERIFY_IDENTITY&trustCertifica
 `BATON_GO_DB_URL`에 넣지 않는다. 애플리케이션과 마이그레이션 Job은 같은 URL·공개 CA 신뢰 저장소를
 사용하되 서로 다른 데이터베이스 사용자 이름/비밀번호를 사용한다.
 
-Kubernetes Secret의 RBAC는 객체 키 단위가 아니다. 따라서 URL, 런타임, 마이그레이션과 root를
-별도 객체로 유지한다. 운영자·컨트롤러 RBAC도 가능하면 `resourceNames`로 필요한 Secret만
-허용하며 네 Secret을 하나로 합치지 않는다. Secret 읽기 권한이 없어도 Pod나 워크로드 템플릿을
+Kubernetes Secret의 RBAC는 객체 키 단위가 아니다. 따라서 URL, DB 런타임, 마이그레이션, root,
+관리 토큰과 HMAC 비밀값을 서로 다른 객체로 유지한다. 운영자·컨트롤러 RBAC도 가능하면
+`resourceNames`로 필요한 Secret만 허용하며 수명주기가 다른 Secret을 하나로 합치지 않는다.
+Secret 읽기 권한이 없어도 Pod나 워크로드 템플릿을
 만들거나 바꿀 수 있으면 해당 Secret을 마운트해 읽을 수 있으므로 워크로드 변경과
 `exec/attach/ephemeralcontainers` 권한도 같은 감사 범위에 포함한다.
 
@@ -194,8 +198,12 @@ Kubernetes Secret의 RBAC는 객체 키 단위가 아니다. 따라서 URL, 런�
 실행하지 않는다.
 
 ```bash
-kubectl -n baton-go create secret generic baton-go-runtime-credentials \
-  --from-env-file=/secure/path/baton-go-runtime-credentials.env \
+kubectl -n baton-go create secret generic baton-go-management-credentials \
+  --from-env-file=/secure/path/baton-go-management-credentials.env \
+  --dry-run=client -o yaml | kubectl apply -f -
+
+kubectl -n baton-go create secret generic baton-go-link-code-secret \
+  --from-env-file=/secure/path/baton-go-link-code-secret.env \
   --dry-run=client -o yaml | kubectl apply -f -
 
 kubectl -n baton-go create secret generic baton-go-database-client-config \
@@ -238,7 +246,8 @@ kubectl -n baton-go create secret generic baton-go-registry \
 다음 출력은 키 이름과 바이트 수만 보여 주며 실제 값은 출력하지 않는다.
 
 ```bash
-kubectl -n baton-go describe secret baton-go-runtime-credentials
+kubectl -n baton-go describe secret baton-go-management-credentials
+kubectl -n baton-go describe secret baton-go-link-code-secret
 kubectl -n baton-go describe secret baton-go-database-client-config
 kubectl -n baton-go describe secret baton-go-database-runtime-credentials
 kubectl -n baton-go describe secret baton-go-database-migration-credentials
@@ -767,7 +776,7 @@ kubectl -n baton-go wait --for=delete \
 Secret을 환경 변수로 주입한 실행 중 Pod는 Secret 객체가 바뀌어도 값을 자동으로
 다시 읽지 않는다. Secret 회전은 다음 수명주기별 절차를 따른다.
 
-- 관리 토큰: 런타임 Secret의 해당 키를 갱신하고
+- 관리 토큰: `baton-go-management-credentials`의 값을 갱신하고
   `kubectl -n baton-go rollout restart deployment/baton-go`를 실행한다. 배포 뒤 새 토큰은
   성공하고 이전 토큰은 `401`인지 비공개 경로에서 확인한다.
 - DB 런타임 비밀번호: 백업과 유지 보수 시간을 확보하고 승인된 MySQL 관리 채널에서
@@ -789,8 +798,8 @@ Secret을 환경 변수로 주입한 실행 중 Pod는 Secret 객체가 바뀌�
   확인한다. 마지막으로 이전 CA를 제거한 클라이언트 신뢰 저장소를 배포하고 애플리케이션을 다시
   배포한 뒤에만 중첩을 종료한다. 서버부터 회전하거나 Secret 볼륨 파일 변경만으로
   MySQL/Hikari가 인증서를 즉시 다시 읽는다고 가정하지 않는다.
-- HMAC 비밀값: 버전별 키 묶음 도입 전에는 일반 회전 대상으로 취급하지 않는다. DB와 함께
-  검증된 복원을 수행하는 경우에만 같은 Secret 버전을 사용한다. 유출·오용이
+- HMAC 비밀값: `baton-go-link-code-secret`은 버전별 키 묶음 도입 전에는 일반 회전 대상으로
+  취급하지 않는다. 검증된 DB 복원을 수행하는 경우에만 같은 Secret 버전을 사용한다. 유출·오용이
   의심되면 Secret을 갱신하거나 rollout restart를 먼저 하지 않고 `/api/v1`과
   `/l`, 호출자 아웃박스를 차단한 뒤
   [ADR-0004 유출 대응](../ADR/0004_link-code-key-binding/adr.md#비밀값-유출-대응)을 따른다.

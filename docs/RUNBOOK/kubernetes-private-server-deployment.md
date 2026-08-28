@@ -259,16 +259,20 @@ MySQL Pod에만, 클라이언트 신뢰 저장소는 애플리케이션과 마�
 kubectl diff -k deploy/k8s/overlays/private-server
 kubectl apply -k deploy/k8s/overlays/private-server
 kubectl -n baton-go rollout status statefulset/baton-go-mysql --timeout=10m
+kubectl -n baton-go patch job baton-go-database-migration \
+  --type=merge --patch '{"spec":{"suspend":false}}'
 kubectl -n baton-go wait --for=condition=complete \
   job/baton-go-database-migration --timeout=10m
 kubectl -n baton-go rollout status deployment/baton-go --timeout=10m
 ```
 
 Kubernetes는 애플리케이션, 마이그레이션 Job과 MySQL의 생성 순서를 보장하지 않는다. 마이그레이션
-Job은 DB가 준비될 때까지 실패를 재시도하고 애플리케이션은 마이그레이션 전 스키마 검증에
-실패하면 Pod 재시작 정책으로 재시도한다. 준비 상태가 성공하기 전에는 Service 엔드포인트가
-되지 않는다. Job이 `Complete`가 되지 않으면 애플리케이션 배포를 성공으로 판단하지 말고
-Job Pod의 종료 원인과 MySQL TLS·자격 증명을 먼저 확인한다. DDL이 시작된 가능성이
+Job은 `suspend=true`, `backoffLimit=0`, `restartPolicy=Never`로 생성한다. MySQL StatefulSet의
+준비 상태를 확인한 운영자가 Job을 한 번만 시작하며 DB 연결 실패와 Flyway DDL 실패를 같은 자동
+재시도로 처리하지 않는다. 애플리케이션은 마이그레이션 전 스키마 검증에 실패하면 Pod 재시작
+정책으로 재시도하고 준비 상태가 성공하기 전에는 Service 엔드포인트가 되지 않는다. Job이
+`Complete`가 되지 않으면 애플리케이션 배포를 성공으로 판단하지 말고 Job Pod의 종료 원인과
+MySQL TLS·자격 증명을 먼저 확인한다. DDL이 시작된 가능성이
 있거나 실패 위치가 불명확하면 Job을 바로 삭제·재생성하지 않고
 [7절의 마이그레이션 Job 실패 복구](#마이그레이션-job-실패-복구)를 따른다.
 
@@ -382,6 +386,8 @@ kubectl -n baton-go get job baton-go-database-migration
 kubectl -n baton-go delete job baton-go-database-migration --wait=true
 kubectl apply -k deploy/k8s/overlays/private-server \
   --selector app.kubernetes.io/component=database-migration
+kubectl -n baton-go patch job baton-go-database-migration \
+  --type=merge --patch '{"spec":{"suspend":false}}'
 kubectl -n baton-go wait --for=condition=complete \
   job/baton-go-database-migration --timeout=10m
 kubectl -n baton-go scale deployment/baton-go --replicas=1
@@ -589,6 +595,9 @@ set -eu
 
 kubectl diff -k deploy/k8s/overlays/private-server
 kubectl apply -k deploy/k8s/overlays/private-server
+kubectl -n baton-go rollout status statefulset/baton-go-mysql --timeout=10m
+kubectl -n baton-go patch job baton-go-database-migration \
+  --type=merge --patch '{"spec":{"suspend":false}}'
 kubectl -n baton-go wait --for=condition=complete \
   job/baton-go-database-migration --timeout=10m
 kubectl -n baton-go rollout status deployment/baton-go --timeout=10m

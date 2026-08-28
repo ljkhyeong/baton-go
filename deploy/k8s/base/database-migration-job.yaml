@@ -6,7 +6,8 @@ metadata:
     app.kubernetes.io/name: baton-go
     app.kubernetes.io/component: database-migration
 spec:
-  backoffLimit: 12
+  suspend: true
+  backoffLimit: 0
   activeDeadlineSeconds: 1800
   ttlSecondsAfterFinished: 3600
   template:
@@ -16,7 +17,7 @@ spec:
         app.kubernetes.io/component: database-migration
     spec:
       automountServiceAccountToken: false
-      restartPolicy: OnFailure
+      restartPolicy: Never
       securityContext:
         runAsNonRoot: true
         runAsUser: 10001

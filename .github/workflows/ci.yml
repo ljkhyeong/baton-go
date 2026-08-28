@@ -92,6 +92,15 @@ jobs:
       - name: 정적·단위·패키징 검증
         run: ./gradlew --no-daemon build
 
+      - name: HTTP 계약 산출물 보존
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: baton-go-rest-docs
+          path: adapter-in-web/build/distributions/baton-go-rest-docs.zip
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+
       - name: Guard 결합 도구 fail-closed 실행 검증
         run: |
           set -euo pipefail

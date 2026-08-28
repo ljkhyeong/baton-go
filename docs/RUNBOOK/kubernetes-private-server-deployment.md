@@ -275,6 +275,12 @@ kubectl -n baton-go describe secret baton-go-mysql-client-tls
 MySQL Pod에만, 클라이언트 신뢰 저장소는 애플리케이션과 마이그레이션 Job에만 마운트된다. 실제 Secret
 값을 렌더 검증을 위해 임시 매니페스트에 넣지 않는다.
 
+기존 `baton-go-runtime-credentials` 한 객체를 사용하던 환경은 애플리케이션 매니페스트를
+적용하기 전에 비밀값 관리자의 같은 승인 버전에서 `baton-go-management-credentials`와
+`baton-go-link-code-secret`을 먼저 만든다. `kubectl get secret -o yaml`로 기존 객체를 복사해
+작업 파일이나 셸 출력에 값을 노출하지 않는다. 새 Pod가 두 객체를 참조해 Ready가 된 뒤 다른
+워크로드가 기존 객체를 참조하지 않는지 확인하고, 그때만 기존 결합 Secret을 폐기한다.
+
 ## 4. 최초 배포
 
 변경 내용을 검토한 뒤 선언적으로 적용한다.

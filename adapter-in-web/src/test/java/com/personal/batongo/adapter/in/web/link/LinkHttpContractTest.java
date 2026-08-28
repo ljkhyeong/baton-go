@@ -26,6 +26,7 @@ import com.personal.batongo.application.link.error.IdempotencyKeyConflictExcepti
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.CreateLinkCommand;
 import com.personal.batongo.application.link.error.LinkCodeKeyBindingException;
 import com.personal.batongo.application.link.error.LinkCodeReplayMismatchException;
+import com.personal.batongo.application.link.error.LinkCreationReplayUnavailableException;
 import com.personal.batongo.application.link.error.LinkNotFoundException;
 import com.personal.batongo.application.link.error.PublicLinkOriginReplayUnavailableException;
 import com.personal.batongo.application.link.error.StoredTargetPolicyViolationException;
@@ -194,6 +195,10 @@ class LinkHttpContractTest {
 
     private static Stream<Arguments> operationalReplayErrors() {
         return Stream.of(
+                Arguments.of(
+                        new LinkCreationReplayUnavailableException(LINK_ID),
+                        "LINK_CREATION_REPLAY_UNAVAILABLE"
+                ),
                 Arguments.of(
                         new LinkCodeReplayMismatchException(),
                         "LINK_CODE_REPLAY_UNAVAILABLE"

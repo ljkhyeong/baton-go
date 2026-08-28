@@ -2,6 +2,7 @@ package com.personal.batongo.application.link;
 
 import com.personal.batongo.application.link.error.IdempotencyKeyConflictException;
 import com.personal.batongo.application.link.error.LinkCodeReplayMismatchException;
+import com.personal.batongo.application.link.error.LinkCreationReplayUnavailableException;
 import com.personal.batongo.application.link.error.LinkNotFoundException;
 import com.personal.batongo.application.link.error.PublicLinkOriginReplayUnavailableException;
 import com.personal.batongo.application.link.error.StoredTargetPolicyViolationException;
@@ -169,7 +170,9 @@ public class SmartLinkService implements SmartLinkUseCase {
             IssuedLinkCode issuedCode
     ) {
         StoredLinkReplay existing = repository.findReplayById(reservation.linkId())
-                .orElseThrow(LinkNotFoundException::new);
+                .orElseThrow(() -> new LinkCreationReplayUnavailableException(
+                        reservation.linkId()
+                ));
         TrustedTarget trustedTarget = requireSameCreationRequest(
                 existing,
                 requestedTarget,

@@ -7,6 +7,7 @@ import com.personal.batongo.application.link.error.InvalidTargetContractRemediat
 import com.personal.batongo.application.link.error.IdempotencyKeyConflictException;
 import com.personal.batongo.application.link.error.LinkCodeKeyBindingException;
 import com.personal.batongo.application.link.error.LinkCodeReplayMismatchException;
+import com.personal.batongo.application.link.error.LinkCreationReplayUnavailableException;
 import com.personal.batongo.application.link.error.LinkNotFoundException;
 import com.personal.batongo.application.link.error.PublicLinkOriginReplayUnavailableException;
 import com.personal.batongo.application.link.error.StoredTargetPolicyViolationException;
@@ -167,6 +168,24 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return error(
                 HttpStatus.CONFLICT,
                 "IDEMPOTENCY_KEY_REUSED",
+                exception.getMessage(),
+                request
+        );
+    }
+
+    @ExceptionHandler(LinkCreationReplayUnavailableException.class)
+    public ResponseEntity<ErrorResponse> handleLinkCreationReplayUnavailable(
+            LinkCreationReplayUnavailableException exception,
+            HttpServletRequest request
+    ) {
+        LOG.error(
+                "기존 링크 생성 결과 누락 linkId={} requestId={}",
+                exception.linkId(),
+                RequestIdFilter.requestId(request)
+        );
+        return error(
+                HttpStatus.INTERNAL_SERVER_ERROR,
+                "LINK_CREATION_REPLAY_UNAVAILABLE",
                 exception.getMessage(),
                 request
         );

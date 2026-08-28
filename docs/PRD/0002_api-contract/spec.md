@@ -32,6 +32,8 @@
 - 만료: `410 LINK_EXPIRED`
 - 폐기: `410 LINK_REVOKED`
 - 같은 멱등성 키를 다른 요청 내용에 재사용: `409 IDEMPOTENCY_KEY_REUSED`
+- 기존 멱등 예약이 가리키는 링크를 복구할 수 없음:
+  `500 LINK_CREATION_REPLAY_UNAVAILABLE`
 - 링크 코드 파생 설정 불일치로 기존 생성 요청을 재생할 수 없음:
   `500 LINK_CODE_REPLAY_UNAVAILABLE`
 - 최초 생성에 사용한 정규 공개 출처를 기존 예약에서 복구할 수 없음:
@@ -80,6 +82,9 @@ Idempotency-Key: 8e448211-66ae-44ab-9888-c4960648c22b
   최초 `shortUrl`을 정확히 재생한다. 저장된 출처가 없거나 정규 형식이 아니면 현재
   설정으로 추정하지 않고 `500 PUBLIC_LINK_ORIGIN_REPLAY_UNAVAILABLE`로 실패한다.
 - 같은 키와 다른 요청 내용은 `409 IDEMPOTENCY_KEY_REUSED`로 거부한다.
+- 기존 멱등 예약은 있으나 예약이 가리키는 링크가 없으면 존재하지 않는 링크로 숨기거나 새 링크를
+  만들지 않고 `500 LINK_CREATION_REPLAY_UNAVAILABLE`로 실패한다. 이 오류는 저장 일관성 복구가
+  끝날 때까지 자동 재시도하지 않는다.
 - 키 누락·형식 오류는 `400 INVALID_IDEMPOTENCY_KEY`로 거부한다.
 - 과거 배포가 이미 저장한 생성 의도에 한해서는 당시 파서가 허용했던 대문자, nil,
   버전 `0`·`6..f`, RFC 비준수 변형의 정규 UUID를 소문자로 정규화해 조회한다.

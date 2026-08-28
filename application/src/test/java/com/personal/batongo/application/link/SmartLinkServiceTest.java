@@ -16,6 +16,7 @@ import static org.mockito.Mockito.when;
 import com.personal.batongo.application.link.error.InvalidCreationTimeException;
 import com.personal.batongo.application.link.error.InvalidIdempotencyKeyException;
 import com.personal.batongo.application.link.error.LinkCodeReplayMismatchException;
+import com.personal.batongo.application.link.error.LinkCreationReplayUnavailableException;
 import com.personal.batongo.application.link.error.LinkNotFoundException;
 import com.personal.batongo.application.link.error.StoredTargetPolicyViolationException;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.CreateLinkCommand;
@@ -165,6 +166,29 @@ class SmartLinkServiceTest {
                 Clock.fixed(NOW, ZoneOffset.UTC)
         ).createLink(command(expiresAt)))
                 .isExactlyInstanceOf(LinkCodeReplayMismatchException.class);
+    }
+
+    @Test
+    @DisplayName("멱등 예약의 링크가 사라졌으면 찾을 수 없음으로 숨기지 않는다")
+    void reportsMissingReservedLinkAsReplayFailure() {
+        Instant expiresAt = NOW.plusSeconds(300);
+        when(reservationPort.reserve(
+                eq(IDEMPOTENCY_HASH),
+                any(UUID.class),
+                anyString(),
+                any(Instant.class)
+        )).thenReturn(new LinkCreationReservationPort.Reservation(
+                LINK_ID,
+                PUBLIC_ORIGIN.serialized(),
+                false
+        ));
+        when(repository.findReplayById(LINK_ID)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.createLink(command(expiresAt)))
+                .isInstanceOfSatisfying(
+                        LinkCreationReplayUnavailableException.class,
+                        exception -> assertThat(exception.linkId()).isEqualTo(LINK_ID)
+                );
     }
 
     @Test

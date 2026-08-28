@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.personal.batongo.BatonGoApplication;
+import com.personal.batongo.MySqlTestImage;
 import com.personal.batongo.application.link.CreationIdempotencyKey;
 import com.personal.batongo.application.link.LinkCodeDerivationIdentity;
 import com.personal.batongo.application.link.LinkCodeKeyGuard;
@@ -59,8 +60,8 @@ class LinkCodeKeyGuardIntegrationTest {
                     + "/seasons/713d9cb7-2842-4f9f-b3cc-e31d98c6238a";
 
     @Container
-    @ServiceConnection
-    static final MySQLContainer MYSQL = new MySQLContainer("mysql:8.4.10");
+    @ServiceConnection(name = "mysql")
+    static final MySQLContainer MYSQL = new MySQLContainer(MySqlTestImage.NAME);
 
     @Autowired
     private JdbcTemplate jdbcTemplate;

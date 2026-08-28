@@ -70,8 +70,8 @@ class TargetContractOperationsIntegrationTest {
     private static final Instant CREATED_AT = Instant.parse("2026-08-01T00:00:00Z");
 
     @Container
-    @ServiceConnection
-    static final MySQLContainer MYSQL = new MySQLContainer("mysql:8.4.10");
+    @ServiceConnection(name = "mysql")
+    static final MySQLContainer MYSQL = new MySQLContainer(MySqlTestImage.NAME);
 
     @Autowired
     private MockMvc mockMvc;

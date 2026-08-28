@@ -1,5 +1,6 @@
 package com.personal.batongo.bootstrap;
 
+import com.personal.batongo.MySqlTestImage;
 import java.io.ByteArrayInputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -13,7 +14,6 @@ import java.time.Duration;
 import java.util.Properties;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.wait.strategy.Wait;
-import org.testcontainers.utility.DockerImageName;
 import org.testcontainers.utility.MountableFile;
 
 final class DeploymentMySqlFixture extends GenericContainer<DeploymentMySqlFixture> {
@@ -37,7 +37,7 @@ final class DeploymentMySqlFixture extends GenericContainer<DeploymentMySqlFixtu
             "deploy/k8s/base/mysql-runtime-user-init.sh";
 
     DeploymentMySqlFixture() {
-        super(DockerImageName.parse("mysql:8.4.10"));
+        super(MySqlTestImage.NAME);
 
         withEnv("MYSQL_DATABASE", DATABASE);
         withEnv("MYSQL_USER", MIGRATION_USERNAME);

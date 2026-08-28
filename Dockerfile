@@ -1,7 +1,7 @@
-# syntax=docker/dockerfile:1.7
+# syntax=docker/dockerfile:1.7@sha256:a57df69d0ea827fb7266491f2813635de6f17269be881f696fbfdf2d83dda33e
 
-ARG JAVA_BUILD_IMAGE=eclipse-temurin:21-jdk-alpine
-ARG JAVA_RUNTIME_IMAGE=eclipse-temurin:21-jre-alpine
+ARG JAVA_BUILD_IMAGE=eclipse-temurin:21-jdk-alpine@sha256:6ea5548706b60ac0a602eaf48af74792cbab012d90e811ca8db6184b16b5c3d6
+ARG JAVA_RUNTIME_IMAGE=eclipse-temurin:21-jre-alpine@sha256:974b08960c5d96694c780e65b2d5705268ab1e1ca1a0dd0caf4ba6c3fe34d699
 
 FROM ${JAVA_BUILD_IMAGE} AS build
 WORKDIR /workspace

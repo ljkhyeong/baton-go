@@ -103,8 +103,8 @@ class LinkCreationIdempotencyIntegrationTest {
             Instant.parse("2040-06-02T13:00:00.987654Z");
 
     @Container
-    @ServiceConnection
-    static final MySQLContainer MYSQL = new MySQLContainer("mysql:8.4.10");
+    @ServiceConnection(name = "mysql")
+    static final MySQLContainer MYSQL = new MySQLContainer(MySqlTestImage.NAME);
 
     @Autowired
     private SmartLinkUseCase smartLinkUseCase;

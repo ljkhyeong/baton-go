@@ -551,13 +551,42 @@ Pod 템플릿은 변경 불가이고 같은 배포 이미지를 사용한다. �
 불명확하면 아래 실패 복구 절차 전에 Job을 삭제·재생성하지 않는다.
 `ttlSecondsAfterFinished=3600`은 보조 정리이며 실패 증거 보존을 대신하지 않는다.
 
+업데이트를 시작할 때 이전 Job 상태는 다음 세 가지로 분류한다.
+
+- Job이 있고 `Complete=True`이면 완료 메타데이터를 보존한 뒤 Job만 삭제한다.
+- Job이 없으면 TTL 정리 가능성을 고려하되, 부재 자체를 성공 증거로 사용하지 않는다. 직전
+  릴리스의 Job 완료 증거와 이미지 다이제스트·Flyway 스키마 버전을 확인하고, 승인된 읽기 전용
+  DB 관리 채널에서 현재 `flyway_schema_history`의 마지막 성공 버전이 그 증거와 일치할 때만
+  다음 적용으로 진행한다. 어느 증거든 없거나 일치하지 않으면 아래 실패 복구 절차로 전환한다.
+- Job이 `Active`, `Failed`이거나 상태를 판정할 수 없으면 삭제·재생성하지 않고 아래 실패
+  복구 절차로 전환한다.
+
 ```bash
-test "$(kubectl -n baton-go get job baton-go-database-migration \
-  -o jsonpath='{.status.conditions[?(@.type=="Complete")].status}')" = "True" || {
-  echo "마이그레이션 Job이 Complete가 아니므로 삭제하지 않습니다." >&2
-  exit 1
-}
-kubectl -n baton-go delete job baton-go-database-migration --wait=true
+set -eu
+
+migration_job="$(kubectl -n baton-go get job baton-go-database-migration \
+  --ignore-not-found -o name)"
+if test -n "$migration_job"; then
+  test "$(kubectl -n baton-go get job baton-go-database-migration \
+    -o jsonpath='{.status.conditions[?(@.type=="Complete")].status}')" = "True" || {
+    echo "마이그레이션 Job이 Complete가 아니므로 삭제하지 않습니다." >&2
+    exit 1
+  }
+  kubectl -n baton-go get job baton-go-database-migration \
+    -o 'custom-columns=NAME:.metadata.name,IMAGE:.spec.template.spec.containers[0].image,COMPLETED:.status.completionTime'
+  kubectl -n baton-go delete job baton-go-database-migration --wait=true
+else
+  echo "마이그레이션 Job이 없습니다. 직전 완료 증거와 현재 Flyway 성공 버전을 대조한 뒤 진행하십시오." >&2
+  exit 2
+fi
+```
+
+`Complete` Job을 위 명령으로 삭제했거나, Job 부재 분기에서 직전 완료 증거와 현재 Flyway
+성공 버전의 일치를 확인한 뒤에만 다음 적용 명령을 실행한다.
+
+```bash
+set -eu
+
 kubectl diff -k deploy/k8s/overlays/private-server
 kubectl apply -k deploy/k8s/overlays/private-server
 kubectl -n baton-go wait --for=condition=complete \

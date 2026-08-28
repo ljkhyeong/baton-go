@@ -346,11 +346,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     private List<String> stackFrames(Exception exception) {
         return Arrays.stream(exception.getStackTrace())
                 .limit(MAX_LOGGED_STACK_FRAMES)
-                .map(frame -> frame.getClassName()
-                        + "#"
-                        + frame.getMethodName()
-                        + ":"
-                        + frame.getLineNumber())
+                .map(StackTraceElement::toString)
                 .toList();
     }
 

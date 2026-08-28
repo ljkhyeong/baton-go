@@ -43,9 +43,9 @@ class GlobalExceptionHandlerTest {
         assertThat(output)
                 .contains(IllegalStateException.class.getName())
                 .contains(RuntimeException.class.getName())
-                .contains("com.personal.batongo.SafeService0#execute0:1")
-                .contains("com.personal.batongo.SafeService11#execute11:12")
-                .doesNotContain("com.personal.batongo.SafeService12#execute12:13")
+                .contains("com.personal.batongo.SafeService0.execute0(SafeService.java:1)")
+                .contains("com.personal.batongo.SafeService11.execute11(SafeService.java:12)")
+                .doesNotContain("com.personal.batongo.SafeService12.execute12(SafeService.java:13)")
                 .doesNotContain(sensitiveMessage)
                 .doesNotContain(sensitiveCause);
         assertThat(output.getOut().split(

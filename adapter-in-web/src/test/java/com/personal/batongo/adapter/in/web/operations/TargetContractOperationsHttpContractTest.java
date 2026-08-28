@@ -24,6 +24,7 @@ import com.personal.batongo.adapter.in.web.ManagementAuthenticationFilter;
 import com.personal.batongo.adapter.in.web.ManagementProperties;
 import com.personal.batongo.adapter.in.web.RequestIdFilter;
 import com.personal.batongo.application.link.error.InvalidTargetContractInventoryRequestException;
+import com.personal.batongo.application.link.error.TargetContractRemediationNotApplicableException;
 import com.personal.batongo.application.link.port.in.TargetContractOperationsUseCase;
 import com.personal.batongo.application.link.port.in.TargetContractOperationsUseCase.Compliance;
 import com.personal.batongo.application.link.port.in.TargetContractOperationsUseCase.CreationRequestState;
@@ -203,6 +204,19 @@ class TargetContractOperationsHttpContractTest {
                 .andDo(documentManagementEndpoint("target-contract-remediation"));
 
         verify(operationsUseCase).remediate(new RemediationCommand(LINK_ID, 7L));
+    }
+
+    @Test
+    @DisplayName("준수 링크의 정리 폐기는 409 REMEDIATION_NOT_APPLICABLE로 응답한다")
+    void rejectsRemediationForCompliantLink() throws Exception {
+        when(operationsUseCase.remediate(new RemediationCommand(LINK_ID, 7L)))
+                .thenThrow(new TargetContractRemediationNotApplicableException());
+
+        mockMvc.perform(remediationRequest("""
+                        {"expectedVersion":7}
+                        """))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("REMEDIATION_NOT_APPLICABLE"));
     }
 
     @Test

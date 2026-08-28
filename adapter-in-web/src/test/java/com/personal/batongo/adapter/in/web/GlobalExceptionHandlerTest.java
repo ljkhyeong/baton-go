@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
+import org.springframework.http.HttpStatus;
 import org.springframework.mock.web.MockHttpServletRequest;
 
 @ExtendWith(OutputCaptureExtension.class)
@@ -35,11 +36,18 @@ class GlobalExceptionHandlerTest {
         }
         exception.setStackTrace(stackFrames);
 
-        new GlobalExceptionHandler(new SimpleMeterRegistry()).handleUnexpected(
+        var response = new GlobalExceptionHandler(new SimpleMeterRegistry()).handleUnexpected(
                 exception,
                 new MockHttpServletRequest()
         );
 
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+        assertThat(response.getBody())
+                .extracting(ErrorResponse::code, ErrorResponse::message)
+                .containsExactly(
+                        "INTERNAL_ERROR",
+                        "서버에서 요청을 처리하지 못했습니다"
+                );
         assertThat(output)
                 .contains(IllegalStateException.class.getName())
                 .contains(RuntimeException.class.getName())

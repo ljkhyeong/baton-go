@@ -103,8 +103,23 @@ Secret의 이름과 키만 참조하므로 3절의 구체화가 먼저 완료되
 시작한다.
 
 ```bash
+set -eu
+
+if grep -F -q \
+  -e 'REPLACE_ME' \
+  -e 'registry.invalid/baton-go' \
+  -e 'replace-with-immutable-release' \
+  deploy/k8s/overlays/private-server/app-config.properties \
+  deploy/k8s/overlays/private-server/kustomization.yaml; then
+  echo "배포 placeholder와 가짜 이미지 참조를 먼저 교체해야 합니다." >&2
+  exit 1
+fi
+
 kubectl kustomize deploy/k8s/overlays/private-server >/dev/null
 ```
+
+이 점검은 placeholder 제거만 확인한다. URL의 정규 HTTPS 출처·동일 출처 정책은 애플리케이션 시작
+검증이 소유하며, 이미지 다이제스트·서명·SBOM·취약점 수용 여부는 위 릴리스 증거와 별도로 대조한다.
 
 애플리케이션의 `/tmp`는 64Mi 메모리 `emptyDir`이고 나머지 root 파일 시스템은 읽기 전용이다.
 Kubernetes `emptyDir`에는 Compose의 `noexec,nosuid,nodev,mode=1777` 마운트 옵션을 이식성 있게

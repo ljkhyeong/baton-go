@@ -16,6 +16,9 @@
   확인한 유지 보수 시간에만 두 활성화 값을 함께 사용하며, 일반 운영에서는 모두 `false`로 둔다.
 - GO 전용 MySQL과 비공개 Kubernetes 기본 구성은 준비되어 있다. 이는 배포 기반일 뿐 실제
   클러스터 검증이나 공개 운영 승인 증거가 아니다.
+- 대표 HTTP 요청·응답은 기존 계약 테스트에서 REST Docs 조각으로 생성하며
+  `:adapter-in-web:apiContractDocs`가 압축 산출물을 만든다. 제품 동작과 전체 오류 행렬의 정본은
+  계속 [API 계약](docs/PRD/0002_api-contract/spec.md)이다.
 
 ## 외부 저장소 확인 기준
 
@@ -55,8 +58,6 @@
    장애 대응과 이미지 되돌리기 훈련을 완료한다.
 10. HMAC 비밀값 유출 시 임의 Secret 회전 없이 쓰기·공개 경계를 차단하고, 기존 링크
     폐기·재발급 또는 버전별 키 묶음 도입 중 복구 방식을 결정해 훈련한다.
-11. 외부 소비 계약을 고정할 REST Docs/OpenAPI 산출물을 연결한다.
-
 운영 실행과 복구 안전선은
 [비공개 Kubernetes 배포 실행서](docs/RUNBOOK/kubernetes-private-server-deployment.md)와
 [HMAC 키·DB 결합 결정](docs/ADR/0004_link-code-key-binding/adr.md)을 따른다.

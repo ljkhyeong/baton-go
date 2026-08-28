@@ -214,6 +214,7 @@ curl -i http://localhost:8080/api/v1/links \
 
 - [제품 기준선](docs/PRD/0001_product-baseline/spec.md)
 - [API 계약](docs/PRD/0002_api-contract/spec.md)
+- [테스트에서 생성하는 HTTP 계약 조각](docs/API/rest-docs.md)
 - [BATON·ROUND 교차 서비스 링크 계약](docs/PRD/0003_cross-service-link-contract/spec.md)
 
 ### 장기 설계 결정

@@ -5,6 +5,10 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.springframework.restdocs.mockmvc.MockMvcRestDocumentation.document;
+import static org.springframework.restdocs.mockmvc.MockMvcRestDocumentation.documentationConfiguration;
+import static org.springframework.restdocs.operation.preprocess.Preprocessors.modifyHeaders;
+import static org.springframework.restdocs.operation.preprocess.Preprocessors.preprocessRequest;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -25,14 +29,18 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.restdocs.RestDocumentationContextProvider;
+import org.springframework.restdocs.RestDocumentationExtension;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import tools.jackson.databind.ObjectMapper;
 
+@ExtendWith(RestDocumentationExtension.class)
 class ManagementAuthenticationHttpContractTest {
 
     private static final String MANAGEMENT_TOKEN =
@@ -48,7 +56,7 @@ class ManagementAuthenticationHttpContractTest {
     private MockMvc mockMvc;
 
     @BeforeEach
-    void setUp() {
+    void setUp(RestDocumentationContextProvider restDocumentation) {
         useCase = mock(SmartLinkUseCase.class);
         LinkManagementController controller = new LinkManagementController(useCase);
         ManagementAuthenticationFilter authenticationFilter =
@@ -59,6 +67,7 @@ class ManagementAuthenticationHttpContractTest {
 
         mockMvc = MockMvcBuilders.standaloneSetup(controller)
                 .addFilters(new RequestIdFilter(), authenticationFilter)
+                .apply(documentationConfiguration(restDocumentation))
                 .build();
     }
 
@@ -96,7 +105,14 @@ class ManagementAuthenticationHttpContractTest {
                 .andExpect(header().string("Referrer-Policy", "no-referrer"))
                 .andExpect(header().exists("X-Request-Id"))
                 .andExpect(jsonPath("$.code")
-                        .value("MANAGEMENT_AUTHENTICATION_REQUIRED"));
+                        .value("MANAGEMENT_AUTHENTICATION_REQUIRED"))
+                .andDo(document(
+                        "management-authentication-required",
+                        preprocessRequest(modifyHeaders().set(
+                                HttpHeaders.AUTHORIZATION,
+                                "Bearer <invalid-management-token>"
+                        ))
+                ));
 
         verifyNoInteractions(useCase);
     }

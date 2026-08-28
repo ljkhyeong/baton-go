@@ -6,6 +6,10 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.springframework.restdocs.mockmvc.MockMvcRestDocumentation.document;
+import static org.springframework.restdocs.mockmvc.MockMvcRestDocumentation.documentationConfiguration;
+import static org.springframework.restdocs.operation.preprocess.Preprocessors.modifyHeaders;
+import static org.springframework.restdocs.operation.preprocess.Preprocessors.preprocessRequest;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.head;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -41,6 +45,7 @@ import java.util.stream.Stream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -49,10 +54,14 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.converter.json.JacksonJsonHttpMessageConverter;
+import org.springframework.restdocs.RestDocumentationContextProvider;
+import org.springframework.restdocs.RestDocumentationExtension;
+import org.springframework.restdocs.mockmvc.RestDocumentationResultHandler;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import tools.jackson.databind.json.JsonMapper;
 
+@ExtendWith(RestDocumentationExtension.class)
 class LinkHttpContractTest {
 
     private static final UUID LINK_ID = UUID.fromString("83a430c4-5c5d-4eb4-a815-7a5ba1fd4aae");
@@ -71,7 +80,7 @@ class LinkHttpContractTest {
     private MockMvc mockMvc;
 
     @BeforeEach
-    void setUp() {
+    void setUp(RestDocumentationContextProvider restDocumentation) {
         useCase = mock(SmartLinkUseCase.class);
         meterRegistry = new SimpleMeterRegistry();
         LinkManagementController managementController = new LinkManagementController(useCase);
@@ -83,6 +92,7 @@ class LinkHttpContractTest {
                 .setControllerAdvice(new GlobalExceptionHandler(meterRegistry))
                 .setMessageConverters(new JacksonJsonHttpMessageConverter(jsonMapper))
                 .addFilters(new RequestIdFilter())
+                .apply(documentationConfiguration(restDocumentation))
                 .build();
     }
 
@@ -123,7 +133,8 @@ class LinkHttpContractTest {
                 .andExpect(jsonPath("$.targetSystem").value("BATON"))
                 .andExpect(jsonPath("$.targetPath").value(BATON_TARGET_PATH))
                 .andExpect(jsonPath("$.purpose").value("NAVIGATION"))
-                .andExpect(jsonPath("$.createdAt").value("2026-07-29T10:00:00Z"));
+                .andExpect(jsonPath("$.createdAt").value("2026-07-29T10:00:00Z"))
+                .andDo(documentManagementEndpoint("links-create"));
     }
 
     @Test
@@ -153,7 +164,8 @@ class LinkHttpContractTest {
                         "true"
                 ))
                 .andExpect(jsonPath("$.shortUrl")
-                        .value("https://go.example/l/VOvLShvx93kQpj8x7w2HYQ"));
+                        .value("https://go.example/l/VOvLShvx93kQpj8x7w2HYQ"))
+                .andDo(documentManagementEndpoint("links-create-replay"));
     }
 
     @ParameterizedTest(name = "{1}")
@@ -208,7 +220,8 @@ class LinkHttpContractTest {
                 .andExpect(jsonPath("$.targetSystem").value("BATON"))
                 .andExpect(jsonPath("$.targetPath").value(BATON_TARGET_PATH))
                 .andExpect(jsonPath("$.purpose").value("NAVIGATION"))
-                .andExpect(jsonPath("$.shortUrl").doesNotExist());
+                .andExpect(jsonPath("$.shortUrl").doesNotExist())
+                .andDo(documentManagementEndpoint("links-get"));
     }
 
     @Test
@@ -232,7 +245,8 @@ class LinkHttpContractTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(LINK_ID.toString()))
                 .andExpect(jsonPath("$.revokedAt").value(firstRevokedAt.toString()))
-                .andExpect(jsonPath("$.shortUrl").doesNotExist());
+                .andExpect(jsonPath("$.shortUrl").doesNotExist())
+                .andDo(documentManagementEndpoint("links-revoke"));
 
         verify(useCase).revokeLink(LINK_ID);
     }
@@ -449,7 +463,8 @@ class LinkHttpContractTest {
 
         mockMvc.perform(get("/l/VOvLShvx93kQpj8x7w2HYQ"))
                 .andExpect(status().isFound())
-                .andExpect(header().string("Location", BATON_DESTINATION));
+                .andExpect(header().string("Location", BATON_DESTINATION))
+                .andDo(document("links-resolve"));
     }
 
     @Test
@@ -463,7 +478,8 @@ class LinkHttpContractTest {
         mockMvc.perform(head("/l/{code}", rawCode))
                 .andExpect(status().isFound())
                 .andExpect(header().string("Location", BATON_DESTINATION))
-                .andExpect(content().string(""));
+                .andExpect(content().string(""))
+                .andDo(document("links-resolve-head"));
 
         verify(useCase).resolveLink(rawCode);
     }
@@ -582,6 +598,15 @@ class LinkHttpContractTest {
 
     private double storedTargetPolicyViolationCount() {
         return meterRegistry.counter(TARGET_POLICY_VIOLATION_METRIC).count();
+    }
+
+    private static RestDocumentationResultHandler documentManagementEndpoint(
+            String identifier
+    ) {
+        return document(identifier, preprocessRequest(modifyHeaders().set(
+                HttpHeaders.AUTHORIZATION,
+                "Bearer <management-token>"
+        )));
     }
 
     private LinkResult linkResult() {

@@ -7,6 +7,10 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.springframework.restdocs.mockmvc.MockMvcRestDocumentation.document;
+import static org.springframework.restdocs.mockmvc.MockMvcRestDocumentation.documentationConfiguration;
+import static org.springframework.restdocs.operation.preprocess.Preprocessors.modifyHeaders;
+import static org.springframework.restdocs.operation.preprocess.Preprocessors.preprocessRequest;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -36,15 +40,20 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.converter.json.JacksonJsonHttpMessageConverter;
+import org.springframework.restdocs.RestDocumentationContextProvider;
+import org.springframework.restdocs.RestDocumentationExtension;
+import org.springframework.restdocs.mockmvc.RestDocumentationResultHandler;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
 
+@ExtendWith(RestDocumentationExtension.class)
 class TargetContractOperationsHttpContractTest {
 
     private static final String BASE_PATH =
@@ -62,7 +71,7 @@ class TargetContractOperationsHttpContractTest {
     private MockMvc mockMvc;
 
     @BeforeEach
-    void setUp() {
+    void setUp(RestDocumentationContextProvider restDocumentation) {
         operationsUseCase = mock(TargetContractOperationsUseCase.class);
         TargetContractOperationsController controller =
                 new TargetContractOperationsController(operationsUseCase);
@@ -80,6 +89,7 @@ class TargetContractOperationsHttpContractTest {
                         jsonMapper
                 ))
                 .addFilters(new RequestIdFilter(), authenticationFilter)
+                .apply(documentationConfiguration(restDocumentation))
                 .build();
     }
 
@@ -122,7 +132,8 @@ class TargetContractOperationsHttpContractTest {
                 .andExpect(content().string(not(containsString("\"codeHash\""))))
                 .andExpect(content().string(not(containsString("\"shortUrl\""))))
                 .andExpect(content().string(not(containsString("\"idempotencyHash\""))))
-                .andExpect(content().string(not(containsString("\"idempotencyKeyHash\""))));
+                .andExpect(content().string(not(containsString("\"idempotencyKeyHash\""))))
+                .andDo(documentManagementEndpoint("target-contract-inventory"));
 
         verify(operationsUseCase).inventory(new InventoryQuery(AFTER_LINK_ID, 1));
     }
@@ -188,7 +199,8 @@ class TargetContractOperationsHttpContractTest {
                 .andExpect(jsonPath("$.revokedAt").value(REVOKED_AT.toString()))
                 .andExpect(jsonPath("$.alreadyRevoked").value(false))
                 .andExpect(jsonPath("$.targetPath").doesNotExist())
-                .andExpect(jsonPath("$.shortUrl").doesNotExist());
+                .andExpect(jsonPath("$.shortUrl").doesNotExist())
+                .andDo(documentManagementEndpoint("target-contract-remediation"));
 
         verify(operationsUseCase).remediate(new RemediationCommand(LINK_ID, 7L));
     }
@@ -214,5 +226,14 @@ class TargetContractOperationsHttpContractTest {
 
     private MockHttpServletRequestBuilder authorized(MockHttpServletRequestBuilder request) {
         return request.header(HttpHeaders.AUTHORIZATION, "Bearer " + MANAGEMENT_TOKEN);
+    }
+
+    private static RestDocumentationResultHandler documentManagementEndpoint(
+            String identifier
+    ) {
+        return document(identifier, preprocessRequest(modifyHeaders().set(
+                HttpHeaders.AUTHORIZATION,
+                "Bearer <management-token>"
+        )));
     }
 }

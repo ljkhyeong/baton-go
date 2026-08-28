@@ -9,4 +9,24 @@ dependencies {
 	annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
 
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
+	testImplementation 'org.springframework.restdocs:spring-restdocs-mockmvc'
+}
+
+def apiContractSnippets = layout.buildDirectory.dir('generated-snippets')
+
+tasks.named('test') {
+	outputs.dir apiContractSnippets
+}
+
+tasks.register('apiContractDocs', Zip) {
+	group = 'documentation'
+	description = '테스트에서 생성한 HTTP 계약 조각을 묶습니다.'
+	dependsOn tasks.named('test')
+	from apiContractSnippets
+	archiveFileName = 'baton-go-rest-docs.zip'
+	destinationDirectory = layout.buildDirectory.dir('distributions')
+}
+
+tasks.named('check') {
+	dependsOn tasks.named('apiContractDocs')
 }

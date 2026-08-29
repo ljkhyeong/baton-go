@@ -35,11 +35,6 @@ spec:
             - configMapRef:
                 name: baton-go-config
           env:
-            - name: BATON_GO_MANAGEMENT_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: baton-go-management-credentials
-                  key: BATON_GO_MANAGEMENT_TOKEN
             - name: BATON_GO_LINK_CODE_SECRET
               valueFrom:
                 secretKeyRef:

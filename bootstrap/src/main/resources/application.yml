@@ -1,6 +1,12 @@
 spring:
   application:
     name: baton-go
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${BATON_GO_MANAGEMENT_JWT_ISSUER_URI}
+          audiences: ${BATON_GO_MANAGEMENT_JWT_AUDIENCE:baton-go}
   jackson:
     deserialization:
       fail-on-unknown-properties: true
@@ -40,8 +46,6 @@ baton-go:
   public-base-url: ${BATON_GO_PUBLIC_BASE_URL}
   link-code:
     secret: ${BATON_GO_LINK_CODE_SECRET:}
-  management:
-    token: ${BATON_GO_MANAGEMENT_TOKEN:}
   target-contract-operations:
     enabled: ${BATON_GO_TARGET_CONTRACT_OPERATIONS_ENABLED:false}
     private-ingress-confirmed: ${BATON_GO_TARGET_CONTRACT_OPERATIONS_PRIVATE_INGRESS_CONFIRMED:false}

@@ -7,7 +7,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.personal.batongo.adapter.in.web.FilterErrorResponseWriter;
-import com.personal.batongo.adapter.in.web.ManagementAuthenticationFilter;
+import com.personal.batongo.adapter.in.web.ManagementApiSecurityConfiguration;
 import com.personal.batongo.adapter.in.web.PublicResolverRateLimitProperties;
 import com.personal.batongo.adapter.in.web.PublicResolverRateLimiter;
 import com.personal.batongo.adapter.in.web.link.LinkResolverController;
@@ -32,11 +32,15 @@ import org.springframework.test.web.servlet.MockMvc;
         controllers = LinkResolverController.class,
         properties = {
                 "baton-go.public-resolver-rate-limit.capacity=1",
-                "baton-go.public-resolver-rate-limit.window=1h"
+                "baton-go.public-resolver-rate-limit.window=1h",
+                "spring.security.oauth2.resourceserver.jwt.issuer-uri=https://identity.example",
+                "spring.autoconfigure.exclude="
+                        + "org.springframework.boot.security.oauth2.server.resource.autoconfigure.web."
+                        + "OAuth2ResourceServerWebSecurityAutoConfiguration"
         },
         excludeFilters = @ComponentScan.Filter(
                 type = FilterType.ASSIGNABLE_TYPE,
-                classes = ManagementAuthenticationFilter.class
+                classes = ManagementApiSecurityConfiguration.class
         )
 )
 @EnableConfigurationProperties(PublicResolverRateLimitProperties.class)

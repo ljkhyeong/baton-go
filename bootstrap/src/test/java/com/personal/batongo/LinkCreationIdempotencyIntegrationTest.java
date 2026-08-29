@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.head;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -62,7 +63,9 @@ import org.springframework.dao.TransientDataAccessException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.mysql.MySQLContainer;
@@ -72,7 +75,9 @@ import org.testcontainers.mysql.MySQLContainer;
 @AutoConfigureMockMvc
 @Import(LinkCreationIdempotencyIntegrationTest.ConcurrencyTestConfiguration.class)
 @SpringBootTest(properties = {
-        "baton-go.management.token=test-management-token-that-is-long-enough",
+        "spring.security.oauth2.resourceserver.jwt.issuer-uri=https://identity.example",
+        "spring.security.oauth2.resourceserver.jwt.audiences=baton-go",
+        "spring.security.oauth2.resourceserver.jwt.jwk-set-uri=https://identity.example/jwks",
         "baton-go.link-code.secret=test-link-code-secret-that-is-separate-and-long-enough",
         "baton-go.public-base-url=https://go.example",
         "baton-go.targets.baton-base-url=https://baton.example",
@@ -183,10 +188,7 @@ class LinkCreationIdempotencyIntegrationTest {
         );
 
         var createdResponse = mockMvc.perform(post("/api/v1/links")
-                        .header(
-                                HttpHeaders.AUTHORIZATION,
-                                "Bearer test-management-token-that-is-long-enough"
-                        )
+                        .with(linkCreateJwt())
                         .header("Idempotency-Key", idempotencyKey)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(requestBody))
@@ -228,8 +230,8 @@ class LinkCreationIdempotencyIntegrationTest {
     }
 
     @Test
-    @DisplayName("실제 Spring 조립은 관리 인증을 비활성 운영 경로의 404보다 먼저 적용한다")
-    void assemblesManagementAuthenticationFilters() throws Exception {
+    @DisplayName("실제 Spring 조립은 관리 JWT 인증을 비활성 운영 경로의 404보다 먼저 적용한다")
+    void assemblesManagementJwtAuthentication() throws Exception {
         mockMvc.perform(get("/api/v1/operations/link-target-contract-v1/inventory"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(header().string(
@@ -242,10 +244,7 @@ class LinkCreationIdempotencyIntegrationTest {
                 .andExpect(jsonPath("$.requestId").isNotEmpty());
 
         mockMvc.perform(get("/api/v1/operations/link-target-contract-v1/inventory")
-                        .header(
-                                HttpHeaders.AUTHORIZATION,
-                                "Bearer test-management-token-that-is-long-enough"
-                        ))
+                        .with(targetContractOperateJwt()))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("RESOURCE_NOT_FOUND"));
     }
@@ -291,10 +290,7 @@ class LinkCreationIdempotencyIntegrationTest {
         );
 
         mockMvc.perform(post("/api/v1/links")
-                        .header(
-                                HttpHeaders.AUTHORIZATION,
-                                "Bearer test-management-token-that-is-long-enough"
-                        )
+                        .with(linkCreateJwt())
                         .header("Idempotency-Key", rawIdempotencyKey)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -384,10 +380,7 @@ class LinkCreationIdempotencyIntegrationTest {
         ));
 
         mockMvc.perform(post("/api/v1/links")
-                        .header(
-                                HttpHeaders.AUTHORIZATION,
-                                "Bearer test-management-token-that-is-long-enough"
-                        )
+                        .with(linkCreateJwt())
                         .header("Idempotency-Key", idempotencyKey)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -769,10 +762,7 @@ class LinkCreationIdempotencyIntegrationTest {
         );
 
         String responseBody = mockMvc.perform(post("/api/v1/links")
-                        .header(
-                                HttpHeaders.AUTHORIZATION,
-                                "Bearer test-management-token-that-is-long-enough"
-                        )
+                        .with(linkCreateJwt())
                         .header("Idempotency-Key", idempotencyKey)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -820,6 +810,18 @@ class LinkCreationIdempotencyIntegrationTest {
     private Instant instant(ResultSet resultSet, String columnName) throws SQLException {
         LocalDateTime value = resultSet.getObject(columnName, LocalDateTime.class);
         return value == null ? null : value.toInstant(ZoneOffset.UTC);
+    }
+
+    private RequestPostProcessor linkCreateJwt() {
+        return jwt().authorities(new SimpleGrantedAuthority(
+                "SCOPE_baton-go.links.create"
+        ));
+    }
+
+    private RequestPostProcessor targetContractOperateJwt() {
+        return jwt().authorities(new SimpleGrantedAuthority(
+                "SCOPE_baton-go.target-contract.operate"
+        ));
     }
 
     private List<Future<CreatedLinkResult>> submitConcurrentCreations(

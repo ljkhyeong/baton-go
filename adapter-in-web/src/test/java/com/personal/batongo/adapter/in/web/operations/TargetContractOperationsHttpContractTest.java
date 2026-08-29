@@ -18,10 +18,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.personal.batongo.adapter.in.web.FilterErrorResponseWriter;
 import com.personal.batongo.adapter.in.web.GlobalExceptionHandler;
-import com.personal.batongo.adapter.in.web.ManagementAuthenticationFilter;
-import com.personal.batongo.adapter.in.web.ManagementProperties;
 import com.personal.batongo.adapter.in.web.RequestIdFilter;
 import com.personal.batongo.application.link.error.InvalidTargetContractInventoryRequestException;
 import com.personal.batongo.application.link.error.TargetContractRemediationNotApplicableException;
@@ -51,7 +48,6 @@ import org.springframework.restdocs.mockmvc.RestDocumentationResultHandler;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
-import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
 
 @ExtendWith(RestDocumentationExtension.class)
@@ -59,8 +55,6 @@ class TargetContractOperationsHttpContractTest {
 
     private static final String BASE_PATH =
             "/api/v1/operations/link-target-contract-v1";
-    private static final String MANAGEMENT_TOKEN =
-            "management-token-with-at-least-32-characters";
     private static final UUID LINK_ID =
             UUID.fromString("83a430c4-5c5d-4eb4-a815-7a5ba1fd4aae");
     private static final UUID AFTER_LINK_ID =
@@ -76,11 +70,6 @@ class TargetContractOperationsHttpContractTest {
         operationsUseCase = mock(TargetContractOperationsUseCase.class);
         TargetContractOperationsController controller =
                 new TargetContractOperationsController(operationsUseCase);
-        ManagementAuthenticationFilter authenticationFilter =
-                new ManagementAuthenticationFilter(
-                        new ManagementProperties(MANAGEMENT_TOKEN),
-                        new FilterErrorResponseWriter(new ObjectMapper())
-                );
         var jsonMapper = JsonMapper.builder()
                 .findAndAddModules()
                 .build();
@@ -89,7 +78,7 @@ class TargetContractOperationsHttpContractTest {
                 .setMessageConverters(new JacksonJsonHttpMessageConverter(
                         jsonMapper
                 ))
-                .addFilters(new RequestIdFilter(), authenticationFilter)
+                .addFilters(new RequestIdFilter())
                 .apply(documentationConfiguration(restDocumentation))
                 .build();
     }
@@ -239,7 +228,7 @@ class TargetContractOperationsHttpContractTest {
     }
 
     private MockHttpServletRequestBuilder authorized(MockHttpServletRequestBuilder request) {
-        return request.header(HttpHeaders.AUTHORIZATION, "Bearer " + MANAGEMENT_TOKEN);
+        return request.header(HttpHeaders.AUTHORIZATION, "Bearer <management-jwt>");
     }
 
     private static RestDocumentationResultHandler documentManagementEndpoint(
@@ -247,7 +236,7 @@ class TargetContractOperationsHttpContractTest {
     ) {
         return document(identifier, preprocessRequest(modifyHeaders().set(
                 HttpHeaders.AUTHORIZATION,
-                "Bearer <management-token>"
+                "Bearer <management-jwt>"
         )));
     }
 }

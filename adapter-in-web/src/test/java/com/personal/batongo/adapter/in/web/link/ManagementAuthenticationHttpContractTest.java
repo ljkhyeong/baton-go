@@ -1,7 +1,6 @@
 package com.personal.batongo.adapter.in.web.link;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -9,14 +8,14 @@ import static org.springframework.restdocs.mockmvc.MockMvcRestDocumentation.docu
 import static org.springframework.restdocs.mockmvc.MockMvcRestDocumentation.documentationConfiguration;
 import static org.springframework.restdocs.operation.preprocess.Preprocessors.modifyHeaders;
 import static org.springframework.restdocs.operation.preprocess.Preprocessors.preprocessRequest;
+import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.personal.batongo.adapter.in.web.FilterErrorResponseWriter;
-import com.personal.batongo.adapter.in.web.ManagementAuthenticationFilter;
-import com.personal.batongo.adapter.in.web.ManagementProperties;
+import com.personal.batongo.adapter.in.web.ManagementApiSecurityConfiguration;
 import com.personal.batongo.adapter.in.web.RequestIdFilter;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.CreatedLinkResult;
@@ -25,26 +24,44 @@ import com.personal.batongo.domain.link.LinkPurpose;
 import com.personal.batongo.domain.link.TargetSystem;
 import java.net.URI;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.security.oauth2.jwt.BadJwtException;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.restdocs.RestDocumentationContextProvider;
 import org.springframework.restdocs.RestDocumentationExtension;
+import org.springframework.test.context.ContextConfiguration;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
-import tools.jackson.databind.ObjectMapper;
+import org.springframework.web.context.WebApplicationContext;
 
 @ExtendWith(RestDocumentationExtension.class)
+@WebMvcTest(
+        controllers = LinkManagementController.class,
+        properties = {
+                "spring.security.oauth2.resourceserver.jwt.issuer-uri=https://identity.example",
+                "spring.security.oauth2.resourceserver.jwt.audiences=baton-go"
+        }
+)
+@ContextConfiguration(classes = LinkManagementController.class)
+@Import({
+        ManagementApiSecurityConfiguration.class,
+        FilterErrorResponseWriter.class
+})
 class ManagementAuthenticationHttpContractTest {
 
-    private static final String MANAGEMENT_TOKEN =
-            "management-token-with-at-least-32-characters";
+    private static final String MANAGEMENT_JWT = "test-management-jwt";
     private static final String BEARER_CHALLENGE =
             "Bearer realm=\"baton-go-management\"";
     private static final String IDEMPOTENCY_KEY = "8e448211-66ae-44ab-9888-c4960648c22b";
@@ -52,32 +69,36 @@ class ManagementAuthenticationHttpContractTest {
             "/teams/8e448211-66ae-44ab-9888-c4960648c22b"
                     + "/seasons/713d9cb7-2842-4f9f-b3cc-e31d98c6238a";
 
+    @Autowired
+    private WebApplicationContext applicationContext;
+
+    @MockitoBean
     private SmartLinkUseCase useCase;
+
+    @MockitoBean
+    private JwtDecoder jwtDecoder;
+
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp(RestDocumentationContextProvider restDocumentation) {
-        useCase = mock(SmartLinkUseCase.class);
-        LinkManagementController controller = new LinkManagementController(useCase);
-        ManagementAuthenticationFilter authenticationFilter =
-                new ManagementAuthenticationFilter(
-                        new ManagementProperties(MANAGEMENT_TOKEN),
-                        new FilterErrorResponseWriter(new ObjectMapper())
-                );
-
-        mockMvc = MockMvcBuilders.standaloneSetup(controller)
-                .addFilters(new RequestIdFilter(), authenticationFilter)
+        mockMvc = MockMvcBuilders.webAppContextSetup(applicationContext)
+                .addFilters(new RequestIdFilter())
+                .apply(springSecurity())
                 .apply(documentationConfiguration(restDocumentation))
                 .build();
     }
 
     @Test
-    @DisplayName("Bearer 스킴은 대소문자를 구분하지 않고 연속 SP를 허용한다")
-    void acceptsCaseInsensitiveSchemeAndRepeatedSpaces() throws Exception {
+    @DisplayName("유효한 관리 JWT와 링크 생성 scope는 링크 생성을 허용한다")
+    void acceptsJwtWithLinkCreationScope() throws Exception {
+        when(jwtDecoder.decode(MANAGEMENT_JWT)).thenReturn(jwt(
+                "baton-go.links.create"
+        ));
         when(useCase.createLink(any())).thenReturn(createdLink());
 
         mockMvc.perform(post("/api/v1/links")
-                        .header(HttpHeaders.AUTHORIZATION, "bEaReR   " + MANAGEMENT_TOKEN)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + MANAGEMENT_JWT)
                         .header("Idempotency-Key", IDEMPOTENCY_KEY)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(createRequest()))
@@ -87,15 +108,17 @@ class ManagementAuthenticationHttpContractTest {
         verify(useCase).createLink(any());
     }
 
-    @ParameterizedTest(name = "{index}: {0}")
-    @ValueSource(strings = {
-            "Bearer invalid-management-token",
-            "Bearer\tmanagement-token-with-at-least-32-characters"
-    })
-    @DisplayName("잘못된 관리 credential은 Bearer challenge가 있는 401 오류로 응답한다")
-    void rejectsInvalidCredentialWithBearerChallenge(String authorization) throws Exception {
+    @Test
+    @DisplayName("검증할 수 없는 관리 JWT는 Bearer challenge가 있는 401 오류로 응답한다")
+    void rejectsInvalidJwtWithBearerChallenge() throws Exception {
+        when(jwtDecoder.decode("invalid-management-jwt"))
+                .thenThrow(new BadJwtException("검증 실패"));
+
         mockMvc.perform(post("/api/v1/links")
-                        .header(HttpHeaders.AUTHORIZATION, authorization)
+                        .header(
+                                HttpHeaders.AUTHORIZATION,
+                                "Bearer invalid-management-jwt"
+                        )
                         .header("Idempotency-Key", IDEMPOTENCY_KEY)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(createRequest()))
@@ -110,22 +133,37 @@ class ManagementAuthenticationHttpContractTest {
                         "management-authentication-required",
                         preprocessRequest(modifyHeaders().set(
                                 HttpHeaders.AUTHORIZATION,
-                                "Bearer <invalid-management-token>"
+                                "Bearer <invalid-management-jwt>"
                         ))
                 ));
 
         verifyNoInteractions(useCase);
     }
 
-    @ParameterizedTest(name = "{index}: {0}")
-    @ValueSource(strings = {
-            "/api/v1;x/links",
-            "/api/v%31/links",
-            "/api/v1/links;x"
-    })
-    @DisplayName("Spring MVC가 관리 API로 해석하는 경로 변형은 인증 없이 호출할 수 없다")
-    void rejectsMappedPathVariantWithoutCredential(String path) throws Exception {
-        mockMvc.perform(post(URI.create(path))
+    @Test
+    @DisplayName("링크 생성 scope가 없는 관리 JWT는 403 오류로 응답한다")
+    void rejectsJwtWithoutLinkCreationScope() throws Exception {
+        when(jwtDecoder.decode(MANAGEMENT_JWT)).thenReturn(jwt(
+                "baton-go.links.read"
+        ));
+
+        mockMvc.perform(post("/api/v1/links")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + MANAGEMENT_JWT)
+                        .header("Idempotency-Key", IDEMPOTENCY_KEY)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(createRequest()))
+                .andExpect(status().isForbidden())
+                .andExpect(header().doesNotExist(HttpHeaders.WWW_AUTHENTICATE))
+                .andExpect(jsonPath("$.code")
+                        .value("MANAGEMENT_AUTHORIZATION_REQUIRED"));
+
+        verifyNoInteractions(useCase);
+    }
+
+    @Test
+    @DisplayName("비정규 관리 API 경로는 Spring Security 경계에서 거부한다")
+    void rejectsNonCanonicalManagementPath() throws Exception {
+        mockMvc.perform(post(URI.create("/api/v1/links;x"))
                         .header("Idempotency-Key", IDEMPOTENCY_KEY)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -135,12 +173,18 @@ class ManagementAuthenticationHttpContractTest {
                                   "purpose": "NAVIGATION"
                                 }
                                 """.formatted(BATON_TARGET_PATH)))
-                .andExpect(status().isUnauthorized())
-                .andExpect(header().string(HttpHeaders.WWW_AUTHENTICATE, BEARER_CHALLENGE))
-                .andExpect(jsonPath("$.code")
-                        .value("MANAGEMENT_AUTHENTICATION_REQUIRED"));
+                .andExpect(status().isBadRequest());
 
         verifyNoInteractions(useCase);
+    }
+
+    private Jwt jwt(String scope) {
+        return Jwt.withTokenValue(MANAGEMENT_JWT)
+                .header("alg", "RS256")
+                .subject("baton-service")
+                .audience(List.of("baton-go"))
+                .claim("scope", scope)
+                .build();
     }
 
     private String createRequest() {

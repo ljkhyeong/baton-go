@@ -4,6 +4,7 @@ import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.nullValue;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -33,10 +34,11 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.mysql.MySQLContainer;
@@ -45,7 +47,9 @@ import org.testcontainers.mysql.MySQLContainer;
 @Testcontainers
 @AutoConfigureMockMvc
 @SpringBootTest(properties = {
-        "baton-go.management.token=test-management-token-that-is-long-enough",
+        "spring.security.oauth2.resourceserver.jwt.issuer-uri=https://identity.example",
+        "spring.security.oauth2.resourceserver.jwt.audiences=baton-go",
+        "spring.security.oauth2.resourceserver.jwt.jwk-set-uri=https://identity.example/jwks",
         "baton-go.link-code.secret=test-link-code-secret-that-is-separate-and-long-enough",
         "baton-go.public-base-url=https://go.example",
         "baton-go.targets.baton-base-url=https://baton.example",
@@ -55,8 +59,6 @@ import org.testcontainers.mysql.MySQLContainer;
 })
 class TargetContractOperationsIntegrationTest {
 
-    private static final String MANAGEMENT_TOKEN =
-            "test-management-token-that-is-long-enough";
     private static final UUID VALID_LINK_ID =
             UUID.fromString("00000000-0000-4000-8000-000000000001");
     private static final UUID INVALID_LINK_ID =
@@ -122,7 +124,7 @@ class TargetContractOperationsIntegrationTest {
         mockMvc.perform(get(
                         "/api/v1/operations/link-target-contract-v1/inventory"
                 )
-                        .header(HttpHeaders.AUTHORIZATION, bearerToken())
+                        .with(targetContractOperateJwt())
                         .param("limit", "2"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.contractVersion").value("v1"))
@@ -144,7 +146,7 @@ class TargetContractOperationsIntegrationTest {
         mockMvc.perform(get(
                         "/api/v1/operations/link-target-contract-v1/inventory"
                 )
-                        .header(HttpHeaders.AUTHORIZATION, bearerToken())
+                        .with(targetContractOperateJwt())
                         .param("afterLinkId", INVALID_LINK_ID.toString())
                         .param("limit", "2"))
                 .andExpect(status().isOk())
@@ -158,12 +160,12 @@ class TargetContractOperationsIntegrationTest {
                 .andExpect(content().string(not(containsString("LEGACY"))));
 
         mockMvc.perform(get("/api/v1/links/{linkId}", INVALID_LINK_ID)
-                        .header(HttpHeaders.AUTHORIZATION, bearerToken()))
+                        .with(linkReadJwt()))
                 .andExpect(status().isNotFound())
                 .andExpect(content().string(not(containsString(INVALID_TARGET_PATH))))
                 .andExpect(jsonPath("$.code").value("LINK_NOT_FOUND"));
         mockMvc.perform(put("/api/v1/links/{linkId}/revocation", INVALID_LINK_ID)
-                        .header(HttpHeaders.AUTHORIZATION, bearerToken()))
+                        .with(linkRevokeJwt()))
                 .andExpect(status().isNotFound())
                 .andExpect(content().string(not(containsString(INVALID_TARGET_PATH))))
                 .andExpect(jsonPath("$.code").value("LINK_NOT_FOUND"));
@@ -186,7 +188,7 @@ class TargetContractOperationsIntegrationTest {
                         "/api/v1/operations/link-target-contract-v1/links/{linkId}/revocation",
                         UNKNOWN_ENUM_LINK_ID
                 )
-                        .header(HttpHeaders.AUTHORIZATION, bearerToken())
+                        .with(targetContractOperateJwt())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"expectedVersion\":4}"))
                 .andExpect(status().isConflict())
@@ -198,7 +200,7 @@ class TargetContractOperationsIntegrationTest {
                         "/api/v1/operations/link-target-contract-v1/links/{linkId}/revocation",
                         UNKNOWN_ENUM_LINK_ID
                 )
-                        .header(HttpHeaders.AUTHORIZATION, bearerToken())
+                        .with(targetContractOperateJwt())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"expectedVersion\":5}"))
                 .andExpect(status().isOk())
@@ -212,7 +214,7 @@ class TargetContractOperationsIntegrationTest {
                         "/api/v1/operations/link-target-contract-v1/links/{linkId}/revocation",
                         UNKNOWN_ENUM_LINK_ID
                 )
-                        .header(HttpHeaders.AUTHORIZATION, bearerToken())
+                        .with(targetContractOperateJwt())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"expectedVersion\":5}"))
                 .andExpect(status().isOk())
@@ -291,7 +293,7 @@ class TargetContractOperationsIntegrationTest {
                         "/api/v1/operations/link-target-contract-v1/links/{linkId}/revocation",
                         INVALID_LINK_ID
                 )
-                        .header(HttpHeaders.AUTHORIZATION, bearerToken())
+                        .with(targetContractOperateJwt())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
                 .andExpect(status().isBadRequest())
@@ -363,8 +365,22 @@ class TargetContractOperationsIntegrationTest {
         }
     }
 
-    private String bearerToken() {
-        return "Bearer " + MANAGEMENT_TOKEN;
+    private RequestPostProcessor targetContractOperateJwt() {
+        return jwt().authorities(new SimpleGrantedAuthority(
+                "SCOPE_baton-go.target-contract.operate"
+        ));
+    }
+
+    private RequestPostProcessor linkReadJwt() {
+        return jwt().authorities(new SimpleGrantedAuthority(
+                "SCOPE_baton-go.links.read"
+        ));
+    }
+
+    private RequestPostProcessor linkRevokeJwt() {
+        return jwt().authorities(new SimpleGrantedAuthority(
+                "SCOPE_baton-go.links.revoke"
+        ));
     }
 
     private Instant storedRevokedAt(UUID linkId) {

@@ -610,7 +610,7 @@ class LinkHttpContractTest {
     ) {
         return document(identifier, preprocessRequest(modifyHeaders().set(
                 HttpHeaders.AUTHORIZATION,
-                "Bearer <management-token>"
+                "Bearer <management-jwt>"
         )));
     }
 

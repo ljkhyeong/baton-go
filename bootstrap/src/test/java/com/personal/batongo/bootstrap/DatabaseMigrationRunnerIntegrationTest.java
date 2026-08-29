@@ -25,6 +25,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 class DatabaseMigrationRunnerIntegrationTest {
 
     private static final String DATABASE = "baton_go";
+    private static final String LATEST_MIGRATION_VERSION = "5";
 
     @Container
     static final DeploymentMySqlFixture MYSQL = new DeploymentMySqlFixture();
@@ -42,12 +43,26 @@ class DatabaseMigrationRunnerIntegrationTest {
     }
 
     @Test
-    @DisplayName("Spring Boot Flyway initializer는 VERIFY_IDENTITY로 마이그레이션을 완료한다")
-    void migratesSchemaThroughVerifiedTls() {
+    @DisplayName("migration-only 실행은 VERIFY_IDENTITY로 최신 스키마까지 적용한다")
+    void migratesSchemaThroughVerifiedTls() throws SQLException {
         String jdbcUrl = MYSQL.verifiedJdbcUrl(trustedCaStore);
         String[] arguments = MYSQL.migrationArguments(jdbcUrl);
 
         BatonGoApplication.main(arguments);
+
+        try (Connection connection = MYSQL.connectAsRuntime(jdbcUrl);
+             PreparedStatement statement = connection.prepareStatement("""
+                     SELECT version
+                     FROM flyway_schema_history
+                     WHERE success = TRUE
+                     ORDER BY installed_rank DESC
+                     LIMIT 1
+                     """);
+             ResultSet resultSet = statement.executeQuery()) {
+            assertThat(resultSet.next()).isTrue();
+            assertThat(resultSet.getString("version"))
+                    .isEqualTo(LATEST_MIGRATION_VERSION);
+        }
     }
 
     @Test

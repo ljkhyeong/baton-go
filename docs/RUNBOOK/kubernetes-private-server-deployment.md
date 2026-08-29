@@ -89,12 +89,12 @@ fragment와 userinfo를 넣지 않는다. 운영 기능 두 설정값은 평상�
 `SPRING_FLYWAY_ENABLED=false`는 장기 실행 애플리케이션에서 변경하지 않는다. Flyway는 아래의
 일회성 마이그레이션 Job만 실행한다.
 
-`deploy/k8s/overlays/private-server/kustomization.yaml`의 `registry.invalid/baton-go`와
-`replace-with-immutable-release`를 검토·서명된 배포 이미지로 교체한다. 이동하는 `latest`
-태그 대신 변경 불가 태그를 `newTag`에 사용한다. 레지스트리가 digest를 제공하면 `newTag`를
-제거하고 같은 이미지 항목에 `digest: sha256:<검증한 digest>`를 사용한다. digest 문자열을
-`newTag` 값에 넣지 않는다. 오버레이는 선택한 공식 MySQL 8.4.10 다중 아키텍처 이미지
-다이제스트로 고정하며, 변경은 백업·복원 검증을 포함한 별도 DB 업그레이드로 다룬다.
+`deploy/k8s/overlays/private-server/kustomization.yaml`의 `registry.invalid/baton-go`를 실제
+레지스트리 이미지 이름으로, `REPLACE_ME_WITH_IMMUTABLE_RELEASE_DIGEST`를 검토·서명한
+애플리케이션 이미지의 64자리 SHA-256 digest로 교체한다. 애플리케이션 Deployment와
+마이그레이션 Job은 같은 `name@sha256:digest`를 사용하며 태그 배포는 허용하지 않는다.
+오버레이는 선택한 공식 MySQL 8.4.10 다중 아키텍처 이미지도 digest로 고정하며, 변경은
+백업·복원 검증을 포함한 별도 DB 업그레이드로 다룬다.
 
 릴리스마다 애플리케이션 이미지 다이제스트와 함께 SBOM, 취약점 검사 결과,
 서명·provenance 검증 결과를 배포 증거에 보존한다. 조직의 취약점 수용 정책을 통과하지
@@ -115,7 +115,6 @@ set -eu
 if grep -F -q \
   -e 'REPLACE_ME' \
   -e 'registry.invalid/baton-go' \
-  -e 'replace-with-immutable-release' \
   deploy/k8s/overlays/private-server/app-config.properties \
   deploy/k8s/overlays/private-server/kustomization.yaml; then
   echo "배포 placeholder와 가짜 이미지 참조를 먼저 교체해야 합니다." >&2

@@ -89,6 +89,34 @@ jobs:
                   -schema-location "$schema_location"
           done
 
+      - name: 애플리케이션 이미지 다이제스트 계약 검증
+        run: |
+          set -euo pipefail
+
+          overlay=deploy/k8s/overlays/private-server
+          app_image="$(awk '
+            $1 == "-" && $2 == "name:" && $3 == "baton-go" {
+              in_app = 1
+              next
+            }
+            in_app && $1 == "newTag:" {
+              exit 2
+            }
+            in_app && $1 == "newName:" {
+              name = $2
+              next
+            }
+            in_app && $1 == "digest:" && $2 ~ /^sha256:/ {
+              print name "@" $2
+              exit
+            }
+          ' "$overlay/kustomization.yaml")"
+          test -n "$app_image"
+
+          rendered_manifest="$RUNNER_TEMP/baton-go-private-server.yaml"
+          kubectl kustomize "$overlay" >"$rendered_manifest"
+          test "$(grep -F -c "image: $app_image" "$rendered_manifest")" -eq 2
+
       - name: 정적·단위·패키징 검증
         run: ./gradlew --no-daemon build
 

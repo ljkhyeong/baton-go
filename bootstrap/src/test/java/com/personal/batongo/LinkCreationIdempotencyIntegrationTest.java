@@ -14,6 +14,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.nimbusds.jose.jwk.JWKSet;
+import com.nimbusds.jose.jwk.RSAKey;
 import com.personal.batongo.application.link.CreationIdempotencyKey;
 import com.personal.batongo.application.link.PublicLinkOrigin;
 import com.personal.batongo.application.link.error.IdempotencyKeyConflictException;
@@ -29,7 +31,16 @@ import com.personal.batongo.domain.link.LinkPurpose;
 import com.personal.batongo.domain.link.SmartLink;
 import com.personal.batongo.domain.link.TargetSystem;
 import com.personal.batongo.domain.link.TrustedTargetPolicy;
+import com.sun.net.httpserver.HttpServer;
+import java.io.IOException;
+import java.net.InetSocketAddress;
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
+import java.security.NoSuchAlgorithmException;
+import java.security.interfaces.RSAPrivateKey;
+import java.security.interfaces.RSAPublicKey;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Clock;
@@ -47,6 +58,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -64,6 +76,12 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.oauth2.jwt.JwtClaimsSet;
+import org.springframework.security.oauth2.jwt.JwtEncoder;
+import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
+import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import org.testcontainers.junit.jupiter.Container;
@@ -75,9 +93,7 @@ import org.testcontainers.mysql.MySQLContainer;
 @AutoConfigureMockMvc
 @Import(LinkCreationIdempotencyIntegrationTest.ConcurrencyTestConfiguration.class)
 @SpringBootTest(properties = {
-        "spring.security.oauth2.resourceserver.jwt.issuer-uri=https://identity.example",
         "spring.security.oauth2.resourceserver.jwt.audiences=baton-go",
-        "spring.security.oauth2.resourceserver.jwt.jwk-set-uri=https://identity.example/jwks",
         "baton-go.link-code.secret=test-link-code-secret-that-is-separate-and-long-enough",
         "baton-go.public-base-url=https://go.example",
         "baton-go.targets.baton-base-url=https://baton.example",
@@ -106,10 +122,32 @@ class LinkCreationIdempotencyIntegrationTest {
             Instant.parse("2040-06-01T13:00:00.654321Z");
     private static final Instant FAR_FUTURE_EXPIRES_AT =
             Instant.parse("2040-06-02T13:00:00.987654Z");
+    private static final String JWT_KEY_ID = "management-integration-test";
+    private static final KeyPair JWT_KEY_PAIR = jwtKeyPair();
+    private static final HttpServer JWT_SERVER = startJwtServer();
+    private static final String JWT_ISSUER =
+            "http://127.0.0.1:" + JWT_SERVER.getAddress().getPort() + "/issuer";
 
     @Container
     @ServiceConnection(name = "mysql")
     static final MySQLContainer MYSQL = new MySQLContainer(MySqlTestImage.NAME);
+
+    @DynamicPropertySource
+    static void managementJwtProperties(DynamicPropertyRegistry registry) {
+        registry.add(
+                "spring.security.oauth2.resourceserver.jwt.issuer-uri",
+                () -> JWT_ISSUER
+        );
+        registry.add(
+                "spring.security.oauth2.resourceserver.jwt.jwk-set-uri",
+                () -> JWT_ISSUER + "/jwks"
+        );
+    }
+
+    @AfterAll
+    static void stopJwtServer() {
+        JWT_SERVER.stop(0);
+    }
 
     @Autowired
     private SmartLinkUseCase smartLinkUseCase;
@@ -230,7 +268,7 @@ class LinkCreationIdempotencyIntegrationTest {
     }
 
     @Test
-    @DisplayName("실제 Spring 조립은 관리 JWT 인증을 비활성 운영 경로의 404보다 먼저 적용한다")
+    @DisplayName("실제 Spring 조립은 서명과 issuer와 audience를 검증한 관리 JWT만 허용한다")
     void assemblesManagementJwtAuthentication() throws Exception {
         mockMvc.perform(get("/api/v1/operations/link-target-contract-v1/inventory"))
                 .andExpect(status().isUnauthorized())
@@ -244,9 +282,21 @@ class LinkCreationIdempotencyIntegrationTest {
                 .andExpect(jsonPath("$.requestId").isNotEmpty());
 
         mockMvc.perform(get("/api/v1/operations/link-target-contract-v1/inventory")
-                        .with(targetContractOperateJwt()))
+                        .header(
+                                HttpHeaders.AUTHORIZATION,
+                                "Bearer " + managementJwt(List.of("baton-go"))
+                        ))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("RESOURCE_NOT_FOUND"));
+
+        mockMvc.perform(get("/api/v1/operations/link-target-contract-v1/inventory")
+                        .header(
+                                HttpHeaders.AUTHORIZATION,
+                                "Bearer " + managementJwt(List.of("another-service"))
+                        ))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code")
+                        .value("MANAGEMENT_AUTHENTICATION_REQUIRED"));
     }
 
     @Test
@@ -822,6 +872,65 @@ class LinkCreationIdempotencyIntegrationTest {
         return jwt().authorities(new SimpleGrantedAuthority(
                 "SCOPE_baton-go.target-contract.operate"
         ));
+    }
+
+    private String managementJwt(List<String> audience) {
+        Instant now = Instant.now();
+        JwtClaimsSet claims = JwtClaimsSet.builder()
+                .issuer(JWT_ISSUER)
+                .subject("baton-integration-test")
+                .audience(audience)
+                .issuedAt(now.minusSeconds(5))
+                .expiresAt(now.plusSeconds(60))
+                .claim("scope", "baton-go.target-contract.operate")
+                .build();
+        JwtEncoder encoder = NimbusJwtEncoder.withKeyPair(
+                        (RSAPublicKey) JWT_KEY_PAIR.getPublic(),
+                        (RSAPrivateKey) JWT_KEY_PAIR.getPrivate()
+                )
+                .jwkPostProcessor(key -> key.keyID(JWT_KEY_ID))
+                .build();
+        return encoder.encode(JwtEncoderParameters.from(claims)).getTokenValue();
+    }
+
+    private static KeyPair jwtKeyPair() {
+        try {
+            KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
+            generator.initialize(2048);
+            return generator.generateKeyPair();
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("RSA 테스트 키를 생성할 수 없습니다", exception);
+        }
+    }
+
+    private static HttpServer startJwtServer() {
+        try {
+            RSAKey publicKey = new RSAKey.Builder(
+                    (RSAPublicKey) JWT_KEY_PAIR.getPublic()
+            ).keyID(JWT_KEY_ID).build();
+            byte[] jwkSet = new JWKSet(publicKey)
+                    .toPublicJWKSet()
+                    .toString()
+                    .getBytes(StandardCharsets.UTF_8);
+            HttpServer server = HttpServer.create(
+                    new InetSocketAddress("127.0.0.1", 0),
+                    0
+            );
+            server.createContext("/issuer/jwks", exchange -> {
+                exchange.getResponseHeaders().set(
+                        HttpHeaders.CONTENT_TYPE,
+                        MediaType.APPLICATION_JSON_VALUE
+                );
+                exchange.sendResponseHeaders(200, jwkSet.length);
+                try (var response = exchange.getResponseBody()) {
+                    response.write(jwkSet);
+                }
+            });
+            server.start();
+            return server;
+        } catch (IOException exception) {
+            throw new IllegalStateException("관리 JWT 테스트 서버를 시작할 수 없습니다", exception);
+        }
     }
 
     private List<Future<CreatedLinkResult>> submitConcurrentCreations(

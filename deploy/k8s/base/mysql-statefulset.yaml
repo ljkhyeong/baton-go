@@ -22,6 +22,9 @@ spec:
       automountServiceAccountToken: false
       terminationGracePeriodSeconds: 120
       securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
         seccompProfile:
           type: RuntimeDefault
         fsGroup: 999
@@ -80,6 +83,9 @@ spec:
               memory: 2Gi
           securityContext:
             allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
           startupProbe:
             exec:
               command:

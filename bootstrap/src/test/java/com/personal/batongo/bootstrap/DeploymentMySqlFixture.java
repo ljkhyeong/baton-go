@@ -1,7 +1,9 @@
 package com.personal.batongo.bootstrap;
 
+import com.github.dockerjava.api.model.Capability;
 import com.personal.batongo.MySqlTestImage;
 import java.io.ByteArrayInputStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.KeyStore;
@@ -11,6 +13,7 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.time.Duration;
+import java.util.Map;
 import java.util.Properties;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.wait.strategy.Wait;
@@ -47,6 +50,10 @@ final class DeploymentMySqlFixture extends GenericContainer<DeploymentMySqlFixtu
         withEnv("BATON_GO_DB_USERNAME", RUNTIME_USERNAME);
         withEnv("BATON_GO_DB_PASSWORD", RUNTIME_PASSWORD);
         withEnv("TZ", "UTC");
+        withTmpFs(Map.of(
+                "/etc/mysql/tls", "rw,uid=999,gid=999,mode=0750",
+                "/var/lib/mysql", "rw,uid=999,gid=999,mode=0770"
+        ));
         withExposedPorts(MYSQL_PORT);
         withCopyFileToContainer(
                 MountableFile.forHostPath(repositoryFile(RUNTIME_INIT_SCRIPT), 0555),
@@ -56,9 +63,11 @@ final class DeploymentMySqlFixture extends GenericContainer<DeploymentMySqlFixtu
                 MountableFile.forClasspathResource(TLS_ENTRYPOINT_RESOURCE, 0755),
                 "/baton-go-test-entrypoint.sh"
         );
-        withCreateContainerCmdModifier(command ->
-                command.withEntrypoint("/baton-go-test-entrypoint.sh")
-        );
+        withCreateContainerCmdModifier(command -> {
+            command.withEntrypoint("/baton-go-test-entrypoint.sh");
+            command.withUser("999:999");
+            command.getHostConfig().withCapDrop(Capability.ALL);
+        });
         withCommand(
                 "--collation-server=utf8mb4_unicode_ci",
                 "--default-time-zone=+00:00",
@@ -67,15 +76,7 @@ final class DeploymentMySqlFixture extends GenericContainer<DeploymentMySqlFixtu
                 "--ssl-cert=/etc/mysql/tls/tls.crt",
                 "--ssl-key=/etc/mysql/tls/tls.key"
         );
-        waitingFor(Wait.forSuccessfulCommand("""
-                MYSQL_PWD="${BATON_GO_DB_PASSWORD}" \
-                mysql --protocol=TCP \
-                  --host=127.0.0.1 \
-                  --ssl-mode=REQUIRED \
-                  --user="${BATON_GO_DB_USERNAME}" \
-                  --database="${MYSQL_DATABASE}" \
-                  --execute='SELECT 1' >/dev/null 2>&1
-                """).withStartupTimeout(Duration.ofMinutes(3)));
+        waitingFor(Wait.forListeningPort().withStartupTimeout(Duration.ofMinutes(3)));
     }
 
     String[] migrationArguments(String jdbcUrl) {
@@ -90,10 +91,11 @@ final class DeploymentMySqlFixture extends GenericContainer<DeploymentMySqlFixtu
 
     Path createTruststore(Path truststorePath)
             throws Exception {
-        byte[] certificatePem = copyFileFromContainer(
-                CA_CERTIFICATE_PATH,
-                inputStream -> inputStream.readAllBytes()
-        );
+        var certificateRead = execInContainer("cat", CA_CERTIFICATE_PATH);
+        if (certificateRead.getExitCode() != 0) {
+            throw new IllegalStateException("배포 MySQL 테스트 CA를 읽지 못했습니다");
+        }
+        byte[] certificatePem = certificateRead.getStdout().getBytes(StandardCharsets.US_ASCII);
         CertificateFactory certificateFactory = CertificateFactory.getInstance("X.509");
         Certificate certificate;
         try (ByteArrayInputStream inputStream = new ByteArrayInputStream(certificatePem)) {

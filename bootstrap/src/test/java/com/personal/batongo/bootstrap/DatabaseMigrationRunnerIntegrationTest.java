@@ -87,6 +87,23 @@ class DatabaseMigrationRunnerIntegrationTest {
         }
     }
 
+    @Test
+    @DisplayName("배포 MySQL은 비루트 사용자와 제거된 Linux capability로 기동한다")
+    void runsMySqlWithRestrictedContainerPermissions() throws Exception {
+        var result = MYSQL.execInContainer(
+                "sh",
+                "-ec",
+                "id -u; id -g; awk '/^CapEff:/ {print $2}' /proc/1/status"
+        );
+
+        assertThat(result.getExitCode()).isZero();
+        assertThat(result.getStdout().lines()).containsExactly(
+                "999",
+                "999",
+                "0000000000000000"
+        );
+    }
+
     private static Set<String> schemaPrivileges(Connection runtimeConnection)
             throws SQLException {
         Set<String> privileges = new LinkedHashSet<>();

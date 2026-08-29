@@ -52,10 +52,12 @@ rm -f \
   "${tls_dir}/ca.srl" \
   "${tls_dir}/tls.csr" \
   "${tls_dir}/server.ext"
-chown mysql:mysql \
-  "${tls_dir}/ca.pem" \
-  "${tls_dir}/tls.crt" \
-  "${tls_dir}/tls.key"
+if [ "$(id -u)" -eq 0 ]; then
+  chown mysql:mysql \
+    "${tls_dir}/ca.pem" \
+    "${tls_dir}/tls.crt" \
+    "${tls_dir}/tls.key"
+fi
 chmod 0440 \
   "${tls_dir}/ca.pem" \
   "${tls_dir}/tls.crt" \

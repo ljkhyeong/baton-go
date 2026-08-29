@@ -142,6 +142,29 @@ Namespace는 워크로드 Kustomization에 의도적으로 포함하지 않았�
 kubectl apply -k deploy/k8s/bootstrap
 ```
 
+기본 Namespace는 `restricted` 감사·경고와 `baseline` 강제를 사용한다. 애플리케이션,
+마이그레이션 Job과 MySQL 매니페스트는 모두 비루트 사용자, `RuntimeDefault` seccomp,
+권한 상승 금지와 Linux capability 전체 제거를 선언한다. MySQL은 공식 이미지의 `mysql`
+사용자와 같은 UID/GID `999`를 사용하고 데이터 PVC는 `fsGroup=999`로 연결한다.
+
+`restricted` 강제 승격 전에는 고정한 MySQL 이미지 다이제스트로 신규 PVC, 운영 백업에서
+복원한 PVC와 현재 PVC를 각각 검증한다. 세 경우 모두 MySQL UID/GID가 `999`, 유효 capability가
+비어 있고 TLS startup·readiness, 초기 사용자 생성, 런타임 DML, 마이그레이션 DDL과 재시작이
+성공해야 한다. 하나라도 확인하지 못하면 `deploy/k8s/bootstrap/namespace.yaml`의
+`pod-security.kubernetes.io/enforce`를 `baseline`으로 유지한다. 검증 증거를 승인한 뒤 해당 값을
+`restricted`로 변경하고 먼저 서버 측 dry-run과 diff를 확인한 후 적용한다.
+
+```bash
+kubectl apply --server-side --dry-run=server -k deploy/k8s/bootstrap
+kubectl diff -k deploy/k8s/bootstrap
+kubectl apply -k deploy/k8s/bootstrap
+kubectl -n baton-go exec pod/baton-go-mysql-0 -- sh -ec \
+  "id -u; id -g; awk '/^CapEff:/ {print \$2}' /proc/1/status"
+```
+
+마지막 명령은 차례로 `999`, `999`, `0000000000000000`을 출력해야 한다. 이 확인은 PVC
+복원·재시작과 데이터베이스 기능 검증을 대신하지 않는다.
+
 비밀값 관리자 또는 External Secrets controller를 사용한다면 다음 이름과 키로 구체화한다.
 
 ```text

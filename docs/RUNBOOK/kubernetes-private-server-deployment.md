@@ -115,9 +115,25 @@ set -eu
 if grep -F -q \
   -e 'REPLACE_ME' \
   -e 'registry.invalid/baton-go' \
+  -e 'newTag:' \
   deploy/k8s/overlays/private-server/app-config.properties \
   deploy/k8s/overlays/private-server/kustomization.yaml; then
-  echo "배포 placeholder와 가짜 이미지 참조를 먼저 교체해야 합니다." >&2
+  echo "배포 placeholder와 가짜 이미지 참조를 교체하고 tag 설정을 제거해야 합니다." >&2
+  exit 1
+fi
+
+app_digest="$(awk '
+  $1 == "-" && $2 == "name:" {
+    in_app = $3 == "baton-go"
+    next
+  }
+  in_app && $1 == "digest:" {
+    print $2
+    exit
+  }
+' deploy/k8s/overlays/private-server/kustomization.yaml)"
+if ! printf '%s\n' "$app_digest" | grep -Eq '^sha256:[0-9a-f]{64}$'; then
+  echo "애플리케이션 이미지는 64자리 SHA-256 digest로 고정해야 합니다." >&2
   exit 1
 fi
 

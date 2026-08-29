@@ -113,6 +113,13 @@ jobs:
           ' "$overlay/kustomization.yaml")"
           test -n "$app_image"
 
+          app_digest="${app_image##*@}"
+          if test "$app_digest" != \
+            "sha256:REPLACE_ME_WITH_IMMUTABLE_RELEASE_DIGEST"; then
+            printf '%s\n' "$app_digest" \
+              | grep -Eq '^sha256:[0-9a-f]{64}$'
+          fi
+
           rendered_manifest="$RUNNER_TEMP/baton-go-private-server.yaml"
           kubectl kustomize "$overlay" >"$rendered_manifest"
           test "$(grep -F -c "image: $app_image" "$rendered_manifest")" -eq 2

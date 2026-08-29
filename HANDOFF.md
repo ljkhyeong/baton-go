@@ -17,8 +17,9 @@
 - GO 전용 MySQL과 비공개 Kubernetes 기본 구성은 준비되어 있다. 이는 배포 기반일 뿐 실제
   클러스터 검증이나 공개 운영 승인 증거가 아니다.
 - 대표 HTTP 요청·응답은 기존 계약 테스트에서 REST Docs 조각으로 생성하며
-  `:adapter-in-web:apiContractDocs`가 압축 산출물을 만들고 CI가 `baton-go-rest-docs`로 14일간
-  보존한다. 제품 동작과 전체 오류 행렬의 정본은 계속
+  `:adapter-in-web:apiContractDocs`가 압축 산출물을 만들고 CI가 `baton-go-rest-docs`로
+  보존한다. 보존 기간은 [CI 워크플로](.github/workflows/ci.yml)의 `retention-days` 설정을
+  따른다. 제품 동작과 전체 오류 행렬의 정본은 계속
   [API 계약](docs/PRD/0002_api-contract/spec.md)이다.
 
 ## 외부 저장소 확인 기준

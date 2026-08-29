@@ -17,9 +17,9 @@ BATON GO의 HTTP 동작 정본은 [API 계약](../PRD/0002_api-contract/spec.md)
 adapter-in-web/build/distributions/baton-go-rest-docs.zip
 ```
 
-CI의 `필수 검증` 작업은 같은 파일을 `baton-go-rest-docs` 산출물로 14일간 보존한다.
-산출물이 없으면 CI가 실패하므로 계약 테스트와 압축 작업이 실행되지 않은 상태를 성공으로
-처리하지 않는다.
+CI의 `필수 검증` 작업은 같은 파일을 `baton-go-rest-docs` 산출물로 보존한다. 보존 기간은
+[CI 워크플로](../../.github/workflows/ci.yml)의 `retention-days` 설정을 따른다. 산출물이 없으면
+CI가 실패하므로 계약 테스트와 압축 작업이 실행되지 않은 상태를 성공으로 처리하지 않는다.
 
 각 작업 식별자는 안정적인 디렉터리 이름으로 유지한다.
 

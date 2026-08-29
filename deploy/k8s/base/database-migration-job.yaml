@@ -9,7 +9,6 @@ spec:
   suspend: true
   backoffLimit: 0
   activeDeadlineSeconds: 1800
-  ttlSecondsAfterFinished: 3600
   template:
     metadata:
       labels:

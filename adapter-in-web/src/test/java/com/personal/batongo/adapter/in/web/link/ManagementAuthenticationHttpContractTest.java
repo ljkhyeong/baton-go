@@ -1,5 +1,6 @@
 package com.personal.batongo.adapter.in.web.link;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -10,8 +11,11 @@ import static org.springframework.restdocs.operation.preprocess.Preprocessors.mo
 import static org.springframework.restdocs.operation.preprocess.Preprocessors.preprocessRequest;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.head;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.request;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -19,15 +23,21 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.personal.batongo.adapter.in.web.FilterErrorResponseWriter;
 import com.personal.batongo.adapter.in.web.ManagementApiSecurityConfiguration;
 import com.personal.batongo.adapter.in.web.RequestIdFilter;
+import com.personal.batongo.adapter.in.web.operations.TargetContractOperationsController;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.CreatedLinkResult;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.LinkResult;
+import com.personal.batongo.application.link.port.in.TargetContractOperationsUseCase;
 import com.personal.batongo.domain.link.LinkPurpose;
 import com.personal.batongo.domain.link.TargetSystem;
 import java.net.URI;
 import java.time.Instant;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -36,9 +46,11 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.security.oauth2.jwt.BadJwtException;
@@ -51,17 +63,28 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.context.WebApplicationContext;
+import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
+import org.springframework.web.util.UriTemplate;
 
 @ExtendWith(RestDocumentationExtension.class)
 @WebMvcTest(
-        controllers = LinkManagementController.class,
+        controllers = {
+                LinkManagementController.class,
+                TargetContractOperationsController.class
+        },
         properties = {
                 "spring.security.oauth2.resourceserver.jwt.issuer-uri=https://identity.example",
-                "spring.security.oauth2.resourceserver.jwt.audiences=baton-go"
+                "spring.security.oauth2.resourceserver.jwt.audiences=baton-go",
+                "baton-go.target-contract-operations.enabled=true",
+                "baton-go.target-contract-operations.private-ingress-confirmed=true"
         }
 )
-@ContextConfiguration(classes = LinkManagementController.class)
+@ContextConfiguration(classes = {
+        LinkManagementController.class,
+        TargetContractOperationsController.class
+})
 @Import({
         ManagementApiSecurityConfiguration.class,
         FilterErrorResponseWriter.class
@@ -83,7 +106,13 @@ class ManagementAuthenticationHttpContractTest {
     private SmartLinkUseCase useCase;
 
     @MockitoBean
+    private TargetContractOperationsUseCase operationsUseCase;
+
+    @MockitoBean
     private JwtDecoder jwtDecoder;
+
+    @Autowired
+    private RequestMappingHandlerMapping handlerMapping;
 
     private MockMvc mockMvc;
 
@@ -168,7 +197,7 @@ class ManagementAuthenticationHttpContractTest {
                 .andExpect(jsonPath("$.code")
                         .value("MANAGEMENT_AUTHORIZATION_REQUIRED"));
 
-        verifyNoInteractions(useCase);
+        verifyNoInteractions(useCase, operationsUseCase);
     }
 
     private static Stream<Arguments> managementRequestsWithWrongScope() {
@@ -195,6 +224,98 @@ class ManagementAuthenticationHttpContractTest {
                         "baton-go.links.read"
                 )
         );
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"baton-go.links.create", "baton-go.links.revoke"})
+    @DisplayName("링크 HEAD 조회는 조회 외 scope를 403으로 거부한다")
+    void rejectsHeadRequestWithoutLinkReadScope(String grantedScope) throws Exception {
+        when(jwtDecoder.decode(MANAGEMENT_JWT)).thenReturn(jwt(grantedScope));
+
+        mockMvc.perform(head(
+                        "/api/v1/links/{linkId}",
+                        "83a430c4-5c5d-4eb4-a815-7a5ba1fd4aae"
+                ).header(
+                        HttpHeaders.AUTHORIZATION,
+                        "Bearer " + MANAGEMENT_JWT
+                ))
+                .andExpect(status().isForbidden())
+                .andExpect(header().doesNotExist(HttpHeaders.WWW_AUTHENTICATE))
+                .andExpect(content().string(""));
+
+        verifyNoInteractions(useCase, operationsUseCase);
+    }
+
+    @Test
+    @DisplayName("링크 HEAD 조회는 조회 scope로 현재 상태를 확인한다")
+    void acceptsHeadRequestWithLinkReadScope() throws Exception {
+        UUID linkId = UUID.fromString("83a430c4-5c5d-4eb4-a815-7a5ba1fd4aae");
+        when(jwtDecoder.decode(MANAGEMENT_JWT)).thenReturn(jwt(
+                "baton-go.links.read"
+        ));
+        when(useCase.getLink(linkId)).thenReturn(link());
+
+        mockMvc.perform(head("/api/v1/links/{linkId}", linkId)
+                        .header(
+                                HttpHeaders.AUTHORIZATION,
+                                "Bearer " + MANAGEMENT_JWT
+                        ))
+                .andExpect(status().isOk());
+
+        verify(useCase).getLink(linkId);
+        verifyNoInteractions(operationsUseCase);
+    }
+
+    @Test
+    @DisplayName("등록된 모든 관리 HTTP 메서드는 작업별 scope를 요구한다")
+    void requiresOperationScopeForEveryRegisteredManagementMethod() throws Exception {
+        when(jwtDecoder.decode(MANAGEMENT_JWT)).thenReturn(jwt(
+                "baton-go.unrelated"
+        ));
+
+        List<ManagementRoute> routes = handlerMapping.getHandlerMethods().keySet().stream()
+                .filter(mapping -> mapping.getPatternValues().stream()
+                        .anyMatch(path -> path.startsWith("/api/v1/")))
+                .peek(mapping -> assertThat(mapping.getMethodsCondition().getMethods())
+                        .as("관리 핸들러는 HTTP 메서드를 명시해야 한다: %s", mapping)
+                        .isNotEmpty())
+                .flatMap(mapping -> mapping.getPatternValues().stream()
+                        .filter(path -> path.startsWith("/api/v1/"))
+                        .flatMap(path -> mapping.getMethodsCondition().getMethods().stream()
+                                .flatMap(ManagementAuthenticationHttpContractTest::withImplicitHead)
+                                .map(method -> new ManagementRoute(method, path))))
+                .distinct()
+                .sorted(Comparator.comparing(ManagementRoute::path)
+                        .thenComparing(route -> route.method().name()))
+                .toList();
+
+        assertThat(routes).isNotEmpty();
+        for (ManagementRoute route : routes) {
+            UriTemplate uriTemplate = new UriTemplate(route.path());
+            Map<String, String> variables = uriTemplate.getVariableNames().stream()
+                    .collect(Collectors.toMap(
+                            Function.identity(),
+                            ignored -> "83a430c4-5c5d-4eb4-a815-7a5ba1fd4aae"
+                    ));
+
+            mockMvc.perform(request(
+                            route.method(),
+                            uriTemplate.expand(variables)
+                    ).header(
+                            HttpHeaders.AUTHORIZATION,
+                            "Bearer " + MANAGEMENT_JWT
+                    ))
+                    .andExpect(status().isForbidden());
+        }
+
+        verifyNoInteractions(useCase, operationsUseCase);
+    }
+
+    private static Stream<HttpMethod> withImplicitHead(RequestMethod method) {
+        HttpMethod httpMethod = HttpMethod.valueOf(method.name());
+        return method == RequestMethod.GET
+                ? Stream.of(httpMethod, HttpMethod.HEAD)
+                : Stream.of(httpMethod);
     }
 
     @Test
@@ -236,18 +357,25 @@ class ManagementAuthenticationHttpContractTest {
 
     private CreatedLinkResult createdLink() {
         return new CreatedLinkResult(
-                new LinkResult(
-                        UUID.fromString("83a430c4-5c5d-4eb4-a815-7a5ba1fd4aae"),
-                        TargetSystem.BATON,
-                        BATON_TARGET_PATH,
-                        LinkPurpose.NAVIGATION,
-                        null,
-                        Instant.parse("2026-07-30T10:00:00Z"),
-                        null,
-                        Instant.parse("2026-07-29T10:00:00Z")
-                ),
+                link(),
                 URI.create("https://go.example/l/VOvLShvx93kQpj8x7w2HYQ"),
                 false
         );
+    }
+
+    private LinkResult link() {
+        return new LinkResult(
+                UUID.fromString("83a430c4-5c5d-4eb4-a815-7a5ba1fd4aae"),
+                TargetSystem.BATON,
+                BATON_TARGET_PATH,
+                LinkPurpose.NAVIGATION,
+                null,
+                Instant.parse("2026-07-30T10:00:00Z"),
+                null,
+                Instant.parse("2026-07-29T10:00:00Z")
+        );
+    }
+
+    private record ManagementRoute(HttpMethod method, String path) {
     }
 }

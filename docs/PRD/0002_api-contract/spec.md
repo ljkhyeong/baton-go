@@ -169,6 +169,8 @@ Idempotency-Key: 8e448211-66ae-44ab-9888-c4960648c22b
 `baton-go.links.read` scope가 있는 관리 JWT가 필요하다. 원문 공개 코드나 `shortUrl`은
 반환하지 않는다.
 성공 시 `200 OK`와 다음 형태의 현재 링크 상태를 반환한다.
+같은 경로의 `HEAD`도 `baton-go.links.read` scope를 요구하며, 같은 상태 판정 뒤 본문 없이
+응답한다.
 
 ```json
 {

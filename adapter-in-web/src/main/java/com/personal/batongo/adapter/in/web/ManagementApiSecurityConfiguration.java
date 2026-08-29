@@ -51,6 +51,8 @@ public class ManagementApiSecurityConfiguration {
                         .hasAuthority(LINK_CREATE_AUTHORITY)
                         .requestMatchers(HttpMethod.GET, "/api/v1/links/*")
                         .hasAuthority(LINK_READ_AUTHORITY)
+                        .requestMatchers(HttpMethod.HEAD, "/api/v1/links/*")
+                        .hasAuthority(LINK_READ_AUTHORITY)
                         .requestMatchers(HttpMethod.PUT, "/api/v1/links/*/revocation")
                         .hasAuthority(LINK_REVOKE_AUTHORITY)
                         .requestMatchers("/api/v1/operations/**")

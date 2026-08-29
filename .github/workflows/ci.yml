@@ -89,7 +89,7 @@ jobs:
                   -schema-location "$schema_location"
           done
 
-      - name: 애플리케이션 이미지 다이제스트 계약 검증
+      - name: 배포 이미지 다이제스트 계약 검증
         run: |
           set -euo pipefail
 
@@ -120,9 +120,16 @@ jobs:
               | grep -Eq '^sha256:[0-9a-f]{64}$'
           fi
 
+          mysql_image="$(docker compose --env-file .env.example \
+            config --images mysql)"
+          mysql_digest="${mysql_image##*@}"
+          printf '%s\n' "$mysql_digest" \
+            | grep -Eq '^sha256:[0-9a-f]{64}$'
+
           rendered_manifest="$RUNNER_TEMP/baton-go-private-server.yaml"
           kubectl kustomize "$overlay" >"$rendered_manifest"
           test "$(grep -F -c "image: $app_image" "$rendered_manifest")" -eq 2
+          test "$(grep -F -c "image: mysql@$mysql_digest" "$rendered_manifest")" -eq 1
 
       - name: 정적·단위·패키징 검증
         run: ./gradlew --no-daemon build

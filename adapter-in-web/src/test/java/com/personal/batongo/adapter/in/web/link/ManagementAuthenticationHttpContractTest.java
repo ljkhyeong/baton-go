@@ -9,7 +9,9 @@ import static org.springframework.restdocs.mockmvc.MockMvcRestDocumentation.docu
 import static org.springframework.restdocs.operation.preprocess.Preprocessors.modifyHeaders;
 import static org.springframework.restdocs.operation.preprocess.Preprocessors.preprocessRequest;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -26,10 +28,14 @@ import java.net.URI;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
@@ -43,6 +49,7 @@ import org.springframework.restdocs.RestDocumentationExtension;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
 
@@ -140,24 +147,54 @@ class ManagementAuthenticationHttpContractTest {
         verifyNoInteractions(useCase);
     }
 
-    @Test
-    @DisplayName("링크 생성 scope가 없는 관리 JWT는 403 오류로 응답한다")
-    void rejectsJwtWithoutLinkCreationScope() throws Exception {
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("managementRequestsWithWrongScope")
+    @DisplayName("관리 API는 작업과 다른 scope를 403으로 거부한다")
+    void rejectsJwtWithWrongScope(
+            String ignoredDescription,
+            MockHttpServletRequestBuilder request,
+            String grantedScope
+    ) throws Exception {
         when(jwtDecoder.decode(MANAGEMENT_JWT)).thenReturn(jwt(
-                "baton-go.links.read"
+                grantedScope
         ));
 
-        mockMvc.perform(post("/api/v1/links")
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + MANAGEMENT_JWT)
-                        .header("Idempotency-Key", IDEMPOTENCY_KEY)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(createRequest()))
+        mockMvc.perform(request.header(
+                        HttpHeaders.AUTHORIZATION,
+                        "Bearer " + MANAGEMENT_JWT
+                ))
                 .andExpect(status().isForbidden())
                 .andExpect(header().doesNotExist(HttpHeaders.WWW_AUTHENTICATE))
                 .andExpect(jsonPath("$.code")
                         .value("MANAGEMENT_AUTHORIZATION_REQUIRED"));
 
         verifyNoInteractions(useCase);
+    }
+
+    private static Stream<Arguments> managementRequestsWithWrongScope() {
+        String linkId = "83a430c4-5c5d-4eb4-a815-7a5ba1fd4aae";
+        return Stream.of(
+                Arguments.of(
+                        "조회 scope로 링크 생성을 요청한다",
+                        post("/api/v1/links"),
+                        "baton-go.links.read"
+                ),
+                Arguments.of(
+                        "생성 scope로 링크 조회를 요청한다",
+                        get("/api/v1/links/{linkId}", linkId),
+                        "baton-go.links.create"
+                ),
+                Arguments.of(
+                        "조회 scope로 링크 폐기를 요청한다",
+                        put("/api/v1/links/{linkId}/revocation", linkId),
+                        "baton-go.links.read"
+                ),
+                Arguments.of(
+                        "조회 scope로 대상 계약 운영을 요청한다",
+                        get("/api/v1/operations/link-target-contract-v1/inventory"),
+                        "baton-go.links.read"
+                )
+        );
     }
 
     @Test

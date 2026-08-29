@@ -152,6 +152,25 @@ class LinkCodeKeyGuardIntegrationTest {
     }
 
     @Test
+    @DisplayName("HMAC 보호 행이 유실되면 시작과 생성 모두 안전하게 실패한다")
+    void rejectsMissingGuardRowAtStartupAndCreation() {
+        jdbcTemplate.update("DELETE FROM link_code_key_guard WHERE guard_id = 1");
+
+        assertThatThrownBy(() -> startupValidator.run(
+                new DefaultApplicationArguments(new String[0])
+        ))
+                .isInstanceOf(LinkCodeKeyBindingException.class);
+        assertThatThrownBy(() -> smartLinkUseCase.createLink(command(
+                "adbb1c82-4ed5-461e-9cb8-431bb5e6fda2"
+        )))
+                .isInstanceOf(LinkCodeKeyBindingException.class);
+
+        assertThat(linkCount()).isZero();
+        assertThat(reservationCount()).isZero();
+        assertThat(storedIdentity()).isNull();
+    }
+
+    @Test
     @DisplayName("기존 링크가 있는 데이터베이스의 미결합 sentinel은 자동 결합하지 않는다")
     void rejectsUnboundDatabaseWithExistingLink() {
         smartLinkUseCase.createLink(command(
@@ -407,9 +426,14 @@ class LinkCodeKeyGuardIntegrationTest {
     private void bind(LinkCodeDerivationIdentity identity) {
         jdbcTemplate.update(
                 """
-                        UPDATE link_code_key_guard
-                        SET derivation_version = ?, key_fingerprint = ?
-                        WHERE guard_id = 1
+                        INSERT INTO link_code_key_guard (
+                            guard_id,
+                            derivation_version,
+                            key_fingerprint
+                        ) VALUES (1, ?, ?) AS new
+                        ON DUPLICATE KEY UPDATE
+                            derivation_version = new.derivation_version,
+                            key_fingerprint = new.key_fingerprint
                         """,
                 identity.version(),
                 identity.hmacFingerprint()

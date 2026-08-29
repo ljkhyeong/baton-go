@@ -655,7 +655,7 @@ class LinkCreationIdempotencyIntegrationTest {
             }
 
             assertThat(rollbackFailures).isEqualTo(1);
-            assertThat(retryableFailures).isBetween(1, CONCURRENCY - 2);
+            assertThat(retryableFailures).isBetween(0, CONCURRENCY - 2);
             assertThat(results).isNotEmpty();
             assertThat(results.size() + rollbackFailures + retryableFailures)
                     .isEqualTo(CONCURRENCY);

@@ -8,7 +8,10 @@ spring:
           issuer-uri: ${BATON_GO_MANAGEMENT_JWT_ISSUER_URI}
           audiences: ${BATON_GO_MANAGEMENT_JWT_AUDIENCE:baton-go}
   jackson:
+    mapper:
+      allow-coercion-of-scalars: false
     deserialization:
+      accept-float-as-int: false
       fail-on-unknown-properties: true
   datasource:
     url: ${BATON_GO_DB_URL:jdbc:mysql://localhost:3307/baton_go?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC}

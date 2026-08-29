@@ -71,8 +71,9 @@ vim .env
 관리 API는 `BATON_GO_MANAGEMENT_JWT_ISSUER_URI`의 발급자가 서명한 JWT를 사용한다. 운영 발급자
 URI는 HTTPS이며 JWT의 `aud`는 기본 `baton-go`와 일치해야 한다. 다른 audience가 필요하면
 `BATON_GO_MANAGEMENT_JWT_AUDIENCE`를 명시한다. Spring Boot 표준
-`SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI`에는 발급자의 JWK Set 주소를 설정한다.
-이 설정은 시작할 때 discovery 서버에 의존하지 않으면서 `iss` 검증을 유지한다. 링크
+`SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI`에는 발급자의 HTTPS JWK Set 주소를
+설정한다. 두 endpoint의 HTTP는 loopback 로컬 개발에서만 허용한다. 이 설정은 시작할 때
+discovery 서버에 의존하지 않으면서 `iss` 검증을 유지한다. 링크
 생성·조회·폐기에는 각각 `baton-go.links.create`,
 `baton-go.links.read`, `baton-go.links.revoke` scope가 필요하다.
 

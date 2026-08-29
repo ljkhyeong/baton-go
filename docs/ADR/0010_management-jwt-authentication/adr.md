@@ -18,7 +18,9 @@ BATON GO는 브라우저 사용자가 아니라 신뢰된 서버 호출자가 �
 - `/api/v1/**`는 Spring Security OAuth2 Resource Server의 JWT 인증으로 보호한다.
 - `BATON_GO_MANAGEMENT_JWT_ISSUER_URI`는 신뢰할 발급자 식별자로 필수다. Spring Boot 표준
   `SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI`에는 발급자의 HTTPS JWK Set 주소를
-  명시해 애플리케이션 시작을 metadata discovery 서버 가용성과 분리한다.
+  명시해 애플리케이션 시작을 metadata discovery 서버 가용성과 분리한다. 애플리케이션은 두
+  endpoint의 비로컬 HTTP 설정을 시작 단계에서 거부하며 loopback HTTP는 로컬 개발에서만
+  허용한다.
 - JWT의 `iss`는 설정한 발급자, `aud`는 기본 `baton-go`와 일치해야 한다. 다른 audience가
   필요하면 `BATON_GO_MANAGEMENT_JWT_AUDIENCE`로 명시한다.
 - 경로별 필요한 scope는 다음과 같다.

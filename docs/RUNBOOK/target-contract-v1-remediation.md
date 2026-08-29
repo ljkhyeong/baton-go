@@ -24,11 +24,11 @@ BATON_GO_TARGET_CONTRACT_OPERATIONS_PRIVATE_INGRESS_CONFIRMED=true
 
 ## 2. 읽기 전용 목록 조사
 
-관리 자격 증명을 셸 기록, 프로세스 인자와 터미널 녹화에 남기지 않는다. 토큰은
-비밀값 관리자에서 현재 셸의 export하지 않은 변수로 읽고, curl 인자가 아니라 표준 입력 헤더로
-전달한다. 헤더 파일 입력은 curl 설정 문자열 문법을 거치지 않으므로 허용된 출력 가능
-ASCII의 따옴표와 백슬래시도 토큰 원문 그대로 보존한다. 기존 작업과 분리한 전용 유지보수
-셸에서 종료·인터럽트 정리 `trap`을 먼저 등록한다. 다음 `read` 입력값은 화면에 표시되지 않는다.
+`baton-go.target-contract.operate` scope와 `aud=baton-go`를 가진 짧은 수명의 관리 JWT를
+승인된 발급 절차로 받는다. JWT를 셸 기록, 프로세스 인자와 터미널 녹화에 남기지 않고 현재
+셸의 export하지 않은 변수로 읽어 curl 인자가 아닌 표준 입력 헤더로 전달한다. 기존 작업과
+분리한 전용 유지보수 셸에서 종료·인터럽트 정리 `trap`을 먼저 등록한다. 다음 `read` 입력값은
+화면에 표시되지 않는다.
 
 ```bash
 trap 'unset BATON_GO_OPS_TOKEN' EXIT HUP INT TERM

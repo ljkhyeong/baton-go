@@ -36,9 +36,9 @@
 1. 배포 DB 전체를 [대상 계약 v1 정리 실행서](docs/RUNBOOK/target-contract-v1-remediation.md)로
    조사하고 `unrevoked non-compliant=0`, 미승인 `HOLD=0` 증거를 확보한다.
 2. 확인한 BATON·ROUND 인증 경계를 실제 릴리스 이미지와 공개 HTTPS, 외부 coturn에 연결하고
-   세션·CSRF·쿠키·JWK 회전·TURN·WebSocket 경계 증거를 확보한다. GO 관리 API도
-   단일 정적 Bearer를 최종 운영 인증으로 유지할지, 호출자별 신원·scope·회전·감사 가능한
-   인증으로 전환할지 결정하고 검증한다.
+   세션·CSRF·쿠키·JWK 회전·TURN·WebSocket 경계 증거를 확보한다. GO 관리 API는
+   Spring Security JWT와 작업별 scope로 전환했으므로 실제 발급자 식별자·JWK, 서비스 신원,
+   audience·scope와 키 회전을 비공개 경계에서 검증한다.
 3. BATON 호출자에 GO 원격 생성·폐기 의도와 같은 `Idempotency-Key`를 소유 트랜잭션의
    순서 보장 아웃박스로 저장하고, 취소 표식과 생성 후 폐기 수렴을 구현한다.
 4. 공개 `/l`과 비공개 `/api/v1` 외부 경계를 분리하고, 분산 요청률 제한과

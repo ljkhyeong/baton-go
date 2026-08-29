@@ -19,7 +19,7 @@ BATON과 ROUND가 링크를 원격 생성할 때 서버는 저장을 완료했�
   소문자 정규화한다. 해당 키 해시의 기존 예약이 있을 때만 요청 내용과 코드 해시를
   검증해 재생하고, 예약이 없으면 `400 INVALID_IDEMPOTENCY_KEY`로 거부한다. 이 경로는
   `INSERT IGNORE`나 링크 저장을 호출하지 않는다.
-- 관리 자격 증명과 분리된 `BATON_GO_LINK_CODE_SECRET`을 사용한다.
+- 관리 JWT 발급 키와 별개인 `BATON_GO_LINK_CODE_SECRET`을 사용한다.
 - 공개 코드는
   `first16(HMAC-SHA-256(secret, "baton-go-link-code:v1\0" + idempotencyKey))`로 파생한다.
 - DB에는 공개 코드와 멱등성 키의 SHA-256 해시만 저장한다.
@@ -72,4 +72,4 @@ BATON과 ROUND가 링크를 원격 생성할 때 서버는 저장을 완료했�
   설정 불일치로 실패한다. 이 검증은 DB-key 결합 이후에도 방어 계층으로 유지한다.
 - BATON과 ROUND는 원본 애그리게이트 커밋 뒤 GO를 호출하고 생성 의도 UUID를 아웃박스 또는
   소유 상태에 보존한다.
-- 관리 자격 증명과 파생 비밀값을 공유하지 않고 둘 다 로그와 URL에 넣지 않는다.
+- 관리 JWT와 링크 코드 파생 비밀값을 로그와 URL에 넣지 않는다.

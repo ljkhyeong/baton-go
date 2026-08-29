@@ -11,7 +11,6 @@
 | `StatefulSet/baton-go-mysql` | GO 전용 `baton_go` 데이터베이스 | 헤드리스 `ClusterIP:3306` |
 | `PVC/data-baton-go-mysql-0` | GO MySQL 데이터 디렉터리 | `ReadWriteOnce`, 10Gi |
 | `ConfigMap/baton-go-database-identity` | 변경 불가 런타임·마이그레이션 사용자 이름 | 애플리케이션·Job·MySQL이 참조 |
-| `Secret/baton-go-management-credentials` | 관리 Bearer 토큰 | 애플리케이션 Pod만 참조 |
 | `Secret/baton-go-link-code-secret` | 링크 HMAC 비밀값 | 애플리케이션 Pod만 참조 |
 | `Secret/baton-go-database-client-config` | 비밀 쿼리가 없는 TLS JDBC URL | 애플리케이션·마이그레이션 Job만 참조 |
 | `Secret/baton-go-database-runtime-credentials` | DML 런타임 비밀번호 | 애플리케이션·MySQL만 참조 |
@@ -53,7 +52,9 @@
 8. 멱등 생성 요청, 만료·폐기 링크의 보존 기간과 자동 정리 후 HTTP 의미,
    백업·감사 요구, PVC 경보·증설 기준을 하나의 데이터 수명주기 정책으로 결정한다.
    이 결정 전에는 만료·폐기를 자동 삭제 조건으로 사용하지 않는다.
-9. Prometheus 수집 구성, 경보 규칙, 알림 경로와 응답 담당자를 확정한다. Actuator
+9. 관리 JWT 발급자, `aud=baton-go`, 서비스 신원별 scope와 signing key 회전 담당자를
+   확정한다. 애플리케이션 Pod에서 설정한 JWK Set HTTPS 주소에 접근할 수 있어야 한다.
+10. Prometheus 수집 구성, 경보 규칙, 알림 경로와 응답 담당자를 확정한다. Actuator
    endpoint 노출이 실제 수집·경보 연결을 대신하지 않는다.
 
 다음 명령은 Secret 값을 출력하지 않는다.
@@ -70,12 +71,18 @@ kubectl cluster-info
 
 ## 2. 비밀값 제외 설정과 이미지 고정
 
-`deploy/k8s/overlays/private-server/app-config.properties`에서 세 `REPLACE_ME` 값을 실제
+`deploy/k8s/overlays/private-server/app-config.properties`에서 다섯 `REPLACE_ME` 값을 실제
 출처로 바꾼다.
 
 - `BATON_GO_PUBLIC_BASE_URL`: 사용자에게 반환할 단축 URL의 HTTPS 출처
 - `BATON_GO_BATON_BASE_URL`: BATON 공개 HTTPS 출처
 - `BATON_GO_ROUND_BASE_URL`: BATON과 같은 HTTPS 출처
+- `BATON_GO_MANAGEMENT_JWT_ISSUER_URI`: 관리 서비스 JWT의 HTTPS 발급자
+- `SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI`: 발급자의 HTTPS JWK Set 주소
+
+`BATON_GO_MANAGEMENT_JWT_AUDIENCE`는 발급 계약을 별도로 정하지 않았다면 `baton-go`를 유지한다.
+JWK Set 주소를 명시하면 애플리케이션 시작이 discovery 서버 가용성에 묶이지 않으면서 설정한
+`iss` 검증은 유지된다.
 
 비로컬 BATON·ROUND 출처는 scheme, host와 port까지 같아야 한다. 경로, query,
 fragment와 userinfo를 넣지 않는다. 운영 기능 두 설정값은 평상시에 모두 `false`로 둔다.
@@ -138,9 +145,6 @@ kubectl apply -k deploy/k8s/bootstrap
 비밀값 관리자 또는 External Secrets controller를 사용한다면 다음 이름과 키로 구체화한다.
 
 ```text
-baton-go-management-credentials
-  BATON_GO_MANAGEMENT_TOKEN
-
 baton-go-link-code-secret
   BATON_GO_LINK_CODE_SECRET
 
@@ -165,10 +169,8 @@ baton-go-mysql-client-tls
   truststore.p12
 ```
 
-- 관리 토큰은 32자 이상의 공백 없는 출력 가능 ASCII이며, 신규 값은 base64url처럼 HTTP
-  헤더와 파서에 안전한 알파벳으로 생성한다.
-- HMAC 비밀값은 관리 토큰과 다른 32자 이상의 새 무작위 값이며 base64url 또는 16진수처럼
-  파서에 안전한 알파벳으로 생성한다.
+- HMAC 비밀값은 32자 이상의 새 무작위 값이며 base64url 또는 16진수처럼 파서에 안전한
+  알파벳으로 생성한다.
 - 런타임 DB 사용자는 변경 불가 ConfigMap의 `baton_go`, 마이그레이션 사용자는
   `baton_go_migrator`다. BATON 계정이나 `root`를 사용하지 않는다. 사용자 이름 변경은 기존 PVC에
   자동 반영되지 않으므로 일반 설정 변경으로 수행하지 않는다.
@@ -200,8 +202,8 @@ jdbc:mysql://baton-go-mysql:3306/baton_go?sslMode=VERIFY_IDENTITY&trustCertifica
 `BATON_GO_DB_URL`에 넣지 않는다. 애플리케이션과 마이그레이션 Job은 같은 URL·공개 CA 신뢰 저장소를
 사용하되 서로 다른 데이터베이스 사용자 이름/비밀번호를 사용한다.
 
-Kubernetes Secret의 RBAC는 객체 키 단위가 아니다. 따라서 URL, DB 런타임, 마이그레이션, root,
-관리 토큰과 HMAC 비밀값을 서로 다른 객체로 유지한다. 운영자·컨트롤러 RBAC도 가능하면
+Kubernetes Secret의 RBAC는 객체 키 단위가 아니다. 따라서 URL, DB 런타임, 마이그레이션, root와
+HMAC 비밀값을 서로 다른 객체로 유지한다. 운영자·컨트롤러 RBAC도 가능하면
 `resourceNames`로 필요한 Secret만 허용하며 수명주기가 다른 Secret을 하나로 합치지 않는다.
 Secret 읽기 권한이 없어도 Pod나 워크로드 템플릿을
 만들거나 바꿀 수 있으면 해당 Secret을 마운트해 읽을 수 있으므로 워크로드 변경과
@@ -213,10 +215,6 @@ Secret 읽기 권한이 없어도 Pod나 워크로드 템플릿을
 실행하지 않는다.
 
 ```bash
-kubectl -n baton-go create secret generic baton-go-management-credentials \
-  --from-env-file=/secure/path/baton-go-management-credentials.env \
-  --dry-run=client -o yaml | kubectl apply -f -
-
 kubectl -n baton-go create secret generic baton-go-link-code-secret \
   --from-env-file=/secure/path/baton-go-link-code-secret.env \
   --dry-run=client -o yaml | kubectl apply -f -
@@ -261,7 +259,6 @@ kubectl -n baton-go create secret generic baton-go-registry \
 다음 출력은 키 이름과 바이트 수만 보여 주며 실제 값은 출력하지 않는다.
 
 ```bash
-kubectl -n baton-go describe secret baton-go-management-credentials
 kubectl -n baton-go describe secret baton-go-link-code-secret
 kubectl -n baton-go describe secret baton-go-database-client-config
 kubectl -n baton-go describe secret baton-go-database-runtime-credentials
@@ -275,11 +272,11 @@ kubectl -n baton-go describe secret baton-go-mysql-client-tls
 MySQL Pod에만, 클라이언트 신뢰 저장소는 애플리케이션과 마이그레이션 Job에만 마운트된다. 실제 Secret
 값을 렌더 검증을 위해 임시 매니페스트에 넣지 않는다.
 
-기존 `baton-go-runtime-credentials` 한 객체를 사용하던 환경은 애플리케이션 매니페스트를
-적용하기 전에 비밀값 관리자의 같은 승인 버전에서 `baton-go-management-credentials`와
-`baton-go-link-code-secret`을 먼저 만든다. `kubectl get secret -o yaml`로 기존 객체를 복사해
-작업 파일이나 셸 출력에 값을 노출하지 않는다. 새 Pod가 두 객체를 참조해 Ready가 된 뒤 다른
-워크로드가 기존 객체를 참조하지 않는지 확인하고, 그때만 기존 결합 Secret을 폐기한다.
+기존 `baton-go-runtime-credentials` 또는 `baton-go-management-credentials`를 사용하는 환경은
+새 JWT 발급자와 호출자 scope 검증을 먼저 완료한다. `baton-go-link-code-secret`은 기존 DB와
+결합한 비밀값 관리자 버전으로 별도 생성하고 `kubectl get secret -o yaml`로 값을 출력하지 않는다.
+새 Pod가 JWT 설정과 분리된 HMAC Secret으로 Ready가 되고 모든 호출자가 JWT로 전환된 뒤 다른
+워크로드가 이전 Secret을 참조하지 않는지 확인한 후 기존 관리 토큰 Secret을 폐기한다.
 
 ## 4. 최초 배포
 
@@ -484,7 +481,7 @@ kubectl label namespace <approved-edge-or-caller-namespace> \
    `pathType: Prefix`를 전달한다.
 3. 공개 외부 경계는 분산 요청 제한을 적용하고 접근 로그에서 `/l/{code}`의 코드를
    마스킹한다.
-4. 관리 Bearer 토큰, Authorization, `Idempotency-Key`, 대상 경로와 전체 단축 URL을
+4. 관리 JWT, Authorization, `Idempotency-Key`, 대상 경로와 전체 단축 URL을
    외부 경계·APM 로그에 기록하지 않는다.
 5. Actuator `8081`은 공개/비공개 Ingress에 연결하지 않는다.
 
@@ -522,7 +519,9 @@ MySQL NetworkPolicy는 같은 Namespace의 BATON GO 애플리케이션과 databa
 차단되지 않는다. 공개 운영 전에 환경별 overlay 또는 CNI 정책으로 다음 최소 흐름을
 표현하고, 허용 흐름과 임의 외부 주소 차단을 모두 실제 Pod에서 검증한다.
 
-- 애플리케이션·마이그레이션 Job: 클러스터 DNS와 `baton-go-mysql:3306`
+- 애플리케이션: 클러스터 DNS, `baton-go-mysql:3306`과 승인한 관리 JWT 발급자의
+  JWK Set HTTPS 주소
+- 마이그레이션 Job: 클러스터 DNS와 `baton-go-mysql:3306`
 - MySQL: 필수 egress가 없음을 확인하되, 환경이 외부 복제·백업을 사용하면 승인된
   목적지와 포트만 별도 허용
 - 이미지 pull·노드 DNS·kubelet probe: Pod egress와 노드 흐름을 구분해 CNI별로 검증
@@ -574,7 +573,7 @@ kubectl -n baton-go get events --sort-by=.lastTimestamp
 - 평상시 운영 기능 두 설정값은 `false`다.
 
 그 다음 비공개 관리 경로에서 새 정규 UUID 요청 의도 한 건으로 생성, 같은 요청 의도
-재생, 공개 해석과 폐기를 검증한다. 실제 관리 토큰, `Idempotency-Key`, 공개 코드,
+재생, 공개 해석과 폐기를 검증한다. 실제 관리 JWT, `Idempotency-Key`, 공개 코드,
 대상 경로와 전체 단축 URL을 셸 기록이나 검증 증거에 복사하지 않는다. 증거에는 HTTP
 상태, 링크 ID, 요청 ID와 시각처럼 허용된 메타데이터만 남긴다.
 
@@ -795,11 +794,12 @@ kubectl -n baton-go wait --for=delete \
 확장/축소 호환 규칙을 따른다.
 
 Secret을 환경 변수로 주입한 실행 중 Pod는 Secret 객체가 바뀌어도 값을 자동으로
-다시 읽지 않는다. Secret 회전은 다음 수명주기별 절차를 따른다.
+다시 읽지 않는다. JWT signing key와 Secret 회전은 다음 수명주기별 절차를 따른다.
 
-- 관리 토큰: `baton-go-management-credentials`의 값을 갱신하고
-  `kubectl -n baton-go rollout restart deployment/baton-go`를 실행한다. 배포 뒤 새 토큰은
-  성공하고 이전 토큰은 `401`인지 비공개 경로에서 확인한다.
+- 관리 JWT signing key: 발급자가 새 공개키를 JWK Set에 먼저 게시하고 새 `kid`로 JWT 발급을
+  전환한다. GO가 새 JWT를 검증하는지 확인한 뒤 이전 JWT 최대 수명과 JWK 캐시 관찰 시간이 모두
+  지난 후에만 이전 공개키를 제거한다. 새 `kid` 조회 실패는 `401`로 안전하게 닫혀야 하며
+  공개 `/l` 해석은 계속 동작하는지 함께 확인한다.
 - DB 런타임 비밀번호: 백업과 유지 보수 시간을 확보하고 승인된 MySQL 관리 채널에서
   `baton_go` 계정을 새 비밀번호로 바꾼 뒤 런타임 Secret을 같은 값으로 갱신한다. 이어서
   `kubectl -n baton-go rollout restart statefulset/baton-go-mysql`과 배포 상태를 먼저

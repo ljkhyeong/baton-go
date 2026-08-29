@@ -11,7 +11,7 @@ BATON GO는 단순 URL 축약기가 아니라 BATON과 ROUND를 위한 정책형
 - `BATON`, `ROUND`의 v1 정확한 대상 조합과 정규 위치 식별자만 생성·해석
 - 시작 시각, 만료 시각과 즉시 폐기
 - 공개 `GET·HEAD /l/{code}` 리다이렉트
-- 관리용 `/api/v1/links` 생성·조회·폐기 API
+- 발급자 서명 JWT와 작업별 scope로 보호하는 `/api/v1/links` 생성·조회·폐기 API
 - MySQL/Flyway 영속화, 상태 확인과 Prometheus 엔드포인트
 
 다음은 아직 구현 범위가 아니다.
@@ -68,16 +68,21 @@ cp .env.example .env
 vim .env
 ```
 
-`BATON_GO_MANAGEMENT_TOKEN`과 `BATON_GO_LINK_CODE_SECRET`은 각각 32자 이상의 서로 다른
-무작위 값이어야 한다. 관리 자격 증명은 HTTP 헤더에 안정적으로 제시할 수 있도록 공백 없는
-출력 가능 ASCII만 사용한다. 링크 코드 파생 비밀값은 기존 DB-키 결합과 복구 호환성을 위해
-길이 외의 문법을 추가 제한하거나 공백 제거·Unicode 정규화하지 않고 설정 문자열 그대로 사용한다.
-서버 설정은 Spring Boot의 표준 외부 설정 우선순위와 바인딩을 그대로 사용한다. 새 비밀값은
-base64url 또는 hex처럼 셸, dotenv와 Spring 자리 표시자 문법에 걸리지 않는 문자 집합으로
-생성하고 자격 증명을 로그나 명령행에 출력하지 않는다. `.env.example`의 짧은 `REPLACE_ME`
-값은 기존 최소 길이 검증에서 바로 실패하므로 실제 값으로 교체해야 한다. 두 비밀을 같게
-설정해도 시작하지 않는다. 링크 코드 파생 비밀값은 재시작과 복구 뒤에도 같은 값을 유지해야
-기존 생성 요청을 동일 URL로 재생할 수 있다.
+관리 API는 `BATON_GO_MANAGEMENT_JWT_ISSUER_URI`의 발급자가 서명한 JWT를 사용한다. 운영 발급자
+URI는 HTTPS이며 JWT의 `aud`는 기본 `baton-go`와 일치해야 한다. 다른 audience가 필요하면
+`BATON_GO_MANAGEMENT_JWT_AUDIENCE`를 명시한다. Spring Boot 표준
+`SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI`에는 발급자의 JWK Set 주소를 설정한다.
+이 설정은 시작할 때 discovery 서버에 의존하지 않으면서 `iss` 검증을 유지한다. 링크
+생성·조회·폐기에는 각각 `baton-go.links.create`,
+`baton-go.links.read`, `baton-go.links.revoke` scope가 필요하다.
+
+`BATON_GO_LINK_CODE_SECRET`은 32자 이상의 별도 무작위 값이어야 한다. 기존 DB-키 결합과 복구
+호환성을 위해 길이 외의 문법을 추가 제한하거나 공백 제거·Unicode 정규화하지 않고 설정 문자열
+그대로 사용한다. 서버 설정은 Spring Boot의 표준 외부 설정 우선순위와 바인딩을 그대로 사용한다.
+새 비밀값은 base64url 또는 hex처럼 셸, dotenv와 Spring 자리 표시자 문법에 걸리지 않는 문자
+집합으로 생성하고 로그나 명령행에 출력하지 않는다. `.env.example`의 짧은 `REPLACE_ME_TOO` 값은
+최소 길이 검증에서 바로 실패하므로 실제 값으로 교체해야 한다. 링크 코드 파생 비밀값은 재시작과
+복구 뒤에도 같은 값을 유지해야 기존 생성 요청을 동일 URL로 재생할 수 있다.
 
 `BATON_GO_PUBLIC_BASE_URL`도 모든 실행 환경에서 명시한다. 로컬 개발의 루프백 HTTP는
 허용하지만, 사용자에게 반환되는 비로컬 단축 URL 출처는 HTTPS여야 한다. 값은 경로, 쿼리,
@@ -199,7 +204,7 @@ GitHub 실행기를 기준으로 하며, 원격 `DOCKER_HOST`는 현재 지원�
 
 ```bash
 curl -i http://localhost:8080/api/v1/links \
-  -H 'Authorization: Bearer <management-token>' \
+  -H 'Authorization: Bearer <management-jwt>' \
   -H 'Idempotency-Key: 8e448211-66ae-44ab-9888-c4960648c22b' \
   -H 'Content-Type: application/json' \
   --data '{"targetSystem":"ROUND","targetPath":"/room/abcd-efgh-jkmn","purpose":"MEETING_ENTRY"}'
@@ -228,6 +233,7 @@ curl -i http://localhost:8080/api/v1/links \
 - [MySQL 절대 시각 저장 형식](docs/ADR/0007_mysql-instant-storage/adr.md)
 - [비공개 Kubernetes DB 구성](docs/ADR/0008_private-kubernetes-database-topology/adr.md)
 - [멱등 생성의 공개 출처 보존](docs/ADR/0009_idempotent-public-origin-replay/adr.md)
+- [관리 API의 발급자 서명 JWT 인증](docs/ADR/0010_management-jwt-authentication/adr.md)
 
 ### 운영 절차
 

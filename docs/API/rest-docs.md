@@ -34,5 +34,5 @@ CI의 `필수 검증` 작업은 같은 파일을 `baton-go-rest-docs` 산출물�
 - `target-contract-remediation`
 
 생성 조각의 관리 `Authorization` 값은 실제 테스트 자격 증명 대신
-`Bearer <management-token>` 또는 `Bearer <invalid-management-token>`으로 치환한다. 실제
+`Bearer <management-jwt>` 또는 `Bearer <invalid-management-jwt>`으로 치환한다. 실제
 비밀값, 원문 링크 코드와 환경별 전체 단축 URL을 계약 산출물에 넣지 않는다.

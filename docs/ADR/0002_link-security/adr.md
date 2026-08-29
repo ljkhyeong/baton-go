@@ -19,12 +19,13 @@
   없는 HTTP 또는 HTTPS 출처여야 한다. HTTP는 `localhost`, 정규 `127.0.0.0/8`
   IPv4 리터럴과 IPv6 루프백 리터럴에만 허용하며 비로컬 출처는 HTTPS를 강제한다.
 - 리다이렉트 응답은 `no-store`와 `no-referrer`를 사용한다.
-- 관리 API는 공백 없는 출력 가능 ASCII로 구성한 최소 32자의 환경 변수 Bearer 자격 증명으로
-  보호한다. 이 자격 증명은 시험 운영용 서비스 인증이며 최종 사용자 신원 모델이 아니다.
+- 관리 API의 초기 정적 Bearer 자격 증명 결정은
+  [ADR-0010](../0010_management-jwt-authentication/adr.md)의 발급자 서명 JWT와 scope 인증으로
+  대체한다.
 - 자격 증명이 담긴 Compose dotenv는 Compose 파서가 읽는 데이터 파일로만 취급하고 셸에서
   `source`하지 않는다. 호스트 실행은 비밀값 관리자나 IDE가 프로세스 환경에 직접
   주입해 파서 변환이나 셸 확장 없이 설정 문자열을 보존한다.
-- 외부 설정은 Spring Boot의 표준 속성 원본 우선순위와 바인딩을 사용한다. 자격 증명은
+- 외부 설정은 Spring Boot의 표준 속성 원본 우선순위와 바인딩을 사용한다. HMAC 비밀값은
   base64url 또는 16진수처럼 셸, dotenv와 자리표시자 문법에 걸리지 않는 알파벳으로 생성해
   파서별 원문 보존을 위한 별도 속성 원본을 두지 않는다.
 - 서버와 `guard-tool`에는 같은 비밀값 관리자 버전을 주입한다. Compose dotenv는 데이터

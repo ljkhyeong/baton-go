@@ -26,6 +26,7 @@
 - 멱등성 키 누락·형식 오류: `400 INVALID_IDEMPOTENCY_KEY`
 - 생성 시각이 Java/JDBC의 UTC 지원 저장 범위나 정밀도를 벗어남: `400 INVALID_REQUEST`
 - 관리 인증 누락·실패: `401 MANAGEMENT_AUTHENTICATION_REQUIRED`
+- 관리 JWT에 요청한 작업의 scope가 없음: `403 MANAGEMENT_AUTHORIZATION_REQUIRED`
 - 링크 없음: `404 LINK_NOT_FOUND`
 - 저장된 대상이 현재 신뢰 계약을 위반함: 존재를 숨기는 `404 LINK_NOT_FOUND`
 - 아직 활성화되지 않음: `404 LINK_NOT_ACTIVE`
@@ -51,12 +52,16 @@
 - 예상하지 못한 오류: `500 INTERNAL_ERROR`
 
 관리 인증 `401` 응답에는
-`WWW-Authenticate: Bearer realm="baton-go-management"`를 포함하며 Bearer 스킴은
-대소문자를 구분하지 않고 스킴과 자격 증명 사이에는 하나 이상의 SP를 허용한다.
+`WWW-Authenticate: Bearer realm="baton-go-management"`를 포함한다. 관리 호출자는
+`iss`가 설정한 발급자, `aud`가 `baton-go`, 유효 시간이 현재 범위이며 요청 작업의 scope를
+포함한 서명 JWT를 표준 `Authorization: Bearer <jwt>` 형식으로 보낸다. JWT 서명·시간·발급자·
+대상 검증과 scope 권한 변환은 Spring Security OAuth2 Resource Server가 수행한다.
+세미콜론이나 비정규 인코딩을 포함한 관리 경로는 인증 처리 전에 Spring Security HTTP 방화벽이
+`400`으로 거부할 수 있으며 이를 정규 경로로 보정하지 않는다.
 
 ## POST `/api/v1/links`
 
-관리용 Bearer 자격 증명이 필요하다.
+`baton-go.links.create` scope가 있는 관리 JWT가 필요하다.
 
 필수 헤더:
 
@@ -161,7 +166,8 @@ Idempotency-Key: 8e448211-66ae-44ab-9888-c4960648c22b
 
 ## GET `/api/v1/links/{linkId}`
 
-관리용 Bearer 자격 증명이 필요하다. 원문 공개 코드나 `shortUrl`은 반환하지 않는다.
+`baton-go.links.read` scope가 있는 관리 JWT가 필요하다. 원문 공개 코드나 `shortUrl`은
+반환하지 않는다.
 성공 시 `200 OK`와 다음 형태의 현재 링크 상태를 반환한다.
 
 ```json
@@ -179,9 +185,9 @@ Idempotency-Key: 8e448211-66ae-44ab-9888-c4960648c22b
 
 ## PUT `/api/v1/links/{linkId}/revocation`
 
-관리용 Bearer 자격 증명이 필요하다. 폐기는 멱등이며 같은 링크를 다시 폐기해도 최초
-`revokedAt`을 유지한 현재 상태를 `200 OK`로 반환한다. 응답 형식은 관리 조회와 같고
-원문 공개 코드나 `shortUrl`은 포함하지 않는다.
+`baton-go.links.revoke` scope가 있는 관리 JWT가 필요하다. 폐기는 멱등이며 같은 링크를 다시
+폐기해도 최초 `revokedAt`을 유지한 현재 상태를 `200 OK`로 반환한다. 응답 형식은 관리 조회와
+같고 원문 공개 코드나 `shortUrl`은 포함하지 않는다.
 
 저장 대상이 현재 v1 계약을 위반하면 일반 관리 조회와 폐기도 원문 대상을 응답하지 않고
 `404 LINK_NOT_FOUND`로 숨긴다. 계약 전 데이터 정리는 아래의 별도 운영 기능 계약만 사용한다.
@@ -192,7 +198,8 @@ Idempotency-Key: 8e448211-66ae-44ab-9888-c4960648c22b
 기본값은 비활성화이며 유지보수 시간대에 공개 경계 차단을 검증한 뒤
 `BATON_GO_TARGET_CONTRACT_OPERATIONS_ENABLED=true`와
 `BATON_GO_TARGET_CONTRACT_OPERATIONS_PRIVATE_INGRESS_CONFIRMED=true`를 모두 설정해야 등록한다.
-확인 값은 네트워크 차단을 대신하지 않으며, 기존 관리 Bearer 자격 증명과 비공개 Ingress를
+확인 값은 네트워크 차단을 대신하지 않으며,
+`baton-go.target-contract.operate` scope가 있는 관리 JWT와 비공개 Ingress를
 모두 요구한다.
 
 관리 인증은 운영 컨트롤러의 등록 여부보다 먼저 적용한다.

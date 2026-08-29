@@ -553,8 +553,8 @@ class LinkHttpContractTest {
     }
 
     @Test
-    @DisplayName("알려진 값의 비허용 target 조합은 안정된 400 INVALID_LINK로 응답한다")
-    void rejectsKnownDisallowedTargetCombinationAsInvalidLink() throws Exception {
+    @DisplayName("빈 target 경로는 도메인 계약의 400 INVALID_LINK로 응답한다")
+    void rejectsBlankTargetPathAsInvalidLink() throws Exception {
         when(useCase.createLink(any())).thenThrow(new LinkValidationException("검증 실패"));
 
         mockMvc.perform(post("/api/v1/links")
@@ -563,10 +563,10 @@ class LinkHttpContractTest {
                         .content("""
                                 {
                                   "targetSystem": "BATON",
-                                  "targetPath": "%s",
-                                  "purpose": "MEETING_ENTRY"
+                                  "targetPath": "",
+                                  "purpose": "NAVIGATION"
                                 }
-                                """.formatted(BATON_TARGET_PATH)))
+                                """))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_LINK"))
                 .andExpect(jsonPath("$.requestId").isNotEmpty());

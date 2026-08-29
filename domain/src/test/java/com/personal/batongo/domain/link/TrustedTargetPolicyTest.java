@@ -191,6 +191,18 @@ class TrustedTargetPolicyTest {
                         null
                 ),
                 Arguments.of(
+                        "BATON 빈 문자열",
+                        TargetSystem.BATON,
+                        LinkPurpose.NAVIGATION,
+                        ""
+                ),
+                Arguments.of(
+                        "BATON 공백만 있는 경로",
+                        TargetSystem.BATON,
+                        LinkPurpose.NAVIGATION,
+                        "   "
+                ),
+                Arguments.of(
                         "BATON 앞 공백",
                         TargetSystem.BATON,
                         LinkPurpose.NAVIGATION,

@@ -27,6 +27,8 @@ class HttpOriginTest {
             "http://0127.0.0.1:8080",
             "http://127.00.0.1:8080",
             "http://127.0.0.1.example:8080",
+            "http://[::ffff:127.0.0.1]:8080",
+            "http://[::ffff:7f00:1]:8080",
             "https://go.example"
     })
     @DisplayName("모호한 주소와 비로컬 host는 loopback으로 분류하지 않는다")

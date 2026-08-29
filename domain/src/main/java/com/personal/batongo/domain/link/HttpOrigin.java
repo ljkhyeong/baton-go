@@ -1,6 +1,7 @@
 package com.personal.batongo.domain.link;
 
 import java.net.InetAddress;
+import java.net.Inet6Address;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.UnknownHostException;
@@ -52,7 +53,8 @@ public final class HttpOrigin {
             return isIpv4LoopbackLiteral(literal);
         }
         try {
-            return InetAddress.getByName(literal).isLoopbackAddress();
+            InetAddress address = InetAddress.getByName(literal);
+            return address instanceof Inet6Address && address.isLoopbackAddress();
         } catch (UnknownHostException exception) {
             return false;
         }

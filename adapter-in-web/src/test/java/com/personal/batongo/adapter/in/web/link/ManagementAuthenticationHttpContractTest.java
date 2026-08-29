@@ -23,7 +23,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.personal.batongo.adapter.in.web.FilterErrorResponseWriter;
 import com.personal.batongo.adapter.in.web.ManagementApiSecurityConfiguration;
 import com.personal.batongo.adapter.in.web.RequestIdFilter;
-import com.personal.batongo.adapter.in.web.operations.TargetContractOperationsController;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.CreatedLinkResult;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.LinkResult;
@@ -49,6 +48,9 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.FilterType;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpHeaders;
@@ -64,16 +66,13 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.bind.annotation.RequestMethod;
+import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.context.WebApplicationContext;
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
 import org.springframework.web.util.UriTemplate;
 
 @ExtendWith(RestDocumentationExtension.class)
 @WebMvcTest(
-        controllers = {
-                LinkManagementController.class,
-                TargetContractOperationsController.class
-        },
         properties = {
                 "spring.security.oauth2.resourceserver.jwt.issuer-uri=https://identity.example",
                 "spring.security.oauth2.resourceserver.jwt.audiences=baton-go",
@@ -81,15 +80,24 @@ import org.springframework.web.util.UriTemplate;
                 "baton-go.target-contract-operations.private-ingress-confirmed=true"
         }
 )
-@ContextConfiguration(classes = {
-        LinkManagementController.class,
-        TargetContractOperationsController.class
-})
+@ContextConfiguration(classes = ManagementAuthenticationHttpContractTest.WebControllerScan.class)
 @Import({
         ManagementApiSecurityConfiguration.class,
         FilterErrorResponseWriter.class
 })
 class ManagementAuthenticationHttpContractTest {
+
+    @Configuration(proxyBeanMethods = false)
+    @ComponentScan(
+            basePackageClasses = RequestIdFilter.class,
+            useDefaultFilters = false,
+            includeFilters = @ComponentScan.Filter(
+                    type = FilterType.ANNOTATION,
+                    classes = RestController.class
+            )
+    )
+    static class WebControllerScan {
+    }
 
     private static final String MANAGEMENT_JWT = "test-management-jwt";
     private static final String BEARER_CHALLENGE =

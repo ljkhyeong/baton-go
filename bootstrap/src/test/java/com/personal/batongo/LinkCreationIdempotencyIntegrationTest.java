@@ -284,7 +284,7 @@ class LinkCreationIdempotencyIntegrationTest {
         mockMvc.perform(get("/api/v1/operations/link-target-contract-v1/inventory")
                         .header(
                                 HttpHeaders.AUTHORIZATION,
-                                "Bearer " + managementJwt(List.of("baton-go"))
+                                "Bearer " + managementJwt(JWT_ISSUER, "baton-go")
                         ))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("RESOURCE_NOT_FOUND"));
@@ -292,7 +292,19 @@ class LinkCreationIdempotencyIntegrationTest {
         mockMvc.perform(get("/api/v1/operations/link-target-contract-v1/inventory")
                         .header(
                                 HttpHeaders.AUTHORIZATION,
-                                "Bearer " + managementJwt(List.of("another-service"))
+                                "Bearer " + managementJwt(JWT_ISSUER, "another-service")
+                        ))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code")
+                        .value("MANAGEMENT_AUTHENTICATION_REQUIRED"));
+
+        mockMvc.perform(get("/api/v1/operations/link-target-contract-v1/inventory")
+                        .header(
+                                HttpHeaders.AUTHORIZATION,
+                                "Bearer " + managementJwt(
+                                        JWT_ISSUER + "/another-issuer",
+                                        "baton-go"
+                                )
                         ))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code")
@@ -874,12 +886,12 @@ class LinkCreationIdempotencyIntegrationTest {
         ));
     }
 
-    private String managementJwt(List<String> audience) {
+    private String managementJwt(String issuer, String audience) {
         Instant now = Instant.now();
         JwtClaimsSet claims = JwtClaimsSet.builder()
-                .issuer(JWT_ISSUER)
+                .issuer(issuer)
                 .subject("baton-integration-test")
-                .audience(audience)
+                .audience(List.of(audience))
                 .issuedAt(now.minusSeconds(5))
                 .expiresAt(now.plusSeconds(60))
                 .claim("scope", "baton-go.target-contract.operate")

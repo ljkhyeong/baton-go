@@ -1,11 +1,13 @@
 package com.personal.batongo.adapter.out.external.link;
 
+import com.personal.batongo.application.link.port.out.TargetUrlPort;
 import com.personal.batongo.domain.link.HttpOrigin;
+import com.personal.batongo.domain.link.TrustedTarget;
 import java.net.URI;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @ConfigurationProperties("baton-go.targets")
-public final class TrustedTargetProperties {
+public final class TrustedTargetProperties implements TargetUrlPort {
 
     private final HttpOrigin batonOrigin;
     private final HttpOrigin roundOrigin;
@@ -20,8 +22,13 @@ public final class TrustedTargetProperties {
         return batonOrigin;
     }
 
-    HttpOrigin roundOrigin() {
-        return roundOrigin;
+    @Override
+    public URI resolve(TrustedTarget target) {
+        HttpOrigin origin = switch (target.targetSystem()) {
+            case BATON -> batonOrigin;
+            case ROUND -> roundOrigin;
+        };
+        return origin.resolve(target.targetPath());
     }
 
     private static void requireDeploymentTopology(

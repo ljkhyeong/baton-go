@@ -28,6 +28,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -261,10 +262,13 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         if (status.is5xxServerError()) {
             logUnexpected(exception, servletRequest(request));
         }
+        HttpHeaders responseHeaders = new HttpHeaders();
+        responseHeaders.putAll(headers);
+        responseHeaders.setContentType(MediaType.APPLICATION_JSON);
         return super.handleExceptionInternal(
                 exception,
                 responseBody,
-                headers,
+                responseHeaders,
                 status,
                 request
         );
@@ -290,7 +294,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
             String message,
             HttpServletRequest request
     ) {
-        return ResponseEntity.status(status).body(new ErrorResponse(
+        return ResponseEntity.status(status).contentType(MediaType.APPLICATION_JSON).body(new ErrorResponse(
                 code,
                 message,
                 RequestIdFilter.requestId(request)

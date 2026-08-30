@@ -469,10 +469,13 @@ class LinkHttpContractTest {
     }
 
     @Test
-    @DisplayName("지원하지 않는 링크 API 메서드는 안정된 405 오류로 응답한다")
+    @DisplayName("지원하지 않는 링크 API 메서드는 HTML 요청에도 JSON 405와 허용 메서드를 반환한다")
     void rejectsUnsupportedMethod() throws Exception {
-        mockMvc.perform(post("/l/VOvLShvx93kQpj8x7w2HYQ"))
+        mockMvc.perform(post("/l/VOvLShvx93kQpj8x7w2HYQ").accept(MediaType.TEXT_HTML))
                 .andExpect(status().isMethodNotAllowed())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(result -> assertThat(result.getResponse().getHeader(HttpHeaders.ALLOW))
+                        .contains("GET"))
                 .andExpect(jsonPath("$.code").value("METHOD_NOT_ALLOWED"))
                 .andExpect(jsonPath("$.requestId").isNotEmpty());
     }

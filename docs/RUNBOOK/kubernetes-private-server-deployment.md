@@ -140,8 +140,9 @@ fi
 kubectl kustomize deploy/k8s/overlays/private-server >/dev/null
 ```
 
-이 점검은 placeholder 제거만 확인한다. URL의 정규 HTTPS 출처·동일 출처 정책은 애플리케이션 시작
-검증이 소유하며, 이미지 다이제스트·서명·SBOM·취약점 수용 여부는 위 릴리스 증거와 별도로 대조한다.
+이 점검은 placeholder·가짜 이미지·tag 설정 제거, 애플리케이션 이미지 digest 형식과
+Kustomize 렌더 가능 여부를 확인한다. URL의 정규 HTTPS 출처·동일 출처 정책은 애플리케이션 시작
+검증이 소유하며, 이미지 서명·SBOM·취약점 수용 여부는 위 릴리스 증거와 별도로 대조한다.
 
 애플리케이션의 `/tmp`는 64Mi 메모리 `emptyDir`이고 나머지 root 파일 시스템은 읽기 전용이다.
 Kubernetes `emptyDir`에는 Compose의 `noexec,nosuid,nodev,mode=1777` 마운트 옵션을 이식성 있게

@@ -25,8 +25,9 @@
 - 입력 형식 오류: `400 INVALID_REQUEST`
 - 멱등성 키 누락·형식 오류: `400 INVALID_IDEMPOTENCY_KEY`
 - 생성 시각이 Java/JDBC의 UTC 지원 저장 범위나 정밀도를 벗어남: `400 INVALID_REQUEST`
-- 관리 인증 누락·실패: `401 MANAGEMENT_AUTHENTICATION_REQUIRED`
+- 관리 인증 누락·토큰 검증 실패: `401 MANAGEMENT_AUTHENTICATION_REQUIRED`
 - 관리 JWT에 요청한 작업의 scope가 없음: `403 MANAGEMENT_AUTHORIZATION_REQUIRED`
+- JWK 조회 등 관리 인증 서비스 장애: `500 INTERNAL_ERROR`
 - 링크 없음: `404 LINK_NOT_FOUND`
 - 저장된 대상이 현재 신뢰 계약을 위반함: 존재를 숨기는 `404 LINK_NOT_FOUND`
 - 아직 활성화되지 않음: `404 LINK_NOT_ACTIVE`
@@ -56,6 +57,9 @@
 `iss`가 설정한 발급자, `aud`가 `baton-go`, 유효 시간이 현재 범위이며 요청 작업의 scope를
 포함한 서명 JWT를 표준 `Authorization: Bearer <jwt>` 형식으로 보낸다. JWT 서명·시간·발급자·
 대상 검증과 scope 권한 변환은 Spring Security OAuth2 Resource Server가 수행한다.
+JWK 조회 등 인증 서비스 장애는 토큰 오류와 구분해 `500 INTERNAL_ERROR`로 응답하고 관리
+작업을 실행하지 않는다. 공통 오류 본문과 `requestId`를 유지하며 `WWW-Authenticate`는
+포함하지 않는다.
 세미콜론이나 비정규 인코딩을 포함한 관리 경로는 인증 처리 전에 Spring Security HTTP 방화벽이
 `400`으로 거부할 수 있으며 이를 정규 경로로 보정하지 않는다.
 

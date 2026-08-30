@@ -883,8 +883,10 @@ Secret을 환경 변수로 주입한 실행 중 Pod는 Secret 객체가 바뀌�
 
 - 관리 JWT signing key: 발급자가 새 공개키를 JWK Set에 먼저 게시하고 새 `kid`로 JWT 발급을
   전환한다. GO가 새 JWT를 검증하는지 확인한 뒤 이전 JWT 최대 수명과 JWK 캐시 관찰 시간이 모두
-  지난 후에만 이전 공개키를 제거한다. 새 `kid` 조회 실패는 `401`로 안전하게 닫혀야 하며
-  공개 `/l` 해석은 계속 동작하는지 함께 확인한다.
+  지난 후에만 이전 공개키를 제거한다. JWK 조회는 성공했지만 해당 `kid`가 없으면 `401`,
+  JWK 조회 자체가 실패하는 인증 서비스 장애는 `500 INTERNAL_ERROR`로 관리 요청을 거부해야 한다.
+  장애 응답의 공통 오류 본문·`requestId`와 안전한 로그를 확인하고, 발급자의 가용성 및 Pod의
+  JWK HTTPS 접근을 점검한다. 공개 `/l` 해석은 계속 동작하는지 함께 확인한다.
 - DB 런타임 비밀번호: 백업과 유지 보수 시간을 확보하고 승인된 MySQL 관리 채널에서
   `baton_go` 계정을 새 비밀번호로 바꾼 뒤 런타임 Secret을 같은 값으로 갱신한다. 이어서
   `kubectl -n baton-go rollout restart statefulset/baton-go-mysql`과 배포 상태를 먼저

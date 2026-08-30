@@ -38,6 +38,10 @@ BATON GO는 브라우저 사용자가 아니라 신뢰된 서버 호출자가 �
 - 인증 누락·JWT 검증 실패는 `401 MANAGEMENT_AUTHENTICATION_REQUIRED`, 유효한 JWT에 scope가
   없으면 `403 MANAGEMENT_AUTHORIZATION_REQUIRED`로 응답한다. `401`에는
   `WWW-Authenticate: Bearer realm="baton-go-management"`를 포함한다.
+- JWK 조회 등 인증 서비스 장애는 Spring의 인증 실패 처리기에서
+  `500 INTERNAL_ERROR`와 공통 오류 본문으로 응답한다. `requestId`와 예외 종류만 기록하고
+  JWT·원격 오류 응답·예외 원문은 기록하지 않는다. JWT 검증과 JWK 조회·캐시는 계속 Spring이
+  수행한다.
 - 관리 보안 체인은 세션을 만들지 않고 CSRF 상태를 사용하지 않는다. 공개 `/l/**`와 Actuator는
   이 체인에 포함하지 않으며 기존 네트워크 경계를 계속 적용한다.
 - JWT 원문, `Authorization` 헤더와 토큰 claim 전체를 로그·지표·오류에 기록하지 않는다.

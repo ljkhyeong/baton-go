@@ -130,7 +130,9 @@ class LinkCreationIdempotencyIntegrationTest {
 
     @Container
     @ServiceConnection(name = "mysql")
-    static final MySQLContainer MYSQL = new MySQLContainer(MySqlTestImage.NAME);
+    static final MySQLContainer MYSQL = new MySQLContainer(MySqlTestImage.NAME)
+            .withUrlParam("connectTimeout", "3000")
+            .withUrlParam("socketTimeout", "30000");
 
     @DynamicPropertySource
     static void managementJwtProperties(DynamicPropertyRegistry registry) {

@@ -42,7 +42,9 @@ class AbsoluteTimeV4MigrationIntegrationTest {
             Instant.parse("2026-01-15T01:02:05.567890Z");
 
     @Container
-    static final MySQLContainer MYSQL = new MySQLContainer(MySqlTestImage.NAME);
+    static final MySQLContainer MYSQL = new MySQLContainer(MySqlTestImage.NAME)
+            .withUrlParam("connectTimeout", "3000")
+            .withUrlParam("socketTimeout", "30000");
 
     @Test
     @DisplayName("V4는 값이 채워진 V3의 다섯 절대 시각을 UTC 그대로 옮기고 세션 시간대를 복원한다")

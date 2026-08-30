@@ -198,9 +198,9 @@ Gradle은 `gradle/verification-metadata.xml`의 SHA-256으로 내려받은 의�
 
 Flyway/JPA와 동시 생성 동작을 포함한 MySQL 통합 검증은 Docker가 실행 중인 환경에서
 별도로 수행한다. 이 테스트 묶음은 Kubernetes 배포용 MySQL 초기화 스크립트, TLS
-`VERIFY_IDENTITY`, 실행 계정의 DML 전용 권한, 마이그레이션 전용 실행기와
-Testcontainers·Compose 이미지 일치도를 함께 검증한다. CI는 Compose가 해석한 MySQL 이미지
-digest와 Kubernetes 오버레이의 최종 렌더 digest도 비교한다.
+`VERIFY_IDENTITY`, 실행 계정의 DML 전용 권한, 마이그레이션 전용 실행기,
+guard CLI 실행 파일의 기존 DB 결합, Testcontainers·Compose 이미지 일치도를 함께 검증한다.
+CI는 Compose가 해석한 MySQL 이미지 digest와 Kubernetes 오버레이의 최종 렌더 digest도 비교한다.
 TLS 호스트 이름 검증용 테스트 별칭을 루프백에 고정하므로 로컬 Docker 소켓 또는 일반
 GitHub 실행기를 기준으로 하며, 원격 `DOCKER_HOST`는 현재 지원하지 않는다.
 

@@ -222,8 +222,9 @@ baton-go-mysql-client-tls
   인증서를 검증하는 CA 체인이다.
 - `truststore.p12`에는 공개 서버 CA 인증서만 넣고 개인 키, 클라이언트 인증서나 다른
   자격 증명을 넣지 않는다. PKCS12 저장소 비밀번호는 자격 증명이 아니라 공개 CA 컨테이너의
-  호환값인 고정 문자열 `baton-go-public-ca-v1`을 사용한다. 애플리케이션은 이 값을 Hikari 드라이버
-  속성으로 이미 제공한다. Hikari DEBUG가 임의 드라이버 속성을 출력할 수 있으므로
+  호환값인 고정 문자열 `baton-go-public-ca-v1`을 사용한다. 애플리케이션과 마이그레이션 Job은
+  이 값을 Hikari 드라이버 속성으로, 별도 guard CLI는 JDBC `Properties`로 제공한다.
+  Hikari DEBUG가 임의 드라이버 속성을 출력할 수 있으므로
   이 값을 비밀값으로 바꾸거나 다른 자격 증명을 같은 속성에 넣지 않는다. 신뢰 저장소 객체의
   변경 무결성과 접근 제한은 Secret 저장 시 암호화와 RBAC로 보장한다.
 

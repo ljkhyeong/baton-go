@@ -41,8 +41,10 @@ tasks.named('test') {
 tasks.register('mysqlTest', Test) {
 	group = 'verification'
 	description = 'MySQL Testcontainers 통합 테스트를 실행합니다.'
+	dependsOn ':guard-tool:bootJar'
 	inputs.file rootProject.file('deploy/k8s/base/mysql-runtime-user-init.sh')
 	inputs.file rootProject.file('compose.yml')
+	inputs.file rootProject.file('guard-tool/build/libs/baton-go-guard-binding.jar')
 	testClassesDirs = sourceSets.test.output.classesDirs
 	classpath = sourceSets.test.runtimeClasspath
 	systemProperty 'batonGo.repositoryRoot', rootProject.projectDir.absolutePath

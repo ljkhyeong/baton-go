@@ -15,6 +15,7 @@ import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.util.Arrays;
 import java.util.Map;
+import java.util.Properties;
 
 /** 기존 데이터베이스 HMAC guard 최초 결합을 위한 one-shot CLI입니다. */
 public final class LinkCodeKeyGuardBindingCli {
@@ -61,10 +62,14 @@ public final class LinkCodeKeyGuardBindingCli {
             LinkCodePort linkCodePort = new SecureLinkCodeAdapter(
                     configuration.linkCodeProperties()
             );
+            Properties jdbcProperties = new Properties();
+            jdbcProperties.setProperty("user", configuration.username());
+            jdbcProperties.setProperty("password", configuration.password());
+            // 개인 키가 없는 공개 CA 저장소의 고정 비밀번호이며 애플리케이션 설정과 같다.
+            jdbcProperties.setProperty("trustCertificateKeyStorePassword", "baton-go-public-ca-v1");
             try (Connection connection = DriverManager.getConnection(
                     configuration.jdbcUrl(),
-                    configuration.username(),
-                    configuration.password()
+                    jdbcProperties
             )) {
                 connection.setAutoCommit(false);
                 try {

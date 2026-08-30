@@ -25,6 +25,14 @@
    `BATON_GO_LINK_CODE_SECRET`을 현재 셸에 주입한다. 명령 인자나 셸 기록에 비밀값을
    넣지 않는다.
 
+운영 DB 접속은 [배포 실행서의 TLS 신뢰 저장소 계약](kubernetes-private-server-deployment.md#3-namespace와-secret-준비)을
+따른다. CLI 실행 환경에서도 JDBC 호스트가 해석되고 URL에 지정한 공개 CA 저장소를 읽을 수
+있어야 한다. `sslMode=VERIFY_IDENTITY`, `trustCertificateKeyStoreType=PKCS12`,
+`fallbackToSystemTrustStore=false`를 유지한다. CLI는 애플리케이션과 같은 공개 CA 저장소
+비밀번호 `baton-go-public-ca-v1`을 JDBC `Properties`로 전달하므로 URL에 중복 지정하지 않는다.
+이 저장소에는 개인 키나 다른 자격 증명을 넣지 않는다. CLI는 Spring을 시작하지 않으므로
+`application.yml`과 `spring.datasource.hikari.*` 설정은 읽지 않는다.
+
 검증용 키나 검증된 비밀값 버전이 없으면 여기서 중단한다. 임의 비밀값으로 결합하거나 보호 정보를
 직접 SQL로 갱신하지 않는다.
 

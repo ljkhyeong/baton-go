@@ -1,11 +1,14 @@
 package com.personal.batongo.adapter.in.web.link;
 
+import com.personal.batongo.adapter.in.web.ManagementOperationLogger;
 import com.personal.batongo.application.link.CreationIdempotencyKey;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.CreateLinkCommand;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.CreatedLinkResult;
+import com.personal.batongo.application.link.port.in.SmartLinkUseCase.LinkResult;
 import jakarta.validation.Valid;
 import java.net.URI;
+import java.security.Principal;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -26,16 +29,21 @@ public class LinkManagementController {
     private static final String IDEMPOTENCY_REPLAYED_HEADER = "Idempotency-Replayed";
 
     private final SmartLinkUseCase smartLinkUseCase;
+    private final ManagementOperationLogger operationLogger;
 
-    public LinkManagementController(SmartLinkUseCase smartLinkUseCase) {
+    public LinkManagementController(
+            SmartLinkUseCase smartLinkUseCase, ManagementOperationLogger operationLogger
+    ) {
         this.smartLinkUseCase = smartLinkUseCase;
+        this.operationLogger = operationLogger;
     }
 
     @PostMapping
     public ResponseEntity<CreateLinkResponse> createLink(
             @RequestHeader(value = IDEMPOTENCY_KEY_HEADER, required = false)
             String idempotencyKey,
-            @Valid @RequestBody CreateLinkRequest request
+            @Valid @RequestBody CreateLinkRequest request,
+            Principal principal
     ) {
         CreatedLinkResult result = smartLinkUseCase.createLink(new CreateLinkCommand(
                 CreationIdempotencyKey.parseRequest(idempotencyKey),
@@ -45,6 +53,11 @@ public class LinkManagementController {
                 request.notBefore(),
                 request.expiresAt()
         ));
+        operationLogger.completed(
+                result.replayed() ? "LINK_CREATE_REPLAY" : "LINK_CREATE",
+                result.link().id(),
+                principal
+        );
         URI location = URI.create("/api/v1/links/" + result.link().id());
         HttpStatus status = result.replayed() ? HttpStatus.OK : HttpStatus.CREATED;
         return ResponseEntity.status(status)
@@ -59,7 +72,9 @@ public class LinkManagementController {
     }
 
     @PutMapping("/{linkId}/revocation")
-    public ResponseEntity<LinkResponse> revokeLink(@PathVariable UUID linkId) {
-        return ResponseEntity.ok(LinkResponse.from(smartLinkUseCase.revokeLink(linkId)));
+    public ResponseEntity<LinkResponse> revokeLink(@PathVariable UUID linkId, Principal principal) {
+        LinkResult result = smartLinkUseCase.revokeLink(linkId);
+        operationLogger.completed("LINK_REVOKE", result.id(), principal);
+        return ResponseEntity.ok(LinkResponse.from(result));
     }
 }

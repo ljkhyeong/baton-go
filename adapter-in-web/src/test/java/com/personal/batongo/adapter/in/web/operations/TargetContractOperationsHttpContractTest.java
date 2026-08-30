@@ -1,5 +1,6 @@
 package com.personal.batongo.adapter.in.web.operations;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
 import static org.mockito.ArgumentMatchers.any;
@@ -19,6 +20,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.personal.batongo.adapter.in.web.GlobalExceptionHandler;
+import com.personal.batongo.adapter.in.web.ManagementOperationLogger;
 import com.personal.batongo.adapter.in.web.RequestIdFilter;
 import com.personal.batongo.application.link.error.InvalidRequestException;
 import com.personal.batongo.application.link.error.TargetContractRemediationNotApplicableException;
@@ -39,6 +41,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.converter.json.JacksonJsonHttpMessageConverter;
@@ -50,7 +54,7 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import tools.jackson.databind.json.JsonMapper;
 
-@ExtendWith(RestDocumentationExtension.class)
+@ExtendWith({RestDocumentationExtension.class, OutputCaptureExtension.class})
 class TargetContractOperationsHttpContractTest {
 
     private static final String BASE_PATH =
@@ -68,12 +72,14 @@ class TargetContractOperationsHttpContractTest {
     @BeforeEach
     void setUp(RestDocumentationContextProvider restDocumentation) {
         operationsUseCase = mock(TargetContractOperationsUseCase.class);
-        TargetContractOperationsController controller =
-                new TargetContractOperationsController(operationsUseCase);
         var jsonMapper = JsonMapper.builder()
                 .findAndAddModules()
                 .build();
+        TargetContractOperationsController controller = new TargetContractOperationsController(
+                operationsUseCase, new ManagementOperationLogger(jsonMapper)
+        );
         mockMvc = MockMvcBuilders.standaloneSetup(controller)
+                .defaultRequest(get("/").principal(() -> "maintenance-service"))
                 .setControllerAdvice(new GlobalExceptionHandler(new SimpleMeterRegistry()))
                 .setMessageConverters(new JacksonJsonHttpMessageConverter(
                         jsonMapper
@@ -167,7 +173,7 @@ class TargetContractOperationsHttpContractTest {
 
     @Test
     @DisplayName("승인된 non-compliant 링크 폐기는 계약 버전과 폐기 결과만 반환한다")
-    void remediatesNonCompliantLink() throws Exception {
+    void remediatesNonCompliantLink(CapturedOutput output) throws Exception {
         when(operationsUseCase.remediate(new RemediationCommand(LINK_ID, 7L)))
                 .thenReturn(new RemediationResult(
                         LINK_ID,
@@ -193,11 +199,31 @@ class TargetContractOperationsHttpContractTest {
                 .andDo(documentManagementEndpoint("target-contract-remediation"));
 
         verify(operationsUseCase).remediate(new RemediationCommand(LINK_ID, 7L));
+        assertThat(output).contains(
+                "\"operation\":\"TARGET_CONTRACT_REVOKE\"",
+                "\"serviceId\":\"maintenance-service\"",
+                "\"linkId\":\"" + LINK_ID + "\""
+        ).doesNotContain("Bearer <management-jwt>");
+    }
+
+    @Test
+    @DisplayName("이미 폐기된 비준수 링크의 정리 요청은 재처리 이력으로 구분한다")
+    void recordsRepeatedRemediation(CapturedOutput output) throws Exception {
+        when(operationsUseCase.remediate(new RemediationCommand(LINK_ID, 7L)))
+                .thenReturn(new RemediationResult(
+                        LINK_ID, "v1", RemediationState.REVOKED, REVOKED_AT, true
+                ));
+
+        mockMvc.perform(remediationRequest("{\"expectedVersion\":7}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.alreadyRevoked").value(true));
+
+        assertThat(output).contains("\"operation\":\"TARGET_CONTRACT_REVOKE_REPLAY\"");
     }
 
     @Test
     @DisplayName("준수 링크의 정리 폐기는 409 REMEDIATION_NOT_APPLICABLE로 응답한다")
-    void rejectsRemediationForCompliantLink() throws Exception {
+    void rejectsRemediationForCompliantLink(CapturedOutput output) throws Exception {
         when(operationsUseCase.remediate(new RemediationCommand(LINK_ID, 7L)))
                 .thenThrow(new TargetContractRemediationNotApplicableException());
 
@@ -206,6 +232,8 @@ class TargetContractOperationsHttpContractTest {
                         """))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("REMEDIATION_NOT_APPLICABLE"));
+
+        assertThat(output).doesNotContain("관리 작업 완료");
     }
 
     @Test

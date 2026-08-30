@@ -22,6 +22,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.personal.batongo.adapter.in.web.FilterErrorResponseWriter;
 import com.personal.batongo.adapter.in.web.ManagementApiSecurityConfiguration;
+import com.personal.batongo.adapter.in.web.ManagementOperationLogger;
 import com.personal.batongo.adapter.in.web.RequestIdFilter;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.CreatedLinkResult;
@@ -50,6 +51,8 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.FilterType;
@@ -73,7 +76,7 @@ import org.springframework.web.context.WebApplicationContext;
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
 import org.springframework.web.util.UriTemplate;
 
-@ExtendWith(RestDocumentationExtension.class)
+@ExtendWith({RestDocumentationExtension.class, OutputCaptureExtension.class})
 @WebMvcTest(
         properties = {
                 "spring.security.oauth2.resourceserver.jwt.issuer-uri=https://identity.example",
@@ -85,6 +88,7 @@ import org.springframework.web.util.UriTemplate;
 @ContextConfiguration(classes = ManagementAuthenticationHttpContractTest.WebControllerScan.class)
 @Import({
         ManagementApiSecurityConfiguration.class,
+        ManagementOperationLogger.class,
         FilterErrorResponseWriter.class,
         SimpleMeterRegistry.class
 })
@@ -141,7 +145,7 @@ class ManagementAuthenticationHttpContractTest {
 
     @Test
     @DisplayName("유효한 관리 JWT와 링크 생성 scope는 링크 생성을 허용한다")
-    void acceptsJwtWithLinkCreationScope() throws Exception {
+    void acceptsJwtWithLinkCreationScope(CapturedOutput output) throws Exception {
         when(jwtDecoder.decode(MANAGEMENT_JWT)).thenReturn(jwt(
                 "baton-go.links.create"
         ));
@@ -156,11 +160,13 @@ class ManagementAuthenticationHttpContractTest {
                 .andExpect(header().doesNotExist(HttpHeaders.WWW_AUTHENTICATE));
 
         verify(useCase).createLink(any());
+        assertThat(output).contains("\"serviceId\":\"baton-service\"")
+                .doesNotContain(MANAGEMENT_JWT, IDEMPOTENCY_KEY, BATON_TARGET_PATH);
     }
 
     @Test
     @DisplayName("검증할 수 없는 관리 JWT는 Bearer challenge가 있는 401 오류로 응답한다")
-    void rejectsInvalidJwtWithBearerChallenge() throws Exception {
+    void rejectsInvalidJwtWithBearerChallenge(CapturedOutput output) throws Exception {
         when(jwtDecoder.decode("invalid-management-jwt"))
                 .thenThrow(new BadJwtException("검증 실패"));
 
@@ -188,6 +194,7 @@ class ManagementAuthenticationHttpContractTest {
                 ));
 
         verifyNoInteractions(useCase);
+        assertThat(output).doesNotContain("관리 작업 완료");
         assertThat(meterRegistry.get("baton.go.management.authentication.service.failures")
                 .counter().count()).isZero();
     }

@@ -20,6 +20,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.personal.batongo.adapter.in.web.GlobalExceptionHandler;
+import com.personal.batongo.adapter.in.web.ManagementOperationLogger;
 import com.personal.batongo.adapter.in.web.RequestIdFilter;
 import com.personal.batongo.adapter.in.web.WebMvcConfiguration;
 import com.personal.batongo.application.link.error.InvalidRequestException;
@@ -57,6 +58,8 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.converter.StringHttpMessageConverter;
@@ -69,7 +72,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.servlet.config.annotation.DelegatingWebMvcConfiguration;
 import tools.jackson.databind.json.JsonMapper;
 
-@ExtendWith(RestDocumentationExtension.class)
+@ExtendWith({RestDocumentationExtension.class, OutputCaptureExtension.class})
 class LinkHttpContractTest {
 
     private static final UUID LINK_ID = UUID.fromString("83a430c4-5c5d-4eb4-a815-7a5ba1fd4aae");
@@ -91,15 +94,18 @@ class LinkHttpContractTest {
     void setUp(RestDocumentationContextProvider restDocumentation) throws IOException {
         useCase = mock(SmartLinkUseCase.class);
         meterRegistry = new SimpleMeterRegistry();
-        LinkManagementController managementController = new LinkManagementController(useCase);
         LinkResolverController resolverController = new LinkResolverController(useCase);
         var jsonMapper = JsonMapper.builder()
                 .findAndAddModules()
                 .build();
+        LinkManagementController managementController = new LinkManagementController(
+                useCase, new ManagementOperationLogger(jsonMapper)
+        );
         var errors = new GlobalExceptionHandler(meterRegistry);
         var mvcConfiguration = new DelegatingWebMvcConfiguration();
         mvcConfiguration.setConfigurers(List.of(new WebMvcConfiguration()));
         mockMvc = MockMvcBuilders.standaloneSetup(managementController, resolverController)
+                .defaultRequest(get("/").principal(() -> "baton-service"))
                 .setControllerAdvice(errors, new PublicLinkExceptionHandler(errors))
                 .setContentNegotiationManager(mvcConfiguration.mvcContentNegotiationManager())
                 .setMessageConverters(
@@ -113,7 +119,7 @@ class LinkHttpContractTest {
 
     @Test
     @DisplayName("링크 생성 응답은 공개 코드가 포함된 short URL과 안정된 필드를 반환한다")
-    void createsLinkContract() throws Exception {
+    void createsLinkContract(CapturedOutput output) throws Exception {
         LinkResult link = linkResult();
         when(useCase.createLink(any())).thenReturn(new CreatedLinkResult(
                 link,
@@ -122,6 +128,7 @@ class LinkHttpContractTest {
         ));
 
         mockMvc.perform(post("/api/v1/links")
+                        .header("X-Request-Id", "link-create-history")
                         .header("Idempotency-Key", IDEMPOTENCY_KEY)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -150,11 +157,18 @@ class LinkHttpContractTest {
                 .andExpect(jsonPath("$.purpose").value("NAVIGATION"))
                 .andExpect(jsonPath("$.createdAt").value("2026-07-29T10:00:00Z"))
                 .andDo(documentManagementEndpoint("links-create"));
+
+        assertThat(output).contains(
+                "\"operation\":\"LINK_CREATE\"",
+                "\"serviceId\":\"baton-service\"",
+                "\"linkId\":\"" + LINK_ID + "\"",
+                "\"requestId\":\"link-create-history\""
+        ).doesNotContain(IDEMPOTENCY_KEY, BATON_TARGET_PATH, "VOvLShvx93kQpj8x7w2HYQ");
     }
 
     @Test
     @DisplayName("같은 링크 생성 요청의 재시도는 동일한 short URL과 200으로 응답한다")
-    void replaysLinkCreationContract() throws Exception {
+    void replaysLinkCreationContract(CapturedOutput output) throws Exception {
         when(useCase.createLink(any())).thenReturn(new CreatedLinkResult(
                 linkResult(),
                 URI.create("https://go.example/l/VOvLShvx93kQpj8x7w2HYQ"),
@@ -181,14 +195,17 @@ class LinkHttpContractTest {
                 .andExpect(jsonPath("$.shortUrl")
                         .value("https://go.example/l/VOvLShvx93kQpj8x7w2HYQ"))
                 .andDo(documentManagementEndpoint("links-create-replay"));
+
+        assertThat(output).contains("\"operation\":\"LINK_CREATE_REPLAY\"");
     }
 
     @ParameterizedTest(name = "{1}")
     @MethodSource("operationalReplayErrors")
-    @DisplayName("재생 안전성을 보장할 수 없으면 원인별 운영 오류로 응답한다")
+    @DisplayName("링크 생성·재생 실패는 원인별 오류를 반환하고 완료 이력을 남기지 않는다")
     void returnsOperationalReplayError(
             RuntimeException exception,
-            String code
+            String code,
+            CapturedOutput output
     ) throws Exception {
         when(useCase.createLink(any())).thenThrow(exception);
 
@@ -205,10 +222,16 @@ class LinkHttpContractTest {
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.code").value(code))
                 .andExpect(jsonPath("$.requestId").isNotEmpty());
+
+        assertThat(output).doesNotContain("관리 작업 완료");
     }
 
     private static Stream<Arguments> operationalReplayErrors() {
         return Stream.of(
+                Arguments.of(
+                        new IllegalStateException("service-failed"),
+                        "INTERNAL_ERROR"
+                ),
                 Arguments.of(
                         new LinkCreationReplayUnavailableException(LINK_ID),
                         "LINK_CREATION_REPLAY_UNAVAILABLE"
@@ -230,7 +253,7 @@ class LinkHttpContractTest {
 
     @Test
     @DisplayName("관리 링크 조회는 원문 공개 코드와 short URL을 노출하지 않는다")
-    void getsManagedLinkWithoutRawShortUrl() throws Exception {
+    void getsManagedLinkWithoutRawShortUrl(CapturedOutput output) throws Exception {
         when(useCase.getLink(LINK_ID)).thenReturn(linkResult());
 
         mockMvc.perform(get("/api/v1/links/{linkId}", LINK_ID))
@@ -241,6 +264,8 @@ class LinkHttpContractTest {
                 .andExpect(jsonPath("$.purpose").value("NAVIGATION"))
                 .andExpect(jsonPath("$.shortUrl").doesNotExist())
                 .andDo(documentManagementEndpoint("links-get"));
+
+        assertThat(output).doesNotContain("관리 작업 완료");
     }
 
     @Test
@@ -256,7 +281,7 @@ class LinkHttpContractTest {
 
     @Test
     @DisplayName("관리 링크 폐기 응답은 최초 폐기 시각을 유지하고 short URL을 노출하지 않는다")
-    void revokesManagedLinkWithoutRawShortUrl() throws Exception {
+    void revokesManagedLinkWithoutRawShortUrl(CapturedOutput output) throws Exception {
         Instant firstRevokedAt = Instant.parse("2026-07-29T11:00:00Z");
         when(useCase.revokeLink(LINK_ID)).thenReturn(linkResult(firstRevokedAt));
 
@@ -268,6 +293,7 @@ class LinkHttpContractTest {
                 .andDo(documentManagementEndpoint("links-revoke"));
 
         verify(useCase).revokeLink(LINK_ID);
+        assertThat(output).contains("\"operation\":\"LINK_REVOKE\"");
     }
 
     @Test

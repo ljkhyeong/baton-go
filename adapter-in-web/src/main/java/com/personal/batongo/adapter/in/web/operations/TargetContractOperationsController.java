@@ -1,9 +1,12 @@
 package com.personal.batongo.adapter.in.web.operations;
 
+import com.personal.batongo.adapter.in.web.ManagementOperationLogger;
 import com.personal.batongo.application.link.port.in.TargetContractOperationsUseCase;
 import com.personal.batongo.application.link.port.in.TargetContractOperationsUseCase.InventoryQuery;
 import com.personal.batongo.application.link.port.in.TargetContractOperationsUseCase.RemediationCommand;
+import com.personal.batongo.application.link.port.in.TargetContractOperationsUseCase.RemediationResult;
 import jakarta.validation.Valid;
+import java.security.Principal;
 import java.util.UUID;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
 import org.springframework.http.ResponseEntity;
@@ -24,9 +27,14 @@ import org.springframework.web.bind.annotation.RestController;
 public class TargetContractOperationsController {
 
     private final TargetContractOperationsUseCase operationsUseCase;
+    private final ManagementOperationLogger operationLogger;
 
-    public TargetContractOperationsController(TargetContractOperationsUseCase operationsUseCase) {
+    public TargetContractOperationsController(
+            TargetContractOperationsUseCase operationsUseCase,
+            ManagementOperationLogger operationLogger
+    ) {
         this.operationsUseCase = operationsUseCase;
+        this.operationLogger = operationLogger;
     }
 
     @GetMapping("/inventory")
@@ -43,14 +51,18 @@ public class TargetContractOperationsController {
     @PutMapping("/links/{linkId}/revocation")
     public ResponseEntity<TargetContractRemediationResponse> remediate(
             @PathVariable UUID linkId,
-            @Valid @RequestBody TargetContractRemediationRequest request
+            @Valid @RequestBody TargetContractRemediationRequest request,
+            Principal principal
     ) {
-        TargetContractRemediationResponse response = TargetContractRemediationResponse.from(
-                operationsUseCase.remediate(new RemediationCommand(
-                        linkId,
-                        request.expectedVersion()
-                ))
+        RemediationResult result = operationsUseCase.remediate(new RemediationCommand(
+                linkId,
+                request.expectedVersion()
+        ));
+        operationLogger.completed(
+                result.alreadyRevoked() ? "TARGET_CONTRACT_REVOKE_REPLAY" : "TARGET_CONTRACT_REVOKE",
+                result.linkId(),
+                principal
         );
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok(TargetContractRemediationResponse.from(result));
     }
 }

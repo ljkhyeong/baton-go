@@ -51,6 +51,9 @@ management:
 
 baton-go:
   public-base-url: ${BATON_GO_PUBLIC_BASE_URL}
+  management-jwk:
+    connect-timeout: ${BATON_GO_MANAGEMENT_JWK_CONNECT_TIMEOUT:3s}
+    read-timeout: ${BATON_GO_MANAGEMENT_JWK_READ_TIMEOUT:5s}
   link-code:
     secret: ${BATON_GO_LINK_CODE_SECRET:}
   target-contract-operations:

@@ -31,6 +31,11 @@ BATON GO는 브라우저 사용자가 아니라 신뢰된 서버 호출자가 �
   이 검증기를 빈으로 등록해 Spring Boot 자동 설정이 기존 시간 검증 대신 사용하게 한다.
   서명·발급자·audience 검증과 JWK 조회·캐시는 유지한다. `nbf`는 계속 선택 사항이며
   시계 오차 허용 범위도 Spring 기본값을 유지한다.
+- JWK HTTP 대기 시간은 Spring Boot의 `JwkSetUriJwtDecoderBuilderCustomizer`로 조정한다.
+  Nimbus가 받는 `RestOperations`에 Spring의 `RestTemplate`과
+  `SimpleClientHttpRequestFactory`를 연결하고, JWT 디코더·검증기·JWK 캐시는 교체하지 않는다.
+  별도 HTTP 클라이언트, 재시도나 시간 제한 실행기를 만들지 않는다. 기본값과 운영 설정은
+  [관리 JWK 대기 시간](../../RUNBOOK/kubernetes-private-server-deployment.md#관리-jwk-대기-시간)을 따른다.
 - 경로별 필요한 scope는 다음과 같다.
 
 | 작업 | scope |

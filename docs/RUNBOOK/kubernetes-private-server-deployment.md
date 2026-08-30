@@ -153,6 +153,32 @@ Kubernetes `emptyDir`에는 Compose의 `noexec,nosuid,nodev,mode=1777` 마운트
 단일 non-root 컨테이너만 `/tmp`를 사용한다. 더 강한 마운트 정책이 필요한 클러스터는 검증된
 RuntimeClass 또는 노드 정책으로 보완하고 애플리케이션 기동·파일 쓰기를 다시 시험한다.
 
+### 관리 JWK 대기 시간
+
+JWK HTTP 조회의 연결·읽기 대기는 Spring 표준 요청 팩터리로 제한한다. JWT 서명·발급자·
+audience·만료 검증과 JWK 캐시는 기존 Spring Security 동작을 유지한다.
+
+| 환경 변수 | 기본값 | 제한 대상 |
+| --- | --- | --- |
+| `BATON_GO_MANAGEMENT_JWK_CONNECT_TIMEOUT` | `3s` | JWK 서버 연결 대기 |
+| `BATON_GO_MANAGEMENT_JWK_READ_TIMEOUT` | `5s` | JWK 응답 읽기 대기 |
+
+값은 `500ms`, `3s`처럼 단위를 붙이고 `1ms` 이상으로 설정한다. 시간 제한을 해제하는 `0`과
+음수는 시작 단계에서 거부한다. Compose는 `.env`, Kubernetes는
+`deploy/k8s/overlays/private-server/app-config.properties`에서 변경하고 애플리케이션을 재시작한다.
+Spring 속성 이름은 각각 `baton-go.management-jwk.connect-timeout`과
+`baton-go.management-jwk.read-timeout`이다.
+
+이 값은 관리 API 요청 전체의 처리 시간 상한이 아니다. DNS 조회, 캐시 갱신 대기와
+여러 HTTP 조회·응답 처리 시간을 합산한 제한으로 해석하지 않는다. 실제 발급자 응답 시간과
+키 회전 시 조회 지연을 측정해 조정한다.
+
+JWK 조회가 시간 초과되면 기존 인증 서비스 장애와 같이 `500 INTERNAL_ERROR`로 응답하고
+관리 인증 서비스 장애 카운터에 집계한다. 이를 토큰 만료나 잘못된 서명의 `401`로 처리하지
+않는다. 공개 링크 해석에는 이 의존성이 없으며, 원격 조회가 필요 없는 캐시 키 검증도 유지된다.
+운영 전 비공개 경계에서 JWK 응답 지연과 복구를 시험하고
+[인증 서비스 장애 경보](prometheus-alerts.md)가 실제로 전달되는지 확인한다.
+
 ## 3. Namespace와 Secret 준비
 
 Namespace는 워크로드 Kustomization에 의도적으로 포함하지 않았다. 한 번만 별도로 적용한다.

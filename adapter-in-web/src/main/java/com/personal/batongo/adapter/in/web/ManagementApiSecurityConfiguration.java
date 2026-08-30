@@ -4,10 +4,13 @@ import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.security.oauth2.server.resource.autoconfigure.JwkSetUriJwtDecoderBuilderCustomizer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.security.authentication.AuthenticationServiceException;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.ObjectPostProcessor;
@@ -21,9 +24,11 @@ import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.AccessDeniedHandler;
 import org.springframework.security.web.authentication.AuthenticationEntryPointFailureHandler;
+import org.springframework.web.client.RestTemplate;
 
 @Configuration(proxyBeanMethods = false)
 @EnableWebSecurity
+@EnableConfigurationProperties(ManagementJwkProperties.class)
 public class ManagementApiSecurityConfiguration {
 
     private static final Logger LOG = LoggerFactory.getLogger(ManagementApiSecurityConfiguration.class);
@@ -33,6 +38,15 @@ public class ManagementApiSecurityConfiguration {
     static final String LINK_REVOKE_AUTHORITY = "SCOPE_baton-go.links.revoke";
     static final String TARGET_CONTRACT_OPERATE_AUTHORITY =
             "SCOPE_baton-go.target-contract.operate";
+
+    @Bean
+    JwkSetUriJwtDecoderBuilderCustomizer managementJwkHttpClient(ManagementJwkProperties properties) {
+        var requestFactory = new SimpleClientHttpRequestFactory();
+        requestFactory.setConnectTimeout(properties.connectTimeout());
+        requestFactory.setReadTimeout(properties.readTimeout());
+        var restOperations = new RestTemplate(requestFactory);
+        return builder -> builder.restOperations(restOperations);
+    }
 
     @Bean
     JwtTimestampValidator managementJwtTimestampValidator() {

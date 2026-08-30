@@ -22,7 +22,10 @@ BATON GO는 브라우저 사용자가 아니라 신뢰된 서버 호출자가 �
   endpoint의 비로컬 HTTP 설정을 시작 단계에서 거부하며 loopback HTTP는 로컬 개발에서만
   허용한다.
 - JWT의 `iss`는 설정한 발급자, `aud`는 기본 `baton-go`와 일치해야 한다. 다른 audience가
-  필요하면 `BATON_GO_MANAGEMENT_JWT_AUDIENCE`로 명시한다.
+  필요하면 `BATON_GO_MANAGEMENT_JWT_AUDIENCE`로 명시한다. 최종 바인딩된 audience 목록이
+  비어 있거나 빈 값·공백뿐인 항목을 포함하면 시작을 거부한다. Spring Boot는 빈 목록이면
+  audience 검증을 생략하므로 설정 단계에서 이를 차단하며, JWT의 `aud` 검증 자체는 계속
+  Spring에 맡긴다.
 - 경로별 필요한 scope는 다음과 같다.
 
 | 작업 | scope |

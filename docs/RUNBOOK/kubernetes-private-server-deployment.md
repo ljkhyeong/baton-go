@@ -81,6 +81,8 @@ kubectl cluster-info
 - `SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI`: 발급자의 HTTPS JWK Set 주소
 
 `BATON_GO_MANAGEMENT_JWT_AUDIENCE`는 발급 계약을 별도로 정하지 않았다면 `baton-go`를 유지한다.
+빈 값으로 설정하지 않는다. 최종 audience 목록이 비어 있거나 빈 값·공백뿐인 항목을 포함하면
+애플리케이션이 시작되지 않는다.
 JWK Set 주소를 명시하면 애플리케이션 시작이 discovery 서버 가용성에 묶이지 않으면서 설정한
 `iss` 검증은 유지된다.
 

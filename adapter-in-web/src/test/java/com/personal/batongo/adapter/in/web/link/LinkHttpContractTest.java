@@ -21,6 +21,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.personal.batongo.adapter.in.web.GlobalExceptionHandler;
 import com.personal.batongo.adapter.in.web.RequestIdFilter;
+import com.personal.batongo.adapter.in.web.WebMvcConfiguration;
 import com.personal.batongo.application.link.error.InvalidRequestException;
 import com.personal.batongo.application.link.error.IdempotencyKeyConflictException;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.CreateLinkCommand;
@@ -39,8 +40,12 @@ import com.personal.batongo.domain.link.LinkUnavailableException;
 import com.personal.batongo.domain.link.LinkValidationException;
 import com.personal.batongo.domain.link.TargetSystem;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.io.IOException;
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.BeforeEach;
@@ -54,12 +59,14 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.http.converter.StringHttpMessageConverter;
 import org.springframework.http.converter.json.JacksonJsonHttpMessageConverter;
 import org.springframework.restdocs.RestDocumentationContextProvider;
 import org.springframework.restdocs.RestDocumentationExtension;
 import org.springframework.restdocs.mockmvc.RestDocumentationResultHandler;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.web.servlet.config.annotation.DelegatingWebMvcConfiguration;
 import tools.jackson.databind.json.JsonMapper;
 
 @ExtendWith(RestDocumentationExtension.class)
@@ -81,7 +88,7 @@ class LinkHttpContractTest {
     private MockMvc mockMvc;
 
     @BeforeEach
-    void setUp(RestDocumentationContextProvider restDocumentation) {
+    void setUp(RestDocumentationContextProvider restDocumentation) throws IOException {
         useCase = mock(SmartLinkUseCase.class);
         meterRegistry = new SimpleMeterRegistry();
         LinkManagementController managementController = new LinkManagementController(useCase);
@@ -89,9 +96,16 @@ class LinkHttpContractTest {
         var jsonMapper = JsonMapper.builder()
                 .findAndAddModules()
                 .build();
+        var errors = new GlobalExceptionHandler(meterRegistry);
+        var mvcConfiguration = new DelegatingWebMvcConfiguration();
+        mvcConfiguration.setConfigurers(List.of(new WebMvcConfiguration()));
         mockMvc = MockMvcBuilders.standaloneSetup(managementController, resolverController)
-                .setControllerAdvice(new GlobalExceptionHandler(meterRegistry))
-                .setMessageConverters(new JacksonJsonHttpMessageConverter(jsonMapper))
+                .setControllerAdvice(errors, new PublicLinkExceptionHandler(errors))
+                .setContentNegotiationManager(mvcConfiguration.mvcContentNegotiationManager())
+                .setMessageConverters(
+                        new StringHttpMessageConverter(StandardCharsets.UTF_8),
+                        new JacksonJsonHttpMessageConverter(jsonMapper)
+                )
                 .addFilters(new RequestIdFilter())
                 .apply(documentationConfiguration(restDocumentation))
                 .build();
@@ -550,6 +564,87 @@ class LinkHttpContractTest {
         performPublicNotFoundHead(violatingCode);
 
         assertThat(storedTargetPolicyViolationCount()).isEqualTo(1.0d);
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+            "NOT_ACTIVE, 404, 아직 사용할 수 없는 링크입니다, 이용 가능한 시간을 확인",
+            "EXPIRED, 410, 만료된 링크입니다, 새 링크를 요청",
+            "REVOKED, 410, 폐기된 링크입니다, 새 링크를 요청"
+    })
+    @DisplayName("브라우저에는 링크 상태와 다음 행동을 한글 HTML로 안내한다")
+    void rendersUnavailableLinkPage(
+            LinkUnavailableException.Reason reason, int expectedStatus,
+            String message, String guidance
+    ) throws Exception {
+        when(useCase.resolveLink("private-link-code"))
+                .thenThrow(new LinkUnavailableException(reason, message));
+
+        var response = mockMvc.perform(get("/l/private-link-code")
+                        .accept(MediaType.TEXT_HTML)
+                        .header("X-Request-Id", "browser-error-request"))
+                .andExpect(status().is(expectedStatus))
+                .andExpect(content().contentTypeCompatibleWith(MediaType.TEXT_HTML))
+                .andExpect(header().doesNotExist(HttpHeaders.LOCATION))
+                .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
+                .andExpect(header().string("Referrer-Policy", "no-referrer"))
+                .andExpect(header().string("X-Content-Type-Options", "nosniff"))
+                .andExpect(header().exists("Content-Security-Policy"))
+                .andDo(document("links-unavailable-html-" + reason.name().toLowerCase(Locale.ROOT)))
+                .andReturn().getResponse();
+
+        assertThat(response.getContentAsString()).contains(
+                        "<html lang=\"ko\">", message, guidance, "browser-error-request"
+                ).doesNotContain("private-link-code", BATON_TARGET_PATH, "<script");
+    }
+
+    @Test
+    @DisplayName("HTML에서도 미존재와 저장 대상 위반을 같은 화면으로 숨기고 위반만 집계한다")
+    void hidesStoredTargetViolationInHtml() throws Exception {
+        when(useCase.resolveLink("missing-code")).thenThrow(new LinkNotFoundException());
+        when(useCase.resolveLink("violating-code"))
+                .thenThrow(new StoredTargetPolicyViolationException(LINK_ID));
+        String missingBody = mockMvc.perform(get("/l/missing-code")
+                        .accept(MediaType.TEXT_HTML).header("X-Request-Id", "same-request"))
+                .andExpect(status().isNotFound())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(storedTargetPolicyViolationCount()).isZero();
+
+        mockMvc.perform(get("/l/violating-code")
+                        .accept(MediaType.TEXT_HTML).header("X-Request-Id", "same-request"))
+                .andExpect(status().isNotFound())
+                .andExpect(header().doesNotExist(HttpHeaders.LOCATION))
+                .andExpect(content().string(missingBody));
+
+        assertThat(storedTargetPolicyViolationCount()).isEqualTo(1);
+        assertThat(missingBody).contains("링크를 찾을 수 없습니다")
+                .doesNotContain("missing-code", "violating-code", LINK_ID.toString());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"*/*", "application/json", "application/json, text/html;q=0.5"})
+    @DisplayName("JSON을 우선하거나 형식을 지정하지 않은 요청은 기존 JSON 오류를 유지한다")
+    void preservesJsonErrorPreference(String accept) throws Exception {
+        when(useCase.resolveLink("missing-code")).thenThrow(new LinkNotFoundException());
+
+        mockMvc.perform(get("/l/missing-code").header(HttpHeaders.ACCEPT, accept))
+                .andExpect(status().isNotFound())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.code").value("LINK_NOT_FOUND"));
+    }
+
+    @Test
+    @DisplayName("HTML을 요청한 HEAD도 본문 없이 같은 링크 오류 상태를 반환한다")
+    void returnsHtmlHeadWithoutBody() throws Exception {
+        when(useCase.resolveLink("expired-code")).thenThrow(new LinkUnavailableException(
+                LinkUnavailableException.Reason.EXPIRED, "만료된 링크입니다"
+        ));
+
+        mockMvc.perform(head("/l/expired-code").accept(MediaType.TEXT_HTML))
+                .andExpect(status().isGone())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.TEXT_HTML))
+                .andExpect(content().string(""))
+                .andExpect(header().doesNotExist(HttpHeaders.LOCATION));
     }
 
     @Test

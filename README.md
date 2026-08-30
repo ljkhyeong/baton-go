@@ -11,6 +11,7 @@ BATON GO는 단순 URL 축약기가 아니라 BATON과 ROUND를 위한 정책형
 - `BATON`, `ROUND`의 v1 정확한 대상 조합과 정규 위치 식별자만 생성·해석
 - 시작 시각, 만료 시각과 즉시 폐기
 - 공개 `GET·HEAD /l/{code}` 리다이렉트
+- 브라우저의 미존재·미활성·만료·폐기 링크에 대한 한글 안내 화면
 - 발급자 서명 JWT와 작업별 scope로 보호하는 `/api/v1/links` 생성·조회·폐기 API
 - MySQL/Flyway 영속화, 상태 확인과 Prometheus 엔드포인트
 

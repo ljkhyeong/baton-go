@@ -108,12 +108,10 @@ final class ExistingDatabaseLinkCodeKeyBinder {
             JdbcClient jdbcClient,
             LinkCodeDerivationIdentity identity
     ) {
-        int updated = jdbcClient.sql("""
+        jdbcClient.sql("""
                         UPDATE link_code_key_guard
                         SET derivation_version = ?, key_fingerprint = ?
                         WHERE guard_id = ?
-                          AND derivation_version IS NULL
-                          AND key_fingerprint IS NULL
                         """)
                 .params(
                         identity.version(),
@@ -121,9 +119,6 @@ final class ExistingDatabaseLinkCodeKeyBinder {
                         SINGLETON_GUARD_ID
                 )
                 .update();
-        if (updated != 1) {
-            throw unsafeState();
-        }
     }
 
     private IllegalStateException unsafeState() {

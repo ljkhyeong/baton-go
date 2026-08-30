@@ -32,12 +32,10 @@ public class LinkCodeKeyGuardPersistenceAdapter implements LinkCodeKeyGuardPort 
             throw new LinkCodeKeyBindingException();
         }
 
-        int updated = jdbcClient.sql("""
+        jdbcClient.sql("""
                         UPDATE link_code_key_guard
                         SET derivation_version = ?, key_fingerprint = ?
                         WHERE guard_id = ?
-                          AND derivation_version IS NULL
-                          AND key_fingerprint IS NULL
                         """)
                 .params(
                         identity.version(),
@@ -45,9 +43,6 @@ public class LinkCodeKeyGuardPersistenceAdapter implements LinkCodeKeyGuardPort 
                         SINGLETON_GUARD_ID
                 )
                 .update();
-        if (updated != 1) {
-            throw new LinkCodeKeyBindingException();
-        }
     }
 
     @Override

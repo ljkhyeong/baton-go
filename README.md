@@ -13,6 +13,7 @@ BATON GO는 단순 URL 축약기가 아니라 BATON과 ROUND를 위한 정책형
 - 공개 `GET·HEAD /l/{code}` 리다이렉트
 - 브라우저의 미존재·미활성·만료·폐기 링크에 대한 한글 안내 화면
 - 발급자 서명 JWT와 작업별 scope로 보호하는 `/api/v1/links` 생성·조회·폐기 API
+- 서비스 식별자를 포함한 링크 생성·재생·폐기의 관리 작업 완료 이력
 - MySQL/Flyway 영속화, 상태 확인과 Prometheus 엔드포인트
 
 다음은 아직 구현 범위가 아니다.
@@ -260,5 +261,6 @@ curl -i http://localhost:8080/api/v1/links \
 
 - [비공개 Kubernetes 배포 실행서](docs/RUNBOOK/kubernetes-private-server-deployment.md)
 - [Prometheus 경보 연결과 검증](docs/RUNBOOK/prometheus-alerts.md)
+- [관리 작업 이력 조회와 보존](docs/RUNBOOK/management-operation-history.md)
 - [기존 DB HMAC 보호 장치 최초 결합 실행서](docs/RUNBOOK/link-code-key-guard-binding.md)
 - [대상 계약 v1 정리 실행서](docs/RUNBOOK/target-contract-v1-remediation.md)

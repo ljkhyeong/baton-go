@@ -26,6 +26,9 @@
   보존한다. 보존 기간은 [CI 워크플로](.github/workflows/ci.yml)의 `retention-days` 설정을
   따른다. 제품 동작과 전체 오류 행렬의 정본은 계속
   [API 계약](docs/PRD/0002_api-contract/spec.md)이다.
+- 관리 쓰기 완료 이력은 JWT `sub`와 내부 링크·요청 ID만 사용하며 기존 중앙 로그 보존 정책을
+  따른다. 별도 감사 DB는 없으며, 실제 수집·조회 권한과 보존 정책 확인은
+  [관리 작업 이력 실행서](docs/RUNBOOK/management-operation-history.md)에 따라 운영 환경에서 수행한다.
 
 ## 외부 저장소 확인 기준
 

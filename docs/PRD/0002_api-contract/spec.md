@@ -67,6 +67,10 @@ JWK 조회 등 인증 서비스 장애는 토큰 오류와 구분해 `500 INTERN
 세미콜론이나 비정규 인코딩을 포함한 관리 경로는 인증 처리 전에 Spring Security HTTP 방화벽이
 `400`으로 거부할 수 있으며 이를 정규 경로로 보정하지 않는다.
 
+관리 쓰기 완료 이력은 JWT의 `sub`를 서비스 식별자로 사용한다. 기존 HTTP 인증 조건과
+응답 형식은 바꾸지 않는다. 기록 대상, 민감정보 제외와 보존 정책은
+[관리 작업 이력 실행서](../../RUNBOOK/management-operation-history.md)를 따른다.
+
 ## POST `/api/v1/links`
 
 `baton-go.links.create` scope가 있는 관리 JWT가 필요하다.

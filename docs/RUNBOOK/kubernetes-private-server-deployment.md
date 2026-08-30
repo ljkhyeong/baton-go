@@ -93,7 +93,7 @@ fragment와 userinfo를 넣지 않는다. 운영 기능 두 설정값은 평상�
 레지스트리 이미지 이름으로, `REPLACE_ME_WITH_IMMUTABLE_RELEASE_DIGEST`를 검토·서명한
 애플리케이션 이미지의 64자리 SHA-256 digest로 교체한다. 애플리케이션 Deployment와
 마이그레이션 Job은 같은 `name@sha256:digest`를 사용하며 태그 배포는 허용하지 않는다.
-오버레이는 선택한 공식 MySQL 8.4.10 다중 아키텍처 이미지도 digest로 고정하며, 변경은
+오버레이는 선택한 공식 MySQL 8.4.11 다중 아키텍처 이미지도 digest로 고정하며, 변경은
 백업·복원 검증을 포함한 별도 DB 업그레이드로 다룬다.
 
 릴리스마다 애플리케이션 이미지 다이제스트와 함께 SBOM, 취약점 검사 결과,

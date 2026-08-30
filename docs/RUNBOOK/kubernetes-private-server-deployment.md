@@ -851,13 +851,21 @@ Secret을 환경 변수로 주입한 실행 중 Pod는 Secret 객체가 바뀌�
 - DB root 비밀번호: 로컬 root 계정을 승인된 관리 채널에서 먼저 변경하고 초기 설정
   Secret을 갱신한 뒤 MySQL StatefulSet을 재시작한다. 애플리케이션과 마이그레이션 Job에는 root
   키를 주입하지 않는다.
-- MySQL TLS/CA: CA 중첩 기간을 두고 다음 순서를 지킨다. 먼저 이전+새 CA를 함께 담은 이중
-  신뢰 저장소와 필요하면 갱신한 client-config JDBC URL을 배포하고 애플리케이션을 배포해 기존
-  서버 인증서 연결과 준비 상태를 확인한다. 실행 중인 마이그레이션 Job은 없어야 하며 다음
-  Job도 이 이중 신뢰 저장소를 사용한다. 그 다음 새 CA가 서명한 서버 인증서 Secret을
-  적용하고 MySQL을 재시작해 애플리케이션 재연결, `Ssl_cipher`, 잘못된 CA·호스트 부정 검증을
-  확인한다. 마지막으로 이전 CA를 제거한 클라이언트 신뢰 저장소를 배포하고 애플리케이션을 다시
-  배포한 뒤에만 중첩을 종료한다. 서버부터 회전하거나 Secret 볼륨 파일 변경만으로
+- MySQL TLS/CA: CA 중첩 기간을 두고 다음 순서를 지킨다. 먼저 이전+새 CA를 함께 담은
+  `baton-go-mysql-client-tls` Secret과 필요하면 갱신한 JDBC URL을 담은
+  `baton-go-database-client-config` Secret을 배포한다. 실행 중인 마이그레이션
+  Job은 없어야 하며 다음 Job도 이 이중 신뢰 저장소를 사용한다. Secret 적용 뒤 아래 명령으로
+  애플리케이션 Pod를 모두 재생성하고 기존 서버 인증서 연결과 준비 상태를 확인한다.
+
+  ```bash
+  kubectl -n baton-go rollout restart deployment/baton-go
+  kubectl -n baton-go rollout status deployment/baton-go --timeout=10m
+  ```
+
+  그 다음 새 CA가 서명한 서버 인증서 Secret을 적용하고 MySQL을 재시작해 애플리케이션 재연결,
+  `Ssl_cipher`, 잘못된 CA·호스트 부정 검증을 확인한다. 마지막으로 이전 CA를 제거한 클라이언트
+  신뢰 저장소를 배포하고 위 두 명령으로 애플리케이션 Pod를 다시 재생성한다. 준비 상태와 새 CA
+  연결을 확인한 뒤에만 중첩을 종료한다. 서버부터 회전하거나 Secret 볼륨 파일 변경만으로
   MySQL/Hikari가 인증서를 즉시 다시 읽는다고 가정하지 않는다.
 - HMAC 비밀값: `baton-go-link-code-secret`은 버전별 키 묶음 도입 전에는 일반 회전 대상으로
   취급하지 않는다. 검증된 DB 복원을 수행하는 경우에만 같은 Secret 버전을 사용한다. 유출·오용이

@@ -223,6 +223,8 @@ jobs:
             http://127.0.0.1:8081/actuator/health/liveness
           docker exec "$app_container" wget -q -T 2 -O /dev/null \
             http://127.0.0.1:8081/actuator/health/readiness
+          docker exec "$app_container" wget -q -T 2 -O /dev/null \
+            http://127.0.0.1:8081/actuator/prometheus
 
           "${compose[@]}" run --rm --no-deps app \
             --baton-go.migration-only=true \

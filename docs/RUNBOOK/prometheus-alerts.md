@@ -41,12 +41,14 @@ Prometheus의 rule selector가 선택하는지 확인한다. 저장소는 특정
 
 | 경보 | 발생 조건 | 우선순위 |
 | --- | --- | --- |
-| `BatonGoHttpServerErrors` | 최근 5분 5xx 5건 이상·오류율 5% 초과가 5분 지속 | `critical` |
+| `BatonGoHttpServerErrors` | 최근 5분 5xx 5건 이상·429 제외 응답의 오류율 5% 초과가 5분 지속 | `critical` |
 | `BatonGoPublicResolverRateLimited` | 최근 5분 GET·HEAD 429 10건 이상이 5분 지속 | `warning` |
 | `BatonGoStoredTargetContractViolation` | 최근 5분 계약 위반 카운터 증가 | `critical` |
 
-- 5xx 계산에서는 `/actuator...`를 제외한다. DB 준비 상태와 수집 중단은 별도 인프라 경보로
-  감시한다. 트래픽이 없거나 수집이 끊겼다고 이 세 경보가 자동으로 발화하지 않는다.
+- 5xx 계산에서는 `/actuator...`를 제외하고, 오류율 분모에서도 429 응답을 제외한다.
+  요청 제한으로 차단된 요청이 늘어도 실제 처리한 요청의 서버 오류율이 낮아지지 않도록 한다.
+  DB 준비 상태와 수집 중단은 별도 인프라 경보로 감시한다. 트래픽이 없거나 수집이 끊겼다고
+  이 세 경보가 자동으로 발화하지 않는다.
 - 429는 MVC 이전 필터에서 반환될 수 있으므로 `uri="/l/{code}"`로 제한하지 않는다.
   Ingress에서 차단된 요청은 애플리케이션에 도달하지 않으므로 Ingress 지표로 별도 감시한다.
 - 계약 위반은 `baton_go_public_resolver_target_contract_violations_total`로 수집한다.
@@ -78,6 +80,8 @@ docker run --rm --network none --read-only \
 
 [규칙 테스트](../../deploy/prometheus/baton-go-alerts.test.yml)는 무트래픽·소수 오류,
 Actuator·다른 서비스 제외, 지속 시간, 경보 회복과 계약 위반 카운터 초기화 후 재발을 확인한다.
+5xx와 대량 429가 함께 발생해도 서버 오류 경보를 유지하고, 429만 발생하면 요청 제한 경보만
+발생하는지도 검증한다.
 CI의 운영 이미지 기동 검증은 실제 `/actuator/prometheus` 출력에 초기 계약 위반 카운터와
 필터가 반환한 429가 포함되는지도 확인한다. 테스트 문법은
 [Prometheus 규칙 단위 테스트](https://prometheus.io/docs/prometheus/latest/configuration/unit_testing_rules/)를 따른다.

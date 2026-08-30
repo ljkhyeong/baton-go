@@ -192,7 +192,7 @@ jobs:
       - name: 운영 이미지 빌드 검증
         run: docker build --tag baton-go:ci .
 
-      - name: 운영 이미지 기동과 health 검증
+      - name: 운영 이미지 기동·상태·공개 오류 응답 검증
         env:
           BATON_GO_APP_IMAGE: baton-go:ci
           BATON_GO_MANAGEMENT_JWT_ISSUER_URI: http://127.0.0.1:1/issuer
@@ -201,7 +201,7 @@ jobs:
           BATON_GO_LINK_CODE_SECRET: ci-runtime-link-code-secret-000000000000
           BATON_GO_DB_PASSWORD: ci-runtime-db-password
           BATON_GO_DB_ROOT_PASSWORD: ci-runtime-root-password
-          BATON_GO_PUBLIC_RESOLVER_RATE_LIMIT_CAPACITY: "1"
+          BATON_GO_PUBLIC_RESOLVER_RATE_LIMIT_CAPACITY: "2"
           BATON_GO_PUBLIC_RESOLVER_RATE_LIMIT_WINDOW: 1h
           BATON_GO_HTTP_PORT: "0"
           BATON_GO_MANAGEMENT_PORT: "0"
@@ -240,11 +240,33 @@ jobs:
           docker exec "$app_container" wget -q -T 2 -O /dev/null \
             http://127.0.0.1:8081/actuator/health/readiness
           http_address="$("${compose[@]}" port app 8080)"
-          for attempt in 1 2; do
-            response_status="$(curl --silent --show-error --max-time 5 \
-              --output /dev/null --write-out '%{http_code}' \
-              "http://$http_address/l/ci-metrics-probe")"
-          done
+          public_url="http://$http_address/l/ci-public-error-probe"
+          html_headers="$RUNNER_TEMP/baton-go-public-html.headers"
+          html_body="$RUNNER_TEMP/baton-go-public.html"
+          response_status="$(curl --silent --show-error --max-time 5 \
+            --header 'Accept: text/html' --header 'X-Request-Id: ci-public-html' \
+            --dump-header "$html_headers" --output "$html_body" \
+            --write-out '%{http_code}' "$public_url")"
+          test "$response_status" = "404"
+          grep -Eiq '^content-type: text/html;[[:space:]]*charset=utf-8[[:space:]]*$' "$html_headers"
+          grep -Fq '<html lang="ko">' "$html_body"
+          grep -Fq '링크를 찾을 수 없습니다' "$html_body"
+          grep -Fq '<code>ci-public-html</code>' "$html_body"
+
+          json_headers="$RUNNER_TEMP/baton-go-public-json.headers"
+          json_body="$RUNNER_TEMP/baton-go-public.json"
+          response_status="$(curl --silent --show-error --max-time 5 \
+            --header 'X-Request-Id: ci-public-json' \
+            --dump-header "$json_headers" --output "$json_body" \
+            --write-out '%{http_code}' "$public_url")"
+          test "$response_status" = "404"
+          grep -Eiq '^content-type: application/json[[:space:]]*$' "$json_headers"
+          jq --exit-status \
+            '.code == "LINK_NOT_FOUND" and .requestId == "ci-public-json"' \
+            "$json_body"
+
+          response_status="$(curl --silent --show-error --max-time 5 \
+            --output /dev/null --write-out '%{http_code}' "$public_url")"
           test "$response_status" = "429"
 
           metrics_file="$RUNNER_TEMP/baton-go-prometheus.txt"

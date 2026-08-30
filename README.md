@@ -193,6 +193,9 @@ DB 대기 시간은 Hikari·Connector/J 설정으로 제한하며, 마이그레�
 ./gradlew --no-daemon build
 ```
 
+CI는 운영 이미지를 Compose로 실행해 상태 확인, 미존재 링크의 HTML·기본 JSON 오류 본문과
+요청률 제한 `429`를 점검한다. 오류 상태별 세부 계약은 웹 테스트에서 검증한다.
+
 Gradle은 `gradle/verification-metadata.xml`의 SHA-256으로 내려받은 의존성을 검증한다.
 의존성을 변경할 때는 검증 메타데이터를 삭제하거나 검증을 끄지 말고, 새 아티팩트의 출처와
 체크섬을 검토한 뒤 같은 변경에서 메타데이터를 갱신한다.

@@ -4,10 +4,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
+import java.net.InetAddress;
+import java.net.ServerSocket;
+import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -70,6 +75,35 @@ class LinkCodeKeyGuardBindingCliTest {
                     .doesNotContain(CANARY)
                     .doesNotContain(secret)
                     .doesNotContain("database-password");
+        }
+    }
+
+    @Test
+    @DisplayName("DB가 연결만 받고 응답하지 않으면 시간 초과로 종료하고 민감한 입력을 노출하지 않는다")
+    void timesOutWhenDatabaseAcceptsConnectionWithoutResponding() throws Exception {
+        String secret = "secret-value-that-must-not-be-printed";
+        Map<String, String> environment = validEnvironment(secret);
+
+        try (ServerSocket server = new ServerSocket(0, 1, InetAddress.getByName("127.0.0.1"));
+                var executor = Executors.newSingleThreadExecutor()) {
+            server.setSoTimeout(10_000);
+            String jdbcUrl = "jdbc:mysql://127.0.0.1:" + server.getLocalPort()
+                    + "/guard_timeout?sslMode=VERIFY_IDENTITY";
+            environment.put("BATON_GO_DB_URL", jdbcUrl);
+            var result = executor.submit(() -> run(
+                    new String[]{"--confirm-writers-stopped"},
+                    environment
+            ));
+
+            try (Socket connection = server.accept()) {
+                CapturedOutput output = result.get(15, TimeUnit.SECONDS);
+
+                assertThat(output.exitCode()).isEqualTo(3);
+                assertThat(output.standardOutput()).isEmpty();
+                assertThat(output.standardError())
+                        .isNotBlank()
+                        .doesNotContain(CANARY, secret, jdbcUrl, "database-password");
+            }
         }
     }
 

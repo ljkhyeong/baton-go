@@ -65,6 +65,8 @@ public final class LinkCodeKeyGuardBindingCli {
             Properties jdbcProperties = new Properties();
             jdbcProperties.setProperty("user", configuration.username());
             jdbcProperties.setProperty("password", configuration.password());
+            jdbcProperties.setProperty("connectTimeout", "3000");
+            jdbcProperties.setProperty("socketTimeout", "5000");
             // 개인 키가 없는 공개 CA 저장소의 고정 비밀번호이며 애플리케이션 설정과 같다.
             jdbcProperties.setProperty("trustCertificateKeyStorePassword", "baton-go-public-ca-v1");
             try (Connection connection = DriverManager.getConnection(

@@ -267,11 +267,14 @@ jdbc:mysql://baton-go-mysql:3306/baton_go?sslMode=VERIFY_IDENTITY&trustCertifica
 
 공유 `BATON_GO_DB_URL`에 `connectTimeout`·`socketTimeout`을 중복 지정하지 않는다.
 특히 URL에 짧은 `socketTimeout`을 넣어 런타임과 마이그레이션의 분리를 무효화하지 않는다.
-별도 JDBC CLI인 guard 도구에는 이 Spring 설정이 적용되지 않는다.
+별도 JDBC CLI인 guard 도구는 Spring 설정을 읽지 않고 JDBC `Properties`에
+`connectTimeout=3000`·`socketTimeout=5000`을 직접 지정한다. CLI 전체 실행 시간의 상한은 아니다.
 
 통신 시간 초과만으로 쓰기 실패나 DDL 롤백을 단정하지 않는다. 링크 생성 재시도는 같은
 `Idempotency-Key`를 사용하고, 마이그레이션 실패는 [실패 복구 절차](#마이그레이션-job-실패-복구)에
 따라 실제 스키마와 Flyway 이력을 먼저 확인한다.
+guard CLI의 결과가 불명확하면 [최초 결합 실행서](link-code-key-guard-binding.md#도구-빌드와-실행)에
+따라 같은 비밀값 버전과 검증용 키로 다시 실행한다.
 설정 의미는 [HikariCP 설정](https://github.com/brettwooldridge/HikariCP#configuration-knobs-baby)과
 [Connector/J 네트워크 설정](https://dev.mysql.com/doc/connector-j/en/connector-j-connp-props-networking.html)을 따른다.
 

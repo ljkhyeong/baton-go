@@ -51,7 +51,7 @@ BATON의 `#accessKey`나 ROUND 참여 허가를 GO의 URL, DB 또는 로그에 �
 
 - Java 21
 - Spring Boot 4.1
-- Gradle 9.2.1
+- Gradle 9.7.1
 - MySQL 8, Flyway
 - Spring Data JPA
 - Actuator, Micrometer Prometheus

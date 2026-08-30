@@ -32,6 +32,7 @@ public final class DatabaseMigrationRunner {
         );
         application.setBannerMode(Banner.Mode.OFF);
         application.setWebApplicationType(WebApplicationType.NONE);
+        application.setAdditionalProfiles("migration");
 
         try (ConfigurableApplicationContext context = application.run(args)) {
             // Spring Boot의 FlywayMigrationInitializer는 애플리케이션 시작 전에 완료됩니다.

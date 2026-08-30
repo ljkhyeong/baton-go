@@ -1,0 +1,5 @@
+spring:
+  datasource:
+    hikari:
+      data-source-properties:
+        socketTimeout: 600000

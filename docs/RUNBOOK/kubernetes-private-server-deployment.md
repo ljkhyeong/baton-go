@@ -241,6 +241,41 @@ jdbc:mysql://baton-go-mysql:3306/baton_go?sslMode=VERIFY_IDENTITY&trustCertifica
 `BATON_GO_DB_URL`에 넣지 않는다. 애플리케이션과 마이그레이션 Job은 같은 URL·공개 CA 신뢰 저장소를
 사용하되 서로 다른 데이터베이스 사용자 이름/비밀번호를 사용한다.
 
+### DB 대기 시간
+
+별도 실행기나 재시도 코드를 두지 않고 Hikari와 Connector/J의 표준 설정을 사용한다.
+아래 값의 단위는 밀리초다.
+
+| 설정 | 일반 애플리케이션 | 마이그레이션 전용 실행 | 제한 대상 |
+| --- | ---: | ---: | --- |
+| `spring.datasource.hikari.connection-timeout` | 3000 | 3000 | 풀에서 연결을 확보하는 대기 |
+| `spring.datasource.hikari.validation-timeout` | 1000 | 1000 | 풀의 연결 유효성 검사 |
+| `spring.datasource.hikari.data-source-properties.connectTimeout` | 3000 | 3000 | Connector/J 소켓 연결 |
+| `spring.datasource.hikari.data-source-properties.socketTimeout` | 5000 | 600000 | Connector/J 소켓 읽기 대기 |
+
+`--baton-go.migration-only=true` 실행기는 `migration` 프로필을 자동으로 추가한다.
+일반 애플리케이션에는 이 프로필을 활성화하지 않는다. 로컬 일반 기동에 포함된 Flyway는
+일반 애플리케이션 값을 사용하므로, 긴 DDL은 마이그레이션 전용 실행으로 분리한다.
+
+이 값은 HTTP 요청이나 SQL 전체 실행 시간의 상한이 아니다. DNS 조회, 여러 SQL 실행,
+연결 재시도와 응답 처리 시간을 합산한 제한으로 해석하지 않는다. 운영 트래픽과 DDL 예상 시간을
+측정해 표준 Spring 설정으로 조정한다. 예를 들어 Job의 명령 인자에
+`--spring.datasource.hikari.data-source-properties.socketTimeout=900000`을 추가하면
+마이그레이션 소켓 읽기 대기만 15분으로 바뀐다. Job 전체 제한인
+`activeDeadlineSeconds: 1800`과도 함께 검토한다.
+
+공유 `BATON_GO_DB_URL`에 `connectTimeout`·`socketTimeout`을 중복 지정하지 않는다.
+특히 URL에 짧은 `socketTimeout`을 넣어 런타임과 마이그레이션의 분리를 무효화하지 않는다.
+별도 JDBC CLI인 guard 도구에는 이 Spring 설정이 적용되지 않는다.
+
+통신 시간 초과만으로 쓰기 실패나 DDL 롤백을 단정하지 않는다. 링크 생성 재시도는 같은
+`Idempotency-Key`를 사용하고, 마이그레이션 실패는 [실패 복구 절차](#마이그레이션-job-실패-복구)에
+따라 실제 스키마와 Flyway 이력을 먼저 확인한다.
+설정 의미는 [HikariCP 설정](https://github.com/brettwooldridge/HikariCP#configuration-knobs-baby)과
+[Connector/J 네트워크 설정](https://dev.mysql.com/doc/connector-j/en/connector-j-connp-props-networking.html)을 따른다.
+
+### Secret 생성
+
 Kubernetes Secret의 RBAC는 객체 키 단위가 아니다. 따라서 URL, DB 런타임, 마이그레이션, root와
 HMAC 비밀값을 서로 다른 객체로 유지한다. 운영자·컨트롤러 RBAC도 가능하면
 `resourceNames`로 필요한 Secret만 허용하며 수명주기가 다른 Secret을 하나로 합치지 않는다.

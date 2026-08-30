@@ -18,7 +18,11 @@ spring:
     username: ${BATON_GO_DB_USERNAME:baton_go}
     password: ${BATON_GO_DB_PASSWORD:}
     hikari:
+      connection-timeout: 3000
+      validation-timeout: 1000
       data-source-properties:
+        connectTimeout: 3000
+        socketTimeout: 5000
         trustCertificateKeyStorePassword: baton-go-public-ca-v1
   flyway:
     validate-migration-naming: true

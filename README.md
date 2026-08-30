@@ -171,6 +171,10 @@ Docker는 Actuator 포트의 종합 `/actuator/health`를 계속 사용한다. �
 `/actuator/health/liveness`와 `/actuator/health/readiness`를 사용하며, 준비 상태는 DB
 연결 상태를 포함하지만 생존 상태는 포함하지 않는다.
 
+DB 대기 시간은 Hikari·Connector/J 설정으로 제한하며, 마이그레이션 전용 실행은 별도의
+소켓 읽기 대기 시간을 사용한다. 기본값과 변경 방법은
+[DB 대기 시간](docs/RUNBOOK/kubernetes-private-server-deployment.md#db-대기-시간)을 따른다.
+
 공개 `GET·HEAD /l/{code}`에는 DB 조회 전 인스턴스 집계 요청률 제한 안전장치가
 적용된다. `BATON_GO_PUBLIC_RESOLVER_RATE_LIMIT_CAPACITY`와
 `BATON_GO_PUBLIC_RESOLVER_RATE_LIMIT_WINDOW`는 배포 트래픽에 맞춰 명시적으로 설정한다.

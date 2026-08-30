@@ -205,6 +205,11 @@ GitHub 실행기를 기준으로 하며, 원격 `DOCKER_HOST`는 현재 지원�
 ./gradlew --no-daemon :bootstrap:mysqlTest
 ```
 
+CI가 실패하면 그때까지 생성된 JUnit XML과 HTML 테스트 보고서를
+`baton-go-test-reports` 산출물로 14일간 보존한다. 테스트 실행 전에 실패하여 보고서가 없으면
+업로드를 건너뛴다. 보고서에는 테스트 출력이 포함될 수 있으므로 실제 운영 자격 증명이나
+운영 데이터를 테스트 입력에 사용하지 않는다.
+
 ## MVP 링크 생성
 
 생성 의도마다 UUID를 한 번 만들고 재시도에도 같은 `Idempotency-Key`를 사용한다.

@@ -27,7 +27,7 @@ tests:
         alertname: BatonGoManagementAuthenticationServiceFailure
         exp_alerts: []
 
-  - name: 소수 오류와 다른 서비스 및 Actuator 오류는 경보에서 제외한다
+  - name: 소수 오류와 다른 서비스 및 상태 확인 오류는 경보에서 제외한다
     interval: 1m
     input_series:
       - series: 'http_server_requests_seconds_count{job="baton-go",method="GET",status="500",uri="/l/{code}"}'
@@ -35,6 +35,10 @@ tests:
       - series: 'http_server_requests_seconds_count{job="baton-go",method="GET",status="429",uri="UNKNOWN"}'
         values: '0 1x10'
       - series: 'http_server_requests_seconds_count{job="baton-go",method="GET",status="503",uri="/actuator/health/readiness"}'
+        values: '0+100x10'
+      - series: 'http_server_requests_seconds_count{job="baton-go",method="GET",status="503",uri="/readyz"}'
+        values: '0+100x10'
+      - series: 'http_server_requests_seconds_count{job="baton-go",method="GET",status="503",uri="/livez"}'
         values: '0+100x10'
       - series: 'http_server_requests_seconds_count{job="other",method="GET",status="500",uri="/l/{code}"}'
         values: '0+100x10'
@@ -87,13 +91,17 @@ tests:
         alertname: BatonGoManagementAuthenticationServiceFailure
         exp_alerts: []
 
-  - name: 5xx가 지속되면 경보를 발생시키고 오류율이 낮아지면 해제한다
+  - name: 상태 확인 성공이 많아도 지속된 5xx 경보를 발생시키고 업무 오류율이 낮아지면 해제한다
     interval: 1m
     input_series:
       - series: 'http_server_requests_seconds_count{job="baton-go",method="GET",status="200",uri="/l/{code}"}'
         values: '0+90x20'
       - series: 'http_server_requests_seconds_count{job="baton-go",method="GET",status="500",uri="/l/{code}"}'
         values: '0+10x8 80x12'
+      - series: 'http_server_requests_seconds_count{job="baton-go",method="GET",status="200",uri="/readyz"}'
+        values: '0+1000x20'
+      - series: 'http_server_requests_seconds_count{job="baton-go",method="GET",status="200",uri="/livez"}'
+        values: '0+1000x20'
     alert_rule_test:
       - eval_time: 5m
         alertname: BatonGoHttpServerErrors

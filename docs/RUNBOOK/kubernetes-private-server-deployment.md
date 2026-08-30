@@ -560,10 +560,11 @@ Job이 `Complete`가 될 때까지 유지한다. 종료된 Job 재생성 분기�
 
 ## 5. 접근 경계
 
-기본본은 `Service/baton-go-http:8080`만 만든다. 이 포트에는 서로 다른 두 경로가 함께 있다.
+기본본은 `Service/baton-go-http:8080`만 만든다. 이 포트에는 다음 경로가 함께 있다.
 
 - 공개: `GET·HEAD /l/{code}`
 - 비공개 관리: `/api/v1` Prefix 경로 집합
+- 내부 상태 확인: `/livez`, `/readyz`
 
 Ingress 컨트롤러, 호스트 이름, TLS 발급 방식과 요청 제한 제품이 정해지지 않았으므로
 저장소는 Ingress를 만들지 않는다. 환경별 외부 경계는 다음을 강제해야 한다.
@@ -590,7 +591,14 @@ kubectl label namespace <approved-edge-or-caller-namespace> \
    마스킹한다.
 4. 관리 JWT, Authorization, `Idempotency-Key`, 대상 경로와 전체 단축 URL을
    외부 경계·APM 로그에 기록하지 않는다.
-5. Actuator `8081`은 공개/비공개 Ingress에 연결하지 않는다.
+5. Actuator `8081`과 주 포트의 `/livez`·`/readyz`는 공개/비공개 Ingress에 연결하지 않는다.
+
+`management.endpoint.health.probes.add-additional-paths=true`로 Spring Boot의 상태 확인 경로를
+주 HTTP 포트에도 등록한다. Kubernetes 탐침의 포트 이름은 `http`(`8080`)이며 시작·준비
+탐침은 `/readyz`, 생존 탐침은 `/livez`를 호출한다. Docker 상태 확인도 `8080/readyz`를
+사용한다. 주 HTTP 포트 장애를 관리 포트의 정상 응답이 가리지 않게 하기 위한 설정이다.
+DB 장애는 준비 상태만 503으로 바꾸며 생존 상태에는 포함하지 않는다. Prometheus 등
+나머지 Actuator 경로는 `8081`을 유지한다.
 
 `8081`은 위 HTTP label로 열리지 않는다. 모니터링 Pod에서 직접 수집해야 한다면 모니터링
 Namespace와 실제 수집기 Pod 템플릿에 각각 다음 label을 부여해야 한다. 두 selector는 AND
@@ -603,19 +611,22 @@ scraper Pod:          baton-go.networking/actuator-client=true
 
 Kubernetes NetworkPolicy 모델에서는 일반적으로 Pod가 실행 중인 노드에서 오는 kubelet probe
 트래픽이 허용되지만, CNI 호스트 방화벽·엄격한 정책과 host-network 구현은 다를 수 있다.
-최초 배포 전에 startup/liveness/readiness probe가 실제 CNI에서 통과하는지 확인한다. 차단되면
-승인된 노드 CIDR 또는 CNI 전용 호스트 엔드포인트 정책만 좁게 추가하고 `8081`을
-`0.0.0.0/0`이나 전체 클러스터 Namespace에 열지 않는다. host-network ingress가 노드 트래픽으로
+최초 배포 전에 `8080`의 startup/liveness/readiness probe가 실제 CNI에서 통과하는지 확인한다.
+차단되면 승인된 노드 CIDR 또는 CNI 전용 호스트 엔드포인트 정책만 좁게 추가하고 `8080`이나
+`8081`을 `0.0.0.0/0`이나 전체 클러스터 Namespace에 열지 않는다. host-network ingress가 노드 트래픽으로
 보여 namespaceSelector를 우회하는지도 별도로 검증한다.
 
-Actuator Service를 기본 생성하지 않아 kubelet probe 외의 안정된 클러스터 엔드포인트가 없다.
-일시적인 운영 확인은 CNI에서 허용되는 로컬 포트 전달로 수행하고 종료한다. 엄격한 CNI가
-포트 전달도 차단하면 위 label을 가진 일회성 운영 Pod를 사용한다.
+일시적인 상태 확인은 주 HTTP 포트로 로컬 포트 전달을 열어 수행하고 종료한다. 엄격한 CNI가
+포트 전달도 차단하면 HTTP 접근을 승인한 Namespace의 일회성 운영 Pod에서 확인한다.
 
 ```bash
-kubectl -n baton-go port-forward deployment/baton-go 18081:8081
-curl --fail --silent http://127.0.0.1:18081/actuator/health/readiness
+kubectl -n baton-go port-forward deployment/baton-go 18080:8080
+curl --fail --silent http://127.0.0.1:18080/readyz
+curl --fail --silent http://127.0.0.1:18080/livez
 ```
+
+Actuator Service는 기본 생성하지 않는다. `8081/actuator/prometheus` 수집·진단은 위 모니터링
+label과 Pod별 접근 절차를 별도로 따른다.
 
 MySQL NetworkPolicy는 같은 Namespace의 BATON GO 애플리케이션과 database-migration label에서
 오는 TCP 3306만 허용한다. MySQL 자체도 `require_secure_transport=ON`이며 애플리케이션과 Job은

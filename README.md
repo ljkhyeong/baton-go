@@ -173,9 +173,10 @@ Actuator는 표시한 모니터링 네임스페이스와 클라이언트 Pod 조
 NetworkPolicy 집행과 kubelet 탐침 동작을 비공개 클러스터에서 검증한다.
 
 기본 애플리케이션 포트는 `8080`, Actuator 관리 포트는 `8081`이다.
-Docker는 Actuator 포트의 종합 `/actuator/health`를 계속 사용한다. 오케스트레이터 탐침은
-`/actuator/health/liveness`와 `/actuator/health/readiness`를 사용하며, 준비 상태는 DB
-연결 상태를 포함하지만 생존 상태는 포함하지 않는다.
+Spring의 추가 상태 확인 경로를 사용해 Kubernetes 생존 탐침은 `8080/livez`, 시작·준비
+탐침과 Docker 상태 확인은 `8080/readyz`를 호출한다. 관리 포트만 정상인 상태를 정상 서비스로
+판단하지 않으며, DB 연결 상태는 준비 상태에만 포함한다. 두 경로는 Ingress에 노출하지 않고,
+Prometheus 등 나머지 Actuator 접근은 계속 `8081`로 제한한다.
 
 DB 대기 시간은 Hikari·Connector/J 설정으로 제한하며, 마이그레이션 전용 실행은 별도의
 소켓 읽기 대기 시간을 사용한다. 기본값과 변경 방법은

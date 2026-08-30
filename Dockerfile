@@ -40,4 +40,4 @@ USER 10001:10001
 EXPOSE 8080 8081
 ENTRYPOINT ["java", "-jar", "/opt/baton-go/baton-go.jar"]
 HEALTHCHECK --interval=15s --timeout=3s --start-period=30s --retries=5 \
-    CMD wget -q -T 2 -O /dev/null http://127.0.0.1:8081/actuator/health || exit 1
+    CMD wget -q -T 2 -O /dev/null http://127.0.0.1:8080/readyz || exit 1

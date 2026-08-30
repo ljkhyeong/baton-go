@@ -1,48 +1,70 @@
 package com.personal.batongo.bootstrap;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.when;
 
+import com.personal.batongo.adapter.in.web.FilterErrorResponseWriter;
+import com.personal.batongo.adapter.in.web.ManagementApiSecurityConfiguration;
+import com.personal.batongo.adapter.in.web.RequestIdFilter;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Duration;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.autoconfigure.AutoConfigurations;
-import org.springframework.boot.health.actuate.endpoint.HealthEndpointGroup;
-import org.springframework.boot.health.actuate.endpoint.HealthEndpointGroups;
-import org.springframework.boot.health.autoconfigure.actuate.endpoint.HealthEndpointAutoConfiguration;
+import org.mockito.Answers;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.health.contributor.Health;
 import org.springframework.boot.health.contributor.HealthIndicator;
-import org.springframework.boot.health.registry.DefaultHealthContributorRegistry;
-import org.springframework.boot.health.registry.HealthContributorRegistry;
-import org.springframework.boot.test.context.ConfigDataApplicationContextInitializer;
-import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Import;
+import org.springframework.test.annotation.DirtiesContext;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
+@SpringBootTest(classes = HealthGroupConfigurationTest.WebConfiguration.class,
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+        properties = {
+                "management.server.port=0",
+                "spring.security.oauth2.resourceserver.jwt.issuer-uri=https://identity.example",
+                "spring.security.oauth2.resourceserver.jwt.jwk-set-uri=http://127.0.0.1:1/jwks"
+        })
+@DirtiesContext
 class HealthGroupConfigurationTest {
 
-    private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
-            .withInitializer(new ConfigDataApplicationContextInitializer())
-            .withConfiguration(AutoConfigurations.of(HealthEndpointAutoConfiguration.class))
-            .withBean(HealthContributorRegistry.class, this::healthContributorRegistry);
-
-    @Test
-    @DisplayName("readiness는 애플리케이션 상태와 데이터베이스를 함께 확인한다")
-    void includesDatabaseInReadiness() {
-        contextRunner.run(context -> {
-            assertThat(context).hasNotFailed();
-
-            HealthEndpointGroups groups = context.getBean(HealthEndpointGroups.class);
-            HealthEndpointGroup readiness = groups.get("readiness");
-
-            assertThat(readiness).isNotNull();
-            assertThat(readiness.isMember("readinessState")).isTrue();
-            assertThat(readiness.isMember("db")).isTrue();
-            assertThat(readiness.isMember("livenessState")).isFalse();
-        });
+    @Configuration(proxyBeanMethods = false)
+    @EnableAutoConfiguration(exclude = DataSourceAutoConfiguration.class)
+    @Import({ManagementApiSecurityConfiguration.class, FilterErrorResponseWriter.class, RequestIdFilter.class})
+    static class WebConfiguration {
     }
 
-    private HealthContributorRegistry healthContributorRegistry() {
-        DefaultHealthContributorRegistry registry = new DefaultHealthContributorRegistry();
-        HealthIndicator up = () -> Health.up().build();
-        registry.registerContributor("readinessState", up);
-        registry.registerContributor("db", up);
-        return registry;
+    @MockitoBean(name = "db", answers = Answers.CALLS_REAL_METHODS)
+    private HealthIndicator databaseHealth;
+
+    @Value("${local.server.port}")
+    private int port;
+
+    @Test
+    @DisplayName("주 HTTP 포트의 상태 확인은 DB 장애 때 준비 상태만 실패한다")
+    void probesOnMainPortIncludeDatabaseOnlyInReadiness() throws Exception {
+        try (var client = HttpClient.newHttpClient()) {
+            when(databaseHealth.health()).thenReturn(Health.up().build());
+            assertStatus(client, "/readyz", 200);
+            assertStatus(client, "/livez", 200);
+
+            when(databaseHealth.health()).thenReturn(Health.down().build());
+            assertStatus(client, "/readyz", 503);
+            assertStatus(client, "/livez", 200);
+        }
+    }
+
+    private void assertStatus(HttpClient client, String path, int expectedStatus) throws Exception {
+        var request = HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + path))
+                .timeout(Duration.ofSeconds(5)).GET().build();
+        var response = client.send(request, HttpResponse.BodyHandlers.discarding());
+        assertThat(response.statusCode()).as("%s 응답 상태", path).isEqualTo(expectedStatus);
     }
 }

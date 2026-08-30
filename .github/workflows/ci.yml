@@ -236,9 +236,9 @@ jobs:
           docker exec "$app_container" sh -c \
             'test ! -w /opt/baton-go/baton-go.jar && test -w /tmp'
           docker exec "$app_container" wget -q -T 2 -O /dev/null \
-            http://127.0.0.1:8081/actuator/health/liveness
+            http://127.0.0.1:8080/livez
           docker exec "$app_container" wget -q -T 2 -O /dev/null \
-            http://127.0.0.1:8081/actuator/health/readiness
+            http://127.0.0.1:8080/readyz
           http_address="$("${compose[@]}" port app 8080)"
           public_url="http://$http_address/l/ci-public-error-probe"
           html_headers="$RUNNER_TEMP/baton-go-public-html.headers"

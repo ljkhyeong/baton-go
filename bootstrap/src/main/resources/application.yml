@@ -45,6 +45,8 @@ management:
         include: health,metrics,prometheus
   endpoint:
     health:
+      probes:
+        add-additional-paths: true
       group:
         readiness:
           include: readinessState,db

@@ -602,7 +602,7 @@ class LinkHttpContractTest {
     }
 
     private double storedTargetPolicyViolationCount() {
-        return meterRegistry.counter(TARGET_POLICY_VIOLATION_METRIC).count();
+        return meterRegistry.get(TARGET_POLICY_VIOLATION_METRIC).counter().count();
     }
 
     private static RestDocumentationResultHandler documentManagementEndpoint(

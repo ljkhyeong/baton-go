@@ -1,0 +1,38 @@
+groups:
+  - name: baton-go
+    interval: 30s
+    rules:
+      - alert: BatonGoHttpServerErrors
+        expr: |
+          (
+            sum by (job) (rate(http_server_requests_seconds_count{job="baton-go",status=~"5..",uri!~"/actuator.*"}[5m]))
+            /
+            sum by (job) (rate(http_server_requests_seconds_count{job="baton-go",uri!~"/actuator.*"}[5m]))
+          ) > 0.05
+          and
+          sum by (job) (increase(http_server_requests_seconds_count{job="baton-go",status=~"5..",uri!~"/actuator.*"}[5m])) >= 5
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: BATON GO 서버 오류 증가
+          description: 최근 5분간 5xx가 5건 이상이고 오류율이 5%를 넘는 상태가 5분간 지속되었습니다. DB 준비 상태와 최근 배포를 확인하세요.
+
+      - alert: BatonGoPublicResolverRateLimited
+        expr: |
+          sum by (job) (increase(http_server_requests_seconds_count{job="baton-go",method=~"GET|HEAD",status="429"}[5m])) >= 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: BATON GO 공개 링크 요청 제한 지속
+          description: 최근 5분간 GET·HEAD의 429가 10건 이상인 상태가 5분간 지속되었습니다. 유입량과 Ingress·인스턴스 요청률 제한을 확인하세요.
+
+      - alert: BatonGoStoredTargetContractViolation
+        expr: |
+          sum by (job) (increase(baton_go_public_resolver_target_contract_violations_total{job="baton-go"}[5m])) > 0
+        labels:
+          severity: critical
+        annotations:
+          summary: BATON GO 저장 대상 계약 위반
+          description: 공개 링크 해석 중 저장된 대상 계약 위반이 발생했습니다. 허용된 linkId·requestId로 로그를 확인하고 대상 계약 정리 절차를 따르세요.

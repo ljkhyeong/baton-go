@@ -250,5 +250,6 @@ curl -i http://localhost:8080/api/v1/links \
 ### 운영 절차
 
 - [비공개 Kubernetes 배포 실행서](docs/RUNBOOK/kubernetes-private-server-deployment.md)
+- [Prometheus 경보 연결과 검증](docs/RUNBOOK/prometheus-alerts.md)
 - [기존 DB HMAC 보호 장치 최초 결합 실행서](docs/RUNBOOK/link-code-key-guard-binding.md)
 - [대상 계약 v1 정리 실행서](docs/RUNBOOK/target-contract-v1-remediation.md)

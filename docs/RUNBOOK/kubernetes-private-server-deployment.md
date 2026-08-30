@@ -610,6 +610,10 @@ DNS Namespace·Pod label, Service IP와 host-network 처리는 클러스터마�
 않는다. 공개 운영 전에 실제 수집기의 target이 `UP`인지 확인하고, 임계치·지속 시간·
 알림 경로·응답 담당자를 명시한 최소 경보를 연결한다.
 
+저장소에는 5xx·429·저장 대상 계약 위반의
+[Prometheus 경보 규칙과 검증 절차](prometheus-alerts.md)가 있다. 수집 label과 초기 임계치를
+실제 환경에 맞춰 연결하며, 아래 인프라·백업 경보는 별도로 준비한다.
+
 - `Job/baton-go-database-migration` 실패·시간 초과
 - 애플리케이션·MySQL Pod `NotReady`, 재시작과 배포 상태 이상
 - HTTP 5xx 오류율과 공개 해석 429 지속 증가

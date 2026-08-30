@@ -13,6 +13,7 @@ import com.personal.batongo.application.link.error.TargetContractRemediationNotA
 import com.personal.batongo.application.link.error.TargetContractRemediationStaleException;
 import com.personal.batongo.domain.link.LinkUnavailableException;
 import com.personal.batongo.domain.link.LinkValidationException;
+import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.Arrays;
@@ -45,10 +46,10 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     private static final int MAX_LOGGED_CAUSE_TYPES = 8;
     private static final int MAX_LOGGED_STACK_FRAMES = 12;
 
-    private final MeterRegistry meterRegistry;
+    private final Counter targetPolicyViolationCounter;
 
     public GlobalExceptionHandler(MeterRegistry meterRegistry) {
-        this.meterRegistry = meterRegistry;
+        this.targetPolicyViolationCounter = meterRegistry.counter(TARGET_POLICY_VIOLATION_METRIC);
     }
 
     @ExceptionHandler(StoredTargetPolicyViolationException.class)
@@ -367,7 +368,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
             StoredTargetPolicyViolationException exception,
             HttpServletRequest request
     ) {
-        meterRegistry.counter(TARGET_POLICY_VIOLATION_METRIC).increment();
+        targetPolicyViolationCounter.increment();
         LOG.error(
                 "저장된 링크 대상 계약 위반 linkId={} requestId={}",
                 exception.linkId(),

@@ -18,6 +18,9 @@
   클러스터 검증이나 공개 운영 승인 증거가 아니다. MySQL 워크로드는 비루트 UID/GID와 Linux
   capability 제거를 선언하지만, Namespace의 `restricted` 강제 승격 전에는 고정 이미지로 신규·
   복원·현재 PVC의 기동과 TLS·초기화·마이그레이션을 실제 클러스터에서 검증해야 한다.
+- 5xx·429·저장 대상 계약 위반의 [Prometheus 경보 규칙](deploy/prometheus/baton-go-alerts.yml)과
+  `promtool` 검증은 준비되어 있다. 실제 수집기·알림 경로 연결과 인프라·백업 경보는
+  [경보 실행서](docs/RUNBOOK/prometheus-alerts.md)에 따라 운영 환경에서 검증해야 한다.
 - 대표 HTTP 요청·응답은 기존 계약 테스트에서 REST Docs 조각으로 생성하며
   `:adapter-in-web:apiContractDocs`가 압축 산출물을 만들고 CI가 `baton-go-rest-docs`로
   보존한다. 보존 기간은 [CI 워크플로](.github/workflows/ci.yml)의 `retention-days` 설정을

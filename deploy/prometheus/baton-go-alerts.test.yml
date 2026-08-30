@@ -1,0 +1,117 @@
+rule_files:
+  - baton-go-alerts.yml
+
+evaluation_interval: 30s
+
+tests:
+  - name: 트래픽이 없으면 요청 경보를 발생시키지 않는다
+    interval: 1m
+    input_series:
+      - series: 'http_server_requests_seconds_count{job="baton-go",method="GET",status="200",uri="/l/{code}"}'
+        values: '0x10'
+      - series: 'baton_go_public_resolver_target_contract_violations_total{job="baton-go"}'
+        values: '0x10'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: BatonGoHttpServerErrors
+        exp_alerts: []
+      - eval_time: 10m
+        alertname: BatonGoPublicResolverRateLimited
+        exp_alerts: []
+      - eval_time: 10m
+        alertname: BatonGoStoredTargetContractViolation
+        exp_alerts: []
+
+  - name: 소수 오류와 다른 서비스 및 Actuator 오류는 경보에서 제외한다
+    interval: 1m
+    input_series:
+      - series: 'http_server_requests_seconds_count{job="baton-go",method="GET",status="500",uri="/l/{code}"}'
+        values: '0 1x10'
+      - series: 'http_server_requests_seconds_count{job="baton-go",method="GET",status="429",uri="UNKNOWN"}'
+        values: '0 1x10'
+      - series: 'http_server_requests_seconds_count{job="baton-go",method="GET",status="503",uri="/actuator/health/readiness"}'
+        values: '0+100x10'
+      - series: 'http_server_requests_seconds_count{job="other",method="GET",status="500",uri="/l/{code}"}'
+        values: '0+100x10'
+      - series: 'http_server_requests_seconds_count{job="other",method="GET",status="429",uri="UNKNOWN"}'
+        values: '0+100x10'
+      - series: 'baton_go_public_resolver_target_contract_violations_total{job="other"}'
+        values: '0+10x10'
+    alert_rule_test:
+      - eval_time: 6m
+        alertname: BatonGoHttpServerErrors
+        exp_alerts: []
+      - eval_time: 6m
+        alertname: BatonGoPublicResolverRateLimited
+        exp_alerts: []
+      - eval_time: 6m
+        alertname: BatonGoStoredTargetContractViolation
+        exp_alerts: []
+
+  - name: 5xx가 지속되면 경보를 발생시키고 오류율이 낮아지면 해제한다
+    interval: 1m
+    input_series:
+      - series: 'http_server_requests_seconds_count{job="baton-go",method="GET",status="200",uri="/l/{code}"}'
+        values: '0+90x20'
+      - series: 'http_server_requests_seconds_count{job="baton-go",method="GET",status="500",uri="/l/{code}"}'
+        values: '0+10x8 80x12'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: BatonGoHttpServerErrors
+        exp_alerts: []
+      - eval_time: 7m
+        alertname: BatonGoHttpServerErrors
+        exp_alerts:
+          - exp_labels:
+              job: baton-go
+              severity: critical
+            exp_annotations:
+              summary: BATON GO 서버 오류 증가
+              description: 최근 5분간 5xx가 5건 이상이고 오류율이 5%를 넘는 상태가 5분간 지속되었습니다. DB 준비 상태와 최근 배포를 확인하세요.
+      - eval_time: 15m
+        alertname: BatonGoHttpServerErrors
+        exp_alerts: []
+
+  - name: URI가 없는 필터 단계의 429도 경보에 포함하고 제한이 끝나면 해제한다
+    interval: 1m
+    input_series:
+      - series: 'http_server_requests_seconds_count{job="baton-go",method="GET",status="429",uri="UNKNOWN"}'
+        values: '0+10x8 80x12'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: BatonGoPublicResolverRateLimited
+        exp_alerts: []
+      - eval_time: 7m
+        alertname: BatonGoPublicResolverRateLimited
+        exp_alerts:
+          - exp_labels:
+              job: baton-go
+              severity: warning
+            exp_annotations:
+              summary: BATON GO 공개 링크 요청 제한 지속
+              description: 최근 5분간 GET·HEAD의 429가 10건 이상인 상태가 5분간 지속되었습니다. 유입량과 Ingress·인스턴스 요청률 제한을 확인하세요.
+      - eval_time: 15m
+        alertname: BatonGoPublicResolverRateLimited
+        exp_alerts: []
+
+  - name: 계약 위반 한 건과 카운터 초기화 뒤 재발을 감지한다
+    interval: 1m
+    input_series:
+      - series: 'baton_go_public_resolver_target_contract_violations_total{job="baton-go"}'
+        values: '0 1x4 0 1x10'
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: BatonGoStoredTargetContractViolation
+        exp_alerts: &contract_violation
+          - exp_labels:
+              job: baton-go
+              severity: critical
+            exp_annotations:
+              summary: BATON GO 저장 대상 계약 위반
+              description: 공개 링크 해석 중 저장된 대상 계약 위반이 발생했습니다. 허용된 linkId·requestId로 로그를 확인하고 대상 계약 정리 절차를 따르세요.
+      - eval_time: 7m
+        alertname: BatonGoStoredTargetContractViolation
+        exp_alerts: *contract_violation
+      - eval_time: 15m
+        alertname: BatonGoStoredTargetContractViolation
+        exp_alerts: []

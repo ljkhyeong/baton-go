@@ -23,6 +23,7 @@ jobs:
       KUBECONFORM_VERSION: "v0.7.0"
       KUBECONFORM_LINUX_AMD64_SHA256: c31518ddd122663b3f3aa874cfe8178cb0988de944f29c74a0b9260920d115d3
       KUBERNETES_SCHEMA_REVISION: c8f4e61c63bc529749125ac566bccc6986e08d45
+      PROMTOOL_IMAGE: prom/prometheus:v3.13.2@sha256:508729e0e2d18e11fd742a5a5ca70e557b940a93948c3c95fd0123a6fd538b69
 
     steps:
       - name: 저장소 체크아웃
@@ -131,6 +132,19 @@ jobs:
           test "$(grep -F -c "image: $app_image" "$rendered_manifest")" -eq 2
           test "$(grep -F -c "image: mysql@$mysql_digest" "$rendered_manifest")" -eq 1
 
+      - name: Prometheus 경보 규칙 검증
+        run: |
+          docker run --rm --network none --read-only \
+            --tmpfs /tmp:rw,nosuid,nodev,size=256m \
+            --volume "$PWD/deploy/prometheus:/rules:ro" --workdir /rules \
+            --entrypoint /bin/promtool "$PROMTOOL_IMAGE" \
+            check rules baton-go-alerts.yml
+          docker run --rm --network none --read-only \
+            --tmpfs /tmp:rw,nosuid,nodev,size=256m \
+            --volume "$PWD/deploy/prometheus:/rules:ro" --workdir /rules \
+            --entrypoint /bin/promtool "$PROMTOOL_IMAGE" \
+            test rules baton-go-alerts.test.yml
+
       - name: 정적·단위·패키징 검증
         run: ./gradlew --no-daemon build
 
@@ -187,6 +201,8 @@ jobs:
           BATON_GO_LINK_CODE_SECRET: ci-runtime-link-code-secret-000000000000
           BATON_GO_DB_PASSWORD: ci-runtime-db-password
           BATON_GO_DB_ROOT_PASSWORD: ci-runtime-root-password
+          BATON_GO_PUBLIC_RESOLVER_RATE_LIMIT_CAPACITY: "1"
+          BATON_GO_PUBLIC_RESOLVER_RATE_LIMIT_WINDOW: 1h
           BATON_GO_HTTP_PORT: "0"
           BATON_GO_MANAGEMENT_PORT: "0"
           BATON_GO_MYSQL_PORT: "0"
@@ -223,8 +239,21 @@ jobs:
             http://127.0.0.1:8081/actuator/health/liveness
           docker exec "$app_container" wget -q -T 2 -O /dev/null \
             http://127.0.0.1:8081/actuator/health/readiness
-          docker exec "$app_container" wget -q -T 2 -O /dev/null \
-            http://127.0.0.1:8081/actuator/prometheus
+          http_address="$("${compose[@]}" port app 8080)"
+          for attempt in 1 2; do
+            response_status="$(curl --silent --show-error --max-time 5 \
+              --output /dev/null --write-out '%{http_code}' \
+              "http://$http_address/l/ci-metrics-probe")"
+          done
+          test "$response_status" = "429"
+
+          metrics_file="$RUNNER_TEMP/baton-go-prometheus.txt"
+          docker exec "$app_container" wget -q -T 2 -O - \
+            http://127.0.0.1:8081/actuator/prometheus >"$metrics_file"
+          grep -Eq '^baton_go_public_resolver_target_contract_violations_total 0(\.0)?$' "$metrics_file"
+          grep '^http_server_requests_seconds_count{' "$metrics_file" \
+            | grep 'status="429"' \
+            | grep -Eq '} [1-9][0-9]*(\.0)?$'
 
           "${compose[@]}" run --rm --no-deps app \
             --baton-go.migration-only=true \

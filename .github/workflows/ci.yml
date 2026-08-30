@@ -251,6 +251,7 @@ jobs:
           docker exec "$app_container" wget -q -T 2 -O - \
             http://127.0.0.1:8081/actuator/prometheus >"$metrics_file"
           grep -Eq '^baton_go_public_resolver_target_contract_violations_total 0(\.0)?$' "$metrics_file"
+          grep -Eq '^baton_go_management_authentication_service_failures_total 0(\.0)?$' "$metrics_file"
           grep '^http_server_requests_seconds_count{' "$metrics_file" \
             | grep 'status="429"' \
             | grep -Eq '} [1-9][0-9]*(\.0)?$'

@@ -3,7 +3,7 @@
 ## 적용 범위
 
 [경보 규칙](../../deploy/prometheus/baton-go-alerts.yml)은 기존 Actuator·Micrometer 지표로
-애플리케이션의 5xx, 공개 해석 요청 제한과 저장 대상 계약 위반을 감지한다.
+애플리케이션의 5xx, 관리 JWT 검증 서비스 장애, 공개 해석 요청 제한과 저장 대상 계약 위반을 감지한다.
 규칙 추가만으로 수집기나 Alertmanager가 배포되지는 않는다. 실제 운영 수집기·알림 경로·
 담당자 연결과 발화 시험은 [배포 실행서의 수집과 경보 관문](kubernetes-private-server-deployment.md#수집과-경보-관문)을 따른다.
 
@@ -42,13 +42,19 @@ Prometheus의 rule selector가 선택하는지 확인한다. 저장소는 특정
 | 경보 | 발생 조건 | 우선순위 |
 | --- | --- | --- |
 | `BatonGoHttpServerErrors` | 최근 5분 5xx 5건 이상·429 제외 응답의 오류율 5% 초과가 5분 지속 | `critical` |
+| `BatonGoManagementAuthenticationServiceFailure` | 최근 5분 관리 JWT 검증 서비스 장애 카운터 증가 | `warning` |
 | `BatonGoPublicResolverRateLimited` | 최근 5분 GET·HEAD 429 10건 이상이 5분 지속 | `warning` |
 | `BatonGoStoredTargetContractViolation` | 최근 5분 계약 위반 카운터 증가 | `critical` |
 
 - 5xx 계산에서는 `/actuator...`를 제외하고, 오류율 분모에서도 429 응답을 제외한다.
   요청 제한으로 차단된 요청이 늘어도 실제 처리한 요청의 서버 오류율이 낮아지지 않도록 한다.
   DB 준비 상태와 수집 중단은 별도 인프라 경보로 감시한다. 트래픽이 없거나 수집이 끊겼다고
-  이 세 경보가 자동으로 발화하지 않는다.
+  이 경보들이 자동으로 발화하지 않는다.
+- 관리 JWT 검증 서비스 장애는
+  `baton_go_management_authentication_service_failures_total`로 따로 집계한다. JWK 조회 등
+  인증 서비스 장애만 포함하고 토큰 누락·서명·클레임 검증 실패인 401과 권한 부족인 403은
+  포함하지 않는다. 공개 링크 성공 요청이 많아 전체 5xx 비율이 낮아져도 경보를 발생시킨다.
+  `requestId`로 안전한 오류 로그를 찾고 발급자 상태와 Pod의 JWK HTTPS 접근을 확인한다.
 - 429는 MVC 이전 필터에서 반환될 수 있으므로 `uri="/l/{code}"`로 제한하지 않는다.
   Ingress에서 차단된 요청은 애플리케이션에 도달하지 않으므로 Ingress 지표로 별도 감시한다.
 - 계약 위반은 `baton_go_public_resolver_target_contract_violations_total`로 수집한다.
@@ -56,6 +62,9 @@ Prometheus의 rule selector가 선택하는지 확인한다. 저장소는 특정
   `increase`에는 관측값이 두 개 이상 필요하므로 최초 수집 전 오류나 수집 공백은 로그로도
   확인한다. 카운터가 초기화되어도 저장 데이터 문제가 해결된 것은 아니다.
 - 증가량은 수집 간격을 보정한 추정치다. 감사용 요청 건수나 청구 집계로 사용하지 않는다.
+  관리 인증 서비스 장애 카운터도 시작 시 0으로 등록하며 최초 수집 전 장애와 수집 공백은
+  로그로 함께 확인한다. 최근 5분에 새 장애가 관측되지 않으면 경보가 해제되지만, 관리 요청이
+  없었던 것만으로 인증 서비스가 복구되었다고 판단하지 않는다.
 - Job 실패, Pod 상태, DB 준비 상태, PVC·백업 경보는 플랫폼 지표로 따로 연결한다.
   이 파일을 적용했다고 전체 운영 관문을 통과한 것으로 기록하지 않는다.
 
@@ -81,8 +90,9 @@ docker run --rm --network none --read-only \
 [규칙 테스트](../../deploy/prometheus/baton-go-alerts.test.yml)는 무트래픽·소수 오류,
 Actuator·다른 서비스 제외, 지속 시간, 경보 회복과 계약 위반 카운터 초기화 후 재발을 확인한다.
 5xx와 대량 429가 함께 발생해도 서버 오류 경보를 유지하고, 429만 발생하면 요청 제한 경보만
-발생하는지도 검증한다.
-CI의 운영 이미지 기동 검증은 실제 `/actuator/prometheus` 출력에 초기 계약 위반 카운터와
+발생하는지도 검증한다. 관리 인증 서비스 장애는 대량 공개 성공 요청과 무관한 발화,
+카운터 초기화 뒤 재발과 새 장애가 없는 구간의 해제를 검증한다.
+CI의 운영 이미지 기동 검증은 실제 `/actuator/prometheus` 출력에 초기 계약 위반·관리 인증 장애 카운터와
 필터가 반환한 429가 포함되는지도 확인한다. 테스트 문법은
 [Prometheus 규칙 단위 테스트](https://prometheus.io/docs/prometheus/latest/configuration/unit_testing_rules/)를 따른다.
 

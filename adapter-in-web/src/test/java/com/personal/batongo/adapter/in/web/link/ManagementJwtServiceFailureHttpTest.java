@@ -10,6 +10,8 @@ import com.personal.batongo.adapter.in.web.FilterErrorResponseWriter;
 import com.personal.batongo.adapter.in.web.ManagementApiSecurityConfiguration;
 import com.personal.batongo.adapter.in.web.RequestIdFilter;
 import com.sun.net.httpserver.HttpServer;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
@@ -43,7 +45,7 @@ import org.springframework.test.web.servlet.MockMvc;
         "spring.security.oauth2.resourceserver.jwt.audiences=baton-go"
 })
 @ContextConfiguration(classes = ManagementApiSecurityConfiguration.class)
-@Import({FilterErrorResponseWriter.class, RequestIdFilter.class})
+@Import({FilterErrorResponseWriter.class, RequestIdFilter.class, SimpleMeterRegistry.class})
 @ExtendWith(OutputCaptureExtension.class)
 class ManagementJwtServiceFailureHttpTest {
 
@@ -52,6 +54,9 @@ class ManagementJwtServiceFailureHttpTest {
 
     @Autowired
     private MockMvc mockMvc;
+
+    @Autowired
+    private MeterRegistry meterRegistry;
 
     @BeforeAll
     static void startJwkServer() throws IOException {
@@ -94,6 +99,10 @@ class ManagementJwtServiceFailureHttpTest {
                 .jwkPostProcessor(key -> key.keyID("test-key"))
                 .build().encode(JwtEncoderParameters.from(claims)).getTokenValue();
         String requestId = "jwk-service-failure-test";
+        var serviceFailures = meterRegistry.get(
+                "baton.go.management.authentication.service.failures"
+        ).counter();
+        assertThat(serviceFailures.count()).isZero();
 
         mockMvc.perform(get("/api/v1/links/83a430c4-5c5d-4eb4-a815-7a5ba1fd4aae")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
@@ -109,5 +118,6 @@ class ManagementJwtServiceFailureHttpTest {
 
         assertThat(output).contains(requestId, AuthenticationServiceException.class.getName())
                 .doesNotContain(JWK_FAILURE_BODY, token);
+        assertThat(serviceFailures.count()).isEqualTo(1);
     }
 }

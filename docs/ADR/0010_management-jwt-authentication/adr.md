@@ -42,6 +42,8 @@ BATON GO는 브라우저 사용자가 아니라 신뢰된 서버 호출자가 �
   `500 INTERNAL_ERROR`와 공통 오류 본문으로 응답한다. `requestId`와 예외 종류만 기록하고
   JWT·원격 오류 응답·예외 원문은 기록하지 않는다. JWT 검증과 JWK 조회·캐시는 계속 Spring이
   수행한다.
+- 인증 서비스 장애는 별도 Micrometer 카운터로 집계해 공개 링크 성공 트래픽과 무관하게
+  감지한다. 경보와 수집 기준은 [Prometheus 실행서](../../RUNBOOK/prometheus-alerts.md)를 따른다.
 - 관리 보안 체인은 세션을 만들지 않고 CSRF 상태를 사용하지 않는다. 공개 `/l/**`와 Actuator는
   이 체인에 포함하지 않으며 기존 네트워크 경계를 계속 적용한다.
 - JWT 원문, `Authorization` 헤더와 토큰 claim 전체를 로그·지표·오류에 기록하지 않는다.

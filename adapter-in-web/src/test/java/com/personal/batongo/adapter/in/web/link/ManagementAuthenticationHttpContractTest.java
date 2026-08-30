@@ -29,6 +29,8 @@ import com.personal.batongo.application.link.port.in.SmartLinkUseCase.LinkResult
 import com.personal.batongo.application.link.port.in.TargetContractOperationsUseCase;
 import com.personal.batongo.domain.link.LinkPurpose;
 import com.personal.batongo.domain.link.TargetSystem;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.net.URI;
 import java.time.Instant;
 import java.util.Comparator;
@@ -83,7 +85,8 @@ import org.springframework.web.util.UriTemplate;
 @ContextConfiguration(classes = ManagementAuthenticationHttpContractTest.WebControllerScan.class)
 @Import({
         ManagementApiSecurityConfiguration.class,
-        FilterErrorResponseWriter.class
+        FilterErrorResponseWriter.class,
+        SimpleMeterRegistry.class
 })
 class ManagementAuthenticationHttpContractTest {
 
@@ -121,6 +124,9 @@ class ManagementAuthenticationHttpContractTest {
 
     @Autowired
     private RequestMappingHandlerMapping handlerMapping;
+
+    @Autowired
+    private MeterRegistry meterRegistry;
 
     private MockMvc mockMvc;
 
@@ -182,6 +188,8 @@ class ManagementAuthenticationHttpContractTest {
                 ));
 
         verifyNoInteractions(useCase);
+        assertThat(meterRegistry.get("baton.go.management.authentication.service.failures")
+                .counter().count()).isZero();
     }
 
     @ParameterizedTest(name = "{0}")

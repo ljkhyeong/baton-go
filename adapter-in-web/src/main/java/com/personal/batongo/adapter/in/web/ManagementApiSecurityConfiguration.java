@@ -1,5 +1,7 @@
 package com.personal.batongo.adapter.in.web;
 
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Bean;
@@ -34,10 +36,15 @@ public class ManagementApiSecurityConfiguration {
     @Bean
     SecurityFilterChain managementApiSecurityFilterChain(
             HttpSecurity http,
-            FilterErrorResponseWriter errorResponseWriter
+            FilterErrorResponseWriter errorResponseWriter,
+            MeterRegistry meterRegistry
     ) throws Exception {
+        Counter serviceFailures = meterRegistry.counter(
+                "baton.go.management.authentication.service.failures"
+        );
         AuthenticationEntryPoint authenticationEntryPoint = (request, response, exception) -> {
             if (exception instanceof AuthenticationServiceException) {
+                serviceFailures.increment();
                 LOG.error(
                         "관리 JWT 검증 서비스 오류 requestId={} exceptionType={}",
                         RequestIdFilter.requestId(request),

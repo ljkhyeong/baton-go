@@ -11,6 +11,8 @@ tests:
         values: '0x10'
       - series: 'baton_go_public_resolver_target_contract_violations_total{job="baton-go"}'
         values: '0x10'
+      - series: 'baton_go_management_authentication_service_failures_total{job="baton-go"}'
+        values: '0x10'
     alert_rule_test:
       - eval_time: 10m
         alertname: BatonGoHttpServerErrors
@@ -20,6 +22,9 @@ tests:
         exp_alerts: []
       - eval_time: 10m
         alertname: BatonGoStoredTargetContractViolation
+        exp_alerts: []
+      - eval_time: 10m
+        alertname: BatonGoManagementAuthenticationServiceFailure
         exp_alerts: []
 
   - name: 소수 오류와 다른 서비스 및 Actuator 오류는 경보에서 제외한다
@@ -37,6 +42,8 @@ tests:
         values: '0+100x10'
       - series: 'baton_go_public_resolver_target_contract_violations_total{job="other"}'
         values: '0+10x10'
+      - series: 'baton_go_management_authentication_service_failures_total{job="other"}'
+        values: '0+10x10'
     alert_rule_test:
       - eval_time: 6m
         alertname: BatonGoHttpServerErrors
@@ -46,6 +53,38 @@ tests:
         exp_alerts: []
       - eval_time: 6m
         alertname: BatonGoStoredTargetContractViolation
+        exp_alerts: []
+      - eval_time: 6m
+        alertname: BatonGoManagementAuthenticationServiceFailure
+        exp_alerts: []
+
+  - name: 공개 성공 요청이 많아도 관리 인증 서비스 장애와 카운터 초기화 뒤 재발을 감지한다
+    interval: 1m
+    input_series:
+      - series: 'http_server_requests_seconds_count{job="baton-go",method="GET",status="302",uri="/l/{code}"}'
+        values: '0+1000x16'
+      - series: 'http_server_requests_seconds_count{job="baton-go",method="POST",status="500",uri="UNKNOWN"}'
+        values: '0 1x4 0 1x10'
+      - series: 'baton_go_management_authentication_service_failures_total{job="baton-go"}'
+        values: '0 1x4 0 1x10'
+    alert_rule_test:
+      - eval_time: 7m
+        alertname: BatonGoHttpServerErrors
+        exp_alerts: []
+      - eval_time: 1m
+        alertname: BatonGoManagementAuthenticationServiceFailure
+        exp_alerts: &management_authentication_failure
+          - exp_labels:
+              job: baton-go
+              severity: warning
+            exp_annotations:
+              summary: BATON GO 관리 인증 서비스 장애
+              description: 최근 5분간 관리 JWT 검증 서비스 장애가 관측되었습니다. requestId로 로그를 확인하고 발급자 상태와 Pod의 JWK HTTPS 접근을 점검하세요.
+      - eval_time: 7m
+        alertname: BatonGoManagementAuthenticationServiceFailure
+        exp_alerts: *management_authentication_failure
+      - eval_time: 15m
+        alertname: BatonGoManagementAuthenticationServiceFailure
         exp_alerts: []
 
   - name: 5xx가 지속되면 경보를 발생시키고 오류율이 낮아지면 해제한다

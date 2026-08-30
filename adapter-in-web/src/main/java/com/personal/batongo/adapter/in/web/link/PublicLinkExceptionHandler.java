@@ -93,9 +93,6 @@ public class PublicLinkExceptionHandler {
                 .header("X-Content-Type-Options", "nosniff")
                 .varyBy(HttpHeaders.ACCEPT);
         ErrorResponse body = error.getBody();
-        if (body == null) {
-            return response.build();
-        }
         String guidance = switch (body.code()) {
             case "LINK_NOT_ACTIVE" -> "링크를 보낸 사람에게 이용 가능한 시간을 확인해 주세요.";
             case "LINK_EXPIRED", "LINK_REVOKED" -> "링크를 보낸 사람에게 새 링크를 요청해 주세요.";

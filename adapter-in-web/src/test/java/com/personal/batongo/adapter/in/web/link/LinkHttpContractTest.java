@@ -574,7 +574,7 @@ class LinkHttpContractTest {
     }
 
     @Test
-    @DisplayName("일반 미존재와 저장 target 계약 위반 HEAD는 같은 본문 없는 404이며 위반만 기록한다")
+    @DisplayName("일반 미존재와 저장 대상 계약 위반 HEAD는 같은 404와 JSON 형식이며 위반만 기록한다")
     void hidesStoredTargetPolicyViolationLikeMissingLinkForHead() throws Exception {
         String missingCode = "missing-link-code";
         when(useCase.resolveLink(missingCode)).thenThrow(new LinkNotFoundException());
@@ -660,8 +660,8 @@ class LinkHttpContractTest {
     }
 
     @Test
-    @DisplayName("HTML을 요청한 HEAD도 본문 없이 같은 링크 오류 상태를 반환한다")
-    void returnsHtmlHeadWithoutBody() throws Exception {
+    @DisplayName("HTML을 요청한 HEAD도 같은 링크 오류 상태와 응답 형식을 유지한다")
+    void returnsHtmlHeadersForHead() throws Exception {
         when(useCase.resolveLink("expired-code")).thenThrow(new LinkUnavailableException(
                 LinkUnavailableException.Reason.EXPIRED, "만료된 링크입니다"
         ));
@@ -669,7 +669,6 @@ class LinkHttpContractTest {
         mockMvc.perform(head("/l/expired-code").accept(MediaType.TEXT_HTML))
                 .andExpect(status().isGone())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.TEXT_HTML))
-                .andExpect(content().string(""))
                 .andExpect(header().doesNotExist(HttpHeaders.LOCATION));
     }
 
@@ -710,16 +709,17 @@ class LinkHttpContractTest {
                 .getContentAsString();
     }
 
+    // HEAD 본문 전송 제외는 MockMvc가 아닌 실행 이미지 CI에서 확인한다.
     private void performPublicNotFoundHead(String rawCode) throws Exception {
         mockMvc.perform(head("/l/{code}", rawCode)
                         .header("X-Request-Id", PUBLIC_NOT_FOUND_REQUEST_ID))
                 .andExpect(status().isNotFound())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
                 .andExpect(header().doesNotExist(HttpHeaders.LOCATION))
                 .andExpect(header().string(
                         "X-Request-Id",
                         PUBLIC_NOT_FOUND_REQUEST_ID
-                ))
-                .andExpect(content().string(""));
+                ));
     }
 
     private double storedTargetPolicyViolationCount() {

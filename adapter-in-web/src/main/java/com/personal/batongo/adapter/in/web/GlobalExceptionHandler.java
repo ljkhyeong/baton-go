@@ -26,7 +26,6 @@ import java.util.stream.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
@@ -291,14 +290,11 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
             String message,
             HttpServletRequest request
     ) {
-        ErrorResponse body = HttpMethod.HEAD.matches(request.getMethod())
-                ? null
-                : new ErrorResponse(
-                        code,
-                        message,
-                        RequestIdFilter.requestId(request)
-                );
-        return ResponseEntity.status(status).body(body);
+        return ResponseEntity.status(status).body(new ErrorResponse(
+                code,
+                message,
+                RequestIdFilter.requestId(request)
+        ));
     }
 
     private ErrorResponse frameworkError(HttpStatusCode status, WebRequest request) {

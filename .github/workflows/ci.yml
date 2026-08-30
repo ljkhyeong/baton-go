@@ -201,7 +201,7 @@ jobs:
           BATON_GO_LINK_CODE_SECRET: ci-runtime-link-code-secret-000000000000
           BATON_GO_DB_PASSWORD: ci-runtime-db-password
           BATON_GO_DB_ROOT_PASSWORD: ci-runtime-root-password
-          BATON_GO_PUBLIC_RESOLVER_RATE_LIMIT_CAPACITY: "2"
+          BATON_GO_PUBLIC_RESOLVER_RATE_LIMIT_CAPACITY: "4"
           BATON_GO_PUBLIC_RESOLVER_RATE_LIMIT_WINDOW: 1h
           BATON_GO_HTTP_PORT: "0"
           BATON_GO_MANAGEMENT_PORT: "0"
@@ -264,6 +264,16 @@ jobs:
           jq --exit-status \
             '.code == "LINK_NOT_FOUND" and .requestId == "ci-public-json"' \
             "$json_body"
+
+          head_headers="$RUNNER_TEMP/baton-go-public-head.headers"
+          for content_type in 'text/html;charset=UTF-8' 'application/json'; do
+            response_metadata="$(curl --silent --show-error --max-time 5 --head \
+              --header "Accept: ${content_type%%;*}" \
+              --dump-header "$head_headers" --output /dev/null \
+              --write-out '%{http_code} %{size_download}' "$public_url")"
+            test "$response_metadata" = "404 0"
+            grep -Fiq "content-type: $content_type" "$head_headers"
+          done
 
           response_status="$(curl --silent --show-error --max-time 5 \
             --output /dev/null --write-out '%{http_code}' "$public_url")"

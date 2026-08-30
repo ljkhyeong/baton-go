@@ -192,6 +192,9 @@ DB 대기 시간은 Hikari·Connector/J 설정으로 제한하며, 마이그레�
 Gradle은 `gradle/verification-metadata.xml`의 SHA-256으로 내려받은 의존성을 검증한다.
 의존성을 변경할 때는 검증 메타데이터를 삭제하거나 검증을 끄지 말고, 새 아티팩트의 출처와
 체크섬을 검토한 뒤 같은 변경에서 메타데이터를 갱신한다.
+의존성 버전을 변경한 뒤에는 `./gradlew --no-daemon --refresh-dependencies build`와
+운영 이미지 빌드를 함께 확인한다. 기존 캐시만 사용하면 POM·Gradle 모듈 메타데이터의
+체크섬 누락이 드러나지 않을 수 있다.
 
 Flyway/JPA와 동시 생성 동작을 포함한 MySQL 통합 검증은 Docker가 실행 중인 환경에서
 별도로 수행한다. 이 테스트 묶음은 Kubernetes 배포용 MySQL 초기화 스크립트, TLS

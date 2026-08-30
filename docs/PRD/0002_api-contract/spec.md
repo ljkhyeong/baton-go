@@ -61,6 +61,8 @@
 `iss`가 설정한 발급자, `aud`가 `baton-go`, 유효 시간이 현재 범위이며 요청 작업의 scope를
 포함한 서명 JWT를 표준 `Authorization: Bearer <jwt>` 형식으로 보낸다. JWT 서명·시간·발급자·
 대상 검증과 scope 권한 변환은 Spring Security OAuth2 Resource Server가 수행한다.
+만료 시각 `exp`는 필수이며 누락하거나 이미 만료된 JWT는 같은 `401`로 거부한다.
+`nbf`는 선택 사항으로 유지하고, 시각 비교에는 Spring의 기본 시계 오차 허용 범위를 적용한다.
 JWK 조회 등 인증 서비스 장애는 토큰 오류와 구분해 `500 INTERNAL_ERROR`로 응답하고 관리
 작업을 실행하지 않는다. 공통 오류 본문과 `requestId`를 유지하며 `WWW-Authenticate`는
 포함하지 않는다.

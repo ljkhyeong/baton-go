@@ -15,6 +15,7 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.oauth2.jwt.JwtTimestampValidator;
 import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
@@ -32,6 +33,13 @@ public class ManagementApiSecurityConfiguration {
     static final String LINK_REVOKE_AUTHORITY = "SCOPE_baton-go.links.revoke";
     static final String TARGET_CONTRACT_OPERATE_AUTHORITY =
             "SCOPE_baton-go.target-contract.operate";
+
+    @Bean
+    JwtTimestampValidator managementJwtTimestampValidator() {
+        var validator = new JwtTimestampValidator();
+        validator.setAllowEmptyExpiryClaim(false);
+        return validator;
+    }
 
     @Bean
     SecurityFilterChain managementApiSecurityFilterChain(

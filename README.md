@@ -79,6 +79,7 @@ URI는 HTTPS이며 JWT의 `aud`는 기본 `baton-go`와 일치해야 한다. 다
 discovery 서버에 의존하지 않으면서 `iss` 검증을 유지한다. 링크
 생성·조회·폐기에는 각각 `baton-go.links.create`,
 `baton-go.links.read`, `baton-go.links.revoke` scope가 필요하다.
+JWT에는 만료 시각 `exp`가 반드시 있어야 하며, 누락하거나 이미 만료된 토큰은 `401`로 거부한다.
 
 `BATON_GO_LINK_CODE_SECRET`은 32자 이상의 별도 무작위 값이어야 한다. 기존 DB-키 결합과 복구
 호환성을 위해 길이 외의 문법을 추가 제한하거나 공백 제거·Unicode 정규화하지 않고 설정 문자열

@@ -26,6 +26,11 @@ BATON GO는 브라우저 사용자가 아니라 신뢰된 서버 호출자가 �
   비어 있거나 빈 값·공백뿐인 항목을 포함하면 시작을 거부한다. Spring Boot는 빈 목록이면
   audience 검증을 생략하므로 설정 단계에서 이를 차단하며, JWT의 `aud` 검증 자체는 계속
   Spring에 맡긴다.
+- `exp`는 필수다. Spring 표준 `JwtTimestampValidator`의
+  `setAllowEmptyExpiryClaim(false)`를 사용하고 별도 claim 검증기를 만들지 않는다.
+  이 검증기를 빈으로 등록해 Spring Boot 자동 설정이 기존 시간 검증 대신 사용하게 한다.
+  서명·발급자·audience 검증과 JWK 조회·캐시는 유지한다. `nbf`는 계속 선택 사항이며
+  시계 오차 허용 범위도 Spring 기본값을 유지한다.
 - 경로별 필요한 scope는 다음과 같다.
 
 | 작업 | scope |
@@ -56,8 +61,9 @@ BATON GO는 브라우저 사용자가 아니라 신뢰된 서버 호출자가 �
 
 ## 전환
 
-1. 발급자에 `aud=baton-go`와 필요한 scope를 가진 서비스 신원을 먼저 준비한다.
-2. 비공개 경계에서 각 scope의 허용과 누락 scope의 `403`을 검증한다.
+1. 발급자에 `aud=baton-go`와 필요한 scope를 가진 서비스 신원을 먼저 준비하고 JWT에
+   유효한 `exp`를 포함하도록 설정한다.
+2. 비공개 경계에서 각 scope의 허용과 누락 scope의 `403`, `exp` 누락·만료의 `401`을 검증한다.
 3. 호출자를 JWT로 전환한 뒤 정적 `BATON_GO_MANAGEMENT_TOKEN` 설정과
    `baton-go-management-credentials` Secret을 폐기한다.
 4. 새 JWK를 먼저 게시하고 발급 키를 전환한 뒤 기존 JWT 최대 수명과 캐시 관찰 시간이 지난

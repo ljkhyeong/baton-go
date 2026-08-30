@@ -1,21 +1,17 @@
 package com.personal.batongo.application.link;
 
-import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import com.personal.batongo.application.link.error.InvalidTargetContractInventoryRequestException;
-import com.personal.batongo.application.link.error.InvalidTargetContractRemediationRequestException;
+import com.personal.batongo.application.link.error.InvalidRequestException;
 import com.personal.batongo.application.link.error.LinkNotFoundException;
 import com.personal.batongo.application.link.error.TargetContractRemediationNotApplicableException;
-import com.personal.batongo.application.link.error.TargetContractRemediationStaleException;
 import com.personal.batongo.application.link.port.in.TargetContractOperationsUseCase.InventoryQuery;
 import com.personal.batongo.application.link.port.in.TargetContractOperationsUseCase.RemediationCommand;
 import com.personal.batongo.application.link.port.out.SmartLinkRepository;
@@ -27,7 +23,6 @@ import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
 
 class TargetContractOperationsServiceTest {
 
@@ -47,9 +42,9 @@ class TargetContractOperationsServiceTest {
     @DisplayName("inventory는 허용 범위를 벗어난 limit을 저장소 호출 전에 거부한다")
     void rejectsInvalidInventoryLimitBeforeScanning() {
         assertThatThrownBy(() -> service.inventory(new InventoryQuery(null, 0)))
-                .isExactlyInstanceOf(InvalidTargetContractInventoryRequestException.class);
+                .isInstanceOf(InvalidRequestException.class);
         assertThatThrownBy(() -> service.inventory(new InventoryQuery(null, 501)))
-                .isExactlyInstanceOf(InvalidTargetContractInventoryRequestException.class);
+                .isInstanceOf(InvalidRequestException.class);
 
         verifyNoInteractions(repository);
     }
@@ -58,10 +53,10 @@ class TargetContractOperationsServiceTest {
     @DisplayName("remediation은 잘못된 명령을 행 잠금 전에 거부한다")
     void rejectsInvalidCommandBeforeLocking() {
         assertThatThrownBy(() -> service.remediate(new RemediationCommand(LINK_ID, -1L)))
-                .isExactlyInstanceOf(InvalidTargetContractRemediationRequestException.class);
+                .isInstanceOf(InvalidRequestException.class);
         assertThatThrownBy(() -> service.remediate(
                 new RemediationCommand(LINK_ID, Long.MAX_VALUE)
-        )).isExactlyInstanceOf(InvalidTargetContractRemediationRequestException.class);
+        )).isInstanceOf(InvalidRequestException.class);
 
         verifyNoInteractions(repository);
     }
@@ -100,34 +95,6 @@ class TargetContractOperationsServiceTest {
                 .isExactlyInstanceOf(TargetContractRemediationNotApplicableException.class);
 
         verify(repository).findStoredByIdForUpdate(LINK_ID);
-        verify(repository, never()).revokeStoredIfVersion(any(), anyLong(), any());
-    }
-
-    @Test
-    @DisplayName("remediation 조건부 갱신 실패는 오래된 요청으로 거부한다")
-    void rejectsWhenConditionalUpdateLosesRace() {
-        StoredLinkSnapshot snapshot = new StoredLinkSnapshot(
-                LINK_ID,
-                "BATON",
-                ROUND_PATH,
-                "NAVIGATION",
-                null,
-                NOW.plusSeconds(3600),
-                null,
-                NOW.minusSeconds(3600),
-                2L,
-                false
-        );
-        when(repository.findStoredByIdForUpdate(LINK_ID))
-                .thenReturn(Optional.of(snapshot));
-        when(repository.revokeStoredIfVersion(eq(LINK_ID), eq(2L), any(Instant.class)))
-                .thenReturn(false);
-
-        assertThatThrownBy(() -> service.remediate(new RemediationCommand(LINK_ID, 2L)))
-                .isExactlyInstanceOf(TargetContractRemediationStaleException.class);
-
-        ArgumentCaptor<Instant> revokedAt = ArgumentCaptor.forClass(Instant.class);
-        verify(repository).revokeStoredIfVersion(eq(LINK_ID), eq(2L), revokedAt.capture());
-        assertThat(revokedAt.getValue()).isEqualTo(NOW);
+        verify(repository, never()).revokeStored(any(), anyLong(), any());
     }
 }

@@ -149,27 +149,23 @@ public class SmartLinkPersistenceAdapter implements SmartLinkRepository {
     }
 
     @Override
-    public boolean revokeStoredIfVersion(
+    public void revokeStored(
             UUID id,
-            long expectedVersion,
+            long currentVersion,
             Instant revokedAt
     ) {
-        long nextVersion = Math.incrementExact(expectedVersion);
-        int updated = jdbcClient.sql("""
+        long nextVersion = Math.incrementExact(currentVersion);
+        jdbcClient.sql("""
                         UPDATE smart_links
                         SET revoked_at = ?, version = ?
                         WHERE id = UUID_TO_BIN(?)
-                          AND version = ?
-                          AND revoked_at IS NULL
                         """)
                 .params(
                         LocalDateTime.ofInstant(revokedAt, ZoneOffset.UTC),
                         nextVersion,
-                        id.toString(),
-                        expectedVersion
+                        id.toString()
                 )
                 .update();
-        return updated == 1;
     }
 
     private Optional<StoredLinkSnapshot> queryStoredSnapshot(

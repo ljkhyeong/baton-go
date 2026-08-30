@@ -244,13 +244,11 @@ public class SmartLinkService implements SmartLinkUseCase {
                 storedLink.createdAt(),
                 clock.instant()
         );
-        if (!repository.revokeStoredIfVersion(
+        repository.revokeStored(
                 storedLink.id(),
                 storedLink.version(),
                 revokedAt
-        )) {
-            throw new IllegalStateException("링크 폐기 상태를 저장할 수 없습니다");
-        }
+        );
         return toResult(storedLink, trustedTarget, revokedAt);
     }
 

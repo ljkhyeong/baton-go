@@ -13,8 +13,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import com.personal.batongo.application.link.error.InvalidCreationTimeException;
 import com.personal.batongo.application.link.error.InvalidIdempotencyKeyException;
+import com.personal.batongo.application.link.error.InvalidRequestException;
 import com.personal.batongo.application.link.error.LinkCodeReplayMismatchException;
 import com.personal.batongo.application.link.error.LinkCreationReplayUnavailableException;
 import com.personal.batongo.application.link.error.LinkNotFoundException;
@@ -122,7 +122,7 @@ class SmartLinkServiceTest {
                 null,
                 MAXIMUM_SUPPORTED_TIME.plusSeconds(1)
         )))
-                .isExactlyInstanceOf(InvalidCreationTimeException.class);
+                .isInstanceOf(InvalidRequestException.class);
 
         verifyNoInteractions(
                 linkCodePort,
@@ -274,8 +274,6 @@ class SmartLinkServiceTest {
         StoredLinkSnapshot snapshot = storedSnapshot();
         when(repository.findStoredById(LINK_ID)).thenReturn(Optional.of(snapshot));
         when(repository.findStoredByIdForUpdate(LINK_ID)).thenReturn(Optional.of(snapshot));
-        when(repository.revokeStoredIfVersion(LINK_ID, 3L, NOW)).thenReturn(true);
-
         var found = service.getLink(LINK_ID);
         var revoked = service.revokeLink(LINK_ID);
 
@@ -284,7 +282,7 @@ class SmartLinkServiceTest {
         assertThat(revoked.revokedAt()).isEqualTo(NOW);
         verify(repository).findStoredById(LINK_ID);
         verify(repository).findStoredByIdForUpdate(LINK_ID);
-        verify(repository).revokeStoredIfVersion(LINK_ID, 3L, NOW);
+        verify(repository).revokeStored(LINK_ID, 3L, NOW);
     }
 
     @Test
@@ -308,21 +306,7 @@ class SmartLinkServiceTest {
         var result = service.revokeLink(LINK_ID);
 
         assertThat(result.revokedAt()).isEqualTo(firstRevokedAt);
-        verify(repository, never()).revokeStoredIfVersion(any(), anyLong(), any());
-    }
-
-    @Test
-    @DisplayName("관리 폐기의 조건부 갱신 실패는 성공으로 보정하지 않는다")
-    void rejectsWhenManagedRevocationUpdateFails() {
-        when(repository.findStoredByIdForUpdate(LINK_ID))
-                .thenReturn(Optional.of(storedSnapshot()));
-        when(repository.revokeStoredIfVersion(LINK_ID, 3L, NOW)).thenReturn(false);
-
-        assertThatThrownBy(() -> service.revokeLink(LINK_ID))
-                .isExactlyInstanceOf(IllegalStateException.class);
-
-        verify(repository).findStoredByIdForUpdate(LINK_ID);
-        verify(repository).revokeStoredIfVersion(LINK_ID, 3L, NOW);
+        verify(repository, never()).revokeStored(any(), anyLong(), any());
     }
 
     @Test
@@ -338,7 +322,7 @@ class SmartLinkServiceTest {
 
         verify(repository).findStoredById(LINK_ID);
         verify(repository).findStoredByIdForUpdate(LINK_ID);
-        verify(repository, never()).revokeStoredIfVersion(any(), anyLong(), any());
+        verify(repository, never()).revokeStored(any(), anyLong(), any());
     }
 
     private void configureReplay(String publicOrigin, Instant expiresAt) {

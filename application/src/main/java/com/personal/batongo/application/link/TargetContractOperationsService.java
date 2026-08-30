@@ -1,7 +1,6 @@
 package com.personal.batongo.application.link;
 
-import com.personal.batongo.application.link.error.InvalidTargetContractInventoryRequestException;
-import com.personal.batongo.application.link.error.InvalidTargetContractRemediationRequestException;
+import com.personal.batongo.application.link.error.InvalidRequestException;
 import com.personal.batongo.application.link.error.LinkNotFoundException;
 import com.personal.batongo.application.link.error.TargetContractRemediationNotApplicableException;
 import com.personal.batongo.application.link.error.TargetContractRemediationStaleException;
@@ -41,7 +40,7 @@ public class TargetContractOperationsService implements TargetContractOperations
     @Transactional(readOnly = true)
     public InventoryResult inventory(InventoryQuery query) {
         if (query.limit() < 1 || query.limit() > MAX_INVENTORY_LIMIT) {
-            throw new InvalidTargetContractInventoryRequestException();
+            throw InvalidRequestException.targetContractInventory();
         }
         List<StoredLinkSnapshot> scanned = repository.scanStoredAfter(
                 query.afterLinkId(),
@@ -67,7 +66,7 @@ public class TargetContractOperationsService implements TargetContractOperations
     public RemediationResult remediate(RemediationCommand command) {
         if (command.expectedVersion() < 0
                 || command.expectedVersion() > MAX_REVOCABLE_VERSION) {
-            throw new InvalidTargetContractRemediationRequestException();
+            throw InvalidRequestException.targetContractRemediation();
         }
         StoredLinkSnapshot storedLink = repository.findStoredByIdForUpdate(command.linkId())
                 .orElseThrow(LinkNotFoundException::new);
@@ -91,14 +90,11 @@ public class TargetContractOperationsService implements TargetContractOperations
                 storedLink.createdAt(),
                 clock.instant()
         );
-        boolean revoked = repository.revokeStoredIfVersion(
+        repository.revokeStored(
                 storedLink.id(),
-                command.expectedVersion(),
+                storedLink.version(),
                 revokedAt
         );
-        if (!revoked) {
-            throw new TargetContractRemediationStaleException();
-        }
         return new RemediationResult(
                 storedLink.id(),
                 CONTRACT_VERSION,

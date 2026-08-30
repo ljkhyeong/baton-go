@@ -3,8 +3,8 @@ package com.personal.batongo.application.link;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.personal.batongo.application.link.error.InvalidCreationTimeException;
 import com.personal.batongo.application.link.error.InvalidIdempotencyKeyException;
+import com.personal.batongo.application.link.error.InvalidRequestException;
 import java.time.Instant;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -66,7 +66,7 @@ class CreationRequestAdmissionPolicyTest {
         assertThat(decision.expiresAt())
                 .isEqualTo(Instant.parse("2026-08-08T01:02:03.123456Z"));
         assertThat(decision.missingReservationException())
-                .isExactlyInstanceOf(InvalidCreationTimeException.class);
+                .isInstanceOf(InvalidRequestException.class);
     }
 
     @Test
@@ -80,6 +80,6 @@ class CreationRequestAdmissionPolicyTest {
                 legacyKey,
                 null,
                 MAXIMUM_SUPPORTED_TIME.plusNanos(1_000)
-        )).isExactlyInstanceOf(InvalidCreationTimeException.class);
+        )).isInstanceOf(InvalidRequestException.class);
     }
 }

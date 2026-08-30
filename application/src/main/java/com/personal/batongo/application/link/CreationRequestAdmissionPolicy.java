@@ -1,7 +1,7 @@
 package com.personal.batongo.application.link;
 
-import com.personal.batongo.application.link.error.InvalidCreationTimeException;
 import com.personal.batongo.application.link.error.InvalidIdempotencyKeyException;
+import com.personal.batongo.application.link.error.InvalidRequestException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Objects;
@@ -21,7 +21,7 @@ final class CreationRequestAdmissionPolicy {
             Instant expiresAt
     ) {
         if (!isWithinRange(notBefore) || !isWithinRange(expiresAt)) {
-            throw new InvalidCreationTimeException();
+            throw InvalidRequestException.creationTime();
         }
 
         Instant storedNotBefore = databaseTime(notBefore);
@@ -70,7 +70,7 @@ final class CreationRequestAdmissionPolicy {
         RuntimeException missingReservationException() {
             return switch (replayOnlyReason) {
                 case LEGACY_IDEMPOTENCY_KEY -> new InvalidIdempotencyKeyException();
-                case SUB_MICROSECOND_TIME -> new InvalidCreationTimeException();
+                case SUB_MICROSECOND_TIME -> InvalidRequestException.creationTime();
                 case NONE -> new IllegalStateException(
                         "신규 생성 가능한 요청에는 기존 예약이 필수일 수 없습니다"
                 );

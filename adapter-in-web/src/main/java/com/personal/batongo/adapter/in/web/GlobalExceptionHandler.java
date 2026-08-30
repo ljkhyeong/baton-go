@@ -1,9 +1,7 @@
 package com.personal.batongo.adapter.in.web;
 
-import com.personal.batongo.application.link.error.InvalidCreationTimeException;
 import com.personal.batongo.application.link.error.InvalidIdempotencyKeyException;
-import com.personal.batongo.application.link.error.InvalidTargetContractInventoryRequestException;
-import com.personal.batongo.application.link.error.InvalidTargetContractRemediationRequestException;
+import com.personal.batongo.application.link.error.InvalidRequestException;
 import com.personal.batongo.application.link.error.IdempotencyKeyConflictException;
 import com.personal.batongo.application.link.error.LinkCodeKeyBindingException;
 import com.personal.batongo.application.link.error.LinkCodeReplayMismatchException;
@@ -109,13 +107,9 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return error(HttpStatus.BAD_REQUEST, "INVALID_LINK", exception.getMessage(), request);
     }
 
-    @ExceptionHandler({
-            InvalidCreationTimeException.class,
-            InvalidTargetContractInventoryRequestException.class,
-            InvalidTargetContractRemediationRequestException.class
-    })
+    @ExceptionHandler(InvalidRequestException.class)
     public ResponseEntity<ErrorResponse> handleInvalidRequest(
-            RuntimeException exception,
+            InvalidRequestException exception,
             HttpServletRequest request
     ) {
         return error(HttpStatus.BAD_REQUEST, "INVALID_REQUEST", exception.getMessage(), request);

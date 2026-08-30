@@ -20,7 +20,7 @@ public interface SmartLinkRepository {
 
     List<StoredLinkSnapshot> scanStoredAfter(UUID afterLinkId, int limit);
 
-    boolean revokeStoredIfVersion(UUID id, long expectedVersion, Instant revokedAt);
+    void revokeStored(UUID id, long currentVersion, Instant revokedAt);
 
     record StoredLinkReplay(
             UUID id,

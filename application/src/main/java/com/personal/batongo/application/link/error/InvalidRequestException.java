@@ -1,0 +1,23 @@
+package com.personal.batongo.application.link.error;
+
+public final class InvalidRequestException extends RuntimeException {
+
+    private InvalidRequestException(String message) {
+        super(message);
+    }
+
+    public static InvalidRequestException creationTime() {
+        return new InvalidRequestException(
+                "notBefore와 expiresAt은 1582-10-15T00:00:00Z 이상 "
+                        + "9999-12-31T23:59:59.999999Z 이하의 마이크로초 단위여야 합니다"
+        );
+    }
+
+    public static InvalidRequestException targetContractInventory() {
+        return new InvalidRequestException("대상 계약 inventory 요청이 올바르지 않습니다");
+    }
+
+    public static InvalidRequestException targetContractRemediation() {
+        return new InvalidRequestException("대상 계약 remediation 요청이 올바르지 않습니다");
+    }
+}

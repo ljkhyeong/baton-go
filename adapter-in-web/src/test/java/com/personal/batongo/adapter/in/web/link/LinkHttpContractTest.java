@@ -21,7 +21,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.personal.batongo.adapter.in.web.GlobalExceptionHandler;
 import com.personal.batongo.adapter.in.web.RequestIdFilter;
-import com.personal.batongo.application.link.error.InvalidCreationTimeException;
+import com.personal.batongo.application.link.error.InvalidRequestException;
 import com.personal.batongo.application.link.error.IdempotencyKeyConflictException;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.CreateLinkCommand;
 import com.personal.batongo.application.link.error.LinkCodeKeyBindingException;
@@ -310,7 +310,7 @@ class LinkHttpContractTest {
     @Test
     @DisplayName("저장할 수 없는 생성 시각 예외는 안정된 400으로 응답한다")
     void mapsUnstorableCreationTimeToInvalidRequest() throws Exception {
-        when(useCase.createLink(any())).thenThrow(new InvalidCreationTimeException());
+        when(useCase.createLink(any())).thenThrow(InvalidRequestException.creationTime());
 
         mockMvc.perform(post("/api/v1/links")
                         .header("Idempotency-Key", IDEMPOTENCY_KEY)

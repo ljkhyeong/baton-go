@@ -20,7 +20,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.personal.batongo.adapter.in.web.GlobalExceptionHandler;
 import com.personal.batongo.adapter.in.web.RequestIdFilter;
-import com.personal.batongo.application.link.error.InvalidTargetContractInventoryRequestException;
+import com.personal.batongo.application.link.error.InvalidRequestException;
 import com.personal.batongo.application.link.error.TargetContractRemediationNotApplicableException;
 import com.personal.batongo.application.link.port.in.TargetContractOperationsUseCase;
 import com.personal.batongo.application.link.port.in.TargetContractOperationsUseCase.Compliance;
@@ -146,7 +146,7 @@ class TargetContractOperationsHttpContractTest {
     @DisplayName("inventory limit 경계를 벗어나면 400 INVALID_REQUEST로 응답한다")
     void rejectsOutOfRangeInventoryLimit() throws Exception {
         when(operationsUseCase.inventory(any()))
-                .thenThrow(new InvalidTargetContractInventoryRequestException());
+                .thenThrow(InvalidRequestException.targetContractInventory());
 
         mockMvc.perform(authorized(get(BASE_PATH + "/inventory")
                         .queryParam("limit", "0")))

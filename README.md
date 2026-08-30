@@ -205,7 +205,8 @@ TLS 호스트 이름 검증용 테스트 별칭을 루프백에 고정하므로 
 GitHub 실행기를 기준으로 하며, 원격 `DOCKER_HOST`는 현재 지원하지 않는다.
 
 `MySQLContainer`는 초기 준비 확인부터 JDBC 연결에 `connectTimeout=3000`·`socketTimeout=30000`을
-적용한다. 동시성 테스트의 잠금 대기를 고려한 테스트 전용 값이며, 운영 서버의 DB 설정은 바꾸지 않는다.
+적용한다. TLS 테스트 도우미의 런타임 연결에도 같은 값을 적용한다. 동시성 테스트의 잠금 대기를
+고려한 테스트 전용 값이며, 운영 서버와 마이그레이션 전용 실행의 DB 설정은 바꾸지 않는다.
 
 ```bash
 ./gradlew --no-daemon :bootstrap:mysqlTest

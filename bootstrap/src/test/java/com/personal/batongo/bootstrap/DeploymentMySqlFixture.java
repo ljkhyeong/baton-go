@@ -139,6 +139,8 @@ final class DeploymentMySqlFixture extends GenericContainer<DeploymentMySqlFixtu
         Properties properties = new Properties();
         properties.setProperty("user", username);
         properties.setProperty("password", password);
+        properties.setProperty("connectTimeout", "3000");
+        properties.setProperty("socketTimeout", "30000");
         properties.setProperty(
                 "trustCertificateKeyStorePassword",
                 TRUSTSTORE_PASSWORD

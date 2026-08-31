@@ -185,6 +185,8 @@ DB 대기 시간은 Hikari·Connector/J 설정으로 제한하며, 마이그레�
 공개 `GET·HEAD /l/{code}`에는 DB 조회 전 인스턴스 집계 요청률 제한 안전장치가
 적용된다. `BATON_GO_PUBLIC_RESOLVER_RATE_LIMIT_CAPACITY`와
 `BATON_GO_PUBLIC_RESOLVER_RATE_LIMIT_WINDOW`는 배포 트래픽에 맞춰 명시적으로 설정한다.
+용량은 1 이상, 시간 구간은 양수여야 하며 유효하지 않은 설정은 Spring 설정 바인딩 단계에서
+거부한다.
 이 제한은 클라이언트 IP나 전달 헤더를 신뢰하지 않는 로컬 안전장치이므로, 여러 복제본을
 공개할 때는 Ingress에서 별도의 분산 요청률 제한과 `/l/{code}` 접근 로그 가림을 적용한다.
 

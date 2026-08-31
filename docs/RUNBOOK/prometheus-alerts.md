@@ -3,7 +3,7 @@
 ## 적용 범위
 
 [경보 규칙](../../deploy/prometheus/baton-go-alerts.yml)은 기존 Actuator·Micrometer 지표로
-애플리케이션의 5xx, 관리 JWT 검증 서비스 장애, 공개 해석 요청 제한과 저장 대상 계약 위반을 감지한다.
+공개·관리 응답 지연, 5xx, 관리 JWT 검증 서비스 장애, 공개 해석 요청 제한과 저장 대상 계약 위반을 감지한다.
 규칙 추가만으로 수집기나 Alertmanager가 배포되지는 않는다. 실제 운영 수집기·알림 경로·
 담당자 연결과 발화 시험은 [배포 실행서의 수집과 경보 관문](kubernetes-private-server-deployment.md#수집과-경보-관문)을 따른다.
 
@@ -41,6 +41,8 @@ Prometheus의 rule selector가 선택하는지 확인한다. 저장소는 특정
 
 | 경보 | 발생 조건 | 우선순위 |
 | --- | --- | --- |
+| `BatonGoPublicResolverLatency` | 최근 5분 공개 요청 100건 이상·1초 초과 비율 5% 초과가 5분 지속 | `warning` |
+| `BatonGoManagementApiLatency` | 최근 5분 관리 요청 20건 이상·2초 초과 비율 5% 초과가 5분 지속 | `warning` |
 | `BatonGoHttpServerErrors` | 최근 5분 5xx 5건 이상·429 제외 응답의 오류율 5% 초과가 5분 지속 | `critical` |
 | `BatonGoManagementAuthenticationServiceFailure` | 최근 5분 관리 JWT 검증 서비스 장애 카운터 증가 | `warning` |
 | `BatonGoPublicResolverRateLimited` | 최근 5분 GET·HEAD 429 10건 이상이 5분 지속 | `warning` |
@@ -69,6 +71,28 @@ Prometheus의 rule selector가 선택하는지 확인한다. 저장소는 특정
 - Job 실패, Pod 상태, DB 준비 상태, PVC·백업 경보는 플랫폼 지표로 따로 연결한다.
   이 파일을 적용했다고 전체 운영 관문을 통과한 것으로 기록하지 않는다.
 
+### 응답 지연 감지
+
+[애플리케이션 설정](../../bootstrap/src/main/resources/application.yml)의
+`management.metrics.distribution.slo.http.server.requests=1s,2s`로 기존 Spring HTTP 타이머에
+두 누적 버킷을 추가한다. 별도 요청 타이머나 사용자·링크별 지표는 만들지 않는다.
+Prometheus의 `http_server_requests_seconds_bucket`에는 초 단위 `le="1.0"`, `le="2.0"`이
+나오며, 경보는 해당 시간 이내 응답의 비율이 95% 미만인지를 계산한다. 이는 보간한 p95가
+아니라 정해진 시간을 초과한 응답 비율이다.
+
+- 공개 경보는 `GET·HEAD /l/{code}`, 관리 경보는 매핑된 `/api/v1/**` 요청만 합산한다.
+  공개 트래픽이 관리 지연을 가리거나 상태 확인 트래픽이 정상 비율을 높이지 않는다.
+- 429는 제외한다. 인증 필터에서 끝나 경로가 `UNKNOWN`인 요청도 지연 경보 대상이 아니므로,
+  관리 JWT 서비스 장애와 Ingress 지연은 기존 전용 경보·경계 지표로 함께 확인한다.
+- 완료된 요청만 관측하므로 진행 중인 요청 정체나 수집 중단을 이 경보만으로 감지하지 못한다.
+  두 경보 모두 최소 요청량과 지속 시간을 요구하며, 무트래픽·저트래픽에서는 발화하지 않는다.
+- 1초·2초는 초기 운영 경고 기준이며 사용자에게 약속한 응답 시간이나 요청 제한 시간이 아니다.
+  실제 부하와 호출자 대기 시간을 확인해 조정한다. 경계를 바꿀 때는 애플리케이션 버킷,
+  경보의 `le`, 설명과 규칙 테스트를 함께 변경한다. 새 버킷을 먼저 배포·수집하고 경보를 바꾸며,
+  새 버킷이 없는 구버전 Pod와 혼합된 구간은 정상적인 지연 판정 근거로 사용하지 않는다.
+
+표준 설정의 의미는 [Spring Boot 지표별 설정](https://docs.spring.io/spring-boot/reference/actuator/metrics.html#actuator.metrics.customizing.per-meter-properties)을 따른다.
+
 ## 로컬·CI 검증
 
 저장소 루트에서 실행한다. CI는 [공식 배포본](https://prometheus.io/download/)의
@@ -95,7 +119,8 @@ Actuator·주 포트 상태 확인·다른 서비스 제외, 지속 시간, 경�
 발생하는지도 검증한다. 관리 인증 서비스 장애는 대량 공개 성공 요청과 무관한 발화,
 카운터 초기화 뒤 재발과 새 장애가 없는 구간의 해제를 검증한다.
 CI의 운영 이미지 기동 검증은 실제 `/actuator/prometheus` 출력에 초기 계약 위반·관리 인증 장애 카운터와
-필터가 반환한 429가 포함되는지도 확인한다. 테스트 문법은
+필터가 반환한 429와 공개 경로의 1초·2초 지연 버킷이 포함되는지도 확인한다.
+지연 규칙은 정상·저트래픽·무트래픽 제외, 공개·관리 경로 분리, 지속 시간과 회복을 검증한다. 테스트 문법은
 [Prometheus 규칙 단위 테스트](https://prometheus.io/docs/prometheus/latest/configuration/unit_testing_rules/)를 따른다.
 
 운영 적용 후에는 target `UP`, 규칙 로딩, Alertmanager 라우팅과 담당자 수신을 각각 확인한다.

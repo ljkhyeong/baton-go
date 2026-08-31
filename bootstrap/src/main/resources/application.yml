@@ -37,6 +37,10 @@ spring:
           time_zone: UTC
 
 management:
+  metrics:
+    distribution:
+      slo:
+        http.server.requests: 1s,2s
   server:
     port: 8081
   endpoints:

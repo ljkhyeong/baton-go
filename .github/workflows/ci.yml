@@ -287,6 +287,11 @@ jobs:
           grep '^http_server_requests_seconds_count{' "$metrics_file" \
             | grep 'status="429"' \
             | grep -Eq '} [1-9][0-9]*(\.0)?$'
+          for boundary in '1.0' '2.0'; do
+            grep '^http_server_requests_seconds_bucket{' "$metrics_file" \
+              | grep -F 'uri="/l/{code}"' \
+              | grep -Fq "le=\"$boundary\""
+          done
 
           "${compose[@]}" run --rm --no-deps app \
             --baton-go.migration-only=true \

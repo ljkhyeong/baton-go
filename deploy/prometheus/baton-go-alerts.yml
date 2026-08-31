@@ -2,6 +2,38 @@ groups:
   - name: baton-go
     interval: 30s
     rules:
+      - alert: BatonGoPublicResolverLatency
+        expr: |
+          (
+            sum by (job) (rate(http_server_requests_seconds_bucket{job="baton-go",uri="/l/{code}",method=~"GET|HEAD",status!="429",le="1.0"}[5m]))
+            /
+            sum by (job) (rate(http_server_requests_seconds_count{job="baton-go",uri="/l/{code}",method=~"GET|HEAD",status!="429"}[5m]))
+          ) < 0.95
+          and
+          sum by (job) (increase(http_server_requests_seconds_count{job="baton-go",uri="/l/{code}",method=~"GET|HEAD",status!="429"}[5m])) >= 100
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: BATON GO 공개 링크 응답 지연
+          description: 최근 5분 공개 링크 요청이 100건 이상이고 1초 초과 응답 비율이 5%를 넘는 상태가 5분간 지속되었습니다. DB 연결 풀과 쿼리 지연, 최근 배포를 확인하세요.
+
+      - alert: BatonGoManagementApiLatency
+        expr: |
+          (
+            sum by (job) (rate(http_server_requests_seconds_bucket{job="baton-go",uri=~"/api/v1/.*",status!="429",le="2.0"}[5m]))
+            /
+            sum by (job) (rate(http_server_requests_seconds_count{job="baton-go",uri=~"/api/v1/.*",status!="429"}[5m]))
+          ) < 0.95
+          and
+          sum by (job) (increase(http_server_requests_seconds_count{job="baton-go",uri=~"/api/v1/.*",status!="429"}[5m])) >= 20
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: BATON GO 관리 API 응답 지연
+          description: 최근 5분 관리 API 요청이 20건 이상이고 2초 초과 응답 비율이 5%를 넘는 상태가 5분간 지속되었습니다. DB 잠금과 연결 풀, JWK 조회 지연을 확인하세요.
+
       - alert: BatonGoHttpServerErrors
         expr: |
           (

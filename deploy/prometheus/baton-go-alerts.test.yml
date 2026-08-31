@@ -321,7 +321,7 @@ tests:
         exp_alerts: []
       - eval_time: 7m
         alertname: BatonGoPublicResolverLatency
-        exp_alerts:
+        exp_alerts: &public_resolver_latency
           - exp_labels:
               job: baton-go
               severity: warning
@@ -352,7 +352,7 @@ tests:
         exp_alerts: []
       - eval_time: 7m
         alertname: BatonGoManagementApiLatency
-        exp_alerts:
+        exp_alerts: &management_api_latency
           - exp_labels:
               job: baton-go
               severity: warning
@@ -365,3 +365,76 @@ tests:
       - eval_time: 15m
         alertname: BatonGoManagementApiLatency
         exp_alerts: []
+
+  - name: 버킷이 없거나 경계가 다른 구버전 Pod와 섞여도 정상 응답에 지연 경보를 발생시키지 않는다
+    interval: 1m
+    input_series:
+      - series: 'http_server_requests_seconds_count{job="baton-go",instance="old-pod",method="GET",status="302",uri="/l/{code}"}'
+        values: '0+100x12'
+      - series: 'http_server_requests_seconds_count{job="baton-go",instance="new-pod",method="GET",status="302",uri="/l/{code}"}'
+        values: '0+100x12'
+      - series: 'http_server_requests_seconds_bucket{job="baton-go",instance="new-pod",method="GET",status="302",uri="/l/{code}",le="1.0"}'
+        values: '0+100x12'
+      - series: 'http_server_requests_seconds_count{job="baton-go",instance="old-pod",method="POST",status="201",uri="/api/v1/links"}'
+        values: '0+10x12'
+      - series: 'http_server_requests_seconds_bucket{job="baton-go",instance="old-pod",method="POST",status="201",uri="/api/v1/links",le="1.0"}'
+        values: '0+10x12'
+      - series: 'http_server_requests_seconds_bucket{job="baton-go",instance="old-pod",method="POST",status="201",uri="/api/v1/links",le="+Inf"}'
+        values: '0+10x12'
+      - series: 'http_server_requests_seconds_count{job="baton-go",instance="new-pod",method="POST",status="201",uri="/api/v1/links"}'
+        values: '0+10x12'
+      - series: 'http_server_requests_seconds_bucket{job="baton-go",instance="new-pod",method="POST",status="201",uri="/api/v1/links",le="2.0"}'
+        values: '0+10x12'
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: BatonGoPublicResolverLatency
+        exp_alerts: []
+      - eval_time: 12m
+        alertname: BatonGoManagementApiLatency
+        exp_alerts: []
+
+  - name: 구버전 Pod의 요청 수로 지연 경보의 최소 요청량을 채우지 않는다
+    interval: 1m
+    input_series:
+      - series: 'http_server_requests_seconds_count{job="baton-go",instance="old-pod",method="HEAD",status="302",uri="/l/{code}"}'
+        values: '0+1000x12'
+      - series: 'http_server_requests_seconds_count{job="baton-go",instance="new-pod",method="HEAD",status="302",uri="/l/{code}"}'
+        values: '0+10x12'
+      - series: 'http_server_requests_seconds_bucket{job="baton-go",instance="new-pod",method="HEAD",status="302",uri="/l/{code}",le="1.0"}'
+        values: '0x12'
+      - series: 'http_server_requests_seconds_count{job="baton-go",instance="old-pod",method="PUT",status="200",uri="/api/v1/links/{linkId}/revocation"}'
+        values: '0+100x12'
+      - series: 'http_server_requests_seconds_count{job="baton-go",instance="new-pod",method="PUT",status="200",uri="/api/v1/links/{linkId}/revocation"}'
+        values: '0+3x12'
+      - series: 'http_server_requests_seconds_bucket{job="baton-go",instance="new-pod",method="PUT",status="200",uri="/api/v1/links/{linkId}/revocation",le="2.0"}'
+        values: '0x12'
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: BatonGoPublicResolverLatency
+        exp_alerts: []
+      - eval_time: 12m
+        alertname: BatonGoManagementApiLatency
+        exp_alerts: []
+
+  - name: 구버전 Pod와 섞여도 버킷이 있는 Pod의 모든 요청이 느리면 지연을 감지한다
+    interval: 1m
+    input_series:
+      - series: 'http_server_requests_seconds_count{job="baton-go",instance="old-pod",method="GET",status="302",uri="/l/{code}"}'
+        values: '0+1000x12'
+      - series: 'http_server_requests_seconds_count{job="baton-go",instance="new-pod",method="GET",status="302",uri="/l/{code}"}'
+        values: '0+100x12'
+      - series: 'http_server_requests_seconds_bucket{job="baton-go",instance="new-pod",method="GET",status="302",uri="/l/{code}",le="1.0"}'
+        values: '0x12'
+      - series: 'http_server_requests_seconds_count{job="baton-go",instance="old-pod",method="POST",status="201",uri="/api/v1/links"}'
+        values: '0+100x12'
+      - series: 'http_server_requests_seconds_count{job="baton-go",instance="new-pod",method="POST",status="201",uri="/api/v1/links"}'
+        values: '0+10x12'
+      - series: 'http_server_requests_seconds_bucket{job="baton-go",instance="new-pod",method="POST",status="201",uri="/api/v1/links",le="2.0"}'
+        values: '0x12'
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: BatonGoPublicResolverLatency
+        exp_alerts: *public_resolver_latency
+      - eval_time: 12m
+        alertname: BatonGoManagementApiLatency
+        exp_alerts: *management_api_latency

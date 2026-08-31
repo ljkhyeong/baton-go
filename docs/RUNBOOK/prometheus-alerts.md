@@ -85,6 +85,11 @@ Prometheus의 `http_server_requests_seconds_bucket`에는 초 단위 `le="1.0"`,
 나오며, 경보는 해당 시간 이내 응답의 비율이 95% 미만인지를 계산한다. 이는 보간한 p95가
 아니라 정해진 시간을 초과한 응답 비율이다.
 
+- 지연 비율의 분모와 최소 요청량은 해당 버킷이 관측된 요청 수만 사용한다.
+  `count`와 버킷의 최근 5분 시계열을 `and ignoring (le)`로 연결한 뒤 합산한다.
+  `le` 외의 `instance`·`method`·`status`·`uri` 등 기존 라벨은 같아야 한다.
+  버킷이 없거나 다른 경계만 제공하는 구버전 Pod의 요청을 분모에 더하지 않는다.
+  버킷 값이 0인 시계열도 유지하므로 모든 요청이 기준 시간을 넘는 장애는 계속 감지한다.
 - 공개 경보는 `GET·HEAD /l/{code}`, 관리 경보는 매핑된 `/api/v1/**` 요청만 합산한다.
   공개 트래픽이 관리 지연을 가리거나 상태 확인 트래픽이 정상 비율을 높이지 않는다.
 - 429는 제외한다. 인증 필터에서 끝나 경로가 `UNKNOWN`인 요청도 지연 경보 대상이 아니므로,
@@ -93,10 +98,12 @@ Prometheus의 `http_server_requests_seconds_bucket`에는 초 단위 `le="1.0"`,
   두 경보 모두 최소 요청량과 지속 시간을 요구하며, 무트래픽·저트래픽에서는 발화하지 않는다.
 - 1초·2초는 초기 운영 경고 기준이며 사용자에게 약속한 응답 시간이나 요청 제한 시간이 아니다.
   실제 부하와 호출자 대기 시간을 확인해 조정한다. 경계를 바꿀 때는 애플리케이션 버킷,
-  경보의 `le`, 설명과 규칙 테스트를 함께 변경한다. 새 버킷을 먼저 배포·수집하고 경보를 바꾸며,
-  새 버킷이 없는 구버전 Pod와 혼합된 구간은 정상적인 지연 판정 근거로 사용하지 않는다.
+  경보의 `le`, 설명과 규칙 테스트를 함께 변경한다. 새 버킷을 먼저 배포·수집하고 경보를 바꾼다.
+  해당 버킷이 없는 Pod는 집계에서 빠지므로 경보가 없다고 전체 Pod가 정상이라고 판단하지 않는다.
+  배포 완료 뒤 모든 Pod에서 해당 버킷이 수집되는지 확인한다.
 
 표준 설정의 의미는 [Spring Boot 지표별 설정](https://docs.spring.io/spring-boot/reference/actuator/metrics.html#actuator.metrics.customizing.per-meter-properties)을 따른다.
+시계열 연결은 [Prometheus 집합 연산과 라벨 매칭](https://prometheus.io/docs/prometheus/latest/querying/operators/#logical-set-binary-operators)을 사용한다.
 
 ## 로컬·CI 검증
 
@@ -127,7 +134,8 @@ Actuator·주 포트 상태 확인·다른 서비스 제외, 지속 시간, 경�
 카운터 초기화 뒤 재발과 새 장애가 없는 구간의 해제를 검증한다.
 CI의 운영 이미지 기동 검증은 실제 `/actuator/prometheus` 출력에 초기 계약 위반·관리 인증 장애 카운터와
 필터가 반환한 429와 공개 경로의 1초·2초 지연 버킷이 포함되는지도 확인한다.
-지연 규칙은 정상·저트래픽·무트래픽 제외, 공개·관리 경로 분리, 지속 시간과 회복을 검증한다. 테스트 문법은
+지연 규칙은 정상·저트래픽·무트래픽 제외, 공개·관리 경로 분리, 지속 시간과 회복을 검증한다.
+혼합 버전에서 정상 응답의 오탐과 최소 요청량 부풀림이 없고 실제 지연은 감지되는지도 확인한다. 테스트 문법은
 [Prometheus 규칙 단위 테스트](https://prometheus.io/docs/prometheus/latest/configuration/unit_testing_rules/)를 따른다.
 
 운영 적용 후에는 target `UP`, 규칙 로딩, Alertmanager 라우팅과 담당자 수신을 각각 확인한다.

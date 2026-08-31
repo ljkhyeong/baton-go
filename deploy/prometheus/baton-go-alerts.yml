@@ -7,10 +7,18 @@ groups:
           (
             sum by (job) (rate(http_server_requests_seconds_bucket{job="baton-go",uri="/l/{code}",method=~"GET|HEAD",status!="429",le="1.0"}[5m]))
             /
-            sum by (job) (rate(http_server_requests_seconds_count{job="baton-go",uri="/l/{code}",method=~"GET|HEAD",status!="429"}[5m]))
+            sum by (job) (
+              rate(http_server_requests_seconds_count{job="baton-go",uri="/l/{code}",method=~"GET|HEAD",status!="429"}[5m])
+              and ignoring (le)
+              rate(http_server_requests_seconds_bucket{job="baton-go",uri="/l/{code}",method=~"GET|HEAD",status!="429",le="1.0"}[5m])
+            )
           ) < 0.95
           and
-          sum by (job) (increase(http_server_requests_seconds_count{job="baton-go",uri="/l/{code}",method=~"GET|HEAD",status!="429"}[5m])) >= 100
+          sum by (job) (
+            increase(http_server_requests_seconds_count{job="baton-go",uri="/l/{code}",method=~"GET|HEAD",status!="429"}[5m])
+            and ignoring (le)
+            rate(http_server_requests_seconds_bucket{job="baton-go",uri="/l/{code}",method=~"GET|HEAD",status!="429",le="1.0"}[5m])
+          ) >= 100
         for: 5m
         labels:
           severity: warning
@@ -23,10 +31,18 @@ groups:
           (
             sum by (job) (rate(http_server_requests_seconds_bucket{job="baton-go",uri=~"/api/v1/.*",status!="429",le="2.0"}[5m]))
             /
-            sum by (job) (rate(http_server_requests_seconds_count{job="baton-go",uri=~"/api/v1/.*",status!="429"}[5m]))
+            sum by (job) (
+              rate(http_server_requests_seconds_count{job="baton-go",uri=~"/api/v1/.*",status!="429"}[5m])
+              and ignoring (le)
+              rate(http_server_requests_seconds_bucket{job="baton-go",uri=~"/api/v1/.*",status!="429",le="2.0"}[5m])
+            )
           ) < 0.95
           and
-          sum by (job) (increase(http_server_requests_seconds_count{job="baton-go",uri=~"/api/v1/.*",status!="429"}[5m])) >= 20
+          sum by (job) (
+            increase(http_server_requests_seconds_count{job="baton-go",uri=~"/api/v1/.*",status!="429"}[5m])
+            and ignoring (le)
+            rate(http_server_requests_seconds_bucket{job="baton-go",uri=~"/api/v1/.*",status!="429",le="2.0"}[5m])
+          ) >= 20
         for: 5m
         labels:
           severity: warning

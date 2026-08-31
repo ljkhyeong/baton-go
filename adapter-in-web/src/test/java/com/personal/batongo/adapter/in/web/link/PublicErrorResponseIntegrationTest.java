@@ -11,6 +11,7 @@ import com.personal.batongo.adapter.in.web.ManagementApiSecurityConfiguration;
 import com.personal.batongo.adapter.in.web.RequestIdFilter;
 import com.personal.batongo.adapter.in.web.WebMvcConfiguration;
 import com.personal.batongo.application.link.error.LinkNotFoundException;
+import com.personal.batongo.application.link.error.StoredTargetPolicyViolationException;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.net.URI;
@@ -18,10 +19,14 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.UUID;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -115,17 +120,29 @@ class PublicErrorResponseIntegrationTest {
                 .doesNotContain(sensitiveMessage, PUBLIC_CODE);
     }
 
-    @Test
-    @DisplayName("공개 서버 오류의 HEAD는 HTML 헤더를 유지하고 본문을 보내지 않는다")
-    void returnsHeaderOnlyServerErrorForHead() throws Exception {
-        when(useCase.resolveLink(PUBLIC_CODE)).thenThrow(new IllegalStateException("서버 오류"));
+    @ParameterizedTest
+    @MethodSource("headErrors")
+    @DisplayName("실제 HTTP 서버의 공개 오류 HEAD는 응답 형식을 유지하고 본문을 보내지 않는다")
+    void returnsHeaderOnlyPublicError(Exception failure, String accept, int expectedStatus) throws Exception {
+        when(useCase.resolveLink(PUBLIC_CODE)).thenThrow(failure);
 
-        HttpResponse<String> response = requestError(MediaType.TEXT_HTML_VALUE, "HEAD");
+        HttpResponse<String> response = requestError(accept, "HEAD");
 
-        assertThat(response.statusCode()).isEqualTo(500);
+        assertThat(response.statusCode()).isEqualTo(expectedStatus);
         assertThat(response.headers().firstValue(HttpHeaders.CONTENT_TYPE))
-                .contains("text/html;charset=UTF-8");
+                .contains(MediaType.TEXT_HTML_VALUE.equals(accept)
+                        ? "text/html;charset=UTF-8" : MediaType.APPLICATION_JSON_VALUE);
+        assertThat(response.headers().firstValue(HttpHeaders.LOCATION)).isEmpty();
         assertThat(response.body()).isEmpty();
+    }
+
+    private static Stream<Arguments> headErrors() {
+        return Stream.of(
+                Arguments.of(new IllegalStateException("서버 오류"), MediaType.TEXT_HTML_VALUE, 500),
+                Arguments.of(new StoredTargetPolicyViolationException(UUID.fromString(
+                        "70f147f2-b02a-4a63-bc27-bf60e44db591"
+                )), MediaType.APPLICATION_JSON_VALUE, 404)
+        );
     }
 
     private HttpResponse<String> requestError(String accept) throws Exception {

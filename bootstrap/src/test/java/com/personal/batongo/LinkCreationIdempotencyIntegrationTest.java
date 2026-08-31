@@ -521,7 +521,8 @@ class LinkCreationIdempotencyIntegrationTest {
         mockMvc.perform(head("/l/{code}", unknownEnumCode))
                 .andExpect(status().isNotFound())
                 .andExpect(header().doesNotExist(HttpHeaders.LOCATION))
-                .andExpect(content().string(""));
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON));
+        // HEAD의 빈 본문은 실제 HTTP 서버를 사용하는 PublicErrorResponseIntegrationTest에서 확인한다.
     }
 
     @Test

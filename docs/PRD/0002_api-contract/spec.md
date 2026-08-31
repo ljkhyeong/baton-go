@@ -13,6 +13,11 @@
 `requestId`는 응답 헤더와 같은 값이다. 공개 링크의 HTML 안내 화면에는 같은 값을
 문의용 요청 번호로 표시한다.
 
+관리 링크 API와 대상 계약 운영 API의 성공 응답은 `application/json`이다. `Accept`가 없거나
+`*/*`이면 기존처럼 JSON을 반환한다. HTML·XML 등 JSON과 호환되지 않는 형식만 요청하면
+인증·권한 검사 뒤 Spring의 요청 매핑 단계에서 `406 INVALID_REQUEST`로 거부한다.
+이때 생성·폐기 서비스는 호출하지 않고 관리 작업 완료 이력도 남기지 않는다.
+
 ## 공통 오류
 
 기본 오류 응답은 다음 JSON 형식이다. 공개 링크의 브라우저 안내 화면은 아래
@@ -51,6 +56,7 @@ XML 등 지원하지 않는 응답 형식만 요청해도 원래 오류 상태·
   `500 LINK_CODE_CONFIGURATION_MISMATCH`
 - 존재하지 않는 API 경로: `404 RESOURCE_NOT_FOUND`
 - 지원하지 않는 HTTP 메서드: `405 METHOD_NOT_ALLOWED`
+- 관리 API에서 지원하지 않는 응답 형식만 요청함: `406 INVALID_REQUEST`
 - 지원하지 않는 요청 본문 형식: `415 UNSUPPORTED_MEDIA_TYPE`
 - 공개 해석기 처리 한도 초과: `429 RATE_LIMIT_EXCEEDED`
 - 허용되지 않은 대상 시스템·목적·위치 식별자 조합: `400 INVALID_LINK`

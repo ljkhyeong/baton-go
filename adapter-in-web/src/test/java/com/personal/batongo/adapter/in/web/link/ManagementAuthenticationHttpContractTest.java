@@ -21,9 +21,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.personal.batongo.adapter.in.web.FilterErrorResponseWriter;
+import com.personal.batongo.adapter.in.web.GlobalExceptionHandler;
 import com.personal.batongo.adapter.in.web.ManagementApiSecurityConfiguration;
 import com.personal.batongo.adapter.in.web.ManagementOperationLogger;
 import com.personal.batongo.adapter.in.web.RequestIdFilter;
+import com.personal.batongo.adapter.in.web.WebMvcConfiguration;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.CreatedLinkResult;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.LinkResult;
@@ -90,6 +92,8 @@ import org.springframework.web.util.UriTemplate;
         ManagementApiSecurityConfiguration.class,
         ManagementOperationLogger.class,
         FilterErrorResponseWriter.class,
+        GlobalExceptionHandler.class,
+        WebMvcConfiguration.class,
         SimpleMeterRegistry.class
 })
 class ManagementAuthenticationHttpContractTest {
@@ -164,8 +168,63 @@ class ManagementAuthenticationHttpContractTest {
                 .doesNotContain(MANAGEMENT_JWT, IDEMPOTENCY_KEY, BATON_TARGET_PATH);
     }
 
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("managementWritesWithUnsupportedResponseTypes")
+    @DisplayName("관리 쓰기는 비지원 응답 형식을 서비스 실행과 완료 이력 기록 전에 406으로 거부한다")
+    void rejectsUnsupportedResponseTypeBeforeMutation(
+            String ignoredDescription,
+            MockHttpServletRequestBuilder request,
+            String grantedScope,
+            CapturedOutput output
+    ) throws Exception {
+        when(jwtDecoder.decode(MANAGEMENT_JWT)).thenReturn(jwt(grantedScope));
+
+        mockMvc.perform(request
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + MANAGEMENT_JWT)
+                        .header("X-Request-Id", "management-response-format"))
+                .andExpect(status().isNotAcceptable())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
+                .andExpect(header().string("Referrer-Policy", "no-referrer"))
+                .andExpect(header().string("X-Request-Id", "management-response-format"))
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
+                .andExpect(jsonPath("$.requestId").value("management-response-format"));
+
+        verifyNoInteractions(useCase, operationsUseCase);
+        assertThat(output).doesNotContain("관리 작업 완료");
+    }
+
+    private static Stream<Arguments> managementWritesWithUnsupportedResponseTypes() {
+        String linkId = "83a430c4-5c5d-4eb4-a815-7a5ba1fd4aae";
+        return Stream.of(
+                Arguments.of(
+                        "링크 생성의 XML 응답 요청",
+                        post("/api/v1/links")
+                                .header("Idempotency-Key", IDEMPOTENCY_KEY)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(createRequest())
+                                .accept(MediaType.APPLICATION_XML),
+                        "baton-go.links.create"
+                ),
+                Arguments.of(
+                        "링크 폐기의 HTML 응답 요청",
+                        put("/api/v1/links/{linkId}/revocation", linkId)
+                                .accept(MediaType.TEXT_HTML),
+                        "baton-go.links.revoke"
+                ),
+                Arguments.of(
+                        "대상 계약 정리 폐기의 XML 응답 요청",
+                        put("/api/v1/operations/link-target-contract-v1/links/{linkId}/revocation", linkId)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\"expectedVersion\":7}")
+                                .accept(MediaType.APPLICATION_XML),
+                        "baton-go.target-contract.operate"
+                )
+        );
+    }
+
     @Test
-    @DisplayName("검증할 수 없는 관리 JWT는 Bearer challenge가 있는 401 오류로 응답한다")
+    @DisplayName("검증할 수 없는 관리 JWT는 응답 형식 검사보다 먼저 Bearer challenge가 있는 401로 거부한다")
     void rejectsInvalidJwtWithBearerChallenge(CapturedOutput output) throws Exception {
         when(jwtDecoder.decode("invalid-management-jwt"))
                 .thenThrow(new BadJwtException("검증 실패"));
@@ -175,6 +234,7 @@ class ManagementAuthenticationHttpContractTest {
                                 HttpHeaders.AUTHORIZATION,
                                 "Bearer invalid-management-jwt"
                         )
+                        .accept(MediaType.APPLICATION_XML)
                         .header("Idempotency-Key", IDEMPOTENCY_KEY)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(createRequest()))
@@ -368,7 +428,7 @@ class ManagementAuthenticationHttpContractTest {
                 .build();
     }
 
-    private String createRequest() {
+    private static String createRequest() {
         return """
                 {
                   "targetSystem": "BATON",

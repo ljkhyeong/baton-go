@@ -9,6 +9,7 @@ import jakarta.validation.Valid;
 import java.security.Principal;
 import java.util.UUID;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -19,7 +20,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/api/v1/operations/link-target-contract-v1")
+@RequestMapping(value = "/api/v1/operations/link-target-contract-v1", produces = MediaType.APPLICATION_JSON_VALUE)
 @ConditionalOnBooleanProperty(
         prefix = "baton-go.target-contract-operations",
         name = {"enabled", "private-ingress-confirmed"}

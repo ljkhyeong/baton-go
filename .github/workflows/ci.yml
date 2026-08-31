@@ -188,7 +188,10 @@ jobs:
             'ci-guard-smoke-secret-000000000000' \
             'jdbc:mysql://127.0.0.1:1/guard_smoke?connectTimeout=100' \
             guard_smoke; do
-            ! grep -F -- "$sensitive_value" "$smoke_dir/canary.err"
+            if grep -Fq -- "$sensitive_value" "$smoke_dir/canary.err"; then
+              printf '%s\n' 'Guard 오류 출력에 검증용 비밀값이 노출되었습니다.' >&2
+              exit 1
+            fi
           done
 
       - name: 운영 이미지 빌드 검증

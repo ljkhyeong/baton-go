@@ -6,6 +6,7 @@ import com.personal.batongo.adapter.in.web.link.CreateLinkRequest;
 import com.personal.batongo.adapter.in.web.link.CreateLinkResponse;
 import com.personal.batongo.adapter.in.web.link.LinkResponse;
 import com.personal.batongo.domain.link.LinkPurpose;
+import com.personal.batongo.domain.link.LinkAvailabilityPolicy.Status;
 import com.personal.batongo.domain.link.TargetSystem;
 import java.net.URI;
 import java.time.Instant;
@@ -58,6 +59,8 @@ class SensitiveWebValueToStringTest {
                 null,
                 null,
                 null,
+                Instant.parse("2026-08-08T00:00:00Z"),
+                Status.ACTIVE,
                 Instant.parse("2026-08-08T00:00:00Z")
         );
 

@@ -135,7 +135,8 @@ class ManagementJwtExpiryHttpTest {
     void acceptsValidExpiryWithoutNotBefore() throws Exception {
         when(useCase.getLink(LINK_ID)).thenReturn(new LinkResult(
                 LINK_ID, TargetSystem.ROUND, "/room/abcd-efgh-jkmn", LinkPurpose.MEETING_ENTRY,
-                null, null, null, Instant.parse("2026-08-29T00:00:00Z")
+                null, null, null, Instant.parse("2026-08-29T00:00:00Z"),
+                Instant.parse("2026-08-29T01:00:00Z")
         ));
 
         mockMvc.perform(get("/api/v1/links/{linkId}", LINK_ID)

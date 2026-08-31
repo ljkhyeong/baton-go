@@ -135,6 +135,7 @@ public class SmartLinkService implements SmartLinkUseCase {
                         prepared.admission().notBefore(),
                         prepared.admission().expiresAt(),
                         null,
+                        now,
                         now
                 ),
                 currentOrigin.shortUrl(issuedCode.rawCode()),
@@ -291,7 +292,8 @@ public class SmartLinkService implements SmartLinkUseCase {
                 storedLink.notBefore(),
                 storedLink.expiresAt(),
                 storedLink.revokedAt(),
-                storedLink.createdAt()
+                storedLink.createdAt(),
+                clock.instant()
         );
     }
 
@@ -320,7 +322,8 @@ public class SmartLinkService implements SmartLinkUseCase {
                 storedLink.notBefore(),
                 storedLink.expiresAt(),
                 revokedAt,
-                storedLink.createdAt()
+                storedLink.createdAt(),
+                clock.instant()
         );
     }
 }

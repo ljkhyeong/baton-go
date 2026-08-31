@@ -1,6 +1,7 @@
 package com.personal.batongo.application.link.port.in;
 
 import com.personal.batongo.application.link.CreationIdempotencyKey;
+import com.personal.batongo.domain.link.LinkAvailabilityPolicy;
 import com.personal.batongo.domain.link.LinkPurpose;
 import com.personal.batongo.domain.link.TargetSystem;
 import java.net.URI;
@@ -60,8 +61,13 @@ public interface SmartLinkUseCase {
             Instant notBefore,
             Instant expiresAt,
             Instant revokedAt,
-            Instant createdAt
+            Instant createdAt,
+            Instant evaluatedAt
     ) {
+
+        public LinkAvailabilityPolicy.Status status() {
+            return LinkAvailabilityPolicy.evaluate(revokedAt, notBefore, expiresAt, evaluatedAt);
+        }
 
         @Override
         public String toString() {

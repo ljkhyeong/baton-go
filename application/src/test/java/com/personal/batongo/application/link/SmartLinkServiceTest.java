@@ -31,6 +31,7 @@ import com.personal.batongo.application.link.port.out.SmartLinkRepository.Stored
 import com.personal.batongo.application.link.port.out.SmartLinkRepository.StoredLinkSnapshot;
 import com.personal.batongo.application.link.port.out.TargetUrlPort;
 import com.personal.batongo.domain.link.LinkPurpose;
+import com.personal.batongo.domain.link.LinkAvailabilityPolicy.Status;
 import com.personal.batongo.domain.link.LinkValidationException;
 import com.personal.batongo.domain.link.TargetSystem;
 import java.net.URI;
@@ -279,7 +280,11 @@ class SmartLinkServiceTest {
 
         assertThat(found.id()).isEqualTo(LINK_ID);
         assertThat(found.revokedAt()).isNull();
+        assertThat(found.status()).isEqualTo(Status.ACTIVE);
+        assertThat(found.evaluatedAt()).isEqualTo(NOW);
         assertThat(revoked.revokedAt()).isEqualTo(NOW);
+        assertThat(revoked.status()).isEqualTo(Status.REVOKED);
+        assertThat(revoked.evaluatedAt()).isEqualTo(NOW);
         verify(repository).findStoredById(LINK_ID);
         verify(repository).findStoredByIdForUpdate(LINK_ID);
         verify(repository).revokeStored(LINK_ID, 3L, NOW);
@@ -306,6 +311,28 @@ class SmartLinkServiceTest {
         var result = service.revokeLink(LINK_ID);
 
         assertThat(result.revokedAt()).isEqualTo(firstRevokedAt);
+        assertThat(result.status()).isEqualTo(Status.REVOKED);
+        assertThat(result.evaluatedAt()).isEqualTo(NOW);
+        verify(repository, never()).revokeStored(any(), anyLong(), any());
+    }
+
+    @Test
+    @DisplayName("관리 조회는 DB 조회가 끝난 시각으로 상태를 판정하고 링크를 갱신하지 않는다")
+    void evaluatesManagedLinkAfterDatabaseRead() {
+        Clock clock = mock(Clock.class);
+        when(clock.instant()).thenReturn(NOW);
+        StoredLinkSnapshot snapshot = storedSnapshot();
+        when(repository.findStoredById(LINK_ID)).thenAnswer(invocation -> {
+            when(clock.instant()).thenReturn(snapshot.expiresAt());
+            return Optional.of(snapshot);
+        });
+
+        var result = service(linkCodePort, publicLinkOriginPort, clock).getLink(LINK_ID);
+
+        assertThat(result.status()).isEqualTo(Status.EXPIRED);
+        assertThat(result.evaluatedAt()).isEqualTo(snapshot.expiresAt());
+        assertThat(result.createdAt()).isEqualTo(snapshot.createdAt());
+        verify(repository, never()).save(any());
         verify(repository, never()).revokeStored(any(), anyLong(), any());
     }
 

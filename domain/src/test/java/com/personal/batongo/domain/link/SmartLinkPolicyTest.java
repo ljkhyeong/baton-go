@@ -1,11 +1,17 @@
 package com.personal.batongo.domain.link;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.personal.batongo.domain.link.LinkAvailabilityPolicy.Status;
 import java.time.Instant;
 import java.util.UUID;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 class SmartLinkPolicyTest {
 
@@ -15,61 +21,40 @@ class SmartLinkPolicyTest {
             "/teams/8e448211-66ae-44ab-9888-c4960648c22b"
                     + "/seasons/713d9cb7-2842-4f9f-b3cc-e31d98c6238a";
 
-    @Test
-    @DisplayName("활성 시작 시각과 정확히 같으면 링크를 해석할 수 있다")
-    void resolvesAtExactActivationBoundary() {
-        LinkAvailabilityPolicy.requireResolvableAt(
-                null,
-                CREATED_AT.plusSeconds(60),
-                CREATED_AT.plusSeconds(120),
-                CREATED_AT.plusSeconds(60)
-        );
+    @ParameterizedTest
+    @MethodSource("availabilityCases")
+    @DisplayName("상태 조회와 공개 해석은 활성·만료 경계와 폐기 우선순위를 함께 적용한다")
+    void evaluatesAvailabilityAndResolution(
+            Instant revokedAt, Instant notBefore, Instant expiresAt, Instant now, Status expected
+    ) {
+        assertThat(LinkAvailabilityPolicy.evaluate(revokedAt, notBefore, expiresAt, now))
+                .isEqualTo(expected);
+        if (expected == Status.ACTIVE) {
+            LinkAvailabilityPolicy.requireResolvableAt(revokedAt, notBefore, expiresAt, now);
+        } else {
+            assertThatThrownBy(() -> LinkAvailabilityPolicy.requireResolvableAt(
+                    revokedAt, notBefore, expiresAt, now
+            ))
+                    .isInstanceOf(LinkUnavailableException.class)
+                    .extracting(exception -> ((LinkUnavailableException) exception).reason().name())
+                    .isEqualTo(expected.name());
+        }
     }
 
-    @Test
-    @DisplayName("활성 시작 전에는 링크를 해석할 수 없다")
-    void rejectsBeforeActivation() {
+    private static Stream<Arguments> availabilityCases() {
         Instant notBefore = CREATED_AT.plusSeconds(60);
-
-        assertThatThrownBy(() -> LinkAvailabilityPolicy.requireResolvableAt(
-                null,
-                notBefore,
-                null,
-                notBefore.minusNanos(1)
-        ))
-                .isInstanceOf(LinkUnavailableException.class)
-                .extracting(exception -> ((LinkUnavailableException) exception).reason())
-                .isEqualTo(LinkUnavailableException.Reason.NOT_ACTIVE);
-    }
-
-    @Test
-    @DisplayName("만료 시각과 정확히 같으면 링크는 만료된다")
-    void expiresAtExactExpiryBoundary() {
-        assertThatThrownBy(() -> LinkAvailabilityPolicy.requireResolvableAt(
-                null,
-                null,
-                CREATED_AT.plusSeconds(120),
-                CREATED_AT.plusSeconds(120)
-        ))
-                .isInstanceOf(LinkUnavailableException.class)
-                .extracting(exception -> ((LinkUnavailableException) exception).reason())
-                .isEqualTo(LinkUnavailableException.Reason.EXPIRED);
-    }
-
-    @Test
-    @DisplayName("폐기된 링크는 해석할 수 없다")
-    void rejectsRevokedLink() {
-        Instant firstRevocation = CREATED_AT.plusSeconds(30);
-
-        assertThatThrownBy(() -> LinkAvailabilityPolicy.requireResolvableAt(
-                firstRevocation,
-                null,
-                null,
-                firstRevocation.plusSeconds(60)
-        ))
-                .isInstanceOf(LinkUnavailableException.class)
-                .extracting(exception -> ((LinkUnavailableException) exception).reason())
-                .isEqualTo(LinkUnavailableException.Reason.REVOKED);
+        Instant expiresAt = CREATED_AT.plusSeconds(120);
+        return Stream.of(
+                Arguments.of(null, notBefore, expiresAt, notBefore.minusNanos(1), Status.NOT_ACTIVE),
+                Arguments.of(null, notBefore, expiresAt, notBefore, Status.ACTIVE),
+                Arguments.of(null, notBefore, expiresAt, notBefore.plusNanos(1), Status.ACTIVE),
+                Arguments.of(null, notBefore, expiresAt, expiresAt.minusNanos(1), Status.ACTIVE),
+                Arguments.of(null, notBefore, expiresAt, expiresAt, Status.EXPIRED),
+                Arguments.of(null, notBefore, expiresAt, expiresAt.plusNanos(1), Status.EXPIRED),
+                Arguments.of(null, null, null, CREATED_AT, Status.ACTIVE),
+                Arguments.of(CREATED_AT, notBefore, expiresAt, CREATED_AT, Status.REVOKED),
+                Arguments.of(CREATED_AT, notBefore, expiresAt, expiresAt, Status.REVOKED)
+        );
     }
 
     @Test

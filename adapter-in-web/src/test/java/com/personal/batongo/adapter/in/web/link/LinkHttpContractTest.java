@@ -262,6 +262,8 @@ class LinkHttpContractTest {
                 .andExpect(jsonPath("$.targetSystem").value("BATON"))
                 .andExpect(jsonPath("$.targetPath").value(BATON_TARGET_PATH))
                 .andExpect(jsonPath("$.purpose").value("NAVIGATION"))
+                .andExpect(jsonPath("$.status").value("ACTIVE"))
+                .andExpect(jsonPath("$.evaluatedAt").value(CREATED_AT.plusSeconds(60).toString()))
                 .andExpect(jsonPath("$.shortUrl").doesNotExist())
                 .andDo(documentManagementEndpoint("links-get"));
 
@@ -289,6 +291,8 @@ class LinkHttpContractTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(LINK_ID.toString()))
                 .andExpect(jsonPath("$.revokedAt").value(firstRevokedAt.toString()))
+                .andExpect(jsonPath("$.status").value("REVOKED"))
+                .andExpect(jsonPath("$.evaluatedAt").value(firstRevokedAt.plusSeconds(60).toString()))
                 .andExpect(jsonPath("$.shortUrl").doesNotExist())
                 .andDo(documentManagementEndpoint("links-revoke"));
 
@@ -751,7 +755,8 @@ class LinkHttpContractTest {
                 null,
                 Instant.parse("2026-07-30T10:00:00Z"),
                 revokedAt,
-                CREATED_AT
+                CREATED_AT,
+                (revokedAt == null ? CREATED_AT : revokedAt).plusSeconds(60)
         );
     }
 }

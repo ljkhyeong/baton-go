@@ -1,6 +1,7 @@
 package com.personal.batongo.adapter.in.web.link;
 
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.LinkResult;
+import com.personal.batongo.domain.link.LinkAvailabilityPolicy.Status;
 import com.personal.batongo.domain.link.LinkPurpose;
 import com.personal.batongo.domain.link.TargetSystem;
 import java.time.Instant;
@@ -14,7 +15,9 @@ public record LinkResponse(
         Instant notBefore,
         Instant expiresAt,
         Instant revokedAt,
-        Instant createdAt
+        Instant createdAt,
+        Status status,
+        Instant evaluatedAt
 ) {
 
     static LinkResponse from(LinkResult result) {
@@ -26,7 +29,9 @@ public record LinkResponse(
                 result.notBefore(),
                 result.expiresAt(),
                 result.revokedAt(),
-                result.createdAt()
+                result.createdAt(),
+                result.status(),
+                result.evaluatedAt()
         );
     }
 

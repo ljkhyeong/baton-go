@@ -40,6 +40,7 @@ class SensitiveValueToStringTest {
                 null,
                 null,
                 null,
+                Instant.parse("2026-08-08T00:00:00Z"),
                 Instant.parse("2026-08-08T00:00:00Z")
         );
         List<Object> values = List.of(

@@ -195,6 +195,21 @@ Idempotency-Key: 8e448211-66ae-44ab-9888-c4960648c22b
 같은 경로의 `HEAD`도 `baton-go.links.read` scope를 요구하며, 같은 상태 판정 뒤 본문 없이
 응답한다.
 
+`status`는 DB 조회 후 서버의 `Clock`으로 얻은 `evaluatedAt` 시점의 GO 링크 이용 상태다.
+공개 해석과 같은 도메인 정책을 사용하며 다음 순서로 판정한다.
+
+| `status` | 판정 |
+| --- | --- |
+| `REVOKED` | `revokedAt`이 있음. 활성·만료 조건보다 우선 |
+| `NOT_ACTIVE` | `notBefore`가 있고 판정 시각이 그 시각 전 |
+| `EXPIRED` | `expiresAt`이 있고 판정 시각이 그 시각 이상 |
+| `ACTIVE` | 위 조건에 해당하지 않음 |
+
+신뢰 대상 계약에 맞는 링크라면 만료·폐기 상태여도 관리 조회는 `200`이다. `status`는
+판정 시점에 읽은 상태이며 응답 이후의 폐기·만료, 대상 서비스의 가용성이나 접근 권한을
+보장하지 않는다. 호출자는 관리·진단 화면에서 이 값을 사용하되 BATON의 일반 목록 조회에
+링크별 GO 동기 호출을 추가하지 않는다. 생성·재생 응답에는 두 필드를 추가하지 않는다.
+
 ```json
 {
   "id": "00000000-0000-0000-0000-000000000000",
@@ -204,7 +219,9 @@ Idempotency-Key: 8e448211-66ae-44ab-9888-c4960648c22b
   "notBefore": "2026-07-29T12:00:00Z",
   "expiresAt": "2026-07-30T12:00:00Z",
   "createdAt": "2026-07-29T11:00:00Z",
-  "revokedAt": null
+  "revokedAt": null,
+  "status": "ACTIVE",
+  "evaluatedAt": "2026-07-29T12:00:00Z"
 }
 ```
 
@@ -213,6 +230,9 @@ Idempotency-Key: 8e448211-66ae-44ab-9888-c4960648c22b
 `baton-go.links.revoke` scope가 있는 관리 JWT가 필요하다. 폐기는 멱등이며 같은 링크를 다시
 폐기해도 최초 `revokedAt`을 유지한 현재 상태를 `200 OK`로 반환한다. 응답 형식은 관리 조회와
 같고 원문 공개 코드나 `shortUrl`은 포함하지 않는다.
+
+`status`는 `REVOKED`이며 `evaluatedAt`은 각 요청의 처리 시각이다. 반복 폐기의 판정 시각은
+달라질 수 있지만 최초 `revokedAt`과 저장 데이터는 바꾸지 않는다.
 
 저장 대상이 현재 v1 계약을 위반하면 일반 관리 조회와 폐기도 원문 대상을 응답하지 않고
 `404 LINK_NOT_FOUND`로 숨긴다. 계약 전 데이터 정리는 아래의 별도 운영 기능 계약만 사용한다.

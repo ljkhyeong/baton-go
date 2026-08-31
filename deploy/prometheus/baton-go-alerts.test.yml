@@ -30,6 +30,9 @@ tests:
         alertname: BatonGoHttpServerErrors
         exp_alerts: []
       - eval_time: 10m
+        alertname: BatonGoManagementApiServerErrors
+        exp_alerts: []
+      - eval_time: 10m
         alertname: BatonGoPublicResolverRateLimited
         exp_alerts: []
       - eval_time: 10m
@@ -129,6 +132,67 @@ tests:
               description: 최근 5분간 5xx가 5건 이상이고 429를 제외한 응답의 오류율이 5%를 넘는 상태가 5분간 지속되었습니다. DB 준비 상태와 최근 배포를 확인하세요.
       - eval_time: 15m
         alertname: BatonGoHttpServerErrors
+        exp_alerts: []
+
+  - name: 공개 성공과 관리 429가 많아도 관리 5xx를 감지하고 오류율이 낮아지면 해제한다
+    interval: 1m
+    input_series:
+      - series: 'http_server_requests_seconds_count{job="baton-go",method="GET",status="302",uri="/l/{code}"}'
+        values: '0+1000x20'
+      - series: 'http_server_requests_seconds_count{job="baton-go",method="POST",status="500",uri="/api/v1/links"}'
+        values: '0+1x12 12x8'
+      - series: 'http_server_requests_seconds_count{job="baton-go",method="POST",status="201",uri="/api/v1/links"}'
+        values: '0+9x20'
+      - series: 'http_server_requests_seconds_count{job="baton-go",method="PUT",status="429",uri="/api/v1/links/{linkId}/revocation"}'
+        values: '0+1000x20'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: BatonGoManagementApiServerErrors
+        exp_alerts: []
+      - eval_time: 10m
+        alertname: BatonGoManagementApiServerErrors
+        exp_alerts:
+          - exp_labels:
+              job: baton-go
+              severity: critical
+            exp_annotations:
+              summary: BATON GO 관리 API 서버 오류 증가
+              description: 최근 5분간 관리 API의 5xx가 5건 이상이고 429를 제외한 관리 응답의 오류율이 5%를 넘는 상태가 5분간 지속되었습니다. 관리 작업 로그와 DB 쓰기 권한, 링크 코드 설정과 최근 배포를 확인하세요.
+      - eval_time: 10m
+        alertname: BatonGoHttpServerErrors
+        exp_alerts: []
+      - eval_time: 15m
+        alertname: BatonGoManagementApiServerErrors
+        exp_alerts: []
+
+  - name: 소량의 관리 5xx와 공개 경로 및 다른 서비스 오류는 관리 경보에서 제외한다
+    interval: 1m
+    input_series:
+      - series: 'http_server_requests_seconds_count{job="baton-go",method="POST",status="500",uri="/api/v1/links"}'
+        values: '0 0 1 1 2 2 3 3 4 4 5 5 6'
+      - series: 'http_server_requests_seconds_count{job="baton-go",method="GET",status="500",uri="/l/{code}"}'
+        values: '0+100x12'
+      - series: 'http_server_requests_seconds_count{job="baton-go",method="GET",status="503",uri="/readyz"}'
+        values: '0+100x12'
+      - series: 'http_server_requests_seconds_count{job="baton-go",method="POST",status="500",uri="UNKNOWN"}'
+        values: '0+100x12'
+      - series: 'http_server_requests_seconds_count{job="other",method="POST",status="500",uri="/api/v1/links"}'
+        values: '0+100x12'
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: BatonGoManagementApiServerErrors
+        exp_alerts: []
+
+  - name: 관리 5xx가 최소 건수를 충족해도 오류율이 정확히 5퍼센트이면 경보를 발생시키지 않는다
+    interval: 1m
+    input_series:
+      - series: 'http_server_requests_seconds_count{job="baton-go",method="POST",status="500",uri="/api/v1/links"}'
+        values: '0+1x12'
+      - series: 'http_server_requests_seconds_count{job="baton-go",method="GET",status="200",uri="/api/v1/links/{linkId}"}'
+        values: '0+19x12'
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: BatonGoManagementApiServerErrors
         exp_alerts: []
 
   - name: 요청 제한 응답이 많아도 허용 요청의 서버 오류 경보는 유지한다

@@ -50,6 +50,22 @@ groups:
           summary: BATON GO 서버 오류 증가
           description: 최근 5분간 5xx가 5건 이상이고 429를 제외한 응답의 오류율이 5%를 넘는 상태가 5분간 지속되었습니다. DB 준비 상태와 최근 배포를 확인하세요.
 
+      - alert: BatonGoManagementApiServerErrors
+        expr: |
+          (
+            sum by (job) (rate(http_server_requests_seconds_count{job="baton-go",uri=~"/api/v1/.*",status=~"5.."}[5m]))
+            /
+            sum by (job) (rate(http_server_requests_seconds_count{job="baton-go",uri=~"/api/v1/.*",status!="429"}[5m]))
+          ) > 0.05
+          and
+          sum by (job) (increase(http_server_requests_seconds_count{job="baton-go",uri=~"/api/v1/.*",status=~"5.."}[5m])) >= 5
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: BATON GO 관리 API 서버 오류 증가
+          description: 최근 5분간 관리 API의 5xx가 5건 이상이고 429를 제외한 관리 응답의 오류율이 5%를 넘는 상태가 5분간 지속되었습니다. 관리 작업 로그와 DB 쓰기 권한, 링크 코드 설정과 최근 배포를 확인하세요.
+
       - alert: BatonGoManagementAuthenticationServiceFailure
         expr: |
           sum by (job) (increase(baton_go_management_authentication_service_failures_total{job="baton-go"}[5m])) > 0

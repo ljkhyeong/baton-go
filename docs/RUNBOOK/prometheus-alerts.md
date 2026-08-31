@@ -3,7 +3,7 @@
 ## 적용 범위
 
 [경보 규칙](../../deploy/prometheus/baton-go-alerts.yml)은 기존 Actuator·Micrometer 지표로
-공개·관리 응답 지연, 5xx, 관리 JWT 검증 서비스 장애, 공개 해석 요청 제한과 저장 대상 계약 위반을 감지한다.
+공개·관리 응답 지연, 전체·관리 API 5xx, 관리 JWT 검증 서비스 장애, 공개 해석 요청 제한과 저장 대상 계약 위반을 감지한다.
 규칙 추가만으로 수집기나 Alertmanager가 배포되지는 않는다. 실제 운영 수집기·알림 경로·
 담당자 연결과 발화 시험은 [배포 실행서의 수집과 경보 관문](kubernetes-private-server-deployment.md#수집과-경보-관문)을 따른다.
 
@@ -44,6 +44,7 @@ Prometheus의 rule selector가 선택하는지 확인한다. 저장소는 특정
 | `BatonGoPublicResolverLatency` | 최근 5분 공개 요청 100건 이상·1초 초과 비율 5% 초과가 5분 지속 | `warning` |
 | `BatonGoManagementApiLatency` | 최근 5분 관리 요청 20건 이상·2초 초과 비율 5% 초과가 5분 지속 | `warning` |
 | `BatonGoHttpServerErrors` | 최근 5분 5xx 5건 이상·429 제외 응답의 오류율 5% 초과가 5분 지속 | `critical` |
+| `BatonGoManagementApiServerErrors` | 최근 5분 관리 API 5xx 5건 이상·429 제외 관리 응답의 오류율 5% 초과가 5분 지속 | `critical` |
 | `BatonGoManagementAuthenticationServiceFailure` | 최근 5분 관리 JWT 검증 서비스 장애 카운터 증가 | `warning` |
 | `BatonGoPublicResolverRateLimited` | 최근 5분 GET·HEAD 429 10건 이상이 5분 지속 | `warning` |
 | `BatonGoStoredTargetContractViolation` | 최근 5분 계약 위반 카운터 증가 | `critical` |
@@ -53,6 +54,10 @@ Prometheus의 rule selector가 선택하는지 확인한다. 저장소는 특정
   낮아지지 않도록 하며, 준비 상태의 503을 업무 요청의 5xx에 합산하지 않는다.
   DB 준비 상태와 수집 중단은 별도 인프라 경보로 감시한다. 트래픽이 없거나 수집이 끊겼다고
   이 경보들이 자동으로 발화하지 않는다.
+- 관리 API 5xx 경보는 매핑된 `/api/v1/**` 응답만 분자·분모에 사용한다. 공개 성공 요청이
+  많아 전체 오류율이 낮아져도 DB 쓰기 권한·링크 코드 설정 등 관리 작업 장애를 감지한다.
+  전체 서비스 장애 때는 전체·관리 5xx 경보가 함께 발생할 수 있다. 인증 필터에서 끝나
+  `uri="UNKNOWN"`으로 기록되는 JWK 장애는 아래의 관리 JWT 전용 경보가 담당한다.
 - 관리 JWT 검증 서비스 장애는
   `baton_go_management_authentication_service_failures_total`로 따로 집계한다. JWK 조회 등
   인증 서비스 장애만 포함하고 토큰 누락·서명·클레임 검증 실패인 401과 권한 부족인 403은
@@ -116,7 +121,9 @@ docker run --rm --network none --read-only \
 Actuator·주 포트 상태 확인·다른 서비스 제외, 지속 시간, 경보 회복과 계약 위반 카운터 초기화 후
 재발을 확인한다. 상태 확인 성공이 많아도 업무 요청의 5xx 경보가 유지되는지 검증한다.
 5xx와 대량 429가 함께 발생해도 서버 오류 경보를 유지하고, 429만 발생하면 요청 제한 경보만
-발생하는지도 검증한다. 관리 인증 서비스 장애는 대량 공개 성공 요청과 무관한 발화,
+발생하는지도 검증한다. 관리 API 5xx는 대량 공개 성공·관리 429에도 발화하는지, 소량 오류와
+다른 경로·서비스를 제외하는지, 최소 건수·오류율·지속 시간과 회복을 검증한다.
+관리 인증 서비스 장애는 대량 공개 성공 요청과 무관한 발화,
 카운터 초기화 뒤 재발과 새 장애가 없는 구간의 해제를 검증한다.
 CI의 운영 이미지 기동 검증은 실제 `/actuator/prometheus` 출력에 초기 계약 위반·관리 인증 장애 카운터와
 필터가 반환한 429와 공개 경로의 1초·2초 지연 버킷이 포함되는지도 확인한다.

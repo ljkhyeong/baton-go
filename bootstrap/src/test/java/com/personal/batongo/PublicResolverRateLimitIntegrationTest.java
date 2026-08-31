@@ -3,10 +3,12 @@ package com.personal.batongo;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.personal.batongo.adapter.in.web.FilterErrorResponseWriter;
+import com.personal.batongo.adapter.in.web.PublicLinkErrorPage;
 import com.personal.batongo.adapter.in.web.ManagementApiSecurityConfiguration;
 import com.personal.batongo.adapter.in.web.PublicResolverRateLimitProperties;
 import com.personal.batongo.adapter.in.web.PublicResolverRateLimiter;
@@ -25,6 +27,7 @@ import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.FilterType;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -46,6 +49,7 @@ import org.springframework.test.web.servlet.MockMvc;
 @EnableConfigurationProperties(PublicResolverRateLimitProperties.class)
 @Import({
         PublicResolverRateLimiter.class,
+        PublicLinkErrorPage.class,
         FilterErrorResponseWriter.class
 })
 class PublicResolverRateLimitIntegrationTest {
@@ -73,11 +77,11 @@ class PublicResolverRateLimitIntegrationTest {
         mockMvc.perform(get("/l/{code}", rawCode))
                 .andExpect(status().isFound());
 
-        mockMvc.perform(get("/l/{code}", rawCode))
+        mockMvc.perform(get("/l/{code}", rawCode).accept(MediaType.TEXT_HTML))
                 .andExpect(status().isTooManyRequests())
                 .andExpect(header().string(HttpHeaders.RETRY_AFTER, "3600"))
                 .andExpect(header().exists("X-Request-Id"))
-                .andExpect(jsonPath("$.code").value("RATE_LIMIT_EXCEEDED"))
-                .andExpect(jsonPath("$.requestId").isNotEmpty());
+                .andExpect(content().contentTypeCompatibleWith(MediaType.TEXT_HTML))
+                .andExpect(content().string(containsString("3600초 후에 다시 열어 주세요")));
     }
 }

@@ -7,6 +7,8 @@
   [API 계약](docs/PRD/0002_api-contract/spec.md)을 정본으로 삼는다.
 - 관리 조회·폐기는 공개 해석과 같은 시간·폐기 정책의 이용 상태와 판정 시각을 반환한다.
   생성·재생 응답과 저장 스키마는 유지하며 BATON·ROUND 접근 권한을 나타내지 않는다.
+- 공개 링크의 HTML 안내는 GO의 요청 제한·서버 오류도 포함한다. JSON 클라이언트와 관리
+  인증 오류는 기존 형식을 유지하며, 요청 제한 화면의 대기 시간은 `Retry-After`와 같다.
 - BATON·ROUND 위치 식별자와 최종 권한 경계는
   [교차 서비스 링크 계약](docs/PRD/0003_cross-service-link-contract/spec.md)을 따른다.
   GO 링크는 위치만 제공하며 BATON 접근 권한이나 ROUND 입장 권한을 부여하지 않는다.

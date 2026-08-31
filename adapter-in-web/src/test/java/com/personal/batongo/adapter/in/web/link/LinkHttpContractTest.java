@@ -36,6 +36,7 @@ import com.personal.batongo.application.link.port.in.SmartLinkUseCase;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.CreatedLinkResult;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.LinkResult;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.ResolvedLinkResult;
+import com.personal.batongo.adapter.in.web.PublicLinkErrorPage;
 import com.personal.batongo.domain.link.LinkPurpose;
 import com.personal.batongo.domain.link.LinkUnavailableException;
 import com.personal.batongo.domain.link.LinkValidationException;
@@ -106,7 +107,7 @@ class LinkHttpContractTest {
         mvcConfiguration.setConfigurers(List.of(new WebMvcConfiguration()));
         mockMvc = MockMvcBuilders.standaloneSetup(managementController, resolverController)
                 .defaultRequest(get("/").principal(() -> "baton-service"))
-                .setControllerAdvice(errors, new PublicLinkExceptionHandler(errors))
+                .setControllerAdvice(errors, new PublicLinkExceptionHandler(errors, new PublicLinkErrorPage()))
                 .setContentNegotiationManager(mvcConfiguration.mvcContentNegotiationManager())
                 .setMessageConverters(
                         new StringHttpMessageConverter(StandardCharsets.UTF_8),

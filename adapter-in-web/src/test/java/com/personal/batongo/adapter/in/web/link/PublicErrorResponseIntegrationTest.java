@@ -6,6 +6,7 @@ import static org.mockito.Mockito.when;
 import com.personal.batongo.adapter.in.web.ErrorResponse;
 import com.personal.batongo.adapter.in.web.FilterErrorResponseWriter;
 import com.personal.batongo.adapter.in.web.GlobalExceptionHandler;
+import com.personal.batongo.adapter.in.web.PublicLinkErrorPage;
 import com.personal.batongo.adapter.in.web.ManagementApiSecurityConfiguration;
 import com.personal.batongo.adapter.in.web.RequestIdFilter;
 import com.personal.batongo.adapter.in.web.WebMvcConfiguration;
@@ -20,6 +21,8 @@ import java.time.Duration;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
@@ -52,7 +55,8 @@ class PublicErrorResponseIntegrationTest {
     @EnableAutoConfiguration
     @Import({ManagementApiSecurityConfiguration.class, FilterErrorResponseWriter.class,
             LinkResolverController.class, GlobalExceptionHandler.class, PublicLinkExceptionHandler.class,
-            RequestIdFilter.class, WebMvcConfiguration.class, SimpleMeterRegistry.class})
+            RequestIdFilter.class, WebMvcConfiguration.class, SimpleMeterRegistry.class,
+            PublicLinkErrorPage.class})
     static class WebConfiguration {
     }
 
@@ -73,36 +77,70 @@ class PublicErrorResponseIntegrationTest {
         HttpResponse<String> response = requestError(MediaType.APPLICATION_XML_VALUE);
 
         assertThat(response.statusCode()).isEqualTo(404);
+        assertThat(response.headers().firstValue(HttpHeaders.CONTENT_TYPE))
+                .contains(MediaType.APPLICATION_JSON_VALUE);
         assertThat(jsonMapper.readValue(response.body(), ErrorResponse.class)).isEqualTo(
                 new ErrorResponse("LINK_NOT_FOUND", "링크를 찾을 수 없습니다", REQUEST_ID)
         );
     }
 
-    @Test
-    @DisplayName("HTML 요청의 서버 오류도 JSON으로 종료하고 서블릿 로그에 예외 원문을 노출하지 않는다")
-    void keepsUnexpectedFailureRedactedForHtmlRequest(CapturedOutput output) throws Exception {
+    @ParameterizedTest
+    @ValueSource(strings = {"text/html", "application/json", "*/*", "application/xml"})
+    @DisplayName("공개 서버 오류는 HTML 우선 요청만 안내 화면으로 응답하고 예외 원문을 숨긴다")
+    void keepsUnexpectedFailureRedacted(String accept, CapturedOutput output) throws Exception {
         String sensitiveMessage = "sensitive-exception-message";
         when(useCase.resolveLink(PUBLIC_CODE)).thenThrow(new IllegalStateException(sensitiveMessage));
 
-        HttpResponse<String> response = requestError(MediaType.TEXT_HTML_VALUE);
+        HttpResponse<String> response = requestError(accept);
 
         assertThat(response.statusCode()).isEqualTo(500);
-        assertThat(jsonMapper.readValue(response.body(), ErrorResponse.class)).isEqualTo(
-                new ErrorResponse("INTERNAL_ERROR", "서버에서 요청을 처리하지 못했습니다", REQUEST_ID)
-        );
+        if (MediaType.TEXT_HTML_VALUE.equals(accept)) {
+            assertThat(response.headers().firstValue(HttpHeaders.CONTENT_TYPE))
+                    .contains("text/html;charset=UTF-8");
+            assertThat(response.headers().firstValue("Content-Security-Policy").orElseThrow())
+                    .contains("default-src 'none'");
+            assertThat(response.headers().firstValue(HttpHeaders.VARY)).contains(HttpHeaders.ACCEPT);
+            assertThat(response.body()).contains(
+                    "<html lang=\"ko\">", "잠시 후 다시 열어 주세요", "<code>" + REQUEST_ID + "</code>"
+            );
+        } else {
+            assertThat(response.headers().firstValue(HttpHeaders.CONTENT_TYPE))
+                    .contains(MediaType.APPLICATION_JSON_VALUE);
+            assertThat(jsonMapper.readValue(response.body(), ErrorResponse.class)).isEqualTo(
+                    new ErrorResponse("INTERNAL_ERROR", "서버에서 요청을 처리하지 못했습니다", REQUEST_ID)
+            );
+        }
+        assertThat(response.body()).doesNotContain(sensitiveMessage, PUBLIC_CODE);
         assertThat(output).contains(REQUEST_ID, IllegalStateException.class.getName())
                 .doesNotContain(sensitiveMessage, PUBLIC_CODE);
     }
 
+    @Test
+    @DisplayName("공개 서버 오류의 HEAD는 HTML 헤더를 유지하고 본문을 보내지 않는다")
+    void returnsHeaderOnlyServerErrorForHead() throws Exception {
+        when(useCase.resolveLink(PUBLIC_CODE)).thenThrow(new IllegalStateException("서버 오류"));
+
+        HttpResponse<String> response = requestError(MediaType.TEXT_HTML_VALUE, "HEAD");
+
+        assertThat(response.statusCode()).isEqualTo(500);
+        assertThat(response.headers().firstValue(HttpHeaders.CONTENT_TYPE))
+                .contains("text/html;charset=UTF-8");
+        assertThat(response.body()).isEmpty();
+    }
+
     private HttpResponse<String> requestError(String accept) throws Exception {
+        return requestError(accept, "GET");
+    }
+
+    private HttpResponse<String> requestError(String accept, String method) throws Exception {
         try (var client = HttpClient.newHttpClient()) {
             var request = HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/l/" + PUBLIC_CODE))
                     .header(HttpHeaders.ACCEPT, accept).header("X-Request-Id", REQUEST_ID)
-                    .timeout(Duration.ofSeconds(5)).GET().build();
+                    .timeout(Duration.ofSeconds(5)).method(method, HttpRequest.BodyPublishers.noBody()).build();
             HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-            assertThat(response.headers().firstValue(HttpHeaders.CONTENT_TYPE))
-                    .contains(MediaType.APPLICATION_JSON_VALUE);
             assertThat(response.headers().firstValue("X-Request-Id")).contains(REQUEST_ID);
+            assertThat(response.headers().firstValue(HttpHeaders.CACHE_CONTROL)).contains("no-store");
+            assertThat(response.headers().firstValue("Referrer-Policy")).contains("no-referrer");
             return response;
         }
     }

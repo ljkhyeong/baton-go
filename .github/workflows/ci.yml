@@ -24,6 +24,8 @@ jobs:
       KUBECONFORM_LINUX_AMD64_SHA256: c31518ddd122663b3f3aa874cfe8178cb0988de944f29c74a0b9260920d115d3
       KUBERNETES_SCHEMA_REVISION: c8f4e61c63bc529749125ac566bccc6986e08d45
       PROMTOOL_IMAGE: prom/prometheus:v3.13.2@sha256:508729e0e2d18e11fd742a5a5ca70e557b940a93948c3c95fd0123a6fd538b69
+      TRIVY_IMAGE: aquasec/trivy:0.72.0@sha256:cffe3f5161a47a6823fbd23d985795b3ed72a4c806da4c4df16266c02accdd6f
+      BATON_GO_APP_IMAGE: baton-go:ci
 
     steps:
       - name: 저장소 체크아웃
@@ -190,11 +192,60 @@ jobs:
           done
 
       - name: 운영 이미지 빌드 검증
-        run: docker build --tag baton-go:ci .
+        run: docker build --tag "$BATON_GO_APP_IMAGE" .
+
+      - name: 이미지 SBOM·취약점 보고서 생성
+        id: image_security
+        timeout-minutes: 10
+        run: |
+          set -euo pipefail
+
+          scan_dir="$RUNNER_TEMP/baton-go-image-security"
+          reports_dir="$scan_dir/reports"
+          archive="$scan_dir/image.tar"
+          mkdir -p "$reports_dir" "$scan_dir/cache" "$scan_dir/tmp"
+          docker save --output "$archive" "$BATON_GO_APP_IMAGE"
+          archive_checksum="$(sha256sum "$archive")"
+          trivy=(docker run --rm --read-only
+            --env TRIVY_DISABLE_TELEMETRY=true
+            --volume "$scan_dir/tmp:/tmp"
+            --volume "$archive:/image.tar:ro"
+            --volume "$scan_dir/cache:/cache"
+            --volume "$reports_dir:/reports")
+          "${trivy[@]}" "$TRIVY_IMAGE" image \
+            --cache-dir /cache --timeout 5m --skip-version-check --no-progress \
+            --offline-scan --scanners vuln --list-all-pkgs --exit-code 0 \
+            --format json --output /reports/vulnerabilities.json --input /image.tar
+          jq \
+            --arg source_commit "$(git rev-parse HEAD)" \
+            --arg image_reference "$BATON_GO_APP_IMAGE" \
+            --arg docker_image_id "$(docker image inspect --format '{{.Id}}' "$BATON_GO_APP_IMAGE")" \
+            --arg image_archive_sha256 "${archive_checksum%% *}" \
+            --arg platform "$(docker image inspect --format '{{.Os}}/{{.Architecture}}' "$BATON_GO_APP_IMAGE")" \
+            --arg scanner_image "$TRIVY_IMAGE" \
+            '{source_commit: $source_commit, image_reference: $image_reference,
+              docker_image_id: $docker_image_id, image_config_digest: .Metadata.ImageID,
+              image_archive_sha256: $image_archive_sha256,
+              platform: $platform, scanner_image: $scanner_image}' \
+            "$reports_dir/vulnerabilities.json" >"$reports_dir/image-metadata.json"
+          "${trivy[@]}" --network none "$TRIVY_IMAGE" convert \
+            --scanners vuln --format cyclonedx --output /reports/sbom.cdx.json /reports/vulnerabilities.json
+          "${trivy[@]}" --network none "$TRIVY_IMAGE" convert \
+            --scanners vuln --format table --output /reports/vulnerabilities.txt /reports/vulnerabilities.json
+          "${trivy[@]}" --network none "$TRIVY_IMAGE" version \
+            --cache-dir /cache --format json >"$reports_dir/scanner.json"
+
+      - name: 이미지 SBOM·취약점 보고서 보존
+        if: ${{ !cancelled() && steps.image_security.outcome != 'skipped' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: baton-go-image-security
+          path: ${{ runner.temp }}/baton-go-image-security/reports/
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: 운영 이미지 기동·상태·공개 오류 응답 검증
         env:
-          BATON_GO_APP_IMAGE: baton-go:ci
           BATON_GO_MANAGEMENT_JWT_ISSUER_URI: http://127.0.0.1:1/issuer
           BATON_GO_MANAGEMENT_JWT_AUDIENCE: baton-go
           SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://127.0.0.1:1/issuer/jwks

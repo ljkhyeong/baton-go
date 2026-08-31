@@ -200,6 +200,9 @@ DB 대기 시간은 Hikari·Connector/J 설정으로 제한하며, 마이그레�
 
 CI는 운영 이미지를 Compose로 실행해 상태 확인, 미존재 링크의 HTML·기본 JSON 오류 본문,
 HEAD의 응답 형식·빈 본문과 요청률 제한 `429`를 점검한다. 오류 상태별 세부 계약은 웹 테스트에서 검증한다.
+같은 이미지의 SBOM·취약점 보고서와 검사 대상 정보를 `baton-go-image-security` 산출물로 보존한다.
+검사 실행 실패는 CI를 실패시키지만 취약점 발견만으로 배포를 차단하지는 않는다.
+보고서 확인과 릴리스 승인 범위는 [이미지 검사 실행서](docs/RUNBOOK/image-security-reports.md)를 따른다.
 
 Gradle은 `gradle/verification-metadata.xml`의 SHA-256으로 내려받은 의존성을 검증한다.
 의존성을 변경할 때는 검증 메타데이터를 삭제하거나 검증을 끄지 말고, 새 아티팩트의 출처와
@@ -270,6 +273,7 @@ curl -i http://localhost:8080/api/v1/links \
 
 - [비공개 Kubernetes 배포 실행서](docs/RUNBOOK/kubernetes-private-server-deployment.md)
 - [Prometheus 경보 연결과 검증](docs/RUNBOOK/prometheus-alerts.md)
+- [이미지 SBOM·취약점 보고서 확인](docs/RUNBOOK/image-security-reports.md)
 - [관리 작업 이력 조회와 보존](docs/RUNBOOK/management-operation-history.md)
 - [기존 DB HMAC 보호 장치 최초 결합 실행서](docs/RUNBOOK/link-code-key-guard-binding.md)
 - [대상 계약 v1 정리 실행서](docs/RUNBOOK/target-contract-v1-remediation.md)

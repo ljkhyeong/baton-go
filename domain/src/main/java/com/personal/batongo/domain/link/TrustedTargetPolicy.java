@@ -36,13 +36,7 @@ public final class TrustedTargetPolicy {
             throw new LinkValidationException("대상 경로는 필수입니다");
         }
 
-        boolean allowed = switch (targetSystem) {
-            case BATON -> purpose == LinkPurpose.NAVIGATION
-                    && BATON_NAVIGATION_PATH.matcher(targetPath).matches();
-            case ROUND -> purpose == LinkPurpose.MEETING_ENTRY
-                    && ROUND_MEETING_ENTRY_PATH.matcher(targetPath).matches();
-        };
-        if (!allowed) {
+        if (!isAllowed(targetSystem.name(), purpose.name(), targetPath)) {
             throw new LinkValidationException(
                     "대상 시스템, 목적과 경로가 v1 신뢰 대상 계약에 맞지 않습니다"
             );
@@ -66,5 +60,22 @@ public final class TrustedTargetPolicy {
                     "저장된 대상 시스템 또는 목적이 v1 신뢰 대상 계약에 맞지 않습니다"
             );
         }
+    }
+
+    public static boolean isAllowed(
+            String targetSystem,
+            String purpose,
+            String targetPath
+    ) {
+        if (targetSystem == null || purpose == null || targetPath == null) {
+            return false;
+        }
+        return switch (targetSystem) {
+            case "BATON" -> "NAVIGATION".equals(purpose)
+                    && BATON_NAVIGATION_PATH.matcher(targetPath).matches();
+            case "ROUND" -> "MEETING_ENTRY".equals(purpose)
+                    && ROUND_MEETING_ENTRY_PATH.matcher(targetPath).matches();
+            default -> false;
+        };
     }
 }

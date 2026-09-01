@@ -7,7 +7,6 @@ import com.personal.batongo.application.link.error.TargetContractRemediationStal
 import com.personal.batongo.application.link.port.in.TargetContractOperationsUseCase;
 import com.personal.batongo.application.link.port.out.SmartLinkRepository;
 import com.personal.batongo.application.link.port.out.SmartLinkRepository.StoredLinkSnapshot;
-import com.personal.batongo.domain.link.LinkValidationException;
 import com.personal.batongo.domain.link.LinkRevocationPolicy;
 import com.personal.batongo.domain.link.TrustedTargetPolicy;
 import java.time.Clock;
@@ -130,16 +129,11 @@ public class TargetContractOperationsService implements TargetContractOperations
     }
 
     private boolean isCompliant(StoredLinkSnapshot storedLink) {
-        try {
-            TrustedTargetPolicy.requireAllowed(
-                    storedLink.targetSystem(),
-                    storedLink.purpose(),
-                    storedLink.targetPath()
-            );
-            return true;
-        } catch (LinkValidationException exception) {
-            return false;
-        }
+        return TrustedTargetPolicy.isAllowed(
+                storedLink.targetSystem(),
+                storedLink.purpose(),
+                storedLink.targetPath()
+        );
     }
 
 }

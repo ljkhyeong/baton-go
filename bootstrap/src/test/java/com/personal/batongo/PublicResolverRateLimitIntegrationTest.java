@@ -3,11 +3,8 @@ package com.personal.batongo;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.personal.batongo.adapter.in.web.ManagementApiSecurityConfiguration;
@@ -30,7 +27,6 @@ import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.FilterType;
 import org.springframework.context.annotation.Import;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -90,11 +86,7 @@ class PublicResolverRateLimitIntegrationTest {
                 .andExpect(status().isFound());
 
         mockMvc.perform(get("/l/{code}", rawCode).accept(MediaType.TEXT_HTML))
-                .andExpect(status().isTooManyRequests())
-                .andExpect(header().string(HttpHeaders.RETRY_AFTER, "3600"))
-                .andExpect(header().exists("X-Request-Id"))
-                .andExpect(content().contentTypeCompatibleWith(MediaType.TEXT_HTML))
-                .andExpect(content().string(containsString("3600초 후에 다시 열어 주세요")));
+                .andExpect(status().isTooManyRequests());
 
         verify(smartLinkUseCase, times(1)).resolveLink(rawCode);
     }

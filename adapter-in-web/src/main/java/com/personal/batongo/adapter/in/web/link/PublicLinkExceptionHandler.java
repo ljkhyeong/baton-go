@@ -3,6 +3,7 @@ package com.personal.batongo.adapter.in.web.link;
 import com.personal.batongo.adapter.in.web.ErrorResponse;
 import com.personal.batongo.adapter.in.web.GlobalExceptionHandler;
 import com.personal.batongo.adapter.in.web.PublicLinkErrorPage;
+import com.personal.batongo.adapter.in.web.PublicResolverRateLimitExceededException;
 import com.personal.batongo.application.link.error.LinkNotFoundException;
 import com.personal.batongo.application.link.error.StoredTargetPolicyViolationException;
 import com.personal.batongo.domain.link.LinkUnavailableException;
@@ -43,6 +44,28 @@ public class PublicLinkExceptionHandler {
             LinkUnavailableException exception, HttpServletRequest request
     ) {
         return errorPage.render(unavailableJson(exception, request));
+    }
+
+    @ExceptionHandler(
+            value = PublicResolverRateLimitExceededException.class,
+            produces = {MediaType.APPLICATION_JSON_VALUE, MediaType.ALL_VALUE}
+    )
+    public ResponseEntity<ErrorResponse> rateLimitedJson(
+            PublicResolverRateLimitExceededException exception,
+            HttpServletRequest request
+    ) {
+        return errors.handlePublicResolverRateLimited(exception, request);
+    }
+
+    @ExceptionHandler(
+            value = PublicResolverRateLimitExceededException.class,
+            produces = MediaType.TEXT_HTML_VALUE
+    )
+    public ResponseEntity<String> rateLimitedHtml(
+            PublicResolverRateLimitExceededException exception,
+            HttpServletRequest request
+    ) {
+        return errorPage.render(rateLimitedJson(exception, request));
     }
 
     @ExceptionHandler(

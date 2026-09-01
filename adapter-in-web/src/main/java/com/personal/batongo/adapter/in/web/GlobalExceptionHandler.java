@@ -100,6 +100,22 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         };
     }
 
+    @ExceptionHandler(PublicResolverRateLimitExceededException.class)
+    public ResponseEntity<ErrorResponse> handlePublicResolverRateLimited(
+            PublicResolverRateLimitExceededException exception,
+            HttpServletRequest request
+    ) {
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .header(HttpHeaders.RETRY_AFTER, Long.toString(exception.retryAfterSeconds()))
+                .varyBy(HttpHeaders.ACCEPT)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(new ErrorResponse(
+                        "RATE_LIMIT_EXCEEDED",
+                        "요청이 너무 많습니다. 잠시 후 다시 시도해 주세요",
+                        RequestIdFilter.requestId(request)
+                ));
+    }
+
     @ExceptionHandler(LinkValidationException.class)
     public ResponseEntity<ErrorResponse> handleValidation(
             LinkValidationException exception,

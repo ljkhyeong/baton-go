@@ -1,17 +1,21 @@
 package com.personal.batongo;
 
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.hamcrest.Matchers.containsString;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.personal.batongo.adapter.in.web.FilterErrorResponseWriter;
-import com.personal.batongo.adapter.in.web.PublicLinkErrorPage;
 import com.personal.batongo.adapter.in.web.ManagementApiSecurityConfiguration;
+import com.personal.batongo.adapter.in.web.PublicLinkErrorPage;
+import com.personal.batongo.adapter.in.web.PublicResolverRateLimitInterceptor;
 import com.personal.batongo.adapter.in.web.PublicResolverRateLimitProperties;
 import com.personal.batongo.adapter.in.web.PublicResolverRateLimiter;
+import com.personal.batongo.adapter.in.web.PublicResolverWebMvcConfiguration;
 import com.personal.batongo.adapter.in.web.link.LinkResolverController;
 import com.personal.batongo.application.link.LinkCodeKeyGuard;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase;
@@ -49,8 +53,9 @@ import org.springframework.test.web.servlet.MockMvc;
 @EnableConfigurationProperties(PublicResolverRateLimitProperties.class)
 @Import({
         PublicResolverRateLimiter.class,
-        PublicLinkErrorPage.class,
-        FilterErrorResponseWriter.class
+        PublicResolverRateLimitInterceptor.class,
+        PublicResolverWebMvcConfiguration.class,
+        PublicLinkErrorPage.class
 })
 class PublicResolverRateLimitIntegrationTest {
 
@@ -67,12 +72,19 @@ class PublicResolverRateLimitIntegrationTest {
     private LinkCodeKeyGuard linkCodeKeyGuard;
 
     @Test
-    @DisplayName("실제 Spring 조립은 공개 링크 요청 제한 설정과 필터 순서를 적용한다")
+    @DisplayName("실제 Spring 조립은 정확한 공개 링크 GET과 HEAD만 요청 제한한다")
     void assemblesPublicResolverRateLimit() throws Exception {
         String rawCode = "A".repeat(22);
         when(smartLinkUseCase.resolveLink(rawCode)).thenReturn(
                 new ResolvedLinkResult(URI.create("https://baton.example/teams/active"))
         );
+
+        mockMvc.perform(post("/l/{code}", rawCode).accept(MediaType.TEXT_HTML))
+                .andExpect(status().isMethodNotAllowed());
+        mockMvc.perform(get("/l/extra/segment"))
+                .andExpect(status().isNotFound());
+        mockMvc.perform(get("/unknown"))
+                .andExpect(status().isNotFound());
 
         mockMvc.perform(get("/l/{code}", rawCode))
                 .andExpect(status().isFound());
@@ -83,5 +95,7 @@ class PublicResolverRateLimitIntegrationTest {
                 .andExpect(header().exists("X-Request-Id"))
                 .andExpect(content().contentTypeCompatibleWith(MediaType.TEXT_HTML))
                 .andExpect(content().string(containsString("3600초 후에 다시 열어 주세요")));
+
+        verify(smartLinkUseCase, times(1)).resolveLink(rawCode);
     }
 }

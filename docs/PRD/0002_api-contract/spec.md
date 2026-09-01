@@ -364,9 +364,10 @@ DB에 저장된 대상이 현재 PRD-0003 계약을 위반하면 존재 여부�
 - 관리 API의 인증·권한·서버 오류와 이 목록 밖 오류는 기존 JSON 계약을 유지한다.
   GO에 도달하기 전에 Ingress가 반환한 오류나 프로세스 중단은 이 화면의 처리 범위가 아니다.
 
-컨트롤러 오류는 `@ExceptionHandler(produces=...)`, 컨트롤러 전 요청 제한은 MVC의
-`ContentNegotiationManager`와 `ProducesRequestCondition`을 사용한다. `Accept` 파서나
-품질값 비교 규칙을 별도로 구현하지 않고, HTML 템플릿과 보안 헤더는 한곳에서 재사용한다.
+컨트롤러 오류와 요청 제한은 `@ExceptionHandler(produces=...)`로 응답 형식을 선택한다.
+요청 제한은 `/l/{code}`에 등록한 MVC `HandlerInterceptor`가 컨트롤러 실행과 DB 조회 전에
+판정한다. `Accept` 파서나 응답 변환을 별도로 구현하지 않고 Spring의 콘텐츠 협상과 메시지
+변환을 사용하며, HTML 템플릿과 보안 헤더는 한곳에서 재사용한다.
 
 ### 공개 해석기 과부하 안전장치
 

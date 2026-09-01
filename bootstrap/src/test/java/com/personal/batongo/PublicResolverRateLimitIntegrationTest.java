@@ -68,7 +68,7 @@ class PublicResolverRateLimitIntegrationTest {
     private LinkCodeKeyGuard linkCodeKeyGuard;
 
     @Test
-    @DisplayName("실제 Spring 조립은 정확한 공개 링크 GET과 HEAD만 요청 제한한다")
+    @DisplayName("실제 Spring 조립은 공개 링크 GET만 제한하고 다른 경로와 메서드는 제외한다")
     void assemblesPublicResolverRateLimit() throws Exception {
         String rawCode = "A".repeat(22);
         when(smartLinkUseCase.resolveLink(rawCode)).thenReturn(

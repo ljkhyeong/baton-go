@@ -1,29 +1,24 @@
 package com.personal.batongo.adapter.in.web;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verifyNoInteractions;
-import com.personal.batongo.application.link.port.out.PublicResolverQuotaPort;
-import com.personal.batongo.application.link.error.PublicResolverQuotaUnavailableException;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.personal.batongo.adapter.in.web.link.LinkResolverController;
 import com.personal.batongo.adapter.in.web.link.PublicLinkExceptionHandler;
-import com.personal.batongo.application.link.error.LinkNotFoundException;
+import com.personal.batongo.application.link.error.PublicResolverQuotaUnavailableException;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase;
+import com.personal.batongo.application.link.port.out.PublicResolverQuotaPort;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Clock;
-import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -31,11 +26,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import tools.jackson.databind.json.JsonMapper;
 
 @SpringBootTest(
         classes = DistributedResolverQuotaHttpIntegrationTest.WebConfiguration.class,

@@ -3,11 +3,11 @@ package com.personal.batongo.adapter.out.persistence.link;
 import java.time.Instant;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.CrudRepository;
+import org.springframework.data.repository.Repository;
 import org.springframework.data.repository.query.Param;
 
 interface SpringDataLinkCreationRequestRepository
-        extends CrudRepository<LinkCreationRequestEntity, String> {
+        extends Repository<LinkCreationRequestEntity, String> {
 
     @Query(value = "SELECT * FROM link_creation_requests WHERE idempotency_key_hash = :hash FOR SHARE",
             nativeQuery = true)

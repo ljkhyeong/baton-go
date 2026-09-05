@@ -82,10 +82,8 @@ public class LinkCodeKeyGuardPersistenceAdapter implements LinkCodeKeyGuardPort 
         GuardRow guard = readGuard(" FOR SHARE");
         Map<String, LinkCodeDerivationIdentity> stored = readKeys();
         requireAnchoredGuard(guard, stored);
-        for (var entry : ring.keys().entrySet()) {
-            if (!entry.getValue().equals(stored.get(entry.getKey()))) {
-                throw new LinkCodeKeyBindingException();
-            }
+        if (!stored.entrySet().containsAll(ring.keys().entrySet())) {
+            throw new LinkCodeKeyBindingException();
         }
     }
 

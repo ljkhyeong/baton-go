@@ -19,7 +19,6 @@ import com.personal.batongo.bootstrap.guard.ExistingDatabaseLinkCodeKeyBinder.Bi
 import com.personal.batongo.domain.link.LinkPurpose;
 import com.personal.batongo.domain.link.TargetSystem;
 import java.util.Locale;
-import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -257,7 +256,7 @@ class LinkCodeKeyGuardIntegrationTest {
 
     @Test
     @DisplayName("기존 데이터베이스는 보관한 canary가 현재 HMAC 키를 증명하면 한 번 결합된다")
-    void bindsExistingDatabaseAfterCanaryVerification() throws Exception {
+    void bindsExistingDatabaseAfterCanaryVerification() {
         String canaryIdempotencyKey = "60fa8eb4-e104-459d-aa45-e4a07831998e";
         smartLinkUseCase.createLink(command(canaryIdempotencyKey));
         unbind();
@@ -272,7 +271,7 @@ class LinkCodeKeyGuardIntegrationTest {
 
     @Test
     @DisplayName("기존 MySQL 데이터의 uppercase version 7 canary는 과거 규칙으로 정규화해 결합한다")
-    void bindsExistingDatabaseWithLegacyUppercaseVersionSevenCanary() throws Exception {
+    void bindsExistingDatabaseWithLegacyUppercaseVersionSevenCanary() {
         String canonicalCanary = "019ae750-9234-7abc-8def-123456789abc";
         insertLegacyCreation(canonicalCanary);
         unbind();
@@ -305,7 +304,7 @@ class LinkCodeKeyGuardIntegrationTest {
 
     @Test
     @DisplayName("같은 identity에 이미 결합된 데이터베이스는 canary 검증 뒤 멱등하게 확인된다")
-    void confirmsAlreadyBoundDatabaseAfterCanaryVerification() throws Exception {
+    void confirmsAlreadyBoundDatabaseAfterCanaryVerification() {
         String canaryIdempotencyKey = "b46dd6bc-91f1-4f73-81e4-ceb63a438f66";
         smartLinkUseCase.createLink(command(canaryIdempotencyKey));
 

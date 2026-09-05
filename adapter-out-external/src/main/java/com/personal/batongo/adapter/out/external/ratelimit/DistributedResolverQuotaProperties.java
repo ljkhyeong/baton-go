@@ -12,8 +12,8 @@ public record DistributedResolverQuotaProperties(@DefaultValue("false") boolean 
         if (enabled && (redisUri == null || redisUri.isBlank())) {
             throw new IllegalArgumentException("분산 요청 제한의 Redis 주소가 필요합니다");
         }
-        if (capacity < 1 || capacity > 1_000_000_000L || window.toMillis() < 1
-                || window.compareTo(Duration.ofDays(1)) > 0 || timeout.toMillis() < 1
+        if (capacity < 1 || capacity > 1_000_000_000L || window.compareTo(Duration.ofMillis(1)) < 0
+                || window.compareTo(Duration.ofDays(1)) > 0 || timeout.compareTo(Duration.ofMillis(1)) < 0
                 || timeout.compareTo(Duration.ofSeconds(5)) > 0) {
             throw new IllegalArgumentException("분산 요청 제한의 용량·시간 구간·대기 시간이 지원 범위를 벗어났습니다");
         }

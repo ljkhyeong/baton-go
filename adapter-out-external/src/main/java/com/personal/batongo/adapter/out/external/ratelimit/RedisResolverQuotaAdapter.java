@@ -36,7 +36,7 @@ public class RedisResolverQuotaAdapter implements PublicResolverQuotaPort {
             Long remaining = connection.sync().eval(SCRIPT, ScriptOutputType.INTEGER,
                     new String[]{KEY}, Long.toString(properties.capacity()), Long.toString(properties.window().toMillis()));
             if (remaining == null || remaining < 0) throw new PublicResolverQuotaUnavailableException();
-            return remaining == 0 ? 0 : (remaining + 999) / 1000;
+            return Math.ceilDiv(remaining, 1000);
         } catch (RedisException exception) {
             throw new PublicResolverQuotaUnavailableException();
         }

@@ -3,6 +3,6 @@ package com.personal.batongo.application.link.error;
 public final class TargetContractRemediationStaleException extends RuntimeException {
 
     public TargetContractRemediationStaleException() {
-        super("대상 계약 remediation 요청의 링크 버전이 오래되었습니다");
+        super("링크가 변경되었습니다. 다시 조회한 뒤 요청해 주세요.");
     }
 }

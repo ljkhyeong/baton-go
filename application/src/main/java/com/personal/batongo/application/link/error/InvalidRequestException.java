@@ -14,7 +14,7 @@ public final class InvalidRequestException extends RuntimeException {
     }
 
     public static InvalidRequestException targetContractInventory() {
-        return new InvalidRequestException("대상 계약 inventory 요청이 올바르지 않습니다");
+        return new InvalidRequestException("링크 점검 목록 조회 조건이 올바르지 않습니다");
     }
 
     public static InvalidRequestException linkSearch() {
@@ -24,6 +24,6 @@ public final class InvalidRequestException extends RuntimeException {
     }
 
     public static InvalidRequestException targetContractRemediation() {
-        return new InvalidRequestException("대상 계약 remediation 요청이 올바르지 않습니다");
+        return new InvalidRequestException("비허용 링크 폐기 요청이 올바르지 않습니다");
     }
 }

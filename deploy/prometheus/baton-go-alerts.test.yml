@@ -490,3 +490,25 @@ tests:
       - eval_time: 12m
         alertname: BatonGoManagementApiLatency
         exp_alerts: *management_api_latency
+
+  - name: 링크 정리 실패는 오류가 증가했을 때만 경보를 발생시킨다
+    interval: 1m
+    input_series:
+      - series: 'baton_go_link_retention_failures_total{job="baton-go",instance="app"}'
+        values: '0 0 1 1 1 1 1 1 1 1'
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: BatonGoLinkRetentionFailure
+        exp_alerts: []
+      - eval_time: 3m
+        alertname: BatonGoLinkRetentionFailure
+        exp_alerts:
+          - exp_labels:
+              job: baton-go
+              severity: warning
+            exp_annotations:
+              summary: BATON GO 링크 정리 실패
+              description: 보존 기간이 지난 링크 정리에 실패했습니다. DB 상태와 정리 예외 종류를 확인하세요. 실패한 묶음은 다음 실행에서 재시도합니다.
+      - eval_time: 9m
+        alertname: BatonGoLinkRetentionFailure
+        exp_alerts: []

@@ -25,7 +25,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 class DatabaseMigrationRunnerIntegrationTest {
 
     private static final String DATABASE = "baton_go";
-    private static final String LATEST_MIGRATION_VERSION = "6";
+    private static final String LATEST_MIGRATION_VERSION = "7";
 
     @Container
     static final DeploymentMySqlFixture MYSQL = new DeploymentMySqlFixture();

@@ -45,6 +45,7 @@ XML 등 지원하지 않는 응답 형식만 요청해도 원래 오류 상태·
 - 아직 활성화되지 않음: `404 LINK_NOT_ACTIVE`
 - 만료: `410 LINK_EXPIRED`
 - 폐기: `410 LINK_REVOKED`
+- 보존 기간 정리 후 같은 생성 요청 재시도: `410 LINK_PURGED`
 - 같은 멱등성 키를 다른 요청 내용에 재사용: `409 IDEMPOTENCY_KEY_REUSED`
 - 기존 멱등 예약이 가리키는 링크를 복구할 수 없음:
   `500 LINK_CREATION_REPLAY_UNAVAILABLE`
@@ -110,7 +111,10 @@ Idempotency-Key: 8e448211-66ae-44ab-9888-c4960648c22b
   최초 `shortUrl`을 정확히 재생한다. 저장된 출처가 없거나 정규 형식이 아니면 현재
   설정으로 추정하지 않고 `500 PUBLIC_LINK_ORIGIN_REPLAY_UNAVAILABLE`로 실패한다.
 - 같은 키와 다른 요청 내용은 `409 IDEMPOTENCY_KEY_REUSED`로 거부한다.
-- 기존 멱등 예약은 있으나 예약이 가리키는 링크가 없으면 존재하지 않는 링크로 숨기거나 새 링크를
+- 자동 정리 표식이 있는 예약은 같은 요청 내용이면 `410 LINK_PURGED`, 다른 내용이면
+  `409 IDEMPOTENCY_KEY_REUSED`로 거부하며 새 링크를 만들지 않는다. 정리 뒤 공개 해석과 관리
+  조회·폐기는 `404 LINK_NOT_FOUND`이고 목록에서 제외한다. [보존 정책](../../ADR/0012_link-retention/adr.md)을 따른다.
+- 정리 표식 없이 기존 멱등 예약은 있으나 예약이 가리키는 링크가 없으면 존재하지 않는 링크로 숨기거나 새 링크를
   만들지 않고 `500 LINK_CREATION_REPLAY_UNAVAILABLE`로 실패한다. 이 오류는 저장 일관성 복구가
   끝날 때까지 자동 재시도하지 않는다.
 - 키 누락·형식 오류는 `400 INVALID_IDEMPOTENCY_KEY`로 거부한다.

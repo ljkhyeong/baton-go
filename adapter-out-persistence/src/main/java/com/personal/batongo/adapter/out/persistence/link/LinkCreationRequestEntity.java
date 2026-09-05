@@ -27,6 +27,16 @@ class LinkCreationRequestEntity {
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
+    @Column(name = "purged_at")
+    private Instant purgedAt;
+
+    @Column(name = "request_hash", length = 64)
+    private String requestHash;
+
+    Instant getPurgedAt() { return purgedAt; }
+
+    String getRequestHash() { return requestHash; }
+
     protected LinkCreationRequestEntity() {
     }
 

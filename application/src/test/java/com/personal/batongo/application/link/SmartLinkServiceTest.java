@@ -186,7 +186,7 @@ class SmartLinkServiceTest {
         )).thenReturn(new LinkCreationReservationPort.Reservation(
                 LINK_ID,
                 PUBLIC_ORIGIN.serialized(),
-                "legacy",
+                "legacy", null, null,
                 false
         ));
         when(repository.findReplayById(LINK_ID)).thenReturn(Optional.empty());
@@ -456,7 +456,7 @@ class SmartLinkServiceTest {
         )).thenReturn(new LinkCreationReservationPort.Reservation(
                 LINK_ID,
                 publicOrigin,
-                "legacy",
+                "legacy", null, null,
                 false
         ));
         when(repository.findReplayById(LINK_ID)).thenReturn(Optional.of(

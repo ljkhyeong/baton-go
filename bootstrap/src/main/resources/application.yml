@@ -60,6 +60,11 @@ baton-go:
   management-jwk:
     connect-timeout: ${BATON_GO_MANAGEMENT_JWK_CONNECT_TIMEOUT:3s}
     read-timeout: ${BATON_GO_MANAGEMENT_JWK_READ_TIMEOUT:5s}
+  link-retention:
+    enabled: ${BATON_GO_LINK_RETENTION_ENABLED:false}
+    period: ${BATON_GO_LINK_RETENTION_PERIOD:}
+    batch-size: ${BATON_GO_LINK_RETENTION_BATCH_SIZE:100}
+    interval: ${BATON_GO_LINK_RETENTION_INTERVAL:60s}
   link-code:
     secret: ${BATON_GO_LINK_CODE_SECRET:}
   target-contract-operations:

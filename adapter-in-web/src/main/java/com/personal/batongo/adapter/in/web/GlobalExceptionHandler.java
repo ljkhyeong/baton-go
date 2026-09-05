@@ -7,6 +7,7 @@ import com.personal.batongo.application.link.error.LinkCodeKeyBindingException;
 import com.personal.batongo.application.link.error.LinkCodeReplayMismatchException;
 import com.personal.batongo.application.link.error.LinkCreationReplayUnavailableException;
 import com.personal.batongo.application.link.error.LinkNotFoundException;
+import com.personal.batongo.application.link.error.LinkPurgedException;
 import com.personal.batongo.application.link.error.PublicLinkOriginReplayUnavailableException;
 import com.personal.batongo.application.link.error.StoredTargetPolicyViolationException;
 import com.personal.batongo.application.link.error.TargetContractRemediationNotApplicableException;
@@ -194,6 +195,11 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                 exception.getMessage(),
                 request
         );
+    }
+
+    @ExceptionHandler(LinkPurgedException.class)
+    public ResponseEntity<ErrorResponse> handlePurged(LinkPurgedException exception, HttpServletRequest request) {
+        return error(HttpStatus.GONE, "LINK_PURGED", exception.getMessage(), request);
     }
 
     @ExceptionHandler(LinkCreationReplayUnavailableException.class)

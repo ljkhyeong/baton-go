@@ -9,6 +9,10 @@ import org.springframework.data.repository.query.Param;
 interface SpringDataLinkCreationRequestRepository
         extends CrudRepository<LinkCreationRequestEntity, String> {
 
+    @Query(value = "SELECT * FROM link_creation_requests WHERE idempotency_key_hash = :hash FOR SHARE",
+            nativeQuery = true)
+    java.util.Optional<LinkCreationRequestEntity> findCurrent(@Param("hash") String hash);
+
     @Modifying
     @Query(value = """
             INSERT IGNORE INTO link_creation_requests (

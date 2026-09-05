@@ -20,6 +20,8 @@ public interface LinkCreationReservationPort {
             UUID linkId,
             String publicOrigin,
             String keyId,
+            Instant purgedAt,
+            String requestHash,
             boolean owner
     ) {
 

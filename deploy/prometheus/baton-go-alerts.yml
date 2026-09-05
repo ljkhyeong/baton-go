@@ -118,3 +118,12 @@ groups:
         annotations:
           summary: BATON GO 저장 대상 계약 위반
           description: 공개 링크 해석 중 저장된 대상 계약 위반이 발생했습니다. 허용된 linkId·requestId로 로그를 확인하고 대상 계약 정리 절차를 따르세요.
+
+      - alert: BatonGoLinkRetentionFailure
+        expr: |
+          sum by (job) (increase(baton_go_link_retention_failures_total{job="baton-go"}[5m])) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: BATON GO 링크 정리 실패
+          description: 보존 기간이 지난 링크 정리에 실패했습니다. DB 상태와 정리 예외 종류를 확인하세요. 실패한 묶음은 다음 실행에서 재시도합니다.

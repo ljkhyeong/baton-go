@@ -22,6 +22,15 @@ import org.springframework.mock.web.MockHttpServletRequest;
 @ExtendWith(OutputCaptureExtension.class)
 class GlobalExceptionHandlerTest {
 
+    @Test
+    @DisplayName("보존 기간 정리 완료는 복구 장애가 아닌 410 LINK_PURGED로 응답한다")
+    void reportsPurgedLink() {
+        var response = new GlobalExceptionHandler(new SimpleMeterRegistry()).handlePurged(
+                new com.personal.batongo.application.link.error.LinkPurgedException(), new MockHttpServletRequest());
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.GONE);
+        assertThat(response.getBody().code()).isEqualTo("LINK_PURGED");
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {
             "LINK_CREATION_REPLAY_UNAVAILABLE",

@@ -5,6 +5,7 @@ import com.personal.batongo.application.link.error.InvalidRequestException;
 import com.personal.batongo.application.link.error.LinkCodeReplayMismatchException;
 import com.personal.batongo.application.link.error.LinkCreationReplayUnavailableException;
 import com.personal.batongo.application.link.error.LinkNotFoundException;
+import com.personal.batongo.application.link.error.LinkPurgedException;
 import com.personal.batongo.application.link.error.PublicLinkOriginReplayUnavailableException;
 import com.personal.batongo.application.link.error.StoredTargetPolicyViolationException;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase;
@@ -87,6 +88,7 @@ public class SmartLinkService implements SmartLinkUseCase {
                 prepared.idempotencyKeyHash()
         ).orElseThrow(prepared.admission()::missingReservationException);
         TrustedTarget requestedTarget = requireAllowedTarget(prepared.command());
+        requireNotPurged(reservation, requestedTarget, prepared);
         linkCodeKeyGuard.verifyBound();
         return replayCreation(
                 reservation,
@@ -109,6 +111,7 @@ public class SmartLinkService implements SmartLinkUseCase {
                 linkCodePort.keyRingIdentity().activeKeyId(),
                 now
         );
+        requireNotPurged(reservation, requestedTarget, prepared);
         IssuedLinkCode issuedCode = linkCodePort.issue(
                 prepared.command().idempotencyKey().value(), reservation.keyId()
         );
@@ -146,6 +149,20 @@ public class SmartLinkService implements SmartLinkUseCase {
                 currentOrigin.shortUrl(issuedCode.rawCode()),
                 false
         );
+    }
+
+    private void requireNotPurged(LinkCreationReservationPort.Reservation reservation,
+                                  TrustedTarget target, PreparedCreation prepared) {
+        if (reservation.purgedAt() == null) {
+            return;
+        }
+        String requestHash = LinkCreationFingerprint.of(target.targetSystem().name(),
+                target.purpose().name(), target.targetPath(),
+                prepared.admission().notBefore(), prepared.admission().expiresAt());
+        if (!requestHash.equals(reservation.requestHash())) {
+            throw new IdempotencyKeyConflictException();
+        }
+        throw new LinkPurgedException();
     }
 
     private record PreparedCreation(

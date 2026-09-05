@@ -8,6 +8,7 @@ BATON GO는 단순 URL 축약기가 아니라 BATON과 ROUND를 위한 정책형
 
 - 정규 UUID 멱등성 키와 HMAC 기반 128비트 공개 코드 발급
 - 발급 키 버전 저장과 키 교체 후 기존 생성 요청의 동일 URL 재생
+- 보존 기간을 명시한 종료 링크 자동 정리와 생성 예약 보존(기본 중지)
 - 원문 코드 대신 SHA-256 해시 저장
 - `BATON`, `ROUND`의 v1 정확한 대상 조합과 정규 위치 식별자만 생성·해석
 - 시작 시각, 만료 시각과 즉시 폐기
@@ -281,6 +282,7 @@ curl -i http://localhost:8080/api/v1/links \
 - [Prometheus 경보 연결과 검증](docs/RUNBOOK/prometheus-alerts.md)
 - [이미지 SBOM·취약점 보고서 확인](docs/RUNBOOK/image-security-reports.md)
 - [관리 작업 이력 조회와 보존](docs/RUNBOOK/management-operation-history.md)
+- [종료 링크 보존 기간 설정](docs/RUNBOOK/link-retention.md)
 - [HMAC 키 교체](docs/RUNBOOK/link-code-key-rotation.md)
 - [기존 DB HMAC 보호 장치 최초 결합 실행서](docs/RUNBOOK/link-code-key-guard-binding.md)
 - [대상 계약 v1 정리 실행서](docs/RUNBOOK/target-contract-v1-remediation.md)

@@ -59,7 +59,7 @@ public class LinkCodeKeyGuardPersistenceAdapter implements LinkCodeKeyGuardPort 
                 throw new LinkCodeKeyBindingException();
             }
         }
-        var requiredKeyIds = jdbcClient.sql("SELECT DISTINCT key_id FROM link_creation_requests")
+        var requiredKeyIds = jdbcClient.sql("SELECT DISTINCT key_id FROM link_creation_requests WHERE purged_at IS NULL")
                 .query(String.class).list();
         if (!ring.keys().keySet().containsAll(requiredKeyIds)) {
             throw new LinkCodeKeyBindingException();

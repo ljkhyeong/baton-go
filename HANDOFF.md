@@ -18,6 +18,8 @@
   각각 [ADR-0004](docs/ADR/0004_link-code-key-binding/adr.md),
   [ADR-0009](docs/ADR/0009_idempotent-public-origin-replay/adr.md),
   [ADR-0007](docs/ADR/0007_mysql-instant-storage/adr.md)을 따른다.
+- V7는 정리 표식과 요청 비교값을 추가한다. 종료 링크 자동 정리는 기본 중지하며
+  [보존 실행서](docs/RUNBOOK/link-retention.md)에 따라 기간을 명시해야 활성화된다.
 - V6는 기존 예약을 `legacy` 키로 이관하고 새 예약에 발급 키 ID를 저장한다. 키 교체와
   이전 키 제거 조건은 [ADR-0011](docs/ADR/0011_link-code-key-ring/adr.md)을 따른다.
   실제 운영 키 묶음 배포·전환·복원 훈련은 [실행서](docs/RUNBOOK/link-code-key-rotation.md)에 따라 남아 있다.
@@ -73,8 +75,8 @@
    Pod 비정상, 5xx·429, DB 준비 상태, 저장 대상 계약 위반, PVC 용량과 백업 실패 경보의
    시험 증거를 확보한다.
 8. 멱등 재생 보장 기간과 만료·폐기 링크 보존 기간, 자동 정리 뒤 HTTP 의미, 백업·감사
-   보존과 PVC 경보·증설 기준을 함께 결정한다. 이 결정과 정리 구현 전에는 업무 행을
-   자동 삭제하지 않는다.
+   보존과 PVC 경보·증설 기준을 함께 결정한다. 정리 구현은 준비되어 있으며 이 결정 전에는
+   자동 정리를 활성화하지 않는다.
 9. 플랫폼 백업 정책에 RPO·RTO·주기·보존 기간·담당자·실패 경보·증거 위치를 명시하고,
    DB와 같은 버전의 `BATON_GO_LINK_CODE_SECRET`을 한 복구 단위로 사용한 격리 복원,
    장애 대응과 이미지 되돌리기 훈련을 완료한다.

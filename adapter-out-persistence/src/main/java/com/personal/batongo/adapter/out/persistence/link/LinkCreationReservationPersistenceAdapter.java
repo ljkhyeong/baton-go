@@ -23,11 +23,13 @@ public class LinkCreationReservationPersistenceAdapter
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
     public Optional<Reservation> find(String idempotencyKeyHash) {
-        return repository.findById(idempotencyKeyHash)
+        return repository.findCurrent(idempotencyKeyHash)
                 .map(request -> new Reservation(
                         request.getLinkId(),
                         request.getPublicOrigin(),
                         request.getKeyId(),
+                        request.getPurgedAt(),
+                        request.getRequestHash(),
                         false
                 ));
     }
@@ -49,7 +51,7 @@ public class LinkCreationReservationPersistenceAdapter
                 createdAt
         );
         if (inserted == 1) {
-            return new Reservation(proposedLinkId, publicOrigin, keyId, true);
+            return new Reservation(proposedLinkId, publicOrigin, keyId, null, null, true);
         }
 
         return find(idempotencyKeyHash)

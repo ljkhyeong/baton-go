@@ -4,7 +4,7 @@ import com.personal.batongo.domain.link.HttpOrigin;
 import java.net.URI;
 import java.util.Objects;
 
-/** 링크 생성 응답에 사용한 공개 origin을 멱등 재생 가능한 값으로 보존합니다. */
+/** 재시도에도 같은 URL을 반환하도록 최초 발급에 사용한 origin을 보관한다. */
 public final class PublicLinkOrigin {
 
     private static final int MAXIMUM_STORED_LENGTH = 255;

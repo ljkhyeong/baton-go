@@ -7,6 +7,7 @@ import java.sql.SQLException;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Propagation;
@@ -15,9 +16,11 @@ import org.springframework.transaction.annotation.Transactional;
 @Repository
 public class LinkRetentionPersistenceAdapter implements LinkRetentionPort {
     private final JdbcClient jdbc;
+    private final JdbcTemplate jdbcTemplate;
 
-    public LinkRetentionPersistenceAdapter(JdbcClient jdbc) {
-        this.jdbc = jdbc;
+    public LinkRetentionPersistenceAdapter(JdbcTemplate jdbcTemplate) {
+        this.jdbc = JdbcClient.create(jdbcTemplate);
+        this.jdbcTemplate = jdbcTemplate;
     }
 
     @Override
@@ -36,16 +39,18 @@ public class LinkRetentionPersistenceAdapter implements LinkRetentionPort {
                         row.getString("target_system"), row.getString("purpose"), row.getString("target_path"),
                         instant(row, "not_before"), instant(row, "expires_at"))))
                 .list();
-        for (Candidate candidate : candidates) {
-            jdbc.sql("""
-                    UPDATE link_creation_requests
-                    SET purged_at = ?, request_hash = ?, public_origin = NULL
-                    WHERE link_id = UUID_TO_BIN(?)
-                    """)
-                    .params(LocalDateTime.ofInstant(purgedAt, ZoneOffset.UTC), candidate.requestHash(), candidate.id())
-                    .update();
-            jdbc.sql("DELETE FROM smart_links WHERE id = UUID_TO_BIN(?)").param(candidate.id()).update();
-        }
+        LocalDateTime storedPurgedAt = LocalDateTime.ofInstant(purgedAt, ZoneOffset.UTC);
+        jdbcTemplate.batchUpdate("""
+                UPDATE link_creation_requests
+                SET purged_at = ?, request_hash = ?, public_origin = NULL
+                WHERE link_id = UUID_TO_BIN(?)
+                """, candidates, batchSize, (statement, candidate) -> {
+            statement.setObject(1, storedPurgedAt);
+            statement.setString(2, candidate.requestHash());
+            statement.setString(3, candidate.id());
+        });
+        jdbcTemplate.batchUpdate("DELETE FROM smart_links WHERE id = UUID_TO_BIN(?)",
+                candidates, batchSize, (statement, candidate) -> statement.setString(1, candidate.id()));
         return candidates.size();
     }
 

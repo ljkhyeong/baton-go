@@ -323,25 +323,15 @@ public class SmartLinkService implements SmartLinkUseCase {
             Instant notBefore,
             Instant expiresAt
     ) {
-        TrustedTarget trustedTarget;
-        try {
-            trustedTarget = TrustedTargetPolicy.requireAllowed(
-                    existing.targetSystem(),
-                    existing.purpose(),
-                    existing.targetPath()
-            );
-        } catch (LinkValidationException exception) {
-            throw new IdempotencyKeyConflictException();
-        }
-        boolean sameRequest = trustedTarget.targetSystem() == requestedTarget.targetSystem()
-                && trustedTarget.targetPath().equals(requestedTarget.targetPath())
-                && trustedTarget.purpose() == requestedTarget.purpose()
+        boolean sameRequest = requestedTarget.targetSystem().name().equals(existing.targetSystem())
+                && requestedTarget.targetPath().equals(existing.targetPath())
+                && requestedTarget.purpose().name().equals(existing.purpose())
                 && Objects.equals(existing.notBefore(), notBefore)
                 && Objects.equals(existing.expiresAt(), expiresAt);
         if (!sameRequest) {
             throw new IdempotencyKeyConflictException();
         }
-        return trustedTarget;
+        return requestedTarget;
     }
 
     private LinkResult toResult(

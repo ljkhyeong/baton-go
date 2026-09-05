@@ -38,6 +38,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
+import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -92,6 +93,7 @@ class LinkRetentionIntegrationTest {
     void purgesInChunksAndPreservesIdempotency() {
         var expiredCommand = command(EXPIRED);
         var expired = create(expiredCommand);
+        create(command(EXPIRED));
         var revokedCommand = command(null);
         var revoked = create(revokedCommand);
         jdbc.update("UPDATE smart_links SET revoked_at = ? WHERE id = UUID_TO_BIN(?)",
@@ -100,7 +102,7 @@ class LinkRetentionIntegrationTest {
 
         assertThat(purge(EXPIRED.minusNanos(1000), 100)).isZero();
         assertThat(purge(EXPIRED, 1)).isEqualTo(1);
-        assertThat(purge(EXPIRED, 1)).isEqualTo(1);
+        assertThat(purge(EXPIRED, 100)).isEqualTo(2);
         assertThat(purge(EXPIRED, 1)).isZero();
         assertThat(links.getLink(active.link().id()).id()).isEqualTo(active.link().id());
         assertThatThrownBy(() -> links.createLink(expiredCommand)).isInstanceOf(LinkPurgedException.class);
@@ -110,8 +112,34 @@ class LinkRetentionIntegrationTest {
         assertThatThrownBy(() -> links.resolveLink(expired.shortUrl().getPath().substring(3)))
                 .isInstanceOf(LinkNotFoundException.class);
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM link_creation_requests WHERE purged_at IS NOT NULL AND public_origin IS NULL",
-                Integer.class)).isEqualTo(2);
+                Integer.class)).isEqualTo(3);
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM smart_links", Integer.class)).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("묶음 삭제 중 실패하면 앞서 삭제한 링크와 모든 예약 변경을 되돌린다")
+    void rollsBackEntireBatchWhenDeleteFails() {
+        create(command(EXPIRED.minusSeconds(1)));
+        var second = create(command(EXPIRED));
+        jdbc.execute("""
+                CREATE TABLE retention_delete_blocker (
+                    link_id BINARY(16) PRIMARY KEY,
+                    FOREIGN KEY (link_id) REFERENCES smart_links(id)
+                )
+                """);
+        try {
+            jdbc.update("INSERT INTO retention_delete_blocker VALUES (UUID_TO_BIN(?))",
+                    second.link().id().toString());
+            assertThatThrownBy(() -> purge(EXPIRED, 100)).isInstanceOf(DataAccessException.class);
+            assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM smart_links", Integer.class)).isEqualTo(2);
+            assertThat(jdbc.queryForObject("""
+                    SELECT COUNT(*) FROM link_creation_requests
+                    WHERE purged_at IS NULL AND request_hash IS NULL AND public_origin IS NOT NULL
+                    """, Integer.class)).isEqualTo(2);
+        } finally {
+            jdbc.execute("DROP TABLE retention_delete_blocker");
+        }
+        assertThat(purge(EXPIRED, 100)).isEqualTo(2);
     }
 
     @Test

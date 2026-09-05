@@ -14,6 +14,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.personal.batongo.application.link.error.InvalidIdempotencyKeyException;
+import com.personal.batongo.application.link.error.IdempotencyKeyConflictException;
 import com.personal.batongo.application.link.error.InvalidRequestException;
 import com.personal.batongo.application.link.error.LinkCodeReplayMismatchException;
 import com.personal.batongo.application.link.error.LinkCreationReplayUnavailableException;
@@ -196,6 +197,20 @@ class SmartLinkServiceTest {
                         LinkCreationReplayUnavailableException.class,
                         exception -> assertThat(exception.linkId()).isEqualTo(LINK_ID)
                 );
+    }
+
+    @Test
+    @DisplayName("재시도는 알 수 없는 저장 대상도 요청 내용 불일치로 거부한다")
+    void rejectsReplayWithUnknownStoredTarget() {
+        Instant expiresAt = NOW.plusSeconds(60);
+        configureReplay(PUBLIC_ORIGIN.serialized(), expiresAt);
+        when(repository.findReplayById(LINK_ID)).thenReturn(Optional.of(new StoredLinkReplay(
+                LINK_ID, "UNKNOWN", BATON_PATH, LinkPurpose.NAVIGATION.name(), CODE_HASH,
+                null, expiresAt, null, NOW
+        )));
+
+        assertThatThrownBy(() -> service.createLink(command(expiresAt)))
+                .isExactlyInstanceOf(IdempotencyKeyConflictException.class);
     }
 
     @Test

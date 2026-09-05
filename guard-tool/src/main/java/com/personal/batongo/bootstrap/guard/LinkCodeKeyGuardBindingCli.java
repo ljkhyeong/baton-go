@@ -16,6 +16,7 @@ import java.sql.SQLException;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.Properties;
+import org.springframework.jdbc.datasource.SingleConnectionDataSource;
 
 /** 기존 데이터베이스 HMAC guard 최초 결합을 위한 one-shot CLI입니다. */
 public final class LinkCodeKeyGuardBindingCli {
@@ -73,22 +74,15 @@ public final class LinkCodeKeyGuardBindingCli {
                     configuration.jdbcUrl(),
                     jdbcProperties
             )) {
-                connection.setAutoCommit(false);
-                try {
-                    BindingResult result = new ExistingDatabaseLinkCodeKeyBinder().bind(
-                            connection,
-                            linkCodePort,
-                            canary
-                    );
-                    connection.commit();
-                    standardOutput.println(result == BindingResult.BOUND
-                            ? "링크 코드 키 guard 결합을 완료했습니다"
-                            : "링크 코드 키 guard가 같은 identity에 이미 결합되어 있습니다");
-                    return 0;
-                } catch (RuntimeException | SQLException exception) {
-                    rollback(connection);
-                    throw exception;
-                }
+                BindingResult result = new ExistingDatabaseLinkCodeKeyBinder().bind(
+                        new SingleConnectionDataSource(connection, true),
+                        linkCodePort,
+                        canary
+                );
+                standardOutput.println(result == BindingResult.BOUND
+                        ? "링크 코드 키 guard 결합을 완료했습니다"
+                        : "링크 코드 키 guard가 같은 identity에 이미 결합되어 있습니다");
+                return 0;
             }
         } catch (RuntimeException | SQLException exception) {
             standardError.println(
@@ -115,14 +109,6 @@ public final class LinkCodeKeyGuardBindingCli {
             return new BufferedReader(new InputStreamReader(System.in)).readLine();
         } catch (IOException exception) {
             return null;
-        }
-    }
-
-    private static void rollback(Connection connection) {
-        try {
-            connection.rollback();
-        } catch (SQLException ignored) {
-            // 실패 응답은 원본 JDBC 세부 정보를 노출하지 않는다.
         }
     }
 

@@ -6,10 +6,10 @@ import com.personal.batongo.application.link.port.out.IssuedLinkCode;
 import com.personal.batongo.application.link.port.out.LinkCodePort;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
-import java.sql.Connection;
-import java.sql.SQLException;
+import javax.sql.DataSource;
 import org.springframework.jdbc.core.simple.JdbcClient;
-import org.springframework.jdbc.datasource.SingleConnectionDataSource;
+import org.springframework.jdbc.support.JdbcTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /** 기존 데이터베이스의 HMAC guard를 검증 후 한 번만 결합하는 JDBC 도구입니다. */
 final class ExistingDatabaseLinkCodeKeyBinder {
@@ -19,36 +19,29 @@ final class ExistingDatabaseLinkCodeKeyBinder {
             "기존 데이터베이스의 링크 코드 키 결합 검증에 실패했습니다";
 
     BindingResult bind(
-            Connection connection,
+            DataSource dataSource,
             LinkCodePort linkCodePort,
             CreationIdempotencyKey canaryIdempotencyKey
     ) {
         try {
-            requireTransactionalConnection(connection);
-            JdbcClient jdbcClient = JdbcClient.create(
-                    new SingleConnectionDataSource(connection, true)
-            );
-            LinkCodeDerivationIdentity identity = linkCodePort.derivationIdentity();
-            GuardState guardState = lockGuard(jdbcClient);
-            verifyCanary(jdbcClient, linkCodePort, canaryIdempotencyKey);
+            JdbcClient jdbcClient = JdbcClient.create(dataSource);
+            return new TransactionTemplate(new JdbcTransactionManager(dataSource)).execute(status -> {
+                LinkCodeDerivationIdentity identity = linkCodePort.derivationIdentity();
+                GuardState guardState = lockGuard(jdbcClient);
+                verifyCanary(jdbcClient, linkCodePort, canaryIdempotencyKey);
 
-            if (guardState.isBound()) {
-                requireMatchingIdentity(guardState, identity);
-                return BindingResult.ALREADY_BOUND;
-            }
-            if (!guardState.isUnbound()) {
-                throw unsafeState();
-            }
+                if (guardState.isBound()) {
+                    requireMatchingIdentity(guardState, identity);
+                    return BindingResult.ALREADY_BOUND;
+                }
+                if (!guardState.isUnbound()) {
+                    throw unsafeState();
+                }
 
-            bindGuard(jdbcClient, identity);
-            return BindingResult.BOUND;
-        } catch (SQLException | RuntimeException exception) {
-            throw unsafeState();
-        }
-    }
-
-    private void requireTransactionalConnection(Connection connection) throws SQLException {
-        if (connection == null || connection.getAutoCommit()) {
+                bindGuard(jdbcClient, identity);
+                return BindingResult.BOUND;
+            });
+        } catch (RuntimeException exception) {
             throw unsafeState();
         }
     }

@@ -18,7 +18,6 @@ import com.personal.batongo.application.link.port.out.LinkCodePort;
 import com.personal.batongo.bootstrap.guard.ExistingDatabaseLinkCodeKeyBinder.BindingResult;
 import com.personal.batongo.domain.link.LinkPurpose;
 import com.personal.batongo.domain.link.TargetSystem;
-import java.sql.Connection;
 import java.util.Locale;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
@@ -356,22 +355,12 @@ class LinkCodeKeyGuardIntegrationTest {
         return identity;
     }
 
-    private BindingResult bindExistingDatabase(String canaryIdempotencyKey) throws Exception {
-        try (Connection connection = dataSource.getConnection()) {
-            connection.setAutoCommit(false);
-            try {
-                BindingResult result = new ExistingDatabaseLinkCodeKeyBinder().bind(
-                        connection,
-                        linkCodePort,
-                        CreationIdempotencyKey.parseRequest(canaryIdempotencyKey)
-                );
-                connection.commit();
-                return result;
-            } catch (RuntimeException exception) {
-                connection.rollback();
-                throw exception;
-            }
-        }
+    private BindingResult bindExistingDatabase(String canaryIdempotencyKey) {
+        return new ExistingDatabaseLinkCodeKeyBinder().bind(
+                dataSource,
+                linkCodePort,
+                CreationIdempotencyKey.parseRequest(canaryIdempotencyKey)
+        );
     }
 
     private void insertLegacyCreation(String canonicalCanary) {

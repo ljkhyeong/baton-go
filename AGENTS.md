@@ -6,7 +6,8 @@
   결과를 바꿀 필수 정보가 없을 때 질문한다. 지시 때문에 중단하면 해당 파일과 근거를 설명한다.
 - 응답·문서·주석·PR은 간결한 한국어로 작성한다. API 식별자·명령·표준 용어는 유지하고,
   변경을 마치면 `Fix`·`Refactor`·`Docs` 등 종류별로 한글 커밋한다.
-- 시작할 때 `README.md`와 `HANDOFF.md`를 확인한다. 이미 읽은 내용은 관련 부분만 다시 확인한다.
+- 시작할 때 `README.md`와 `HANDOFF.md`를 확인한다. 같은 세션에서 읽은 파일은 변경 여부와 관련 부분만
+  확인한다. 출력이 잘리면 필요한 줄만 다시 읽고 전체 검색·출력을 반복하지 않는다.
 - 제품 동작은 [제품 명세](docs/PRD/0001_product-baseline/spec.md), HTTP 동작은
   [API 계약](docs/PRD/0002_api-contract/spec.md)을 따른다. 변경에 필요한 문서만 읽고,
   제품 요구는 PRD, 장기 설계는 ADR, 운영 절차는 RUNBOOK, 현재 인계 상태는 HANDOFF에 기록한다.
@@ -47,12 +48,5 @@
   같은 입력 조합의 중복 테스트, 라이브러리 자체 테스트, 테스트 전용 운영 API는 만들지 않는다.
 - 필요한 검증이 통과하면 끝낸다. 새 변경·실패·미해결 문제가 있을 때만 검증을 확대하거나 반복한다.
   문서·주석만 바꾸면 내용과 참조를 확인한다. 테스트의 `@DisplayName`은 한국어 문장으로 작성한다.
-
-| 변경 | 검증 명령 |
-| --- | --- |
-| 도메인 정책 | `./gradlew :domain:test` |
-| 애플리케이션 흐름 | `./gradlew :application:test` |
-| HTTP 계약 | `./gradlew :adapter-in-web:test` |
-| Spring·Flyway·MySQL | `./gradlew --no-daemon :bootstrap:mysqlTest` |
-| Redis 요청 제한 | `./gradlew --no-daemon :bootstrap:redisTest` |
-| 전체 단위 테스트가 필요한 변경 | `./gradlew test` |
+- 변경별 명령과 결과 재사용은 [개발 검증 절차](docs/RUNBOOK/development-verification.md)를 따른다.
+  일반 테스트 성공을 MySQL·Redis 통합 검증 성공으로 보고하지 않는다.

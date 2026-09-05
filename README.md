@@ -200,6 +200,9 @@ DB 대기 시간은 Hikari·Connector/J 설정으로 제한하며, 마이그레�
 
 ## 검증
 
+개발 중에는 [개발 검증 절차](docs/RUNBOOK/development-verification.md)에 따라 변경한 범위부터 확인한다.
+아래 명령은 전체 빌드가 필요할 때 사용한다.
+
 일반 빌드와 단위 테스트는 로컬 MySQL이나 Docker를 자동으로 요구하지 않는다.
 
 ```bash

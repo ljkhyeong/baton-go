@@ -17,6 +17,12 @@ public final class InvalidRequestException extends RuntimeException {
         return new InvalidRequestException("대상 계약 inventory 요청이 올바르지 않습니다");
     }
 
+    public static InvalidRequestException linkSearch() {
+        return new InvalidRequestException(
+                "limit은 1..500이어야 하며 createdBefore는 createdFrom보다 뒤여야 합니다"
+        );
+    }
+
     public static InvalidRequestException targetContractRemediation() {
         return new InvalidRequestException("대상 계약 remediation 요청이 올바르지 않습니다");
     }

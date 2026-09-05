@@ -29,6 +29,7 @@ import com.personal.batongo.adapter.in.web.WebMvcConfiguration;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.CreatedLinkResult;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.LinkResult;
+import com.personal.batongo.application.link.port.in.SmartLinkUseCase.LinkSearchResult;
 import com.personal.batongo.application.link.port.in.TargetContractOperationsUseCase;
 import com.personal.batongo.domain.link.LinkPurpose;
 import com.personal.batongo.domain.link.TargetSystem;
@@ -347,6 +348,21 @@ class ManagementAuthenticationHttpContractTest {
 
         verify(useCase).getLink(linkId);
         verifyNoInteractions(operationsUseCase);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"GET", "HEAD"})
+    @DisplayName("관리 목록의 GET과 HEAD는 조회 scope로 접근할 수 있다")
+    void acceptsReadScopeForLinkSearch(String method) throws Exception {
+        when(jwtDecoder.decode(MANAGEMENT_JWT)).thenReturn(jwt("baton-go.links.read"));
+        when(useCase.searchLinks(any())).thenReturn(new LinkSearchResult(
+                List.of(link()), null, false, link().evaluatedAt()
+        ));
+
+        mockMvc.perform(request(HttpMethod.valueOf(method), "/api/v1/links")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + MANAGEMENT_JWT))
+                .andExpect(status().isOk());
+        verify(useCase).searchLinks(any());
     }
 
     @Test

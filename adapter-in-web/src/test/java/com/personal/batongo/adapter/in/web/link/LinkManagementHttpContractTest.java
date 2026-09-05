@@ -32,6 +32,9 @@ import com.personal.batongo.application.link.port.in.SmartLinkUseCase;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.CreateLinkCommand;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.CreatedLinkResult;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.LinkResult;
+import com.personal.batongo.application.link.port.in.SmartLinkUseCase.LinkSearchQuery;
+import com.personal.batongo.application.link.port.in.SmartLinkUseCase.LinkSearchResult;
+import com.personal.batongo.domain.link.LinkAvailabilityPolicy.Status;
 import com.personal.batongo.domain.link.LinkPurpose;
 import com.personal.batongo.domain.link.LinkValidationException;
 import com.personal.batongo.domain.link.TargetSystem;
@@ -101,6 +104,60 @@ class LinkManagementHttpContractTest {
                 .addFilters(new RequestIdFilter())
                 .apply(documentationConfiguration(restDocumentation))
                 .build();
+    }
+
+    @Test
+    @DisplayName("관리 검색은 조회 조건을 전달하고 공개 코드 없는 목록과 다음 커서를 반환한다")
+    void searchesLinksContract() throws Exception {
+        var link = linkResult();
+        UUID cursor = UUID.fromString("00000000-0000-4000-8000-000000000000");
+        when(useCase.searchLinks(any())).thenReturn(new LinkSearchResult(
+                List.of(link), LINK_ID, true, CREATED_AT
+        ));
+
+        mockMvc.perform(get("/api/v1/links")
+                        .param("afterLinkId", cursor.toString())
+                        .param("limit", "50")
+                        .param("targetSystem", "BATON")
+                        .param("createdFrom", "2026-07-29T19:00:00+09:00")
+                        .param("createdBefore", "2026-07-30T10:00:00Z")
+                        .param("status", "ACTIVE"))
+                .andExpect(status().isOk())
+                .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
+                .andExpect(jsonPath("$.items[0].id").value(LINK_ID.toString()))
+                .andExpect(jsonPath("$.items[0].status").value("ACTIVE"))
+                .andExpect(jsonPath("$.items[0].shortUrl").doesNotExist())
+                .andExpect(jsonPath("$.items[0].codeHash").doesNotExist())
+                .andExpect(jsonPath("$.nextAfterLinkId").value(LINK_ID.toString()))
+                .andExpect(jsonPath("$.hasMore").value(true))
+                .andExpect(jsonPath("$.evaluatedAt").value(CREATED_AT.toString()))
+                .andDo(document("links-search"));
+
+        verify(useCase).searchLinks(new LinkSearchQuery(
+                cursor, 50, TargetSystem.BATON, CREATED_AT, CREATED_AT.plusSeconds(86400), Status.ACTIVE
+        ));
+    }
+
+    @Test
+    @DisplayName("관리 검색 조건을 생략하면 기본 검사 한도와 필터 없는 조회를 사용한다")
+    void searchesWithDefaultParameters() throws Exception {
+        when(useCase.searchLinks(any())).thenReturn(new LinkSearchResult(List.of(), null, false, CREATED_AT));
+
+        mockMvc.perform(get("/api/v1/links"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items").isEmpty())
+                .andExpect(jsonPath("$.hasMore").value(false));
+
+        verify(useCase).searchLinks(new LinkSearchQuery(null, 100, null, null, null, null));
+    }
+
+    @Test
+    @DisplayName("관리 검색의 잘못된 시각 표현은 서비스 호출 전에 요청 오류로 반환한다")
+    void rejectsMalformedSearchTime() throws Exception {
+        mockMvc.perform(get("/api/v1/links").param("createdFrom", "not-a-time"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+        verifyNoInteractions(useCase);
     }
 
     @Test

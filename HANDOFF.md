@@ -7,6 +7,8 @@
   [API 계약](docs/PRD/0002_api-contract/spec.md)을 정본으로 삼는다.
 - 관리 조회·폐기는 공개 해석과 같은 시간·폐기 정책의 이용 상태와 판정 시각을 반환한다.
   생성·재생 응답과 저장 스키마는 유지하며 BATON·ROUND 접근 권한을 나타내지 않는다.
+- 일반 관리 목록은 기존 읽기 scope로 대상 시스템·생성 기간·이용 상태를 검색한다.
+  검사량을 제한하고 필터로 빈 페이지가 되어도 다음 커서로 진행하며, 비허용 저장 대상은 제외한다.
 - 공개 링크의 HTML 안내는 GO의 요청 제한·서버 오류도 포함한다. JSON 클라이언트와 관리
   인증 오류는 기존 형식을 유지하며, 요청 제한 화면의 대기 시간은 `Retry-After`와 같다.
 - BATON·ROUND 위치 식별자와 최종 권한 경계는
@@ -22,7 +24,7 @@
   클러스터 검증이나 공개 운영 승인 증거가 아니다. MySQL 워크로드는 비루트 UID/GID와 Linux
   capability 제거를 선언하지만, Namespace의 `restricted` 강제 승격 전에는 고정 이미지로 신규·
   복원·현재 PVC의 기동과 TLS·초기화·마이그레이션을 실제 클러스터에서 검증해야 한다.
-- 공개·관리 응답 지연과 전체·관리 API 5xx·관리 JWT 서비스 장애·429·저장 대상 계약 위반의 [Prometheus 경보 규칙](deploy/prometheus/baton-go-alerts.yml)과
+- 공개·관리 응답 지연과 전체·관리 API 5xx·관리 JWT 서비스 장애·관리 링크 복구 오류·429·저장 대상 계약 위반의 [Prometheus 경보 규칙](deploy/prometheus/baton-go-alerts.yml)과
   `promtool` 검증은 준비되어 있다. 실제 수집기·알림 경로 연결과 인프라·백업 경보는
   [경보 실행서](docs/RUNBOOK/prometheus-alerts.md)에 따라 운영 환경에서 검증해야 한다.
 - CI는 검사한 커밋·이미지 구성 다이제스트·아카이브 체크섬과 SBOM·취약점 보고서를

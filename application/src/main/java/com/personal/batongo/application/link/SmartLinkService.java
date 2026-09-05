@@ -1,6 +1,7 @@
 package com.personal.batongo.application.link;
 
 import com.personal.batongo.application.link.error.IdempotencyKeyConflictException;
+import com.personal.batongo.application.link.error.InvalidRequestException;
 import com.personal.batongo.application.link.error.LinkCodeReplayMismatchException;
 import com.personal.batongo.application.link.error.LinkCreationReplayUnavailableException;
 import com.personal.batongo.application.link.error.LinkNotFoundException;
@@ -17,13 +18,16 @@ import com.personal.batongo.application.link.port.out.SmartLinkRepository.Stored
 import com.personal.batongo.application.link.port.out.SmartLinkRepository.StoredLinkSnapshot;
 import com.personal.batongo.application.link.port.out.TargetUrlPort;
 import com.personal.batongo.domain.link.LinkAvailabilityPolicy;
+import com.personal.batongo.domain.link.LinkPurpose;
 import com.personal.batongo.domain.link.LinkRevocationPolicy;
 import com.personal.batongo.domain.link.LinkValidationException;
 import com.personal.batongo.domain.link.SmartLink;
+import com.personal.batongo.domain.link.TargetSystem;
 import com.personal.batongo.domain.link.TrustedTarget;
 import com.personal.batongo.domain.link.TrustedTargetPolicy;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -206,6 +210,48 @@ public class SmartLinkService implements SmartLinkUseCase {
                 .orElseThrow(LinkNotFoundException::new);
         TrustedTarget trustedTarget = requireManagedTrustedTarget(storedLink);
         return toResult(storedLink, trustedTarget, storedLink.revokedAt());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public LinkSearchResult searchLinks(LinkSearchQuery query) {
+        if (query.limit() < 1 || query.limit() > 500
+                || (query.createdFrom() != null && query.createdBefore() != null
+                && !query.createdBefore().isAfter(query.createdFrom()))) {
+            throw InvalidRequestException.linkSearch();
+        }
+        List<StoredLinkSnapshot> scanned = repository.scanStoredAfter(
+                query.afterLinkId(), query.limit() + 1
+        );
+        Instant evaluatedAt = clock.instant();
+        boolean hasMore = scanned.size() > query.limit();
+        List<LinkResult> items = scanned.stream()
+                .limit(query.limit())
+                .filter(stored -> query.targetSystem() == null
+                        || query.targetSystem().name().equals(stored.targetSystem()))
+                .filter(stored -> query.createdFrom() == null
+                        || !stored.createdAt().isBefore(query.createdFrom()))
+                .filter(stored -> query.createdBefore() == null
+                        || stored.createdAt().isBefore(query.createdBefore()))
+                .filter(stored -> TrustedTargetPolicy.isAllowed(
+                        stored.targetSystem(), stored.purpose(), stored.targetPath()
+                ))
+                .map(stored -> new LinkResult(
+                        stored.id(),
+                        TargetSystem.valueOf(stored.targetSystem()),
+                        stored.targetPath(),
+                        LinkPurpose.valueOf(stored.purpose()),
+                        stored.notBefore(),
+                        stored.expiresAt(),
+                        stored.revokedAt(),
+                        stored.createdAt(),
+                        evaluatedAt
+                ))
+                .filter(link -> query.status() == null || link.status() == query.status())
+                .toList();
+        // 필터 결과가 비어도 검사한 마지막 행 다음으로 진행한다.
+        UUID nextAfterLinkId = hasMore ? scanned.get(query.limit() - 1).id() : null;
+        return new LinkSearchResult(items, nextAfterLinkId, hasMore, evaluatedAt);
     }
 
     @Override

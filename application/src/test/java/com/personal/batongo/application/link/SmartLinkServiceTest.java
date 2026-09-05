@@ -20,6 +20,8 @@ import com.personal.batongo.application.link.error.LinkCreationReplayUnavailable
 import com.personal.batongo.application.link.error.LinkNotFoundException;
 import com.personal.batongo.application.link.error.StoredTargetPolicyViolationException;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.CreateLinkCommand;
+import com.personal.batongo.application.link.port.in.SmartLinkUseCase.LinkResult;
+import com.personal.batongo.application.link.port.in.SmartLinkUseCase.LinkSearchQuery;
 import com.personal.batongo.application.link.port.out.IssuedLinkCode;
 import com.personal.batongo.application.link.port.out.LinkCodeKeyGuardPort;
 import com.personal.batongo.application.link.port.out.LinkCodePort;
@@ -38,6 +40,7 @@ import java.net.URI;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -350,6 +353,94 @@ class SmartLinkServiceTest {
         verify(repository).findStoredById(LINK_ID);
         verify(repository).findStoredByIdForUpdate(LINK_ID);
         verify(repository, never()).revokeStored(any(), anyLong(), any());
+    }
+
+    @Test
+    @DisplayName("관리 검색은 대상 생성 기간과 이용 상태를 함께 적용하고 같은 시각으로 판정한다")
+    void searchesLinksWithCombinedFilters() {
+        Clock clock = mock(Clock.class);
+        when(clock.instant()).thenReturn(NOW, NOW.plusSeconds(1));
+        Instant from = NOW.minusSeconds(60);
+        var first = searchSnapshot(1, "BATON", BATON_PATH, from, null);
+        var second = searchSnapshot(2, "BATON", BATON_PATH, NOW.minusSeconds(1), null);
+        when(repository.scanStoredAfter(null, 101)).thenReturn(List.of(
+                first,
+                second,
+                searchSnapshot(3, "BATON", BATON_PATH, from.minusNanos(1), null),
+                searchSnapshot(4, "BATON", BATON_PATH, NOW, null),
+                searchSnapshot(5, "ROUND", ROUND_PATH, from, null),
+                searchSnapshot(6, "BATON", BATON_PATH, from, NOW)
+        ));
+
+        var result = service(linkCodePort, publicLinkOriginPort, clock).searchLinks(new LinkSearchQuery(
+                null, 100, TargetSystem.BATON, from, NOW, Status.ACTIVE
+        ));
+
+        assertThat(result.items()).extracting(LinkResult::id).containsExactly(first.id(), second.id());
+        assertThat(result.items()).allSatisfy(link -> {
+            assertThat(link.status()).isEqualTo(Status.ACTIVE);
+            assertThat(link.evaluatedAt()).isEqualTo(result.evaluatedAt());
+        });
+        assertThat(result.evaluatedAt()).isEqualTo(NOW);
+        assertThat(result.hasMore()).isFalse();
+        assertThat(result.nextAfterLinkId()).isNull();
+        verify(repository, never()).save(any());
+        verify(repository, never()).revokeStored(any(), anyLong(), any());
+    }
+
+    @Test
+    @DisplayName("관리 검색은 비허용 저장 대상을 제외한 빈 페이지에서도 다음 커서로 진행한다")
+    void advancesSearchCursorAcrossHiddenTargets() {
+        var invalidPath = searchSnapshot(1, "BATON", "/teams/legacy", NOW, null);
+        var unknownSystem = searchSnapshot(2, "UNKNOWN", "/secret-target", NOW, null);
+        var valid = searchSnapshot(3, "BATON", BATON_PATH, NOW, null);
+        when(repository.scanStoredAfter(null, 3)).thenReturn(List.of(invalidPath, unknownSystem, valid));
+        when(repository.scanStoredAfter(unknownSystem.id(), 3)).thenReturn(List.of(valid));
+
+        var first = service.searchLinks(new LinkSearchQuery(null, 2, null, null, null, null));
+        var next = service.searchLinks(new LinkSearchQuery(
+                first.nextAfterLinkId(), 2, null, null, null, null
+        ));
+
+        assertThat(first.items()).isEmpty();
+        assertThat(first.hasMore()).isTrue();
+        assertThat(first.nextAfterLinkId()).isEqualTo(unknownSystem.id());
+        assertThat(next.items()).extracting(LinkResult::id).containsExactly(valid.id());
+        assertThat(next.hasMore()).isFalse();
+        assertThat(next.nextAfterLinkId()).isNull();
+    }
+
+    @Test
+    @DisplayName("관리 검색은 잘못된 검사 한도와 생성 기간을 DB 조회 전에 거부한다")
+    void rejectsInvalidSearchBeforeDatabaseRead() {
+        List<LinkSearchQuery> queries = List.of(
+                new LinkSearchQuery(null, 0, null, null, null, null),
+                new LinkSearchQuery(null, 501, null, null, null, null),
+                new LinkSearchQuery(null, 100, null, NOW, NOW, null),
+                new LinkSearchQuery(null, 100, null, NOW, NOW.minusSeconds(1), null)
+        );
+        for (LinkSearchQuery query : queries) {
+            assertThatThrownBy(() -> service.searchLinks(query))
+                    .isExactlyInstanceOf(InvalidRequestException.class);
+        }
+        verifyNoInteractions(repository);
+    }
+
+    private StoredLinkSnapshot searchSnapshot(
+            int id, String targetSystem, String targetPath, Instant createdAt, Instant expiresAt
+    ) {
+        return new StoredLinkSnapshot(
+                new UUID(0, id),
+                targetSystem,
+                targetPath,
+                "ROUND".equals(targetSystem) ? "MEETING_ENTRY" : "NAVIGATION",
+                null,
+                expiresAt,
+                null,
+                createdAt,
+                0,
+                true
+        );
     }
 
     private void configureReplay(String publicOrigin, Instant expiresAt) {

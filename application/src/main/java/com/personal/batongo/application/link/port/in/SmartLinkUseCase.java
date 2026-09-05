@@ -6,6 +6,7 @@ import com.personal.batongo.domain.link.LinkPurpose;
 import com.personal.batongo.domain.link.TargetSystem;
 import java.net.URI;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 public interface SmartLinkUseCase {
@@ -14,9 +15,32 @@ public interface SmartLinkUseCase {
 
     LinkResult getLink(UUID linkId);
 
+    LinkSearchResult searchLinks(LinkSearchQuery query);
+
     ResolvedLinkResult resolveLink(String rawCode);
 
     LinkResult revokeLink(UUID linkId);
+
+    record LinkSearchQuery(
+            UUID afterLinkId,
+            int limit,
+            TargetSystem targetSystem,
+            Instant createdFrom,
+            Instant createdBefore,
+            LinkAvailabilityPolicy.Status status
+    ) {
+    }
+
+    record LinkSearchResult(
+            List<LinkResult> items,
+            UUID nextAfterLinkId,
+            boolean hasMore,
+            Instant evaluatedAt
+    ) {
+        public LinkSearchResult {
+            items = List.copyOf(items);
+        }
+    }
 
     record CreateLinkCommand(
             CreationIdempotencyKey idempotencyKey,

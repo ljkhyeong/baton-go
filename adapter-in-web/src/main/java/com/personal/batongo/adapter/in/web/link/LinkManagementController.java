@@ -6,10 +6,15 @@ import com.personal.batongo.application.link.port.in.SmartLinkUseCase;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.CreateLinkCommand;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.CreatedLinkResult;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.LinkResult;
+import com.personal.batongo.application.link.port.in.SmartLinkUseCase.LinkSearchQuery;
+import com.personal.batongo.domain.link.LinkAvailabilityPolicy.Status;
+import com.personal.batongo.domain.link.TargetSystem;
 import jakarta.validation.Valid;
 import java.net.URI;
 import java.security.Principal;
+import java.time.Instant;
 import java.util.UUID;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -20,6 +25,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -65,6 +71,22 @@ public class LinkManagementController {
                 .location(location)
                 .header(IDEMPOTENCY_REPLAYED_HEADER, Boolean.toString(result.replayed()))
                 .body(CreateLinkResponse.from(result));
+    }
+
+    @GetMapping
+    public ResponseEntity<LinkSearchResponse> searchLinks(
+            @RequestParam(value = "afterLinkId", required = false) UUID afterLinkId,
+            @RequestParam(value = "limit", defaultValue = "100") int limit,
+            @RequestParam(value = "targetSystem", required = false) TargetSystem targetSystem,
+            @RequestParam(value = "createdFrom", required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant createdFrom,
+            @RequestParam(value = "createdBefore", required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant createdBefore,
+            @RequestParam(value = "status", required = false) Status status
+    ) {
+        return ResponseEntity.ok(LinkSearchResponse.from(smartLinkUseCase.searchLinks(
+                new LinkSearchQuery(afterLinkId, limit, targetSystem, createdFrom, createdBefore, status)
+        )));
     }
 
     @GetMapping("/{linkId}")

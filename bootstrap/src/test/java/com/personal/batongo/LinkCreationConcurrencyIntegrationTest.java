@@ -180,7 +180,7 @@ class LinkCreationConcurrencyIntegrationTest {
     }
 
     @Test
-    @DisplayName("서로 다른 공개 origin의 replica가 경쟁해도 저장된 승자 short URL로 수렴한다")
+    @DisplayName("공개 origin이 다른 서버에서 동시에 생성해도 먼저 저장된 URL을 반환한다")
     void convergesOnStoredPublicOriginAcrossConcurrentReplicas() throws Exception {
         String idempotencyKey = "f14af1a6-9d56-4a41-8f47-c05f7c8898a1";
         CreateLinkCommand command = new CreateLinkCommand(

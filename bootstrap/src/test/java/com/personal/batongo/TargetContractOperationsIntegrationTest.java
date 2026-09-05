@@ -227,7 +227,7 @@ class TargetContractOperationsIntegrationTest {
     }
 
     @Test
-    @DisplayName("동시 remediation은 MySQL row lock으로 최초 폐기와 한 번의 version 증가에 수렴한다")
+    @DisplayName("비허용 링크를 동시에 폐기해도 폐기 시각을 유지하고 버전은 한 번만 증가한다")
     void serializesConcurrentRemediation() throws Exception {
         insertStoredLink(
                 UNKNOWN_ENUM_LINK_ID,

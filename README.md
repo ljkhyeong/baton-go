@@ -7,6 +7,7 @@ BATON GO는 단순 URL 축약기가 아니라 BATON과 ROUND를 위한 정책형
 ## 첫 구현 범위
 
 - 정규 UUID 멱등성 키와 HMAC 기반 128비트 공개 코드 발급
+- 발급 키 버전 저장과 키 교체 후 기존 생성 요청의 동일 URL 재생
 - 원문 코드 대신 SHA-256 해시 저장
 - `BATON`, `ROUND`의 v1 정확한 대상 조합과 정규 위치 식별자만 생성·해석
 - 시작 시각, 만료 시각과 즉시 폐기
@@ -108,9 +109,11 @@ JWK 조회에는 별도의 연결·읽기 제한을 적용한다. 기본값과 �
 
 신규 빈 DB는 현재 파생 버전과 HMAC 키 지문에 자동 결합하지만, 기존 데이터가 있는
 미결합 DB는 안전하게 실패한다. DB 백업과 해당 시점의
-`BATON_GO_LINK_CODE_SECRET` 버전을 하나의 복구 단위로 관리하고, 키 묶음 없이
-비밀값을 단독 회전하지 않는다. 정책 정본은
-[ADR-0004](docs/ADR/0004_link-code-key-binding/adr.md)이다.
+키 묶음을 하나의 복구 단위로 관리한다. 기존 단일 비밀값은 `legacy` 키로 호환하며,
+새 발급 키를 추가해도 이전 생성 요청은 저장된 키 버전으로 재생한다. 키 ID의 비밀값을
+덮어쓰거나 아직 재생에 필요한 키를 제거하면 시작을 거부한다. 정책 정본은
+[ADR-0011](docs/ADR/0011_link-code-key-ring/adr.md), 설정·교체 순서는
+[키 교체 실행서](docs/RUNBOOK/link-code-key-rotation.md)다.
 
 기존 DB의 최초 결합은 모든 쓰기를 중지하고 분리된 `guard-tool`로 카나리를
 검증한 뒤에만 수행한다. 직접 SQL이나 임의 비밀값 강제 결합 대신
@@ -270,6 +273,7 @@ curl -i http://localhost:8080/api/v1/links \
 - [비공개 Kubernetes DB 구성](docs/ADR/0008_private-kubernetes-database-topology/adr.md)
 - [멱등 생성의 공개 출처 보존](docs/ADR/0009_idempotent-public-origin-replay/adr.md)
 - [관리 API의 발급자 서명 JWT 인증](docs/ADR/0010_management-jwt-authentication/adr.md)
+- [링크 코드 키 묶음과 교체](docs/ADR/0011_link-code-key-ring/adr.md)
 
 ### 운영 절차
 
@@ -277,5 +281,6 @@ curl -i http://localhost:8080/api/v1/links \
 - [Prometheus 경보 연결과 검증](docs/RUNBOOK/prometheus-alerts.md)
 - [이미지 SBOM·취약점 보고서 확인](docs/RUNBOOK/image-security-reports.md)
 - [관리 작업 이력 조회와 보존](docs/RUNBOOK/management-operation-history.md)
+- [HMAC 키 교체](docs/RUNBOOK/link-code-key-rotation.md)
 - [기존 DB HMAC 보호 장치 최초 결합 실행서](docs/RUNBOOK/link-code-key-guard-binding.md)
 - [대상 계약 v1 정리 실행서](docs/RUNBOOK/target-contract-v1-remediation.md)

@@ -12,12 +12,14 @@ public interface LinkCreationReservationPort {
             String idempotencyKeyHash,
             UUID proposedLinkId,
             String publicOrigin,
+            String keyId,
             Instant createdAt
     );
 
     record Reservation(
             UUID linkId,
             String publicOrigin,
+            String keyId,
             boolean owner
     ) {
 

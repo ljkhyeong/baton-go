@@ -1,10 +1,10 @@
 package com.personal.batongo.application.link.port.out;
 
-import com.personal.batongo.application.link.LinkCodeDerivationIdentity;
+import com.personal.batongo.application.link.LinkCodeKeyRingIdentity;
 
 public interface LinkCodeKeyGuardPort {
 
-    void verifyOrBind(LinkCodeDerivationIdentity identity);
+    void verifyOrBind(LinkCodeKeyRingIdentity identity);
 
-    void verifyBound(LinkCodeDerivationIdentity identity);
+    void verifyBound(LinkCodeKeyRingIdentity identity);
 }

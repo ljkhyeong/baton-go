@@ -21,10 +21,10 @@ public class LinkCodeKeyGuard {
 
     @Transactional
     public void verifyOrBind() {
-        guardPort.verifyOrBind(linkCodePort.derivationIdentity());
+        guardPort.verifyOrBind(linkCodePort.keyRingIdentity());
     }
 
     void verifyBound() {
-        guardPort.verifyBound(linkCodePort.derivationIdentity());
+        guardPort.verifyBound(linkCodePort.keyRingIdentity());
     }
 }

@@ -1,6 +1,8 @@
 package com.personal.batongo.adapter.out.external.link;
 
 import com.personal.batongo.application.link.LinkCodeDerivationIdentity;
+import com.personal.batongo.application.link.LinkCodeKeyRingIdentity;
+import com.personal.batongo.application.link.error.LinkCodeReplayMismatchException;
 import com.personal.batongo.application.link.error.LinkNotFoundException;
 import com.personal.batongo.application.link.port.out.IssuedLinkCode;
 import com.personal.batongo.application.link.port.out.LinkCodePort;
@@ -11,6 +13,8 @@ import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.HexFormat;
+import java.util.Map;
+import java.util.stream.Collectors;
 import java.util.regex.Pattern;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
@@ -29,25 +33,49 @@ public class SecureLinkCodeAdapter implements LinkCodePort {
             "baton-go-link-code-key-fingerprint:v1\u0000"
                     .getBytes(StandardCharsets.US_ASCII);
 
-    private final byte[] secret;
-    private final LinkCodeDerivationIdentity derivationIdentity;
+    private final Map<String, byte[]> secrets;
+    private final LinkCodeKeyRingIdentity keyRingIdentity;
 
     public SecureLinkCodeAdapter(LinkCodeProperties properties) {
-        this.secret = properties.secret().getBytes(StandardCharsets.UTF_8);
-        this.derivationIdentity = new LinkCodeDerivationIdentity(
-                DERIVATION_VERSION,
-                HexFormat.of().formatHex(hmac(FINGERPRINT_CONTEXT))
+        this.secrets = properties.keys().entrySet().stream().collect(Collectors.toUnmodifiableMap(
+                Map.Entry::getKey,
+                entry -> entry.getValue().getBytes(StandardCharsets.UTF_8)
+        ));
+        this.keyRingIdentity = new LinkCodeKeyRingIdentity(
+                properties.activeKeyId(),
+                secrets.entrySet().stream().collect(Collectors.toUnmodifiableMap(
+                        Map.Entry::getKey,
+                        entry -> new LinkCodeDerivationIdentity(
+                                DERIVATION_VERSION,
+                                HexFormat.of().formatHex(hmac(entry.getValue(), FINGERPRINT_CONTEXT))
+                        )
+                ))
         );
     }
 
     @Override
     public LinkCodeDerivationIdentity derivationIdentity() {
-        return derivationIdentity;
+        return keyRingIdentity.keys().get(keyRingIdentity.activeKeyId());
+    }
+
+    @Override
+    public LinkCodeKeyRingIdentity keyRingIdentity() {
+        return keyRingIdentity;
     }
 
     @Override
     public IssuedLinkCode issue(String idempotencyKey) {
+        return issue(idempotencyKey, keyRingIdentity.activeKeyId());
+    }
+
+    @Override
+    public IssuedLinkCode issue(String idempotencyKey, String keyId) {
+        byte[] secret = secrets.get(keyId);
+        if (secret == null) {
+            throw new LinkCodeReplayMismatchException();
+        }
         byte[] digest = hmac(
+                secret,
                 DERIVATION_CONTEXT,
                 idempotencyKey.getBytes(StandardCharsets.US_ASCII)
         );
@@ -70,7 +98,7 @@ public class SecureLinkCodeAdapter implements LinkCodePort {
         return sha256(idempotencyKey);
     }
 
-    private byte[] hmac(byte[]... parts) {
+    private byte[] hmac(byte[] secret, byte[]... parts) {
         try {
             Mac mac = Mac.getInstance("HmacSHA256");
             mac.init(new SecretKeySpec(secret, "HmacSHA256"));

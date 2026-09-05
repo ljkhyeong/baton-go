@@ -15,11 +15,13 @@ interface SpringDataLinkCreationRequestRepository
                 idempotency_key_hash,
                 link_id,
                 public_origin,
+                key_id,
                 created_at
             ) VALUES (
                 :idempotencyKeyHash,
                 UUID_TO_BIN(:linkId),
                 :publicOrigin,
+                :keyId,
                 :createdAt
             )
             """, nativeQuery = true)
@@ -27,6 +29,7 @@ interface SpringDataLinkCreationRequestRepository
             @Param("idempotencyKeyHash") String idempotencyKeyHash,
             @Param("linkId") String linkId,
             @Param("publicOrigin") String publicOrigin,
+            @Param("keyId") String keyId,
             @Param("createdAt") Instant createdAt
     );
 }

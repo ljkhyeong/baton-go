@@ -27,6 +27,7 @@ public class LinkCreationReservationPersistenceAdapter
                 .map(request -> new Reservation(
                         request.getLinkId(),
                         request.getPublicOrigin(),
+                        request.getKeyId(),
                         false
                 ));
     }
@@ -37,16 +38,18 @@ public class LinkCreationReservationPersistenceAdapter
             String idempotencyKeyHash,
             UUID proposedLinkId,
             String publicOrigin,
+            String keyId,
             Instant createdAt
     ) {
         int inserted = repository.insertIfAbsent(
                 idempotencyKeyHash,
                 proposedLinkId.toString(),
                 publicOrigin,
+                keyId,
                 createdAt
         );
         if (inserted == 1) {
-            return new Reservation(proposedLinkId, publicOrigin, true);
+            return new Reservation(proposedLinkId, publicOrigin, keyId, true);
         }
 
         return find(idempotencyKeyHash)

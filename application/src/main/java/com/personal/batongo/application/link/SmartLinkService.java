@@ -93,7 +93,7 @@ public class SmartLinkService implements SmartLinkUseCase {
                 requestedTarget,
                 prepared.admission().notBefore(),
                 prepared.admission().expiresAt(),
-                linkCodePort.issue(prepared.command().idempotencyKey().value())
+                linkCodePort.issue(prepared.command().idempotencyKey().value(), reservation.keyId())
         );
     }
 
@@ -106,10 +106,11 @@ public class SmartLinkService implements SmartLinkUseCase {
                 prepared.idempotencyKeyHash(),
                 UUID.randomUUID(),
                 currentOrigin.serialized(),
+                linkCodePort.keyRingIdentity().activeKeyId(),
                 now
         );
         IssuedLinkCode issuedCode = linkCodePort.issue(
-                prepared.command().idempotencyKey().value()
+                prepared.command().idempotencyKey().value(), reservation.keyId()
         );
 
         if (!reservation.owner()) {

@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.personal.batongo.application.link.error.LinkNotFoundException;
+import com.personal.batongo.application.link.error.LinkCodeReplayMismatchException;
+import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -14,6 +16,18 @@ class SecureLinkCodeAdapterTest {
 
     private final SecureLinkCodeAdapter adapter =
             new SecureLinkCodeAdapter(new LinkCodeProperties(SECRET));
+
+    @Test
+    @DisplayName("현재 발급 키를 바꿔도 기존 키를 지정한 재생 코드는 유지한다")
+    void replaysWithStoredKeyVersionAfterRotation() {
+        var rotated = new SecureLinkCodeAdapter(new LinkCodeProperties(
+                SECRET, "k202609", Map.of("k202609", "new-test-key-that-is-at-least-thirty-two-characters")
+        ));
+        assertThat(rotated.issue(IDEMPOTENCY_KEY, "legacy")).isEqualTo(adapter.issue(IDEMPOTENCY_KEY));
+        assertThat(rotated.issue(IDEMPOTENCY_KEY)).isNotEqualTo(adapter.issue(IDEMPOTENCY_KEY));
+        assertThatThrownBy(() -> rotated.issue(IDEMPOTENCY_KEY, "missing"))
+                .isInstanceOf(LinkCodeReplayMismatchException.class);
+    }
 
     @Test
     @DisplayName("HMAC SHA-256 v1 파생 규약은 고정 벡터와 일치한다")

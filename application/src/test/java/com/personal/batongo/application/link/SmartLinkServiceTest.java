@@ -41,6 +41,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -152,7 +153,7 @@ class SmartLinkServiceTest {
                 null
         ))).isExactlyInstanceOf(InvalidIdempotencyKeyException.class);
         verify(reservationPort).find(IDEMPOTENCY_HASH);
-        verify(reservationPort, never()).reserve(anyString(), any(), anyString(), any());
+        verify(reservationPort, never()).reserve(anyString(), any(), anyString(), anyString(), any());
         verifyNoInteractions(repository, keyGuardPort, publicLinkOriginPort, targetUrlPort);
     }
 
@@ -180,10 +181,12 @@ class SmartLinkServiceTest {
                 eq(IDEMPOTENCY_HASH),
                 any(UUID.class),
                 anyString(),
+                anyString(),
                 any(Instant.class)
         )).thenReturn(new LinkCreationReservationPort.Reservation(
                 LINK_ID,
                 PUBLIC_ORIGIN.serialized(),
+                "legacy",
                 false
         ));
         when(repository.findReplayById(LINK_ID)).thenReturn(Optional.empty());
@@ -448,10 +451,12 @@ class SmartLinkServiceTest {
                 eq(IDEMPOTENCY_HASH),
                 any(UUID.class),
                 anyString(),
+                anyString(),
                 any(Instant.class)
         )).thenReturn(new LinkCreationReservationPort.Reservation(
                 LINK_ID,
                 publicOrigin,
+                "legacy",
                 false
         ));
         when(repository.findReplayById(LINK_ID)).thenReturn(Optional.of(
@@ -517,7 +522,10 @@ class SmartLinkServiceTest {
             String codeHash
     ) {
         when(configuredLinkCodePort.derivationIdentity()).thenReturn(DERIVATION_IDENTITY);
-        when(configuredLinkCodePort.issue(anyString()))
+        when(configuredLinkCodePort.keyRingIdentity()).thenReturn(
+                new LinkCodeKeyRingIdentity("legacy", Map.of("legacy", DERIVATION_IDENTITY))
+        );
+        when(configuredLinkCodePort.issue(anyString(), anyString()))
                 .thenReturn(new IssuedLinkCode(rawCode, codeHash));
         when(configuredLinkCodePort.hash(anyString())).thenReturn(codeHash);
         when(configuredLinkCodePort.hashIdempotencyKey(anyString()))

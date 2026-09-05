@@ -431,6 +431,7 @@ class LinkCreationConcurrencyIntegrationTest {
                 String idempotencyKeyHash,
                 UUID proposedLinkId,
                 String publicOrigin,
+                String keyId,
                 Instant createdAt
         ) {
             allEntered.countDown();
@@ -438,6 +439,7 @@ class LinkCreationConcurrencyIntegrationTest {
                     idempotencyKeyHash,
                     proposedLinkId,
                     publicOrigin,
+                    keyId,
                     createdAt
             );
             if (reservation.owner() && firstOwnerHandled.compareAndSet(false, true)) {

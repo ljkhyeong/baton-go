@@ -34,12 +34,16 @@ spec:
           envFrom:
             - configMapRef:
                 name: baton-go-config
+            - secretRef:
+                name: baton-go-link-code-key-ring
+                optional: true
           env:
             - name: BATON_GO_LINK_CODE_SECRET
               valueFrom:
                 secretKeyRef:
                   name: baton-go-link-code-secret
                   key: BATON_GO_LINK_CODE_SECRET
+                  optional: true
             - name: BATON_GO_DB_USERNAME
               valueFrom:
                 configMapKeyRef:

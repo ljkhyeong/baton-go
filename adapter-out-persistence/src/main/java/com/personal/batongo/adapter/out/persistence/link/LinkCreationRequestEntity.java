@@ -21,6 +21,9 @@ class LinkCreationRequestEntity {
     @Column(name = "public_origin", length = 255)
     private String publicOrigin;
 
+    @Column(name = "key_id", nullable = false, length = 32)
+    private String keyId;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -33,5 +36,9 @@ class LinkCreationRequestEntity {
 
     String getPublicOrigin() {
         return publicOrigin;
+    }
+
+    String getKeyId() {
+        return keyId;
     }
 }

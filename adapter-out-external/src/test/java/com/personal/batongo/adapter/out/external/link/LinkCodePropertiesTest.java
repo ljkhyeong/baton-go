@@ -3,13 +3,44 @@ package com.personal.batongo.adapter.out.external.link;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.NullSource;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.springframework.boot.context.properties.bind.Bindable;
+import org.springframework.boot.context.properties.bind.Binder;
+import org.springframework.boot.context.properties.source.ConfigurationPropertySources;
+import org.springframework.core.env.SystemEnvironmentPropertySource;
 
 class LinkCodePropertiesTest {
+
+    @Test
+    @DisplayName("환경 변수의 키 묶음과 현재 발급 키는 표준 Spring 바인딩으로 읽는다")
+    void bindsKeyRingFromEnvironmentVariables() {
+        String secret = "test-secret-with-at-least-thirty-two-characters";
+        var source = new SystemEnvironmentPropertySource("systemEnvironment", Map.of(
+                "BATONGO_LINKCODE_ACTIVEKEYID", "k202609",
+                "BATONGO_LINKCODE_KEYS_K202609", secret
+        ));
+        var properties = new Binder(ConfigurationPropertySources.from(source))
+                .bind("baton-go.link-code", Bindable.of(LinkCodeProperties.class)).get();
+        assertThat(properties.activeKeyId()).isEqualTo("k202609");
+        assertThat(properties.keys()).containsExactly(Map.entry("k202609", secret));
+    }
+
+    @Test
+    @DisplayName("키 묶음은 현재 발급 키 누락과 기존 키의 중복 설정을 거부한다")
+    void rejectsMissingActiveKeyAndDuplicateLegacyConfiguration() {
+        String secret = "test-secret-that-is-at-least-thirty-two-characters";
+        assertThatThrownBy(() -> new LinkCodeProperties(secret, "missing", Map.of()))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new LinkCodeProperties(secret, "legacy", Map.of("legacy", secret)))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThat(new LinkCodeProperties(null, "current", Map.of("current", secret)).toString())
+                .doesNotContain(secret);
+    }
 
     @ParameterizedTest
     @NullSource

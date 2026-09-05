@@ -18,6 +18,9 @@
   각각 [ADR-0004](docs/ADR/0004_link-code-key-binding/adr.md),
   [ADR-0009](docs/ADR/0009_idempotent-public-origin-replay/adr.md),
   [ADR-0007](docs/ADR/0007_mysql-instant-storage/adr.md)을 따른다.
+- V6는 기존 예약을 `legacy` 키로 이관하고 새 예약에 발급 키 ID를 저장한다. 키 교체와
+  이전 키 제거 조건은 [ADR-0011](docs/ADR/0011_link-code-key-ring/adr.md)을 따른다.
+  실제 운영 키 묶음 배포·전환·복원 훈련은 [실행서](docs/RUNBOOK/link-code-key-rotation.md)에 따라 남아 있다.
 - 계약 전 저장 데이터 조사·폐기 API는 구현되어 있지만 기본 비활성화 상태다. 공개 경계 차단을
   확인한 유지 보수 시간에만 두 활성화 값을 함께 사용하며, 일반 운영에서는 모두 `false`로 둔다.
 - GO 전용 MySQL과 비공개 Kubernetes 기본 구성은 준비되어 있다. 이는 배포 기반일 뿐 실제
@@ -76,7 +79,7 @@
    DB와 같은 버전의 `BATON_GO_LINK_CODE_SECRET`을 한 복구 단위로 사용한 격리 복원,
    장애 대응과 이미지 되돌리기 훈련을 완료한다.
 10. HMAC 비밀값 유출 시 임의 Secret 회전 없이 쓰기·공개 경계를 차단하고, 기존 링크
-    폐기·재발급 또는 버전별 키 묶음 도입 중 복구 방식을 결정해 훈련한다.
+    폐기·재발급과 키 묶음 전환을 결합한 복구 방식을 결정해 훈련한다.
 운영 실행과 복구 안전선은
 [비공개 Kubernetes 배포 실행서](docs/RUNBOOK/kubernetes-private-server-deployment.md)와
 [HMAC 키·DB 결합 결정](docs/ADR/0004_link-code-key-binding/adr.md)을 따른다.

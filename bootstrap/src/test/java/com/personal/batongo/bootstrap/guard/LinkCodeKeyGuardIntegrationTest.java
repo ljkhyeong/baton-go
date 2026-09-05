@@ -7,6 +7,8 @@ import com.personal.batongo.BatonGoApplication;
 import com.personal.batongo.MySqlTestImage;
 import com.personal.batongo.application.link.CreationIdempotencyKey;
 import com.personal.batongo.application.link.LinkCodeDerivationIdentity;
+import com.personal.batongo.application.link.LinkCodeKeyRingIdentity;
+import java.util.Map;
 import com.personal.batongo.application.link.LinkCodeKeyGuard;
 import com.personal.batongo.application.link.error.LinkCodeKeyBindingException;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase;
@@ -321,7 +323,7 @@ class LinkCodeKeyGuardIntegrationTest {
     ) {
         new TransactionTemplate(transactionManager).executeWithoutResult(
                 status -> {
-                    linkCodeKeyGuardPort.verifyOrBind(identity);
+                    linkCodeKeyGuardPort.verifyOrBind(new LinkCodeKeyRingIdentity("legacy", Map.of("legacy", identity)));
                     bound.countDown();
                     try {
                         if (!release.await(10, TimeUnit.SECONDS)) {
@@ -348,7 +350,7 @@ class LinkCodeKeyGuardIntegrationTest {
         new TransactionTemplate(transactionManager).executeWithoutResult(
                 status -> {
                     started.countDown();
-                    linkCodeKeyGuardPort.verifyOrBind(identity);
+                    linkCodeKeyGuardPort.verifyOrBind(new LinkCodeKeyRingIdentity("legacy", Map.of("legacy", identity)));
                 }
         );
         return identity;
@@ -423,9 +425,15 @@ class LinkCodeKeyGuardIntegrationTest {
     private void clearLinkData() {
         jdbcTemplate.update("DELETE FROM link_creation_requests");
         jdbcTemplate.update("DELETE FROM smart_links");
+        jdbcTemplate.update("DELETE FROM link_code_keys");
     }
 
     private void bind(LinkCodeDerivationIdentity identity) {
+        jdbcTemplate.update("DELETE FROM link_code_keys");
+        jdbcTemplate.update(
+                "INSERT INTO link_code_keys (key_id, derivation_version, key_fingerprint) VALUES ('legacy', ?, ?)",
+                identity.version(), identity.hmacFingerprint()
+        );
         jdbcTemplate.update(
                 """
                         INSERT INTO link_code_key_guard (
@@ -443,6 +451,7 @@ class LinkCodeKeyGuardIntegrationTest {
     }
 
     private void unbind() {
+        jdbcTemplate.update("DELETE FROM link_code_keys");
         jdbcTemplate.update(
                 """
                         UPDATE link_code_key_guard

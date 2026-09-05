@@ -1,0 +1,6 @@
+services:
+  app:
+    env_file:
+      - ${BATON_GO_LINK_CODE_KEY_RING_ENV_FILE:?키 묶음 환경 파일의 절대 경로가 필요합니다}
+    environment:
+      BATON_GO_LINK_CODE_SECRET: ""

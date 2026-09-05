@@ -127,3 +127,12 @@ groups:
         annotations:
           summary: BATON GO 링크 정리 실패
           description: 보존 기간이 지난 링크 정리에 실패했습니다. DB 상태와 정리 예외 종류를 확인하세요. 실패한 묶음은 다음 실행에서 재시도합니다.
+
+      - alert: BatonGoDistributedResolverQuotaFailure
+        expr: |
+          sum by (job) (increase(baton_go_public_resolver_quota_failures_total{job="baton-go"}[5m])) > 0
+        labels:
+          severity: critical
+        annotations:
+          summary: BATON GO 공용 요청 제한 장애
+          description: Redis 공용 제한을 확인하지 못해 공개 링크 요청을 503으로 차단했습니다. Redis 연결·TLS·ACL·메모리 상태를 확인하세요.

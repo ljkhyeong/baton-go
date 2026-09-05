@@ -8,6 +8,7 @@ import com.personal.batongo.application.link.error.LinkCodeReplayMismatchExcepti
 import com.personal.batongo.application.link.error.LinkCreationReplayUnavailableException;
 import com.personal.batongo.application.link.error.LinkNotFoundException;
 import com.personal.batongo.application.link.error.LinkPurgedException;
+import com.personal.batongo.application.link.error.PublicResolverQuotaUnavailableException;
 import com.personal.batongo.application.link.error.PublicLinkOriginReplayUnavailableException;
 import com.personal.batongo.application.link.error.StoredTargetPolicyViolationException;
 import com.personal.batongo.application.link.error.TargetContractRemediationNotApplicableException;
@@ -50,9 +51,11 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     private static final int MAX_LOGGED_STACK_FRAMES = 12;
 
     private final Counter targetPolicyViolationCounter;
+    private final Counter quotaFailureCounter;
     private final Map<String, Counter> linkRecoveryFailureCounters;
 
     public GlobalExceptionHandler(MeterRegistry meterRegistry) {
+        this.quotaFailureCounter = meterRegistry.counter("baton.go.public.resolver.quota.failures");
         this.targetPolicyViolationCounter = meterRegistry.counter(TARGET_POLICY_VIOLATION_METRIC);
         this.linkRecoveryFailureCounters = Stream.of(
                 "LINK_CREATION_REPLAY_UNAVAILABLE",
@@ -127,6 +130,13 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                         "요청이 너무 많습니다. 잠시 후 다시 시도해 주세요",
                         RequestIdFilter.requestId(request)
                 ));
+    }
+
+    @ExceptionHandler(PublicResolverQuotaUnavailableException.class)
+    public ResponseEntity<ErrorResponse> handleQuotaUnavailable(
+            PublicResolverQuotaUnavailableException exception, HttpServletRequest request) {
+        quotaFailureCounter.increment();
+        return error(HttpStatus.SERVICE_UNAVAILABLE, "RATE_LIMIT_UNAVAILABLE", exception.getMessage(), request);
     }
 
     @ExceptionHandler(LinkValidationException.class)

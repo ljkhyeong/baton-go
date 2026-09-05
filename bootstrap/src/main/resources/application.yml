@@ -60,6 +60,12 @@ baton-go:
   management-jwk:
     connect-timeout: ${BATON_GO_MANAGEMENT_JWK_CONNECT_TIMEOUT:3s}
     read-timeout: ${BATON_GO_MANAGEMENT_JWK_READ_TIMEOUT:5s}
+  distributed-resolver-quota:
+    enabled: ${BATON_GO_DISTRIBUTED_RESOLVER_QUOTA_ENABLED:false}
+    redis-uri: ${BATON_GO_REDIS_URI:}
+    capacity: ${BATON_GO_DISTRIBUTED_RESOLVER_QUOTA_CAPACITY:300}
+    window: ${BATON_GO_DISTRIBUTED_RESOLVER_QUOTA_WINDOW:1m}
+    timeout: ${BATON_GO_DISTRIBUTED_RESOLVER_QUOTA_TIMEOUT:500ms}
   link-retention:
     enabled: ${BATON_GO_LINK_RETENTION_ENABLED:false}
     period: ${BATON_GO_LINK_RETENTION_PERIOD:}

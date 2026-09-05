@@ -25,6 +25,8 @@
   실제 운영 키 묶음 배포·전환·복원 훈련은 [실행서](docs/RUNBOOK/link-code-key-rotation.md)에 따라 남아 있다.
 - 계약 전 저장 데이터 조사·폐기 API는 구현되어 있지만 기본 비활성화 상태다. 공개 경계 차단을
   확인한 유지 보수 시간에만 두 활성화 값을 함께 사용하며, 일반 운영에서는 모두 `false`로 둔다.
+- Redis 공용 요청 제한은 기본 중지하며 [분산 제한 실행서](docs/RUNBOOK/distributed-public-rate-limit.md)에
+  따라 운영 Redis를 연결해야 한다. 두 연결 동시성·실패 차단과 공개 HTTP 검증은 준비되어 있다.
 - GO 전용 MySQL과 비공개 Kubernetes 기본 구성은 준비되어 있다. 이는 배포 기반일 뿐 실제
   클러스터 검증이나 공개 운영 승인 증거가 아니다. MySQL 워크로드는 비루트 UID/GID와 Linux
   capability 제거를 선언하지만, Namespace의 `restricted` 강제 승격 전에는 고정 이미지로 신규·
@@ -65,7 +67,7 @@
 3. BATON 호출자에 GO 원격 생성·폐기 의도와 같은 `Idempotency-Key`를 소유 트랜잭션의
    순서 보장 아웃박스로 저장하고, 취소 표식과 생성 후 폐기 수렴을 구현한다.
 4. 공개 `/l`과 비공개 `/api/v1` 외부 경계를 분리하고, 분산 요청률 제한과
-   `/l/{code}` 접근 로그 마스킹을 적용한다.
+   `/l/{code}` 접근 로그 마스킹을 적용한다. 공용 제한 구현은 준비되었으며 실제 Redis·Ingress 검증은 남아 있다.
 5. 실제 비공개 클러스터에서 DNS·TLS·CNI·NetworkPolicy·startup/liveness/readiness probe,
    PVC와 Secret 수명주기를 검증한다. 현재 ingress 전용 NetworkPolicy에 더해 환경별 DNS·MySQL
    egress 허용 목록과 기본 차단 정책을 정하고 실제 CNI에서 허용·차단 증거를 확보한다.

@@ -3,6 +3,8 @@ dependencies {
 	implementation project(':domain')
 
 	implementation 'org.springframework.boot:spring-boot'
+	implementation 'org.springframework.boot:spring-boot-autoconfigure'
+	implementation 'io.lettuce:lettuce-core'
 
 	annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
 

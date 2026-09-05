@@ -512,3 +512,22 @@ tests:
       - eval_time: 9m
         alertname: BatonGoLinkRetentionFailure
         exp_alerts: []
+
+  - name: 공용 요청 제한 저장소 장애를 감지한다
+    interval: 1m
+    input_series:
+      - series: 'baton_go_public_resolver_quota_failures_total{job="baton-go",instance="app"}'
+        values: '0 0 1 1'
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: BatonGoDistributedResolverQuotaFailure
+        exp_alerts: []
+      - eval_time: 3m
+        alertname: BatonGoDistributedResolverQuotaFailure
+        exp_alerts:
+          - exp_labels:
+              job: baton-go
+              severity: critical
+            exp_annotations:
+              summary: BATON GO 공용 요청 제한 장애
+              description: Redis 공용 제한을 확인하지 못해 공개 링크 요청을 503으로 차단했습니다. Redis 연결·TLS·ACL·메모리 상태를 확인하세요.

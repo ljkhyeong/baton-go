@@ -363,7 +363,7 @@ jobs:
             --logging.level.root=OFF
 
       - name: MySQL 통합 검증
-        run: ./gradlew --no-daemon :bootstrap:mysqlTest
+        run: ./gradlew --no-daemon :bootstrap:mysqlTest :bootstrap:redisTest
 
       - name: 실패한 테스트 보고서 보존
         if: failure()

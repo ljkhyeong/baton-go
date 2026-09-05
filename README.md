@@ -25,7 +25,7 @@ BATON GO는 단순 URL 축약기가 아니라 BATON과 ROUND를 위한 정책형
 - BATON 접근 키를 대체하는 계정·초대 권한
 - ROUND WebSocket 입장용 BATON 참여 허가 발급 엔드포인트
 - 임의 외부 URL 축약
-- 사용자 지정 별칭, 클릭 분석, Redis 요청률 제한
+- 사용자 지정 별칭, 클릭 분석
 - 링크 소비 횟수와 일회성 교환
 
 ## 서비스 원칙
@@ -193,8 +193,10 @@ DB 대기 시간은 Hikari·Connector/J 설정으로 제한하며, 마이그레�
 `BATON_GO_PUBLIC_RESOLVER_RATE_LIMIT_WINDOW`는 배포 트래픽에 맞춰 명시적으로 설정한다.
 용량은 1 이상, 시간 구간은 양수여야 하며 유효하지 않은 설정은 Spring 설정 바인딩 단계에서
 거부한다.
-이 제한은 클라이언트 IP나 전달 헤더를 신뢰하지 않는 로컬 안전장치이므로, 여러 복제본을
-공개할 때는 Ingress에서 별도의 분산 요청률 제한과 `/l/{code}` 접근 로그 가림을 적용한다.
+이 제한에 더해 [Redis 공용 요청 제한](docs/RUNBOOK/distributed-public-rate-limit.md)을
+선택적으로 활성화할 수 있다. 모든 복제본의 전체 허용량을 공유하며 Redis 장애는 공개 조회를
+`503`으로 막는다. 클라이언트 IP와 전달 헤더는 사용하지 않는다. 실제 Ingress의 경로 분리와
+`/l/{code}` 접근 로그 가림, 사용자별 트래픽 제한은 공개 경계에서 함께 적용한다.
 
 ## 검증
 
@@ -230,7 +232,7 @@ GitHub 실행기를 기준으로 하며, 원격 `DOCKER_HOST`는 현재 지원�
 고려한 테스트 전용 값이며, 운영 서버와 마이그레이션 전용 실행의 DB 설정은 바꾸지 않는다.
 
 ```bash
-./gradlew --no-daemon :bootstrap:mysqlTest
+./gradlew --no-daemon :bootstrap:mysqlTest :bootstrap:redisTest
 ```
 
 CI가 실패하면 그때까지 생성된 JUnit XML과 HTML 테스트 보고서를
@@ -275,6 +277,8 @@ curl -i http://localhost:8080/api/v1/links \
 - [멱등 생성의 공개 출처 보존](docs/ADR/0009_idempotent-public-origin-replay/adr.md)
 - [관리 API의 발급자 서명 JWT 인증](docs/ADR/0010_management-jwt-authentication/adr.md)
 - [링크 코드 키 묶음과 교체](docs/ADR/0011_link-code-key-ring/adr.md)
+- [종료 링크 정리와 멱등 예약](docs/ADR/0012_link-retention/adr.md)
+- [공개 링크 공용 요청 제한](docs/ADR/0013_distributed-public-resolver-quota/adr.md)
 
 ### 운영 절차
 

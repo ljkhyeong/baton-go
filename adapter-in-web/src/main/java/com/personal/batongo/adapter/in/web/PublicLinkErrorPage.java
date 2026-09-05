@@ -27,7 +27,7 @@ public class PublicLinkErrorPage {
             case "LINK_EXPIRED", "LINK_REVOKED" -> "링크를 보낸 사람에게 새 링크를 요청해 주세요.";
             case "RATE_LIMIT_EXCEEDED" -> "%s초 후에 다시 열어 주세요. 계속 실패하면 요청 번호를 전달해 주세요."
                     .formatted(error.getHeaders().getFirst(HttpHeaders.RETRY_AFTER));
-            case "INTERNAL_ERROR" -> "잠시 후 다시 열어 주세요. 계속 실패하면 요청 번호를 전달해 주세요.";
+            case "INTERNAL_ERROR", "RATE_LIMIT_UNAVAILABLE" -> "잠시 후 다시 열어 주세요. 계속 실패하면 요청 번호를 전달해 주세요.";
             default -> "주소가 올바른지 확인하거나 링크를 보낸 사람에게 새 링크를 요청해 주세요.";
         };
         return ResponseEntity.status(error.getStatusCode())

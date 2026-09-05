@@ -60,6 +60,7 @@ XML 등 지원하지 않는 응답 형식만 요청해도 원래 오류 상태·
 - 관리 API에서 지원하지 않는 응답 형식만 요청함: `406 INVALID_REQUEST`
 - 지원하지 않는 요청 본문 형식: `415 UNSUPPORTED_MEDIA_TYPE`
 - 공개 해석기 처리 한도 초과: `429 RATE_LIMIT_EXCEEDED`
+- 공용 요청 제한 저장소 장애: `503 RATE_LIMIT_UNAVAILABLE`
 - 허용되지 않은 대상 시스템·목적·위치 식별자 조합: `400 INVALID_LINK`
 - 대상 계약 운영 기능의 목록 조사 요청 값 오류: `400 INVALID_REQUEST`
 - 준수 링크에 정리 폐기를 요청함: `409 REMEDIATION_NOT_APPLICABLE`
@@ -440,3 +441,10 @@ DB에 저장된 대상이 현재 PRD-0003 계약을 위반하면 존재 여부�
 인스턴스 메모리만 사용하므로 여러 복제본의 합산 요청량을 제한하지 않는다. 운영 공개
 경로에는 별도의 경계 또는 분산 요청률 제한과 접근 로그 코드 마스킹을 반드시
 적용한다.
+
+## 공용 요청 제한
+
+분산 제한을 활성화하면 공개 `GET·HEAD /l/{code}`의 허용량을 모든 Pod가 공유한다.
+한도 초과는 기존 `429 RATE_LIMIT_EXCEEDED`와 `Retry-After`이며, Redis 오류는
+`503 RATE_LIMIT_UNAVAILABLE`다. HTML·JSON·HEAD는 기존 공개 오류 표현을 따르고 링크
+조회는 실행하지 않는다. 관리 API는 이 제한에서 제외한다. [실행서](../../RUNBOOK/distributed-public-rate-limit.md)를 따른다.

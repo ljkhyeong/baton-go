@@ -5,6 +5,7 @@ import com.personal.batongo.adapter.in.web.GlobalExceptionHandler;
 import com.personal.batongo.adapter.in.web.PublicLinkErrorPage;
 import com.personal.batongo.adapter.in.web.PublicResolverRateLimitExceededException;
 import com.personal.batongo.application.link.error.LinkNotFoundException;
+import com.personal.batongo.application.link.error.PublicResolverQuotaUnavailableException;
 import com.personal.batongo.application.link.error.StoredTargetPolicyViolationException;
 import com.personal.batongo.domain.link.LinkUnavailableException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -99,6 +100,19 @@ public class PublicLinkExceptionHandler {
             StoredTargetPolicyViolationException exception, HttpServletRequest request
     ) {
         return errorPage.render(storedTargetViolationJson(exception, request));
+    }
+
+    @ExceptionHandler(value = PublicResolverQuotaUnavailableException.class,
+            produces = {MediaType.APPLICATION_JSON_VALUE, MediaType.ALL_VALUE})
+    public ResponseEntity<ErrorResponse> quotaUnavailableJson(
+            PublicResolverQuotaUnavailableException exception, HttpServletRequest request) {
+        return errors.handleQuotaUnavailable(exception, request);
+    }
+
+    @ExceptionHandler(value = PublicResolverQuotaUnavailableException.class, produces = MediaType.TEXT_HTML_VALUE)
+    public ResponseEntity<String> quotaUnavailableHtml(
+            PublicResolverQuotaUnavailableException exception, HttpServletRequest request) {
+        return errorPage.render(quotaUnavailableJson(exception, request));
     }
 
     @ExceptionHandler(value = Exception.class, produces = MediaType.APPLICATION_JSON_VALUE)

@@ -38,6 +38,12 @@ spec:
                 name: baton-go-link-code-key-ring
                 optional: true
           env:
+            - name: BATON_GO_REDIS_URI
+              valueFrom:
+                secretKeyRef:
+                  name: baton-go-redis-credentials
+                  key: BATON_GO_REDIS_URI
+                  optional: true
             - name: BATON_GO_LINK_CODE_SECRET
               valueFrom:
                 secretKeyRef:

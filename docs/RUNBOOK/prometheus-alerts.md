@@ -50,6 +50,8 @@ Prometheus의 rule selector가 선택하는지 확인한다. 저장소는 특정
 | `BatonGoManagementLinkRecoveryFailure` | 최근 5분 관리 링크 복구 오류 카운터가 코드별로 증가 | `critical` |
 | `BatonGoPublicResolverRateLimited` | 최근 5분 GET·HEAD 429 10건 이상이 5분 지속 | `warning` |
 | `BatonGoStoredTargetContractViolation` | 최근 5분 계약 위반 카운터 증가 | `critical` |
+| `BatonGoLinkRetentionFailure` | 최근 5분 링크 정리 실패 증가 | `warning` |
+| `BatonGoDistributedResolverQuotaFailure` | 최근 5분 공용 제한 저장소 장애 증가 | `critical` |
 
 - 5xx 계산의 분자·분모에서 `/actuator...`, `/livez`, `/readyz`를 제외하고, 오류율 분모에서도
   429 응답을 제외한다. 상태 확인 성공이나 요청 제한 응답이 늘어도 업무 요청의 서버 오류율이

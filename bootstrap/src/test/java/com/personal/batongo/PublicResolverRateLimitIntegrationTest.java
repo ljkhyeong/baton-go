@@ -17,7 +17,7 @@ import com.personal.batongo.adapter.in.web.link.LinkResolverController;
 import com.personal.batongo.application.link.LinkCodeKeyGuard;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.ResolvedLinkResult;
-import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.net.URI;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -51,7 +51,8 @@ import org.springframework.test.web.servlet.MockMvc;
         PublicResolverRateLimiter.class,
         PublicResolverRateLimitInterceptor.class,
         PublicResolverWebMvcConfiguration.class,
-        PublicLinkErrorPage.class
+        PublicLinkErrorPage.class,
+        SimpleMeterRegistry.class
 })
 class PublicResolverRateLimitIntegrationTest {
 
@@ -60,9 +61,6 @@ class PublicResolverRateLimitIntegrationTest {
 
     @MockitoBean
     private SmartLinkUseCase smartLinkUseCase;
-
-    @MockitoBean
-    private MeterRegistry meterRegistry;
 
     @MockitoBean
     private LinkCodeKeyGuard linkCodeKeyGuard;

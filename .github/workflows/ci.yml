@@ -338,6 +338,15 @@ jobs:
             http://127.0.0.1:8081/actuator/prometheus >"$metrics_file"
           grep -Eq '^baton_go_public_resolver_target_contract_violations_total 0(\.0)?$' "$metrics_file"
           grep -Eq '^baton_go_management_authentication_service_failures_total 0(\.0)?$' "$metrics_file"
+          for recovery_code in \
+            LINK_CREATION_REPLAY_UNAVAILABLE \
+            LINK_CODE_REPLAY_UNAVAILABLE \
+            LINK_CODE_CONFIGURATION_MISMATCH \
+            PUBLIC_LINK_ORIGIN_REPLAY_UNAVAILABLE; do
+            grep '^baton_go_management_link_recovery_failures_total{' "$metrics_file" \
+              | grep -F "code=\"$recovery_code\"" \
+              | grep -Eq '} 0(\.0)?$'
+          done
           grep '^http_server_requests_seconds_count{' "$metrics_file" \
             | grep -F 'uri="/l/{code}"' \
             | grep -F 'method="GET"' \

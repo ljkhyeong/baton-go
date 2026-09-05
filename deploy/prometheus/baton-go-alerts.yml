@@ -91,6 +91,15 @@ groups:
           summary: BATON GO 관리 인증 서비스 장애
           description: 최근 5분간 관리 JWT 검증 서비스 장애가 관측되었습니다. requestId로 로그를 확인하고 발급자 상태와 Pod의 JWK HTTPS 접근을 점검하세요.
 
+      - alert: BatonGoManagementLinkRecoveryFailure
+        expr: |
+          sum by (job, code) (increase(baton_go_management_link_recovery_failures_total{job="baton-go"}[5m])) > 0
+        labels:
+          severity: critical
+        annotations:
+          summary: BATON GO 관리 링크 복구 필요
+          description: 최근 5분간 {{ $labels.code }} 오류가 관측되었습니다. requestId로 로그를 확인하고 생성 예약·링크 데이터·HMAC 키·최초 공개 출처를 점검하세요. 같은 요청을 반복하기 전에 해당 오류의 복구 절차를 따르세요.
+
       - alert: BatonGoPublicResolverRateLimited
         expr: |
           sum by (job) (increase(http_server_requests_seconds_count{job="baton-go",method=~"GET|HEAD",status="429"}[5m])) >= 10

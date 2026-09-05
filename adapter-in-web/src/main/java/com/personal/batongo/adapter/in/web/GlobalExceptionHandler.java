@@ -20,8 +20,10 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -47,9 +49,19 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     private static final int MAX_LOGGED_STACK_FRAMES = 12;
 
     private final Counter targetPolicyViolationCounter;
+    private final Map<String, Counter> linkRecoveryFailureCounters;
 
     public GlobalExceptionHandler(MeterRegistry meterRegistry) {
         this.targetPolicyViolationCounter = meterRegistry.counter(TARGET_POLICY_VIOLATION_METRIC);
+        this.linkRecoveryFailureCounters = Stream.of(
+                "LINK_CREATION_REPLAY_UNAVAILABLE",
+                "LINK_CODE_REPLAY_UNAVAILABLE",
+                "LINK_CODE_CONFIGURATION_MISMATCH",
+                "PUBLIC_LINK_ORIGIN_REPLAY_UNAVAILABLE"
+        ).collect(Collectors.toUnmodifiableMap(
+                code -> code,
+                code -> meterRegistry.counter("baton.go.management.link.recovery.failures", "code", code)
+        ));
     }
 
     @ExceptionHandler(StoredTargetPolicyViolationException.class)
@@ -194,8 +206,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                 exception.linkId(),
                 RequestIdFilter.requestId(request)
         );
-        return error(
-                HttpStatus.INTERNAL_SERVER_ERROR,
+        return linkRecoveryFailure(
                 "LINK_CREATION_REPLAY_UNAVAILABLE",
                 exception.getMessage(),
                 request
@@ -208,8 +219,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
             HttpServletRequest request
     ) {
         logUnexpected(exception, request);
-        return error(
-                HttpStatus.INTERNAL_SERVER_ERROR,
+        return linkRecoveryFailure(
                 "LINK_CODE_REPLAY_UNAVAILABLE",
                 exception.getMessage(),
                 request
@@ -222,8 +232,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
             HttpServletRequest request
     ) {
         logUnexpected(exception, request);
-        return error(
-                HttpStatus.INTERNAL_SERVER_ERROR,
+        return linkRecoveryFailure(
                 "LINK_CODE_CONFIGURATION_MISMATCH",
                 exception.getMessage(),
                 request
@@ -236,12 +245,18 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
             HttpServletRequest request
     ) {
         logUnexpected(exception, request);
-        return error(
-                HttpStatus.INTERNAL_SERVER_ERROR,
+        return linkRecoveryFailure(
                 "PUBLIC_LINK_ORIGIN_REPLAY_UNAVAILABLE",
                 exception.getMessage(),
                 request
         );
+    }
+
+    private ResponseEntity<ErrorResponse> linkRecoveryFailure(
+            String code, String message, HttpServletRequest request
+    ) {
+        linkRecoveryFailureCounters.get(code).increment();
+        return error(HttpStatus.INTERNAL_SERVER_ERROR, code, message, request);
     }
 
     @Override

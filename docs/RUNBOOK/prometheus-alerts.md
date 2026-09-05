@@ -3,7 +3,8 @@
 ## 적용 범위
 
 [경보 규칙](../../deploy/prometheus/baton-go-alerts.yml)은 기존 Actuator·Micrometer 지표로
-공개·관리 응답 지연, 전체·관리 API 5xx, 관리 JWT 검증 서비스 장애, 공개 해석 요청 제한과 저장 대상 계약 위반을 감지한다.
+공개·관리 응답 지연, 전체·관리 API 5xx, 관리 JWT 검증 서비스 장애, 관리 링크 복구 오류,
+공개 해석 요청 제한과 저장 대상 계약 위반을 감지한다.
 규칙 추가만으로 수집기나 Alertmanager가 배포되지는 않는다. 실제 운영 수집기·알림 경로·
 담당자 연결과 발화 시험은 [배포 실행서의 수집과 경보 관문](kubernetes-private-server-deployment.md#수집과-경보-관문)을 따른다.
 
@@ -46,6 +47,7 @@ Prometheus의 rule selector가 선택하는지 확인한다. 저장소는 특정
 | `BatonGoHttpServerErrors` | 최근 5분 5xx 5건 이상·429 제외 응답의 오류율 5% 초과가 5분 지속 | `critical` |
 | `BatonGoManagementApiServerErrors` | 최근 5분 관리 API 5xx 5건 이상·429 제외 관리 응답의 오류율 5% 초과가 5분 지속 | `critical` |
 | `BatonGoManagementAuthenticationServiceFailure` | 최근 5분 관리 JWT 검증 서비스 장애 카운터 증가 | `warning` |
+| `BatonGoManagementLinkRecoveryFailure` | 최근 5분 관리 링크 복구 오류 카운터가 코드별로 증가 | `critical` |
 | `BatonGoPublicResolverRateLimited` | 최근 5분 GET·HEAD 429 10건 이상이 5분 지속 | `warning` |
 | `BatonGoStoredTargetContractViolation` | 최근 5분 계약 위반 카운터 증가 | `critical` |
 
@@ -63,6 +65,12 @@ Prometheus의 rule selector가 선택하는지 확인한다. 저장소는 특정
   인증 서비스 장애만 포함하고 토큰 누락·서명·클레임 검증 실패인 401과 권한 부족인 403은
   포함하지 않는다. 공개 링크 성공 요청이 많아 전체 5xx 비율이 낮아져도 경보를 발생시킨다.
   `requestId`로 안전한 오류 로그를 찾고 발급자 상태와 Pod의 JWK HTTPS 접근을 확인한다.
+- 관리 링크 복구 오류는 `baton_go_management_link_recovery_failures_total`에 아래 네 가지
+  `code`만 사용해 집계한다. 각 카운터를 시작 시 0으로 등록하고, 오류 한 건도 다음 규칙
+  평가에서 감지하도록 최소 건수나 지속 시간을 두지 않는다. 최초 수집 전 오류와 수집 공백은
+  로그로 함께 확인한다. 5분 동안 새 오류가 없으면 경보가 해제되지만 복구 완료를 뜻하지는 않는다.
+  링크 ID·요청 ID·대상 경로·멱등성 키·공개 코드는 지표 label에 넣지 않는다.
+  `requestId`로 기존 오류 로그를 찾고 해당 오류의 복구를 완료한 뒤 같은 요청으로 확인한다.
 - 현재 버전의 429는 MVC가 `/l/{code}`를 매핑한 뒤 인터셉터가 차단하므로 같은 경로 패턴으로
   기록된다. 기존 필터 버전과 함께 배포하는 동안 `uri="UNKNOWN"` 시계열을 놓치지 않도록
   경보 선택 조건은 `uri`로 제한하지 않는다. Ingress에서 차단된 요청은 애플리케이션에
@@ -77,6 +85,19 @@ Prometheus의 rule selector가 선택하는지 확인한다. 저장소는 특정
   없었던 것만으로 인증 서비스가 복구되었다고 판단하지 않는다.
 - Job 실패, Pod 상태, DB 준비 상태, PVC·백업 경보는 플랫폼 지표로 따로 연결한다.
   이 파일을 적용했다고 전체 운영 관문을 통과한 것으로 기록하지 않는다.
+
+### 관리 링크 복구 오류별 대응
+
+| `code` | 확인할 내용 |
+| --- | --- |
+| `LINK_CREATION_REPLAY_UNAVAILABLE` | 생성 예약이 가리키는 링크의 누락과 DB 복원·수동 변경 이력을 확인한다. 예약을 삭제하거나 새 링크로 대체하기 전에 저장 일관성을 복구한다. |
+| `LINK_CODE_REPLAY_UNAVAILABLE` | 현재 파생 코드와 저장 코드 해시가 일치하지 않는다. 생성 당시 HMAC 비밀값·파생 버전과 데이터 이력을 확인하고 [키·DB 결합 절차](../ADR/0004_link-code-key-binding/adr.md)를 따른다. |
+| `LINK_CODE_CONFIGURATION_MISMATCH` | 현재 HMAC 설정이 DB 보호 정보와 일치하는지 확인한다. 비밀값이나 보호 정보를 임의로 덮어쓰지 않고 [키·DB 결합 절차](../ADR/0004_link-code-key-binding/adr.md)를 따른다. |
+| `PUBLIC_LINK_ORIGIN_REPLAY_UNAVAILABLE` | 최초 생성 예약의 공개 출처가 없거나 정규 형식이 아니다. 현재 출처를 추정 입력하지 않고 [공개 출처 보존 결정](../ADR/0009_idempotent-public-origin-replay/adr.md)에 따라 최초 출처 증거를 복구한다. |
+
+이 카운터는 HTTP 요청 처리 중 발생한 오류만 집계한다. 시작 단계의 키 결합 실패로 프로세스가
+종료된 경우는 Pod·기동 실패 경보와 시작 로그로 확인한다. JWT 인증 장애와 일반 `500`,
+`409 IDEMPOTENCY_KEY_REUSED`는 이 카운터에 포함하지 않는다.
 
 ### 응답 지연 감지
 
@@ -134,7 +155,9 @@ Actuator·주 포트 상태 확인·다른 서비스 제외, 지속 시간, 경�
 다른 경로·서비스를 제외하는지, 최소 건수·오류율·지속 시간과 회복을 검증한다.
 관리 인증 서비스 장애는 대량 공개 성공 요청과 무관한 발화,
 카운터 초기화 뒤 재발과 새 장애가 없는 구간의 해제를 검증한다.
-CI의 운영 이미지 기동 검증은 실제 `/actuator/prometheus` 출력에 초기 계약 위반·관리 인증 장애 카운터와
+관리 링크 복구 오류는 한 건 발생, 코드별 구분·Pod 합산, 다른 서비스 제외, 카운터 초기화 뒤
+재발과 새 오류가 없는 구간의 해제를 검증한다.
+CI의 운영 이미지 기동 검증은 실제 `/actuator/prometheus` 출력에 초기 계약 위반·관리 인증 장애·링크 복구 오류 카운터와
 MVC 인터셉터가 차단한 429와 공개 경로의 1초·2초 지연 버킷이 포함되는지도 확인한다.
 지연 규칙은 정상·저트래픽·무트래픽 제외, 공개·관리 경로 분리, 지속 시간과 회복을 검증한다.
 혼합 버전에서 정상 응답의 오탐과 최소 요청량 부풀림이 없고 실제 지연은 감지되는지도 확인한다. 테스트 문법은

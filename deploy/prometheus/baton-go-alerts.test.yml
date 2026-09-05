@@ -19,6 +19,8 @@ tests:
         values: '0x10'
       - series: 'baton_go_management_authentication_service_failures_total{job="baton-go"}'
         values: '0x10'
+      - series: 'baton_go_management_link_recovery_failures_total{job="baton-go",code="LINK_CREATION_REPLAY_UNAVAILABLE"}'
+        values: '0x10'
     alert_rule_test:
       - eval_time: 10m
         alertname: BatonGoPublicResolverLatency
@@ -40,6 +42,9 @@ tests:
         exp_alerts: []
       - eval_time: 10m
         alertname: BatonGoManagementAuthenticationServiceFailure
+        exp_alerts: []
+      - eval_time: 10m
+        alertname: BatonGoManagementLinkRecoveryFailure
         exp_alerts: []
 
   - name: 소수 오류와 다른 서비스 및 상태 확인 오류는 경보에서 제외한다
@@ -63,6 +68,8 @@ tests:
         values: '0+10x10'
       - series: 'baton_go_management_authentication_service_failures_total{job="other"}'
         values: '0+10x10'
+      - series: 'baton_go_management_link_recovery_failures_total{job="other",code="LINK_CREATION_REPLAY_UNAVAILABLE"}'
+        values: '0+10x10'
     alert_rule_test:
       - eval_time: 6m
         alertname: BatonGoHttpServerErrors
@@ -75,6 +82,51 @@ tests:
         exp_alerts: []
       - eval_time: 6m
         alertname: BatonGoManagementAuthenticationServiceFailure
+        exp_alerts: []
+      - eval_time: 6m
+        alertname: BatonGoManagementLinkRecoveryFailure
+        exp_alerts: []
+
+  - name: 링크 복구 오류 한 건을 코드별로 감지하고 초기화 뒤 재발과 새 오류 없는 구간을 구분한다
+    interval: 1m
+    input_series:
+      - series: 'http_server_requests_seconds_count{job="baton-go",method="GET",status="302",uri="/l/{code}"}'
+        values: '0+1000x16'
+      - series: 'baton_go_management_link_recovery_failures_total{job="baton-go",instance="one",code="LINK_CREATION_REPLAY_UNAVAILABLE"}'
+        values: '0 1x4 0 1x10'
+      - series: 'baton_go_management_link_recovery_failures_total{job="baton-go",instance="two",code="LINK_CREATION_REPLAY_UNAVAILABLE"}'
+        values: '0x16'
+      - series: 'baton_go_management_link_recovery_failures_total{job="baton-go",instance="one",code="PUBLIC_LINK_ORIGIN_REPLAY_UNAVAILABLE"}'
+        values: '0x1 1x14'
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: BatonGoManagementLinkRecoveryFailure
+        exp_alerts:
+          - &link_creation_recovery_failure
+            exp_labels:
+              job: baton-go
+              code: LINK_CREATION_REPLAY_UNAVAILABLE
+              severity: critical
+            exp_annotations:
+              summary: BATON GO 관리 링크 복구 필요
+              description: 최근 5분간 LINK_CREATION_REPLAY_UNAVAILABLE 오류가 관측되었습니다. requestId로 로그를 확인하고 생성 예약·링크 데이터·HMAC 키·최초 공개 출처를 점검하세요. 같은 요청을 반복하기 전에 해당 오류의 복구 절차를 따르세요.
+      - eval_time: 2m
+        alertname: BatonGoManagementLinkRecoveryFailure
+        exp_alerts:
+          - *link_creation_recovery_failure
+          - exp_labels:
+              job: baton-go
+              code: PUBLIC_LINK_ORIGIN_REPLAY_UNAVAILABLE
+              severity: critical
+            exp_annotations:
+              summary: BATON GO 관리 링크 복구 필요
+              description: 최근 5분간 PUBLIC_LINK_ORIGIN_REPLAY_UNAVAILABLE 오류가 관측되었습니다. requestId로 로그를 확인하고 생성 예약·링크 데이터·HMAC 키·최초 공개 출처를 점검하세요. 같은 요청을 반복하기 전에 해당 오류의 복구 절차를 따르세요.
+      - eval_time: 7m
+        alertname: BatonGoManagementLinkRecoveryFailure
+        exp_alerts:
+          - *link_creation_recovery_failure
+      - eval_time: 15m
+        alertname: BatonGoManagementLinkRecoveryFailure
         exp_alerts: []
 
   - name: 공개 성공 요청이 많아도 관리 인증 서비스 장애와 카운터 초기화 뒤 재발을 감지한다

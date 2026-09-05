@@ -648,7 +648,7 @@ DNS Namespace·Pod label, Service IP와 host-network 처리는 클러스터마�
 기본본에 예시 selector를 고정하지 않는다. DNS 증거 없이 egress 기본 차단만 적용해
 시작·준비 탐지를 깨뜨리지 않는다.
 
-### 수집과 경보 관문
+### 수집과 경보 확인 사항
 
 `/actuator/prometheus`와 health endpoint가 켜져 있다는 사실만으로는 운영 감시가 완료되지
 않는다. 공개 운영 전에 실제 수집기의 target이 `UP`인지 확인하고, 임계치·지속 시간·
@@ -666,7 +666,7 @@ DNS Namespace·Pod label, Service IP와 host-network 처리는 클러스터마�
 - PVC 사용률·증가 추세·확장 실패
 - 백업 실패와 정책에서 정한 시간 동안 성공 백업 부재
 
-각 경보는 데이터를 조작하지 않는 방식으로 시험하고 규칙 버전, 발화 시각, 알림
+각 경보는 데이터를 조작하지 않는 방식으로 시험하고 규칙 버전, 경보 발생 시각, 알림
 수신·확인 결과와 담당자를 운영 증거에 남긴다. 대시보드 화면만 있거나 알림을
 실제로 전송하지 않은 규칙은 관문 통과 증거가 아니다.
 
@@ -840,22 +840,22 @@ Job이 `Failed`이거나 결과가 불명확하면 다음 순서를 지킨다.
    ORDER BY table_name, ordinal_position;
    ```
 
-4. V4의 완료 모양은 `smart_links` 네 열과 `link_creation_requests.created_at`이
+4. V4의 스키마 변경이 모두 적용되면 `smart_links` 네 열과 `link_creation_requests.created_at`이
    모두 `datetime(6)`이고, `smart_links.created_at`과
    `link_creation_requests.created_at`만 `NOT NULL`인 상태다. V4 성공 이력이 없을 때는
    다음처럼 분기한다.
 
    - 모두 기존 `timestamp(6)`: DDL 적용 전 실패다. 원인을 제거하고 백업을 확보한
      뒤 변경하지 않은 V4 재실행을 검토한다.
-   - `smart_links`만 완료 모양이고 `link_creation_requests.created_at`이
+   - `smart_links`만 스키마 변경이 적용되고 `link_creation_requests.created_at`이
      `timestamp(6)`: 첫 `ALTER TABLE`만 커밋된 V4 혼합 상태다. 즉시 일관된 백업을
      확보하고 첫 `ALTER` 재실행의 잠금·시간 영향과 둘째 `ALTER` 완료를 격리
      환경에서 시험한 뒤 변경하지 않은 V4를 전진 재실행할지, 이전 일관된
      백업으로 복원할지 DBA와 결정한다.
-   - 모두 완료 모양: DDL은 완료됐지만 성공 이력 기록 전에 종료됐을 수 있다.
+   - 모든 스키마 변경이 적용된 상태: DDL은 완료됐지만 성공 이력 기록 전에 종료됐을 수 있다.
      일관된 백업을 확보하고 동일 `MODIFY` 재실행의 잠금·시간 영향을 검증한 뒤
      변경하지 않은 V4 재실행 또는 이전 일관된 백업 복원을 선택한다.
-   - 위 세 모양 외의 조합: 수동 변경이나 추가 drift로 분류하고 재실행하지 않는다.
+   - 위 세 상태 외의 조합: 수동 변경이나 추가 스키마 차이로 분류하고 재실행하지 않는다.
 
 5. V5 성공 이력이 없을 때 `public_origin`이 없으면 DDL 전 실패로 분류한다.
    열이 `varchar(255)`, `ascii`, `ascii_bin`, `NULL` 허용으로 존재하면 DDL 커밋과
@@ -1045,7 +1045,7 @@ StatefulSet 삭제는 기본적으로 PVC를 보존하지만 Namespace 삭제는
 
 이 실행서의 완료만으로 공개 운영을 승인하지 않는다. 장기 완료 조건은
 [교차 서비스 링크 계약의 공개 운영 관문](../PRD/0003_cross-service-link-contract/spec.md#9-공개-운영-관문),
-현재 남은 작업은 [인수인계](../../HANDOFF.md#공개-운영-전-남은-관문)를 따른다.
+현재 남은 작업은 [인수인계](../../HANDOFF.md#운영-시작-전-확인-사항)를 따른다.
 
 참고:
 

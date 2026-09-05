@@ -42,13 +42,13 @@ BATON의 `#accessKey`나 ROUND 참여 허가를 GO의 URL, DB 또는 로그에 �
 
 교차 서비스 계약 v1의 허용 대상, 권한 소유, 동일 출처 경계와 운영
 차단 조건은 [교차 서비스 링크 계약](docs/PRD/0003_cross-service-link-contract/spec.md)이
-기준 문서다. GO는 생성과 공개 해석 양쪽에서 해당 계약을 안전 차단 방식으로
-강제하고, 비허용 저장 대상은 원문을 노출하지 않은 채 `404 LINK_NOT_FOUND`로
+기준 문서다. GO는 링크 생성과 접속 처리 시 계약에 맞지 않는 요청을 거부하고,
+비허용 저장 대상은 원문을 노출하지 않은 채 `404 LINK_NOT_FOUND`로
 숨긴다. 이 구현만으로 BATON·ROUND 권한과 실제 경계 검증이 완료되지는 않는다.
 
 계약 강화 전 저장 데이터는 기본 비활성화된 비공개 운영 API로 조사하고,
 원본 도메인 소유자가 승인한 링크만 폐기·재발급한다. 활성화 조건, 민감 필드
-비노출 및 완료 판정은 [대상 계약 v1 정리 실행서](docs/RUNBOOK/target-contract-v1-remediation.md)를
+비노출 및 완료 판정은 [대상 계약 v1 정리 절차](docs/RUNBOOK/target-contract-v1-remediation.md)를
 따른다. 로컬 기본 출처는 개발용이며 운영 출처·라우팅·쿠키 계약은 기준 문서의
 종단 간 검증을 통과해야 한다.
 
@@ -92,12 +92,12 @@ JWK 조회에는 별도의 연결·읽기 제한을 적용한다. 기본값과 �
 새 비밀값은 base64url 또는 hex처럼 셸, dotenv와 Spring 자리 표시자 문법에 걸리지 않는 문자
 집합으로 생성하고 로그나 명령행에 출력하지 않는다. `.env.example`의 짧은 `REPLACE_ME_TOO` 값은
 최소 길이 검증에서 바로 실패하므로 실제 값으로 교체해야 한다. 링크 코드 파생 비밀값은 재시작과
-복구 뒤에도 같은 값을 유지해야 기존 생성 요청을 동일 URL로 재생할 수 있다.
+복구 뒤에도 같은 값을 유지해야 같은 생성 요청에 기존 URL을 반환할 수 있다.
 
 `BATON_GO_PUBLIC_BASE_URL`도 모든 실행 환경에서 명시한다. 로컬 개발의 루프백 HTTP는
 허용하지만, 사용자에게 반환되는 비로컬 단축 URL 출처는 HTTPS여야 한다. 값은 경로, 쿼리,
 프래그먼트나 사용자 정보가 없는 출처여야 한다. 스킴·호스트 대소문자, 기본 포트와 루트 슬래시는
-정규 출처로 정규화해 생성 예약에 저장한다. 같은 의도를 재생할 때는 현재 설정이
+정규 출처로 정규화해 생성 예약에 저장한다. 같은 요청을 재시도할 때는 현재 설정이
 아니라 최초 예약의 출처를 사용하므로 출처 이전 뒤에도 같은 단축 URL을 반환한다. V5 이전
 예약처럼 출처 증거가 없으면 현재 값으로 추정하지 않고 운영 오류로 실패한다.
 
@@ -107,17 +107,17 @@ JWK 조회에는 별도의 연결·읽기 제한을 적용한다. 기본값과 �
 
 ### HMAC 키와 데이터베이스 결합
 
-신규 빈 DB는 현재 파생 버전과 HMAC 키 지문에 자동 결합하지만, 기존 데이터가 있는
-미결합 DB는 안전하게 실패한다. DB 백업과 해당 시점의
+신규 빈 DB에는 현재 파생 버전과 HMAC 키 지문을 자동 등록한다. 링크 데이터가 있지만
+HMAC 키가 등록되지 않은 DB에서는 서버 시작을 거부한다. DB 백업과 해당 시점의
 키 묶음을 하나의 복구 단위로 관리한다. 기존 단일 비밀값은 `legacy` 키로 호환하며,
 새 발급 키를 추가해도 이전 생성 요청은 저장된 키 버전으로 재생한다. 키 ID의 비밀값을
 덮어쓰거나 아직 재생에 필요한 키를 제거하면 시작을 거부한다. 정책 기준은
 [ADR-0011](docs/ADR/0011_link-code-key-ring/adr.md), 설정·교체 순서는
-[키 교체 실행서](docs/RUNBOOK/link-code-key-rotation.md)다.
+[키 교체 절차](docs/RUNBOOK/link-code-key-rotation.md)다.
 
 기존 DB의 최초 결합은 모든 쓰기를 중지하고 분리된 `guard-tool`로 카나리를
 검증한 뒤에만 수행한다. 직접 SQL이나 임의 비밀값 강제 결합 대신
-[기존 데이터베이스 HMAC 보호 장치 최초 결합 실행서](docs/RUNBOOK/link-code-key-guard-binding.md)를
+[기존 데이터베이스 HMAC 보호 장치 최초 결합 절차](docs/RUNBOOK/link-code-key-guard-binding.md)를
 따른다.
 
 `.env`는 Docker Compose의 dotenv 문법으로 해석하는 데이터 파일이며 셸 스크립트가 아니다.
@@ -168,10 +168,10 @@ kubectl kustomize deploy/k8s/overlays/private-server >/dev/null
 ```
 
 실제 Secret 생성, 레지스트리 인증, 배포·백업·복구와 경계 구성은
-[비공개 Kubernetes 배포 실행서](docs/RUNBOOK/kubernetes-private-server-deployment.md)를
+[비공개 Kubernetes 배포 절차](docs/RUNBOOK/kubernetes-private-server-deployment.md)를
 따른다. 공개 Ingress는 `/l` 접두 경로만, 비공개 관리 경로는 `/api/v1` 접두 경로만 같은
 HTTP Service로 분리해야 하며 Actuator `8081`은 기본 노출하지 않는다. 이 인프라 구성은
-PRD-0003의 공개 운영 배포 관문을 대신하지 않는다.
+PRD-0003의 운영 시작 전 점검을 대신하지 않는다.
 
 애플리케이션 Ingress NetworkPolicy는 HTTP를 명시적으로 표시한 Ingress 네임스페이스에서만 받고,
 Actuator는 표시한 모니터링 네임스페이스와 클라이언트 Pod 조합에만 허용한다. 실제 적용 전 CNI의
@@ -209,7 +209,7 @@ CI는 운영 이미지를 Compose로 실행해 상태 확인, 미존재 링크�
 HEAD의 응답 형식·빈 본문과 요청률 제한 `429`를 점검한다. 오류 상태별 세부 계약은 웹 테스트에서 검증한다.
 같은 이미지의 SBOM·취약점 보고서와 검사 대상 정보를 `baton-go-image-security` 산출물로 보존한다.
 검사 실행 실패는 CI를 실패시키지만 취약점 발견만으로 배포를 차단하지는 않는다.
-보고서 확인과 릴리스 승인 범위는 [이미지 검사 실행서](docs/RUNBOOK/image-security-reports.md)를 따른다.
+보고서 확인과 릴리스 승인 범위는 [이미지 검사 절차](docs/RUNBOOK/image-security-reports.md)를 따른다.
 
 Gradle은 `gradle/verification-metadata.xml`의 SHA-256으로 내려받은 의존성을 검증한다.
 의존성을 변경할 때는 검증 메타데이터를 삭제하거나 검증을 끄지 말고, 새 아티팩트의 출처와
@@ -281,11 +281,11 @@ curl -i http://localhost:8080/api/v1/links \
 
 ### 운영 절차
 
-- [비공개 Kubernetes 배포 실행서](docs/RUNBOOK/kubernetes-private-server-deployment.md)
+- [비공개 Kubernetes 배포 절차](docs/RUNBOOK/kubernetes-private-server-deployment.md)
 - [Prometheus 경보 연결과 검증](docs/RUNBOOK/prometheus-alerts.md)
 - [이미지 SBOM·취약점 보고서 확인](docs/RUNBOOK/image-security-reports.md)
 - [관리 작업 이력 조회와 보존](docs/RUNBOOK/management-operation-history.md)
 - [종료 링크 보존 기간 설정](docs/RUNBOOK/link-retention.md)
 - [HMAC 키 교체](docs/RUNBOOK/link-code-key-rotation.md)
-- [기존 DB HMAC 보호 장치 최초 결합 실행서](docs/RUNBOOK/link-code-key-guard-binding.md)
-- [대상 계약 v1 정리 실행서](docs/RUNBOOK/target-contract-v1-remediation.md)
+- [기존 DB HMAC 보호 장치 최초 결합 절차](docs/RUNBOOK/link-code-key-guard-binding.md)
+- [대상 계약 v1 정리 절차](docs/RUNBOOK/target-contract-v1-remediation.md)

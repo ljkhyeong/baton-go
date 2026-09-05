@@ -38,7 +38,7 @@ docker compose --env-file .env -f compose.yml -f compose.key-ring.yml up -d app
 2. 현재 발급 키를 유지한 채 새 ID·비밀값을 모든 Pod에 추가한다. 각 Pod 재시작과 준비 상태를 확인한다.
 3. `BATONGO_LINKCODE_ACTIVEKEYID`를 새 ID로 바꾸고 Pod를 순차 교체한다. 두 키가 모두 있는
    동안 현재 발급 키가 다른 Pod도 같은 요청의 저장된 키 ID로 재생한다.
-4. 기존 생성 의도의 동일 URL 재생, 새 의도 생성·재생·공개 해석·폐기를 검증한다.
+4. 기존 요청을 재시도하면 기존 URL을 반환하는지 확인한다. 새 요청의 생성·재시도·리다이렉트·폐기도 검증한다.
 5. 기존 키를 발급하는 Pod가 모두 종료되고 [보존 정리](link-retention.md)로 기존 키의 재생 대상이 없어졌을 때만 해당 비밀값을 실행 설정에서 제거한다. 등록 키
    메타데이터는 남기며 같은 키 ID에 다른 값을 다시 할당하지 않는다.
 

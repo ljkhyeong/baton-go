@@ -57,8 +57,8 @@ GitHub Actions의 해당 실행에서 `baton-go-image-security` 산출물을 내
 결정하지 않는다. 로컬 빌드 이미지의 보고서만으로 공개 운영을 승인하지 않는다.
 
 릴리스 담당자는 실제 배포할 매니페스트 다이제스트와 플랫폼에 맞는 검사 결과를 확보하고,
-발견 사항의 처리·예외 승인, 서명·provenance 검증과 보존 위치를 기록한다. 상세 배포 관문은
-[비공개 Kubernetes 배포 실행서](kubernetes-private-server-deployment.md)를 따른다.
+발견 사항의 처리·예외 승인, 서명·provenance 검증과 보존 위치를 기록한다. 상세 배포 점검 항목은
+[비공개 Kubernetes 배포 절차](kubernetes-private-server-deployment.md)를 따른다.
 
 ## 표준 도구 문서
 

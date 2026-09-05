@@ -34,7 +34,7 @@ Lettuce의 공유 연결과 표준 URI·TLS·재연결을 사용한다. 연결�
 
 두 Redis 연결의 동시 요청 합계, 창 만료, TTL 훼손과 연결 종료를 통합 테스트한다.
 Spring 활성화 조립과 공개 JSON·HTML·HEAD 오류, DB 조회 미실행도 검증한다.
-[운영 실행서](../../RUNBOOK/distributed-public-rate-limit.md)를 따른다.
+[운영 절차](../../RUNBOOK/distributed-public-rate-limit.md)를 따른다.
 
 - [Redis INCR의 원자적 요청 제한 예시](https://redis.io/docs/latest/commands/incr/)
 - [Lettuce 연결·대기열·시간 제한](https://redis.github.io/lettuce/advanced-usage/client-options/)

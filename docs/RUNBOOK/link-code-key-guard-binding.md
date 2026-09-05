@@ -1,4 +1,4 @@
-# 기존 데이터베이스 HMAC 보호 정보 최초 결합 운영 절차
+# 기존 데이터베이스 HMAC 보호 정보 최초 결합 절차
 
 이 절차는 `link_code_key_guard` 마이그레이션을 처음 적용했지만 기존 링크 또는 생성 예약 때문에
 자동 결합이 거부된 데이터베이스에만 사용한다. 신규 빈 데이터베이스는 시작 검증이 자동으로
@@ -25,7 +25,7 @@
    `BATON_GO_LINK_CODE_SECRET`을 현재 셸에 주입한다. 명령 인자나 셸 기록에 비밀값을
    넣지 않는다.
 
-운영 DB 접속은 [배포 실행서의 TLS 신뢰 저장소 계약](kubernetes-private-server-deployment.md#3-namespace와-secret-준비)을
+운영 DB 접속은 [배포 절차의 TLS 신뢰 저장소 계약](kubernetes-private-server-deployment.md#3-namespace와-secret-준비)을
 따른다. CLI 실행 환경에서도 JDBC 호스트가 해석되고 URL에 지정한 공개 CA 저장소를 읽을 수
 있어야 한다. `sslMode=VERIFY_IDENTITY`, `trustCertificateKeyStoreType=PKCS12`,
 `fallbackToSystemTrustStore=false`를 유지한다. CLI는 애플리케이션과 같은 공개 CA 저장소
@@ -96,9 +96,9 @@ zsh에서 입력을 화면과 기록에 남기지 않는다.
 
 1. 같은 배포 실행 파일을 정상 모드로 시작한다.
 2. 준비 상태가 열리기 전에 HMAC 보호 정보 시작 검증이 통과하는지 확인한다.
-3. 보관한 검증용 요청 내용을 같은 키로 재생해 기존 링크 ID와 단축 URL로 수렴하는지 확인한다.
+3. 보관한 검증용 요청을 같은 키와 내용으로 재시도해 기존 링크 ID와 단축 URL을 반환하는지 확인한다.
    응답의 전체 단축 URL은 로그나 증거 문서에 복사하지 않는다.
-4. 신규 정규 생성 의도 한 건의 생성·재생과 공개 해석기를 스모크 테스트한다.
+4. 새 정규 UUID로 링크 한 건을 생성하고 같은 요청의 재시도와 리다이렉트를 스모크 테스트한다.
 5. 검증이 끝난 뒤에만 기록자와 생성 트래픽을 다시 연다.
 
 DB와 비밀값을 함께 복구하는 훈련에서도 같은 검증 순서를 사용한다. 키 묶음을 도입하기

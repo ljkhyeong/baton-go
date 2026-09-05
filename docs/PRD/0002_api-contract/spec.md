@@ -59,7 +59,7 @@ XML 등 지원하지 않는 응답 형식만 요청해도 원래 오류 상태·
 - 지원하지 않는 HTTP 메서드: `405 METHOD_NOT_ALLOWED`
 - 관리 API에서 지원하지 않는 응답 형식만 요청함: `406 INVALID_REQUEST`
 - 지원하지 않는 요청 본문 형식: `415 UNSUPPORTED_MEDIA_TYPE`
-- 공개 해석기 처리 한도 초과: `429 RATE_LIMIT_EXCEEDED`
+- 단축 링크 요청 한도 초과: `429 RATE_LIMIT_EXCEEDED`
 - 공용 요청 제한 저장소 장애: `503 RATE_LIMIT_UNAVAILABLE`
 - 허용되지 않은 대상 시스템·목적·위치 식별자 조합: `400 INVALID_LINK`
 - 대상 계약 운영 기능의 목록 조사 요청 값 오류: `400 INVALID_REQUEST`
@@ -82,7 +82,7 @@ JWK 조회 등 인증 서비스 장애는 토큰 오류와 구분해 `500 INTERN
 
 관리 쓰기 완료 이력은 JWT의 `sub`를 서비스 식별자로 사용한다. 기존 HTTP 인증 조건과
 응답 형식은 바꾸지 않는다. 기록 대상, 민감정보 제외와 보존 정책은
-[관리 작업 이력 실행서](../../RUNBOOK/management-operation-history.md)를 따른다.
+[관리 작업 이력 운영 절차](../../RUNBOOK/management-operation-history.md)를 따른다.
 
 ## POST `/api/v1/links`
 
@@ -102,7 +102,7 @@ Idempotency-Key: 8e448211-66ae-44ab-9888-c4960648c22b
 ^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$
 ```
 
-- 호출자는 하나의 생성 의도에 같은 키를 사용하고 원본 도메인 상태와 함께 영속화한다.
+- 호출자는 하나의 링크 생성 요청에 같은 키를 사용하고 원본 도메인 상태와 함께 영속화한다.
 - 성공 응답의 `Location`은 `/api/v1/links/{id}`다.
 - 최초 성공은 `201 Created`와 `Idempotency-Replayed: false`를 반환한다.
 - 같은 키와 같은 요청 내용의 재시도는 동일한 `id`, `shortUrl`, `Location`을
@@ -119,7 +119,7 @@ Idempotency-Key: 8e448211-66ae-44ab-9888-c4960648c22b
   만들지 않고 `500 LINK_CREATION_REPLAY_UNAVAILABLE`로 실패한다. 이 오류는 저장 일관성 복구가
   끝날 때까지 자동 재시도하지 않는다.
 - 키 누락·형식 오류는 `400 INVALID_IDEMPOTENCY_KEY`로 거부한다.
-- 과거 배포가 이미 저장한 생성 의도에 한해서는 당시 파서가 허용했던 대문자, nil,
+- 과거 배포가 이미 저장한 링크 생성 요청에 한해서는 당시 파서가 허용했던 대문자, nil,
   버전 `0`·`6..f`, RFC 비준수 변형의 정규 UUID를 소문자로 정규화해 조회한다.
   동일한 멱등성 키 해시의 기존 예약과 동일 요청 내용이 모두 확인될 때만 `200` 재생하며,
   예약이 없으면 `400 INVALID_IDEMPOTENCY_KEY`로 거부하고 새 예약이나 링크를 만들지 않는다.
@@ -192,7 +192,7 @@ Idempotency-Key: 8e448211-66ae-44ab-9888-c4960648c22b
 
 `RESOURCE_OPEN`과 표 밖 조합, 비정규 식별자, 끝 슬래시와 추가 경로 구간은
 `400 INVALID_LINK`로 거부하며 링크와 생성 예약을 저장하지 않는다. 정확한 정규식, 클릭
-시점 권한과 배포 관문은 PRD-0003을 따른다.
+시점 권한과 배포 전 점검은 PRD-0003을 따른다.
 
 ## GET `/api/v1/links`
 
@@ -380,9 +380,9 @@ Idempotency-Key: 8e448211-66ae-44ab-9888-c4960648c22b
 ```
 
 이미 폐기한 비준수 행의 반복 요청은 같은 `revokedAt`과
-`alreadyRevoked=true`를 반환한다. 대상과 생성 예약 행은 수정·삭제하지 않는다. 새 링크는
-원본 애그리게이트 소유자가 권위 있는 정규 대상과 새 의도 UUID로 정상 생성 API를
-호출해 재발급한다.
+`alreadyRevoked=true`를 반환한다. 대상과 생성 예약 행은 수정·삭제하지 않는다.
+원본을 관리하는 BATON·ROUND 서비스가 대상 경로를 확인한 뒤 새 요청 UUID로
+링크 생성 API를 호출해 재발급한다.
 
 ## GET·HEAD `/l/{code}`
 
@@ -426,7 +426,7 @@ DB에 저장된 대상이 현재 PRD-0003 계약을 위반하면 존재 여부�
 판정한다. `Accept` 파서나 응답 변환을 별도로 구현하지 않고 Spring의 콘텐츠 협상과 메시지
 변환을 사용하며, HTML 템플릿과 보안 헤더는 한곳에서 재사용한다.
 
-### 공개 해석기 과부하 안전장치
+### 단축 링크 요청 제한
 
 `GET·HEAD /l/{code}`는 데이터베이스 조회 전에 인스턴스 단위 통합 요청률 제한을
 적용한다. 존재 여부와 코드 형식에 관계없이 이 경로의 모든 `GET`과 `HEAD`가 하나의
@@ -447,4 +447,4 @@ DB에 저장된 대상이 현재 PRD-0003 계약을 위반하면 존재 여부�
 분산 제한을 활성화하면 공개 `GET·HEAD /l/{code}`의 허용량을 모든 Pod가 공유한다.
 한도 초과는 기존 `429 RATE_LIMIT_EXCEEDED`와 `Retry-After`이며, Redis 오류는
 `503 RATE_LIMIT_UNAVAILABLE`다. HTML·JSON·HEAD는 기존 공개 오류 표현을 따르고 링크
-조회는 실행하지 않는다. 관리 API는 이 제한에서 제외한다. [실행서](../../RUNBOOK/distributed-public-rate-limit.md)를 따른다.
+조회는 실행하지 않는다. 관리 API는 이 제한에서 제외한다. [운영 절차](../../RUNBOOK/distributed-public-rate-limit.md)를 따른다.

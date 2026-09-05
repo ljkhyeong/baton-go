@@ -19,13 +19,13 @@
   [ADR-0009](docs/ADR/0009_idempotent-public-origin-replay/adr.md),
   [ADR-0007](docs/ADR/0007_mysql-instant-storage/adr.md)을 따른다.
 - V7는 정리 표식과 요청 비교값을 추가한다. 종료 링크 자동 정리는 기본 중지하며
-  [보존 실행서](docs/RUNBOOK/link-retention.md)에 따라 기간을 명시해야 활성화된다.
+  [보존 절차](docs/RUNBOOK/link-retention.md)에 따라 기간을 명시해야 활성화된다.
 - V6는 기존 예약을 `legacy` 키로 이관하고 새 예약에 발급 키 ID를 저장한다. 키 교체와
   이전 키 제거 조건은 [ADR-0011](docs/ADR/0011_link-code-key-ring/adr.md)을 따른다.
-  실제 운영 키 묶음 배포·전환·복원 훈련은 [실행서](docs/RUNBOOK/link-code-key-rotation.md)에 따라 남아 있다.
+  실제 운영 키 묶음 배포·전환·복원 훈련은 [운영 절차](docs/RUNBOOK/link-code-key-rotation.md)에 따라 남아 있다.
 - 계약 전 저장 데이터 조사·폐기 API는 구현되어 있지만 기본 비활성화 상태다. 공개 경계 차단을
   확인한 유지 보수 시간에만 두 활성화 값을 함께 사용하며, 일반 운영에서는 모두 `false`로 둔다.
-- Redis 공용 요청 제한은 기본 중지하며 [분산 제한 실행서](docs/RUNBOOK/distributed-public-rate-limit.md)에
+- Redis 공용 요청 제한은 기본 중지하며 [분산 요청 제한 절차](docs/RUNBOOK/distributed-public-rate-limit.md)에
   따라 운영 Redis를 연결해야 한다. 두 연결 동시성·실패 차단과 공개 HTTP 검증은 준비되어 있다.
 - GO 전용 MySQL과 비공개 Kubernetes 기본 구성은 준비되어 있다. 이는 배포 기반일 뿐 실제
   클러스터 검증이나 공개 운영 승인 증거가 아니다. MySQL 워크로드는 비루트 UID/GID와 Linux
@@ -33,10 +33,10 @@
   복원·현재 PVC의 기동과 TLS·초기화·마이그레이션을 실제 클러스터에서 검증해야 한다.
 - 공개·관리 응답 지연과 전체·관리 API 5xx·관리 JWT 서비스 장애·관리 링크 복구 오류·429·저장 대상 계약 위반의 [Prometheus 경보 규칙](deploy/prometheus/baton-go-alerts.yml)과
   `promtool` 검증은 준비되어 있다. 실제 수집기·알림 경로 연결과 인프라·백업 경보는
-  [경보 실행서](docs/RUNBOOK/prometheus-alerts.md)에 따라 운영 환경에서 검증해야 한다.
+  [경보 운영 절차](docs/RUNBOOK/prometheus-alerts.md)에 따라 운영 환경에서 검증해야 한다.
 - CI는 검사한 커밋·이미지 구성 다이제스트·아카이브 체크섬과 SBOM·취약점 보고서를
   `baton-go-image-security`로 보존한다. 취약점 등급별 자동 차단이나 릴리스 이미지 승인 증거는
-  아니며, [이미지 검사 실행서](docs/RUNBOOK/image-security-reports.md)에 따라 결과를 검토한다.
+  아니며, [이미지 검사 절차](docs/RUNBOOK/image-security-reports.md)에 따라 결과를 검토한다.
 - 대표 HTTP 요청·응답은 기존 계약 테스트에서 REST Docs 조각으로 생성하며
   `:adapter-in-web:apiContractDocs`가 압축 산출물을 만들고 CI가 `baton-go-rest-docs`로
   보존한다. 보존 기간은 [CI 워크플로](.github/workflows/ci.yml)의 `retention-days` 설정을
@@ -44,7 +44,7 @@
   [API 계약](docs/PRD/0002_api-contract/spec.md)이다.
 - 관리 쓰기 완료 이력은 JWT `sub`와 내부 링크·요청 ID만 사용하며 기존 중앙 로그 보존 정책을
   따른다. 별도 감사 DB는 없으며, 실제 수집·조회 권한과 보존 정책 확인은
-  [관리 작업 이력 실행서](docs/RUNBOOK/management-operation-history.md)에 따라 운영 환경에서 수행한다.
+  [관리 작업 이력 운영 절차](docs/RUNBOOK/management-operation-history.md)에 따라 운영 환경에서 수행한다.
 
 ## 외부 저장소 확인 기준
 
@@ -54,7 +54,7 @@
   브라우저 진입, 참여권 검증, TURN·WebSocket 방 경계 구현을 확인했다.
 - 위 커밋 확인은 실제 릴리스 이미지, 공개 HTTPS, 외부 coturn과 운영 자격 증명 검증을
   대신하지 않는다.
-- 2026-09-05 BATON의 `codex/go-link-integration-20260905` 브랜치 `27192c37`에 ROUND 방의
+- 2026-09-05 BATON의 `codex/go-link-integration-20260905` 브랜치 `e5685e6f`에 ROUND 방의
   GO 생성·폐기 전달, 인증된 조회·화면 복사, 운영 조회·재처리와 이전 공개 도메인 재생을 구현했다.
   작업 공간은 `/private/tmp/baton-go-integration-20260905`이며 원본 `c89927d0`의 오늘 화면
   자료 재확인 기능까지 통합했다.
@@ -95,7 +95,7 @@
 
 ## 운영 시작 전 확인 사항
 
-1. 배포 DB 전체를 [대상 계약 v1 정리 실행서](docs/RUNBOOK/target-contract-v1-remediation.md)로
+1. 배포 DB 전체를 [대상 계약 v1 정리 절차](docs/RUNBOOK/target-contract-v1-remediation.md)로
    조사하고 `unrevoked non-compliant=0`, 미승인 `HOLD=0` 증거를 확보한다.
 2. 확인한 BATON·ROUND 인증 경계를 실제 릴리스 이미지와 공개 HTTPS, 외부 coturn에 연결하고
    세션·CSRF·쿠키·JWK 회전·TURN·WebSocket 경계 증거를 확보한다. GO 관리 API는
@@ -124,5 +124,5 @@
 10. HMAC 비밀값 유출 시 임의 Secret 회전 없이 쓰기·공개 경계를 차단하고, 기존 링크
     폐기·재발급과 키 묶음 전환을 결합한 복구 방식을 결정해 훈련한다.
 운영 실행과 복구 안전선은
-[비공개 Kubernetes 배포 실행서](docs/RUNBOOK/kubernetes-private-server-deployment.md)와
+[비공개 Kubernetes 배포 절차](docs/RUNBOOK/kubernetes-private-server-deployment.md)와
 [HMAC 키·DB 결합 결정](docs/ADR/0004_link-code-key-binding/adr.md)을 따른다.

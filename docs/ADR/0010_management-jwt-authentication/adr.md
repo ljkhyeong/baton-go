@@ -53,14 +53,14 @@ BATON GO는 브라우저 사용자가 아니라 신뢰된 서버 호출자가 �
   JWT·원격 오류 응답·예외 원문은 기록하지 않는다. JWT 검증과 JWK 조회·캐시는 계속 Spring이
   수행한다.
 - 인증 서비스 장애는 별도 Micrometer 카운터로 집계해 공개 링크 성공 트래픽과 무관하게
-  감지한다. 경보와 수집 기준은 [Prometheus 실행서](../../RUNBOOK/prometheus-alerts.md)를 따른다.
+  감지한다. 경보와 수집 기준은 [Prometheus 운영 절차](../../RUNBOOK/prometheus-alerts.md)를 따른다.
 - 관리 보안 체인은 세션을 만들지 않고 CSRF 상태를 사용하지 않는다. 공개 `/l/**`와 Actuator는
   이 체인에 포함하지 않으며 기존 네트워크 경계를 계속 적용한다.
 - JWT 원문, `Authorization` 헤더와 토큰 claim 전체를 로그·지표·오류에 기록하지 않는다.
 - 관리 쓰기 완료 이력은 검증된 JWT의 `sub`를 서비스 식별자로 사용한다. 기존 인증 조건을
   변경하거나 다른 claim으로 대체하지 않는다. 웹 경계에서 트랜잭션 서비스의 성공 반환 뒤
   허용한 필드만 기존 로그에 기록하며, 별도 감사 DB나 보존 기간을 만들지 않는다. 기록 범위,
-  식별자 누락과 수집 실패의 의미는 [관리 작업 이력 실행서](../../RUNBOOK/management-operation-history.md)를 따른다.
+  식별자 누락과 수집 실패의 의미는 [관리 작업 이력 운영 절차](../../RUNBOOK/management-operation-history.md)를 따른다.
 - JWT 발급, 서비스 신원 등록, 개인 키 보관과 signing key 회전은 발급자가 소유한다. GO는
   JWK 공개키를 검증하며 정적 관리 토큰 Secret이나 자체 JWT 파서를 두지 않는다.
 

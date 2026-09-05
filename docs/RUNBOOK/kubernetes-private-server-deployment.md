@@ -1,4 +1,4 @@
-# 비공개 Kubernetes 서버 배포 운영 절차
+# 비공개 Kubernetes 서버 배포 절차
 
 이 문서는 BATON GO 애플리케이션과 GO 전용 MySQL을 비공개 Kubernetes에 처음 배포하고
 업데이트·복구하는 절차다. BATON 또는 ROUND의 데이터베이스, 사용자, 볼륨이나 Secret은 사용하지
@@ -21,7 +21,7 @@
 | `ConfigMap/baton-go-mysql-runtime-user-init-*` | DML 전용 런타임 사용자 초기화 스크립트 | MySQL 초기화 디렉터리에 마운트 |
 
 이 배포만으로 공개 운영 배포가 승인되지는 않는다. PRD-0003의 BATON 세션,
-참여 허가, 회의실 매핑, 외부 경계 라우팅과 기존 데이터 목록 조사 관문은 별도다.
+참여 허가, 회의실 매핑, 외부 경계 라우팅과 기존 데이터 목록 조사는 별도로 점검해야 한다.
 
 ## 1. 배포 전 결정
 
@@ -302,7 +302,7 @@ jdbc:mysql://baton-go-mysql:3306/baton_go?sslMode=VERIFY_IDENTITY&trustCertifica
 통신 시간 초과만으로 쓰기 실패나 DDL 롤백을 단정하지 않는다. 링크 생성 재시도는 같은
 `Idempotency-Key`를 사용하고, 마이그레이션 실패는 [실패 복구 절차](#마이그레이션-job-실패-복구)에
 따라 실제 스키마와 Flyway 이력을 먼저 확인한다.
-guard CLI의 결과가 불명확하면 [최초 결합 실행서](link-code-key-guard-binding.md#도구-빌드와-실행)에
+guard CLI의 결과가 불명확하면 [최초 결합 절차](link-code-key-guard-binding.md#도구-빌드와-실행)에
 따라 같은 비밀값 버전과 검증용 키로 다시 실행한다.
 설정 의미는 [HikariCP 설정](https://github.com/brettwooldridge/HikariCP#configuration-knobs-baby)과
 [Connector/J 네트워크 설정](https://dev.mysql.com/doc/connector-j/en/connector-j-connp-props-networking.html)을 따른다.
@@ -438,7 +438,7 @@ PVC에는 사용자 분리 초기화 스크립트도 다시 실행되지 않는�
 일회성 Job이 Flyway 스키마를 만든 뒤 장기 실행 애플리케이션은 DML 사용자로 JPA 스키마를
 검증한다. 신규 빈 DB의 링크 코드 HMAC 보호 장치는 애플리케이션 시작 시 현재 HMAC 비밀값에 자동
 결합된다. 이후에는 DB와 `BATON_GO_LINK_CODE_SECRET`을 항상 같은 시점의 복구 단위로
-보존한다. HMAC 키 교체는 [키 교체 실행서](link-code-key-rotation.md)의 키 ID 추가·선배포·전환 순서를 따른다.
+보존한다. HMAC 키 교체는 [키 교체 절차](link-code-key-rotation.md)의 키 ID 추가·선배포·전환 순서를 따른다.
 
 ### 부분 초기화 실패 복구
 
@@ -501,8 +501,8 @@ kubectl get pv "${BATON_GO_RECOVERY_PV_NAME}" \
 kubectl get storageclass "${BATON_GO_RECOVERY_STORAGE_CLASS_NAME}"
 ```
 
-PVC UID·PV·StorageClass·회수 정책이 승인 기록과 정확히 일치할 때만 다음 파괴 블록을
-별도로 실행한다.
+PVC UID·PV·StorageClass·회수 정책이 승인 기록과 정확히 일치할 때만 아래 PVC 삭제·MySQL 시작
+명령을 별도로 실행한다.
 
 ```bash
 kubectl -n baton-go delete pvc data-baton-go-mysql-0 --wait=true
@@ -668,7 +668,7 @@ DNS Namespace·Pod label, Service IP와 host-network 처리는 클러스터마�
 
 각 경보는 데이터를 조작하지 않는 방식으로 시험하고 규칙 버전, 경보 발생 시각, 알림
 수신·확인 결과와 담당자를 운영 증거에 남긴다. 대시보드 화면만 있거나 알림을
-실제로 전송하지 않은 규칙은 관문 통과 증거가 아니다.
+실제로 전송하지 않은 규칙은 경보 점검을 완료한 근거가 되지 않는다.
 
 ## 6. 배포 검증
 
@@ -694,8 +694,8 @@ kubectl -n baton-go get events --sort-by=.lastTimestamp
   마이그레이션 label이 아닌 Pod에서 MySQL `3306` 연결이 실패한다.
 - 평상시 운영 기능 두 설정값은 `false`다.
 
-그 다음 비공개 관리 경로에서 새 정규 UUID 요청 의도 한 건으로 생성, 같은 요청 의도
-재생, 공개 해석과 폐기를 검증한다. 실제 관리 JWT, `Idempotency-Key`, 공개 코드,
+그 다음 비공개 관리 경로에서 새 정규 UUID로 링크를 생성한다. 같은 요청의 재시도, 리다이렉트와
+폐기를 검증한다. 실제 관리 JWT, `Idempotency-Key`, 공개 코드,
 대상 경로와 전체 단축 URL을 셸 기록이나 검증 증거에 복사하지 않는다. 증거에는 HTTP
 상태, 링크 ID, 요청 ID와 시각처럼 허용된 메타데이터만 남긴다.
 
@@ -889,7 +889,7 @@ Job이 `Failed`이거나 결과가 불명확하면 다음 순서를 지킨다.
 
 단, V5의 `public_origin` 추가는 열 모양만 확장 호환이고 구 쓰기 프로세스와 동작까지
 온라인 호환되지는 않는다. V5 적용 뒤 구 Pod가 생성한 예약은 `public_origin`이 `NULL`인 채
-최초 요청을 성공시킬 수 있고 새 Pod는 그 요청 의도의 정확한 단축 URL을 재생할 수 없다. 이
+최초 요청을 성공시킬 수 있지만, 새 Pod에서 같은 요청을 재시도하면 기존 단축 URL을 반환할 수 없다. 이
 비공개 서버의 신규 빈 DB 첫 배포에는 구 Pod가 없으므로 해당 경합이 없지만, 이미 애플리케이션이
 실행 중인 환경에 V5를 도입할 때는 다음 유지 보수 순서를 사용한다.
 
@@ -903,7 +903,7 @@ Job이 `Failed`이거나 결과가 불명확하면 다음 순서를 지킨다.
    유지 보수 중 채우고, 증거가 없는 행을 현재 설정으로 일괄 추정하지 않는다.
 4. 완료된 이전 마이그레이션 Job을 위 절차로 삭제한 뒤 Kustomize를 적용한다. 새 애플리케이션이 먼저
    시작하더라도 외부 경계의 쓰기 경로 차단은 유지한다.
-5. 마이그레이션 Job `Complete`, 새 Deployment 준비 상태, 신규 요청 의도의 최초 생성과 동일 URL 재생을
+5. 마이그레이션 Job `Complete`, 새 Deployment 준비 상태, 새 링크 생성과 같은 요청의 재시도 시 기존 URL 반환을
    순서대로 확인한 뒤 쓰기 경로를 다시 연다.
 
 ```bash
@@ -952,7 +952,7 @@ Secret을 환경 변수로 주입한 실행 중 Pod는 Secret 객체가 바뀌�
   신뢰 저장소를 배포하고 위 두 명령으로 애플리케이션 Pod를 다시 재생성한다. 준비 상태와 새 CA
   연결을 확인한 뒤에만 중첩을 종료한다. 서버부터 회전하거나 Secret 볼륨 파일 변경만으로
   MySQL/Hikari가 인증서를 즉시 다시 읽는다고 가정하지 않는다.
-- HMAC 비밀값: 기존 키 ID의 값을 바꾸지 않고 [키 교체 실행서](link-code-key-rotation.md)에 따라
+- HMAC 비밀값: 기존 키 ID의 값을 바꾸지 않고 [키 교체 절차](link-code-key-rotation.md)에 따라
   새 키 ID를 모든 Pod에 먼저 배포한 뒤 현재 발급 키를 전환한다. 검증된 DB 복원에는
   해당 백업의 재생 대상 키 묶음을 함께 사용한다. 유출·오용이
   의심되면 Secret을 갱신하거나 rollout restart를 먼저 하지 않고 `/api/v1`과
@@ -981,7 +981,7 @@ Flyway 마이그레이션은 자동으로 역적용되지 않는다. DB 스키�
 소유한다. 이 저장소는 특정 백업 스케줄러나 원격 저장소를 제공하지 않고, 복구 세트의 구성과
 복원 검증 절차를 소유한다. 공개 운영 전에는 환경별 플랫폼 백업 정책의 위치와 RPO, RTO,
 실행 주기, 보존 기간, 담당자, 실패 경보를 운영 증거에 기록한다. 정책이나 증거 위치가
-확정되지 않았으면 공개 운영 관문은 닫힌 상태로 유지한다.
+확정되지 않았으면 공개 운영을 시작하지 않는다.
 
 각 백업 증거는 최소한 다음을 하나의 식별 가능한 복구 세트로 묶는다.
 
@@ -995,7 +995,7 @@ Flyway 마이그레이션은 자동으로 역적용되지 않는다. DB 스키�
 복원 훈련은 격리된 Namespace와 별도 호스트 이름에서 수행한다. 복구한 DB 계정과
 런타임·마이그레이션·초기 설정 Secret 버전을 맞추고, 복구 환경 Service DNS를 SAN에 포함한
 서버 인증서와 그 CA 신뢰 저장소를 주입한다. 마이그레이션 Job `Complete` 뒤 같은 HMAC Secret
-버전으로 시작 보호 장치, 준비 상태와 보관된 검증용 생성 요청의 동일 URL 재생을 검증한다. 전체
+버전으로 시작 보호 장치, 준비 상태와 보관된 검증용 생성 요청의 기존 URL 반환을 검증한다. 전체
 단축 URL, 코드 해시, HMAC 지문, JDBC URL이나 Secret 값은 복원 증거에 남기지
 않는다.
 
@@ -1036,15 +1036,15 @@ StatefulSet 삭제는 기본적으로 PVC를 보존하지만 Namespace 삭제는
 배포하지 않는다. 현재 10Gi를 무제한 보존 승인으로 해석하지 않고, 정책 확정 전에는
 용량 경보와 승인된 PVC 증설로 대응한다.
 
-## 10. 운영 기능 유지 보수와 운영 공개 관문
+## 10. 운영 기능 유지 보수와 운영 시작 조건
 
 대상 계약 목록 조사가 필요한 유지 보수 시간에만 비공개 외부 경계 차단 증거와 쓰기 경로
 중지를 먼저 확인한 뒤 운영 기능 두 설정값을 함께 활성화한다. 설정값은 네트워크 경계가
 아니며 작업 직후 다시 `false`로 배포한다. 상세 절차는
-[대상 계약 v1 정리 실행서](target-contract-v1-remediation.md)를 따른다.
+[대상 계약 v1 정리 절차](target-contract-v1-remediation.md)를 따른다.
 
-이 실행서의 완료만으로 공개 운영을 승인하지 않는다. 장기 완료 조건은
-[교차 서비스 링크 계약의 공개 운영 관문](../PRD/0003_cross-service-link-contract/spec.md#9-공개-운영-관문),
+이 운영 절차의 완료만으로 공개 운영을 승인하지 않는다. 장기 완료 조건은
+[교차 서비스 링크 계약의 운영 시작 조건](../PRD/0003_cross-service-link-contract/spec.md#9-운영-시작-조건),
 현재 남은 작업은 [인수인계](../../HANDOFF.md#운영-시작-전-확인-사항)를 따른다.
 
 참고:

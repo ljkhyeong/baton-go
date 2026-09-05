@@ -536,7 +536,6 @@ class SmartLinkServiceTest {
             String rawCode,
             String codeHash
     ) {
-        when(configuredLinkCodePort.derivationIdentity()).thenReturn(DERIVATION_IDENTITY);
         when(configuredLinkCodePort.keyRingIdentity()).thenReturn(
                 new LinkCodeKeyRingIdentity("legacy", Map.of("legacy", DERIVATION_IDENTITY))
         );

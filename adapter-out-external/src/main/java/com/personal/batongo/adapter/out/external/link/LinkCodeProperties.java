@@ -33,7 +33,7 @@ public record LinkCodeProperties(
                 throw new IllegalArgumentException("기존 키는 secret 또는 keys.legacy 중 한 곳에서 설정해야 합니다");
             }
         }
-        if (!KEY_ID.matcher(activeKeyId).matches() || !configured.containsKey(activeKeyId)) {
+        if (!configured.containsKey(activeKeyId)) {
             throw new IllegalArgumentException("현재 발급 키와 해당 비밀값을 설정해야 합니다");
         }
         configured.forEach((keyId, value) -> {

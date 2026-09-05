@@ -53,8 +53,12 @@
 - 2026-08-27 ROUND `a67df4ba89e935b623d58f2ce7542a5dbbbaea7f`에서 BATON 모드
   브라우저 진입, 참여권 검증, TURN·WebSocket 방 경계 구현을 확인했다.
 - 위 커밋 확인은 실제 릴리스 이미지, 공개 HTTPS, 외부 coturn과 운영 자격 증명 검증을
-  대신하지 않는다. BATON 저장소에서는 GO 원격 생성·폐기 호출과 순서 보장 아웃박스 구현을
-  확인하지 못했다.
+  대신하지 않는다.
+- 2026-09-05 BATON `/Users/lim/devProject/personal/manager`의 별도
+  `codex/go-link-integration-20260905` 브랜치에 ROUND 방의 GO 생성·폐기 전달을 구현했다.
+  기능 커밋은 `8282956`이며 실제 원본 작업과의 병합·V33 이후 V34 이관·운영 JWT와 HTTPS
+  검증은 남아 있다. 방 매핑 응답/UI의 단축 URL 제공과 기존 방 일괄 생성은 이 서버 전달 범위에
+  포함하지 않는다. 기존 사용자 작업은 별도 체크아웃에서 계속 진행 중이다.
 
 ## 공개 운영 전 남은 관문
 
@@ -64,8 +68,8 @@
    세션·CSRF·쿠키·JWK 회전·TURN·WebSocket 경계 증거를 확보한다. GO 관리 API는
    Spring Security JWT와 작업별 scope로 전환했으므로 실제 발급자 식별자·JWK, 서비스 신원,
    audience·scope와 키 회전을 비공개 경계에서 검증한다.
-3. BATON 호출자에 GO 원격 생성·폐기 의도와 같은 `Idempotency-Key`를 소유 트랜잭션의
-   순서 보장 아웃박스로 저장하고, 취소 표식과 생성 후 폐기 수렴을 구현한다.
+3. 별도 BATON 연동 브랜치의 생성 의도·취소·결과 회수 구현을 원본 작업과 병합하고,
+   실제 서비스 JWT와 HTTPS 환경에서 생성 응답 유실 뒤 취소·폐기 수렴을 검증한다.
 4. 공개 `/l`과 비공개 `/api/v1` 외부 경계를 분리하고, 분산 요청률 제한과
    `/l/{code}` 접근 로그 마스킹을 적용한다. 공용 제한 구현은 준비되었으며 실제 Redis·Ingress 검증은 남아 있다.
 5. 실제 비공개 클러스터에서 DNS·TLS·CNI·NetworkPolicy·startup/liveness/readiness probe,

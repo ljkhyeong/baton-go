@@ -8,6 +8,59 @@
 규칙 추가만으로 수집기나 Alertmanager가 배포되지는 않는다. 실제 운영 수집기 연결,
 알림 경로·수신자 설정과 경보 발생 테스트는 [배포 문서의 수집·경보 확인 절차](kubernetes-private-server-deployment.md#수집과-경보-확인-사항)를 따른다.
 
+## 추가 서비스 요금 없는 연결
+
+기존 서버의 Prometheus·Alertmanager와 기존 알림 채널을 재사용한다. 유료 SaaS, 무료 체험,
+사용량 과금 API나 새 서버를 추가하지 않는다. 수집·경보에는 기존 서버의 CPU·메모리·저장 공간이
+필요하다. 이미 수집 중이면 중복 job을 만들지 않고 아래 설정과 비교한다.
+
+1. [수집 설정 예시](../../deploy/prometheus/prometheus-kubernetes.example.yml)의 `rule_files`와
+   `scrape_configs`를 기존 Prometheus 설정에 병합한다. 기존 `alerting`, 저장 기간과 다른 수집
+   작업은 유지한다. 경보 파일은 Prometheus 설정 파일과 같은 디렉터리에 마운트하거나
+   `rule_files`를 실제 마운트 경로로 바꾼다.
+2. Kubernetes 내부 Prometheus를 기준으로 `baton-go` Namespace의 애플리케이션 Pod에서
+   `actuator` 포트만 자동 발견한다. Namespace가 다르면 수집 설정과 아래 Role의 Namespace를
+   함께 바꾼다. 준비되지 않은 실행 중 Pod도 수집하여 장애를 숨기지 않는다.
+3. 기존 Prometheus ServiceAccount에 Pod 조회 권한이 없다면
+   [조회 권한 설정](../../deploy/k8s/monitoring-access/prometheus-pod-reader.yaml)의 `subjects`를
+   실제 ServiceAccount·Namespace로 수정한 뒤 적용한다. 예시의 `monitoring/prometheus`는
+   운영 환경을 확인한 값이 아니다. GO Namespace의 Pod `get/list/watch`만 허용하며 Secret 읽기나
+   클러스터 전체 권한을 부여하지 않는다. Prometheus에는 해당 ServiceAccount 토큰이 필요하다.
+
+   ```bash
+   kubectl kustomize deploy/k8s/monitoring-access
+   kubectl apply -k deploy/k8s/monitoring-access
+   ```
+
+4. 수집기 Namespace에는 `baton-go.networking/allow-actuator: "true"`, 수집기 Pod의
+   배포 템플릿에는 `baton-go.networking/actuator-client: "true"` label을 설정한다.
+   GO의 `8081`을 공개하거나 기존 NetworkPolicy를 완화하지 않는다.
+5. Prometheus의 기존 `alerting.alertmanagers`가 운영 Alertmanager를 가리키는지 확인한다.
+   Alertmanager에서 GO 경보가 기존 수신자로 전달되는 경로를 사용한다. 전용 경로가 필요하면
+   다음을 기존 `route.routes`에 병합하고 `receiver`를 등록된 운영 수신자 이름으로 바꾼다.
+   앞선 일치 경로가 알림을 가로채지 않는지도 확인한다.
+
+   ```yaml
+   - matchers: ['job="baton-go"']
+     receiver: REPLACE_WITH_EXISTING_RECEIVER
+     group_by: [job, alertname]
+     group_wait: 30s
+     group_interval: 5m
+     repeat_interval: 4h
+   ```
+
+   기존 무료 채널만 사용하고 발송용 Java 코드를 추가하지 않는다. 수신자가 없으면 전달 준비가
+   끝난 것으로 보지 않는다. 토큰·SMTP 비밀번호는 기존 비밀값 관리 경로에 둔다.
+6. 병합한 설정을 `promtool check config`, `amtool check-config`로 확인한 뒤 기존 운영 절차로
+   다시 읽는다. Pod별 `up{job="baton-go"}=1`, 경보 파일 로딩과 기존 수신자 라우팅을 확인한다.
+   시험 알림은 담당자와 정한 채널에서 발생·해제 수신까지 확인한다.
+
+이 설정은 한 운영 환경의 GO를 대상으로 한다. 여러 환경을 하나의 Prometheus에 수집하려면
+아래 수집 계약에 따라 환경별 label과 경보 집계를 먼저 구분한다. Prometheus 자체가 중단되면
+이 규칙도 평가되지 않으므로 수집기 장애 감시는 기존 플랫폼 감시에 연결한다.
+표준 기능은 [Prometheus Kubernetes 수집](https://prometheus.io/docs/prometheus/latest/configuration/configuration/#kubernetes_sd_config)과
+[Alertmanager 알림 경로](https://prometheus.io/docs/alerting/latest/configuration/#route)를 따른다.
+
 ## 수집 계약
 
 - 한 운영 환경의 BATON GO Pod들을 `job="baton-go"`로 수집한다. 다른 환경을 같은 job으로
@@ -42,6 +95,8 @@ YAML 규칙을 기준으로 하며, 표와 테스트도 같은 변경에서 갱�
 
 | 경보 | 발생 조건 | 우선순위 |
 | --- | --- | --- |
+| `BatonGoMetricsScrapeFailed` | 특정 Pod의 지표 수집 실패가 2분 지속 | `critical` |
+| `BatonGoMetricsTargetMissing` | GO의 `up` 시계열 부재가 2분 지속 | `critical` |
 | `BatonGoPublicResolverLatency` | 최근 5분 공개 요청 100건 이상·1초 초과 비율 5% 초과가 5분 지속 | `warning` |
 | `BatonGoManagementApiLatency` | 최근 5분 관리 요청 20건 이상·2초 초과 비율 5% 초과가 5분 지속 | `warning` |
 | `BatonGoHttpServerErrors` | 최근 5분 5xx 5건 이상·429 제외 응답의 오류율 5% 초과가 5분 지속 | `critical` |
@@ -56,8 +111,9 @@ YAML 규칙을 기준으로 하며, 표와 테스트도 같은 변경에서 갱�
 - 5xx 계산의 분자·분모에서 `/actuator...`, `/livez`, `/readyz`를 제외하고, 오류율 분모에서도
   429 응답을 제외한다. 상태 확인 성공이나 요청 제한 응답이 늘어도 업무 요청의 서버 오류율이
   낮아지지 않도록 하며, 준비 상태의 503을 업무 요청의 5xx에 합산하지 않는다.
-  DB 준비 상태와 수집 중단은 별도 인프라 경보로 감시한다. 트래픽이 없거나 수집이 끊겼다고
-  이 경보들이 자동으로 발생하지 않는다.
+  DB 준비 상태는 별도 인프라 경보로 감시한다. HTTP 경보는 트래픽이 없거나 수집이 끊기면
+  발생하지 않으므로 위의 수집 실패·대상 누락 경보를 함께 적용한다. 대상이 사라진 뒤 누락
+  경보까지는 시계열의 stale 처리 시간과 2분 지속 시간이 걸린다.
 - 관리 API 5xx 경보는 매핑된 `/api/v1/**` 응답만 분자·분모에 사용한다. 공개 성공 요청이
   많아 전체 오류율이 낮아져도 DB 쓰기 권한·링크 코드 설정 등 관리 작업 장애를 감지한다.
   전체 서비스 장애 때는 전체·관리 5xx 경보가 함께 발생할 수 있다. 인증 필터에서 끝나
@@ -139,6 +195,11 @@ Prometheus 3.13.2 이미지 다이제스트를 고정하여 같은 명령을 실
 promtool_image=prom/prometheus:v3.13.2@sha256:508729e0e2d18e11fd742a5a5ca70e557b940a93948c3c95fd0123a6fd538b69
 
 docker run --rm --network none --read-only \
+  --volume "$PWD/deploy/prometheus:/rules:ro" --workdir /rules \
+  --entrypoint /bin/promtool "$promtool_image" \
+  check config --syntax-only prometheus-kubernetes.example.yml
+
+docker run --rm --network none --read-only \
   --tmpfs /tmp:rw,nosuid,nodev,size=256m \
   --volume "$PWD/deploy/prometheus:/rules:ro" --workdir /rules \
   --entrypoint /bin/promtool "$promtool_image" check rules baton-go-alerts.yml
@@ -146,7 +207,8 @@ docker run --rm --network none --read-only \
 docker run --rm --network none --read-only \
   --tmpfs /tmp:rw,nosuid,nodev,size=256m \
   --volume "$PWD/deploy/prometheus:/rules:ro" --workdir /rules \
-  --entrypoint /bin/promtool "$promtool_image" test rules baton-go-alerts.test.yml
+  --entrypoint /bin/promtool "$promtool_image" \
+  test rules baton-go-alerts.test.yml baton-go-availability.test.yml
 ```
 
 [규칙 테스트](../../deploy/prometheus/baton-go-alerts.test.yml)는 무트래픽·소수 오류,
@@ -164,6 +226,10 @@ MVC 인터셉터가 차단한 429와 공개 경로의 1초·2초 지연 버킷�
 지연 규칙은 정상·저트래픽·무트래픽 제외, 공개·관리 경로 분리, 지속 시간과 회복을 검증한다.
 혼합 버전에서 정상 응답의 오탐과 최소 요청량 부풀림이 없고 실제 지연은 감지되는지도 확인한다. 테스트 문법은
 [Prometheus 규칙 단위 테스트](https://prometheus.io/docs/prometheus/latest/configuration/unit_testing_rules/)를 따른다.
+
+[수집 경보 테스트](../../deploy/prometheus/baton-go-availability.test.yml)는 일부 Pod 실패,
+다른 서비스 제외, 대상 누락, 지속 시간과 복구 후 해제를 확인한다. 수집 예시는 클러스터 자격
+증명 없이 문법을 검증하며, 실제 Pod 발견·접근과 운영 수신자 연결 성공을 대신하지 않는다.
 
 운영 적용 후에는 target `UP`, 규칙 로딩, Alertmanager 라우팅과 담당자 수신을 각각 확인한다.
 실제 저장 데이터를 훼손해 오류를 만들지 말고 격리된 환경의 합성 시계열·시험 알림을 사용한다.

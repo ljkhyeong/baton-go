@@ -81,7 +81,8 @@ jobs:
 
           for target in \
             deploy/k8s/bootstrap \
-            deploy/k8s/overlays/private-server
+            deploy/k8s/overlays/private-server \
+            deploy/k8s/monitoring-access
           do
             printf '검증 중: %s\n' "$target"
             kubectl kustomize "$target" \
@@ -134,8 +135,12 @@ jobs:
           test "$(grep -F -c "image: $app_image" "$rendered_manifest")" -eq 2
           test "$(grep -F -c "image: mysql@$mysql_digest" "$rendered_manifest")" -eq 1
 
-      - name: Prometheus 경보 규칙 검증
+      - name: Prometheus 수집 설정·경보 규칙 검증
         run: |
+          docker run --rm --network none --read-only \
+            --volume "$PWD/deploy/prometheus:/rules:ro" --workdir /rules \
+            --entrypoint /bin/promtool "$PROMTOOL_IMAGE" \
+            check config --syntax-only prometheus-kubernetes.example.yml
           docker run --rm --network none --read-only \
             --tmpfs /tmp:rw,nosuid,nodev,size=256m \
             --volume "$PWD/deploy/prometheus:/rules:ro" --workdir /rules \
@@ -145,7 +150,7 @@ jobs:
             --tmpfs /tmp:rw,nosuid,nodev,size=256m \
             --volume "$PWD/deploy/prometheus:/rules:ro" --workdir /rules \
             --entrypoint /bin/promtool "$PROMTOOL_IMAGE" \
-            test rules baton-go-alerts.test.yml
+            test rules baton-go-alerts.test.yml baton-go-availability.test.yml
 
       - name: 정적·단위·패키징 검증
         run: ./gradlew --no-daemon build

@@ -658,6 +658,9 @@ DNS Namespace·Pod label, Service IP와 host-network 처리는 클러스터마�
 [Prometheus 경보 규칙과 검증 절차](prometheus-alerts.md)가 있다. 수집 label과 초기 임계치를
 실제 환경에 맞춰 연결하며, 아래 인프라·백업 경보는 별도로 준비한다.
 
+기존 수집기와 알림 채널을 재사용하는 [추가 서비스 요금 없는 연결 절차](prometheus-alerts.md#추가-서비스-요금-없는-연결)에
+Pod 자동 발견 설정과 Namespace 범위 조회 권한이 있다. 수집 실패·대상 누락도 경보로 감지한다.
+
 - `Job/baton-go-database-migration` 실패·시간 초과
 - 애플리케이션·MySQL Pod `NotReady`, 재시작과 배포 상태 이상
 - HTTP 5xx 오류율과 공개 해석 429 지속 증가

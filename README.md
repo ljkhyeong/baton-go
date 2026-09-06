@@ -198,6 +198,10 @@ DB 대기 시간은 Hikari·Connector/J 설정으로 제한하며, 마이그레�
 `503`으로 막는다. 클라이언트 IP와 전달 헤더는 사용하지 않는다. 실제 Ingress의 경로 분리와
 `/l/{code}` 접근 로그 가림, 사용자별 트래픽 제한은 공개 경계에서 함께 적용한다.
 
+별도 서비스 요금 없이 기존 Prometheus·Alertmanager를 연결하려면
+[수집·알림 연결 절차](docs/RUNBOOK/prometheus-alerts.md#추가-서비스-요금-없는-연결)를 따른다.
+Pod 자동 발견 설정과 최소 조회 권한을 제공하며 새 서버나 유료 API를 추가하지 않는다.
+
 ## 검증
 
 개발 중에는 [개발 검증 절차](docs/RUNBOOK/development-verification.md)에 따라 변경한 범위부터 확인한다.

@@ -1,0 +1,25 @@
+# 기존 Prometheus 설정의 rule_files와 scrape_configs에 병합한다.
+# alerting과 기존 작업은 운영 설정을 유지한다.
+rule_files:
+  - baton-go-alerts.yml
+
+scrape_configs:
+  - job_name: baton-go
+    scrape_interval: 30s
+    scrape_timeout: 10s
+    metrics_path: /actuator/prometheus
+    kubernetes_sd_configs:
+      - role: pod
+        namespaces:
+          names: [baton-go]
+        selectors:
+          - role: pod
+            label: app.kubernetes.io/name=baton-go,app.kubernetes.io/component=application
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_container_name, __meta_kubernetes_pod_container_port_name]
+        regex: application;actuator
+        action: keep
+      - source_labels: [__meta_kubernetes_pod_phase]
+        regex: Running
+        action: keep
+

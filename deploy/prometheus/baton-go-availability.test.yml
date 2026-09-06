@@ -1,0 +1,63 @@
+rule_files:
+  - baton-go-alerts.yml
+
+evaluation_interval: 30s
+
+tests:
+  - name: 일부 Pod의 수집 실패는 다른 Pod의 정상 수집과 무관하게 감지하고 회복하면 해제한다
+    interval: 30s
+    input_series:
+      - series: 'up{job="baton-go",instance="10.0.0.1:8081"}'
+        values: '1 0 0 0 0 0 1'
+      - series: 'up{job="baton-go",instance="10.0.0.2:8081"}'
+        values: '1x6'
+      - series: 'up{job="other",instance="10.0.0.3:8081"}'
+        values: '0x6'
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: BatonGoMetricsScrapeFailed
+        exp_alerts: []
+      - eval_time: 2m30s
+        alertname: BatonGoMetricsScrapeFailed
+        exp_alerts:
+          - exp_labels:
+              job: baton-go
+              instance: 10.0.0.1:8081
+              severity: critical
+            exp_annotations:
+              summary: BATON GO 지표 수집 실패
+              description: 2분간 Pod 지표를 수집하지 못했습니다. Pod 상태와 Actuator 접근 권한, 네트워크를 확인하세요.
+      - eval_time: 3m
+        alertname: BatonGoMetricsScrapeFailed
+        exp_alerts: []
+      - eval_time: 2m30s
+        alertname: BatonGoMetricsTargetMissing
+        exp_alerts: []
+
+  - name: 다른 서비스만 수집되면 GO 수집 대상 누락을 감지하고 대상이 생기면 해제한다
+    interval: 30s
+    input_series:
+      - series: 'up{job="other",instance="10.0.0.3:8081"}'
+        values: '1x6'
+      - series: 'up{job="baton-go",instance="10.0.0.1:8081"}'
+        values: '_ _ _ _ _ _ 1'
+    alert_rule_test:
+      - eval_time: 1m30s
+        alertname: BatonGoMetricsTargetMissing
+        exp_alerts: []
+      - eval_time: 2m
+        alertname: BatonGoMetricsTargetMissing
+        exp_alerts:
+          - exp_labels:
+              job: baton-go
+              severity: critical
+            exp_annotations:
+              summary: BATON GO 지표 수집 대상 없음
+              description: 2분간 지표 수집 대상이 없습니다. 배포 상태와 Prometheus의 Pod 조회 권한, 수집 설정을 확인하세요.
+      - eval_time: 3m
+        alertname: BatonGoMetricsTargetMissing
+        exp_alerts: []
+      - eval_time: 2m
+        alertname: BatonGoMetricsScrapeFailed
+        exp_alerts: []
+

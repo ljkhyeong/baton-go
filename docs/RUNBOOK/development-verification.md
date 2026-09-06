@@ -15,6 +15,7 @@
 | HTTP 형식·상태·인증 | `./gradlew :adapter-in-web:test` |
 | JPA·SQL·Flyway·DB 동시성 | `./gradlew --no-daemon :bootstrap:mysqlTest` |
 | Redis 요청 제한·연결 설정 | `./gradlew --no-daemon :bootstrap:redisTest` |
+| Prometheus 수집·경보 | [설정·규칙 검증](prometheus-alerts.md#로컬ci-검증). Kubernetes 권한 변경은 Kustomize와 strict schema 검증을 함께 실행한다. Java·DB 테스트는 생략한다. |
 | 여러 모듈에 영향을 주는 변경 | `./gradlew test`. 실행 패키지·의존성·배포 변경은 README의 추가 검증을 적용한다. |
 
 테스트 클래스를 알면 `--tests`로 좁혀 실행한다. 영향이 다른 계층까지 이어질 때만 범위를 넓힌다.

@@ -32,8 +32,19 @@
   capability 제거를 선언하지만, Namespace의 `restricted` 강제 승격 전에는 고정 이미지로 신규·
   복원·현재 PVC의 기동과 TLS·초기화·마이그레이션을 실제 클러스터에서 검증해야 한다.
 - 공개·관리 응답 지연과 전체·관리 API 5xx·관리 JWT 서비스 장애·관리 링크 복구 오류·429·저장 대상 계약 위반의 [Prometheus 경보 규칙](deploy/prometheus/baton-go-alerts.yml)과
-  `promtool` 검증은 준비되어 있다. 실제 수집기·알림 경로 연결과 인프라·백업 경보는
+  `promtool` 검증은 준비되어 있다. 기존 Prometheus·Alertmanager를 재사용하는
+  [수집·알림 연결 절차](docs/RUNBOOK/prometheus-alerts.md#추가-서비스-요금-없는-연결), Pod 자동 발견 설정과
+  Namespace 범위 조회 권한을 추가했다. 특정 Pod 수집 실패·전체 대상 누락도 감지하며 새 서버나
+  유료 서비스는 추가하지 않는다. 실제 수집기·알림 경로 연결과 인프라·백업 경보는
   [경보 운영 절차](docs/RUNBOOK/prometheus-alerts.md)에 따라 운영 환경에서 검증해야 한다.
+- 2026-09-07 모니터링 검증 기준은 `663cd84`이며 검증 대상의 미커밋 변경은 없다.
+  `promtool check config --syntax-only`, `check rules`, `test rules`로 수집 예시·12개 경보 규칙과
+  기존·수집 장애 테스트 두 묶음을 통과했다. `kubectl kustomize`·Kubeconform strict로 조회 권한
+  2개, actionlint로 CI를 검증했다. `amtool check-config`·`config routes test`는 문서 예시를 임시
+  설정에 병합해 GO·다른 서비스의 수신자 분리를 확인했다. 규칙·스키마·CI 로그는
+  `/private/tmp/baton-go-free-monitoring-{rules,schema,ci}.log`에 있다.
+  Java·DB 변경이 없어 해당 테스트는 생략했다. 운영 Kubernetes context와 수신자 설정을 확인할 수
+  없어 실제 Pod 발견·네트워크 접근·배포·알림 발송은 미실행이다.
 - CI는 검사한 커밋·이미지 구성 다이제스트·아카이브 체크섬과 SBOM·취약점 보고서를
   `baton-go-image-security`로 보존한다. 취약점 등급별 자동 차단이나 릴리스 이미지 승인 증거는
   아니며, [이미지 검사 절차](docs/RUNBOOK/image-security-reports.md)에 따라 결과를 검토한다.

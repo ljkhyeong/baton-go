@@ -6,7 +6,7 @@
 
 | 자원 | 역할 | 기본 노출 |
 |---|---|---|
-| `Deployment/baton-go` | 링크 생성·조회·폐기와 공개 해석 | `ClusterIP:8080` |
+| `Deployment/baton-go` | 링크 생성·조회·폐기와 단축 링크 접속 처리 | `ClusterIP:8080` |
 | `Job/baton-go-database-migration` | 배포 이미지의 Flyway 마이그레이션 전용 실행 | 일회성, 네트워크 엔드포인트 없음 |
 | `StatefulSet/baton-go-mysql` | GO 전용 `baton_go` 데이터베이스 | 헤드리스 `ClusterIP:3306` |
 | `PVC/data-baton-go-mysql-0` | GO MySQL 데이터 디렉터리 | `ReadWriteOnce`, 10Gi |
@@ -175,7 +175,7 @@ Spring 속성 이름은 각각 `baton-go.management-jwk.connect-timeout`과
 
 JWK 조회가 시간 초과되면 기존 인증 서비스 장애와 같이 `500 INTERNAL_ERROR`로 응답하고
 관리 인증 서비스 장애 카운터에 집계한다. 이를 토큰 만료나 잘못된 서명의 `401`로 처리하지
-않는다. 공개 링크 해석에는 이 의존성이 없으며, 원격 조회가 필요 없는 캐시 키 검증도 유지된다.
+않는다. 단축 링크 접속 처리에는 이 의존성이 없으며, 원격 조회가 필요 없는 캐시 키 검증도 유지된다.
 운영 전 비공개 경계에서 JWK 응답 지연과 복구를 시험하고
 [인증 서비스 장애 경보](prometheus-alerts.md)가 실제로 전달되는지 확인한다.
 
@@ -302,7 +302,7 @@ jdbc:mysql://baton-go-mysql:3306/baton_go?sslMode=VERIFY_IDENTITY&trustCertifica
 통신 시간 초과만으로 쓰기 실패나 DDL 롤백을 단정하지 않는다. 링크 생성 재시도는 같은
 `Idempotency-Key`를 사용하고, 마이그레이션 실패는 [실패 복구 절차](#마이그레이션-job-실패-복구)에
 따라 실제 스키마와 Flyway 이력을 먼저 확인한다.
-guard CLI의 결과가 불명확하면 [최초 결합 절차](link-code-key-guard-binding.md#도구-빌드와-실행)에
+guard CLI의 결과가 불명확하면 [최초 등록 절차](link-code-key-guard-binding.md#도구-빌드와-실행)에
 따라 같은 비밀값 버전과 검증용 키로 다시 실행한다.
 설정 의미는 [HikariCP 설정](https://github.com/brettwooldridge/HikariCP#configuration-knobs-baby)과
 [Connector/J 네트워크 설정](https://dev.mysql.com/doc/connector-j/en/connector-j-connp-props-networking.html)을 따른다.
@@ -663,7 +663,7 @@ Pod 자동 발견 설정과 Namespace 범위 조회 권한이 있다. 수집 실
 
 - `Job/baton-go-database-migration` 실패·시간 초과
 - 애플리케이션·MySQL Pod `NotReady`, 재시작과 배포 상태 이상
-- HTTP 5xx 오류율과 공개 해석 429 지속 증가
+- HTTP 5xx 오류율과 단축 링크 접속의 429 응답 지속 증가
 - DB를 포함한 readiness 실패
 - `baton.go.public.resolver.target.contract.violations` 증가
 - PVC 사용률·증가 추세·확장 실패
@@ -887,7 +887,7 @@ Job이 `Failed`이거나 결과가 불명확하면 다음 순서를 지킨다.
 
 7. 확정한 복구를 격리 환경에서 먼저 재현한다. 실제 환경에서는 Job `Complete`,
    Flyway 이력과 실제 컬럼 정의 일치, 애플리케이션 준비 상태, 새 생성·동일 요청
-   재생·공개 해석·폐기를 순서대로 확인한 뒤에만 호출자 쓰기와 공개 경계를
+   재생·단축 링크 접속 처리·폐기를 순서대로 확인한 뒤에만 호출자 쓰기와 공개 경계를
    다시 연다.
 
 단, V5의 `public_origin` 추가는 스키마 변경만 하위 호환되며, 이전 버전의 링크 저장
@@ -897,11 +897,11 @@ Job이 `Failed`이거나 결과가 불명확하면 다음 순서를 지킨다.
 실행 중인 환경에 V5를 도입할 때는 다음 유지 보수 순서를 사용한다.
 
 1. 비공개 관리 외부 경계와 모든 BATON 호출자에서 링크 생성 쓰기 경로를 차단하고 처리 중
-   요청과 아웃박스 전송을 비운다. 공개 해석 읽기는 비우는 동안과 구 Pod가 남아 있는
+   요청과 아웃박스 전송을 비운다. 단축 링크 접속 처리는 비우는 동안과 구 Pod가 남아 있는
    동안에만 계속 운영할 수 있다.
 2. `Deployment/baton-go`를 복제본 0으로 축소하고 구 Pod가 0개이며 생성 쓰기 경로가 남지 않았음을
    확인한다. 복제본 0 확인 시점부터 5단계에서 새 Deployment 준비 상태가 회복될 때까지
-   공개 해석도 계획 중단 상태다.
+   단축 링크 접속 처리도 계획 중단 상태다.
 3. V5 이전 예약의 최초 출처 목록을 조사한다. 증명할 수 있는 행만 정규 출처로
    유지 보수 중 채우고, 증거가 없는 행을 현재 설정으로 일괄 추정하지 않는다.
 4. 완료된 이전 마이그레이션 Job을 위 절차로 삭제한 뒤 Kustomize를 적용한다. 새 애플리케이션이 먼저
@@ -1019,7 +1019,7 @@ StatefulSet 삭제는 기본적으로 PVC를 보존하지만 Namespace 삭제는
 
 ## 9. 데이터 보존과 용량
 
-현재 시스템은 만료·폐기된 `smart_links`와 멱등 재생 근거인
+기본 설정에서는 만료·폐기된 `smart_links`와 재시도 시 기존 결과를 확인하는
 `link_creation_requests`를 자동 삭제하지 않는다. `expires_at` 인덱스가 있다는 사실은
 정리 정책이나 정리 Job이 있다는 뜻이 아니다. 임의 TTL을 추가하면 다음 계약이
 함께 바뀌므로 공개 운영 전에 제품·운영·보안 소유자가 같이 결정한다.

@@ -1,6 +1,6 @@
 # 링크 보존 기간 설정
 
-기본값은 `BATON_GO_LINK_RETENTION_ENABLED=false`다. 운영자가 멱등 재생 보장 기간, 백업·감사
+기본값은 `BATON_GO_LINK_RETENTION_ENABLED=false`다. 운영자가 재시도 시 기존 URL 반환 보장 기간, 백업·감사
 보존과 복구 요구를 확인하고 `BATON_GO_LINK_RETENTION_PERIOD`를 정하기 전에는 켜지 않는다.
 이 구현은 운영 보존 기간을 임의로 확정하지 않는다.
 

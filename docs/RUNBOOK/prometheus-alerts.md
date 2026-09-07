@@ -4,7 +4,7 @@
 
 [경보 규칙](../../deploy/prometheus/baton-go-alerts.yml)은 기존 Actuator·Micrometer 지표로
 공개·관리 응답 지연, 전체·관리 API 5xx, 관리 JWT 검증 서비스 장애, 관리 링크 복구 오류,
-공개 해석 요청 제한과 저장 대상 계약 위반을 감지한다.
+단축 링크 요청 제한과 저장 대상 계약 위반을 감지한다.
 규칙 추가만으로 수집기나 Alertmanager가 배포되지는 않는다. 실제 운영 수집기 연결,
 알림 경로·수신자 설정과 경보 발생 테스트는 [배포 문서의 수집·경보 확인 절차](kubernetes-private-server-deployment.md#수집과-경보-확인-사항)를 따른다.
 

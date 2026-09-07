@@ -1,11 +1,34 @@
 # 인수인계
 
+## 최근 문구 검증
+
+- 2026-09-08 검증 기준은 GO `81fd4e2`다. 검증 대상 코드·테스트의 미커밋 변경은 없으며 이후에는 문서만 수정했다.
+- 공개 오류 제목, 링크 대상·자동 삭제 오류와 HMAC 키 설정·등록 안내를 수정했다. HTML의 요청 제한 장애 제목은
+  "지금은 링크를 열 수 없습니다."이며 JSON의 상세 원인, 오류 코드와 HTTP 상태는 유지했다.
+- Java 21(`/Library/Java/JavaVirtualMachines/microsoft-21.jdk/Contents/Home`)로 아래 기존 테스트 77개를
+  모두 통과했다. 실패·제외는 없다. 로그는 `/private/tmp/baton-go-wording-tests-20260908.log`에 있다.
+
+```bash
+./gradlew --no-daemon :domain:test --tests '*TrustedTargetPolicyTest' \
+  :adapter-out-external:test --tests '*LinkCodePropertiesTest' \
+  :adapter-in-web:test --tests '*GlobalExceptionHandlerTest' \
+  --tests '*DistributedResolverQuotaHttpIntegrationTest' --tests '*PublicLinkHttpContractTest' \
+  :guard-tool:test --tests '*LinkCodeKeyGuardBindingCliTest'
+```
+
+- README·PRD·ADR·운영 절차의 용어와 참조를 맞췄고 `git diff --check`를 통과했다.
+- BATON `codex/go-link-integration-20260905`의 `90557822`에 공유 문구와 검증 기록을 반영했다.
+  코드 기준은 `bc888b15`다. 타입·빌드 검사와 공유 시나리오 12개를 통과하고, 안내 위치를 맞춘 뒤
+  직접 복사 3개만 추가 검증했다. 명령·포트 조건·로그는
+  `/private/tmp/baton-go-integration-20260905/output/verification/latest.md`에 있다.
+- 문구·표시 순서만 바뀌어 실제 MySQL·Redis·배포 검증은 반복하지 않았다. 실제 카카오 전송과 BATON 메인 병합은 남아 있다.
+
 ## 현재 기준
 
-- BATON GO의 링크 생성·재생·조회·공개 해석·폐기와 v1 신뢰 대상 정책은 구현되어 있다.
+- BATON GO의 링크 생성·조회·접속 처리·폐기, 동일 요청 재시도와 v1 링크 대상 규칙은 구현되어 있다.
   제품 동작은 [제품 기준선](docs/PRD/0001_product-baseline/spec.md), HTTP 동작은
   [API 계약](docs/PRD/0002_api-contract/spec.md)을 기준으로 삼는다.
-- 관리 조회·폐기는 공개 해석과 같은 시간·폐기 정책의 이용 상태와 판정 시각을 반환한다.
+- 관리 조회·폐기는 단축 링크 접속 처리와 같은 시간·폐기 정책의 이용 상태와 판정 시각을 반환한다.
   생성·재생 응답과 저장 스키마는 유지하며 BATON·ROUND 접근 권한을 나타내지 않는다.
 - 일반 관리 목록은 기존 읽기 scope로 대상 시스템·생성 기간·이용 상태를 검색한다.
   검사량을 제한하고 필터로 빈 페이지가 되어도 다음 커서로 진행하며, 비허용 저장 대상은 제외한다.
@@ -14,11 +37,11 @@
 - BATON·ROUND 위치 식별자와 최종 권한 경계는
   [교차 서비스 링크 계약](docs/PRD/0003_cross-service-link-contract/spec.md)을 따른다.
   GO 링크는 위치만 제공하며 BATON 접근 권한이나 ROUND 입장 권한을 부여하지 않는다.
-- 링크 코드 HMAC 보호 장치, 멱등 재생의 공개 출처 보존과 MySQL 절대 시각 저장 결정은
+- 링크 코드 HMAC 보호 장치, 재시도 시 최초 공개 출처 유지와 MySQL 절대 시각 저장 결정은
   각각 [ADR-0004](docs/ADR/0004_link-code-key-binding/adr.md),
   [ADR-0009](docs/ADR/0009_idempotent-public-origin-replay/adr.md),
   [ADR-0007](docs/ADR/0007_mysql-instant-storage/adr.md)을 따른다.
-- V7는 정리 표식과 요청 비교값을 추가한다. 종료 링크 자동 정리는 기본 중지하며
+- V7는 자동 삭제 표시와 요청 내용 해시를 추가한다. 종료 링크 자동 정리는 기본 중지하며
   [보존 절차](docs/RUNBOOK/link-retention.md)에 따라 기간을 명시해야 활성화된다.
 - V6는 기존 예약을 `legacy` 키로 이관하고 새 예약에 발급 키 ID를 저장한다. 키 교체와
   이전 키 제거 조건은 [ADR-0011](docs/ADR/0011_link-code-key-ring/adr.md)을 따른다.
@@ -75,7 +98,7 @@
   사용을 끄는 절차를 문서화했다. 키 미등록 상태로 실제 메시지 전송·무료 사용 설정·실기기 스캔은 미검증이다.
   프런트엔드 타입 검사·빌드와 공유 관련 Chromium·390px 모바일·WebKit 12개 시나리오가 통과했다.
   변경한 배포 스크립트 문법·ShellCheck·기존 사전점검, Compose의 공개 키 전달과 Caddy CSP도 확인했다.
-  명령·결과·로그는 BATON 작업 공간의 `output/verification/latest.md`에 있다.
+  당시 명령·결과·로그는 BATON 작업 공간의 `output/verification/go-sharing-initial.md`에 있다.
   GO 서버·API·DB 변경이 없어 해당 검증은 반복하지 않았다. 실제 배포와 원격 푸시는 하지 않았다.
 - GO 직접 폐기의 백그라운드 반영, 전달 중지·2분 지연 안내, 기본 5분 전달 대기·15분 상태 확인
   지연 경보를 제공한다. 마지막 정상 확인 시각과 실패 코드를 따로 보관하고 확인 실패만으로
@@ -134,7 +157,7 @@
 7. Prometheus 실제 수집, 경보 규칙, 알림 경로와 담당자를 연결하고 마이그레이션 실패,
    Pod 비정상, 5xx·429, DB 준비 상태, 저장 대상 계약 위반, PVC 용량과 백업 실패 경보의
    시험 증거를 확보한다.
-8. 멱등 재생 보장 기간과 만료·폐기 링크 보존 기간, 자동 정리 뒤 HTTP 의미, 백업·감사
+8. 재시도 시 기존 URL 반환 보장 기간과 만료·폐기 링크 보존 기간, 자동 정리 뒤 HTTP 의미, 백업·감사
    보존과 PVC 경보·증설 기준을 함께 결정한다. 정리 구현은 준비되어 있으며 이 결정 전에는
    자동 정리를 활성화하지 않는다.
 9. 플랫폼 백업 정책에 RPO·RTO·주기·보존 기간·담당자·실패 경보·증거 위치를 명시하고,

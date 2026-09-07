@@ -116,9 +116,9 @@ HMAC 키가 등록되지 않은 DB에서는 서버 시작을 거부한다. DB �
 [ADR-0011](docs/ADR/0011_link-code-key-ring/adr.md), 설정·교체 순서는
 [키 교체 절차](docs/RUNBOOK/link-code-key-rotation.md)다.
 
-기존 DB의 최초 결합은 모든 쓰기를 중지하고 분리된 `guard-tool`로 카나리를
-검증한 뒤에만 수행한다. 직접 SQL이나 임의 비밀값 강제 결합 대신
-[기존 데이터베이스 HMAC 보호 장치 최초 결합 절차](docs/RUNBOOK/link-code-key-guard-binding.md)를
+기존 DB의 HMAC 키 정보는 모든 쓰기를 중지하고 전용 `guard-tool`로 기존 생성 요청을
+검증한 뒤에만 등록한다. 직접 SQL이나 임의 비밀값 등록 대신
+[기존 DB의 HMAC 키 정보 최초 등록 절차](docs/RUNBOOK/link-code-key-guard-binding.md)를
 따른다.
 
 `.env`는 Docker Compose의 dotenv 문법으로 해석하는 데이터 파일이며 셸 스크립트가 아니다.
@@ -295,5 +295,5 @@ curl -i http://localhost:8080/api/v1/links \
 - [관리 작업 이력 조회와 보존](docs/RUNBOOK/management-operation-history.md)
 - [종료 링크 보존 기간 설정](docs/RUNBOOK/link-retention.md)
 - [HMAC 키 교체](docs/RUNBOOK/link-code-key-rotation.md)
-- [기존 DB HMAC 보호 장치 최초 결합 절차](docs/RUNBOOK/link-code-key-guard-binding.md)
+- [기존 DB의 HMAC 키 정보 최초 등록 절차](docs/RUNBOOK/link-code-key-guard-binding.md)
 - [대상 계약 v1 정리 절차](docs/RUNBOOK/target-contract-v1-remediation.md)

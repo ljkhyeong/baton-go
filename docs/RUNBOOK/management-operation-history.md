@@ -8,7 +8,7 @@ BATON GO는 다음 관리 쓰기 요청이 완료되면
 | `operation` | 의미 |
 | --- | --- |
 | `LINK_CREATE` | 새 링크 생성 완료 |
-| `LINK_CREATE_REPLAY` | 기존 생성 결과 재생 완료 |
+| `LINK_CREATE_REPLAY` | 동일 생성 요청에 기존 결과 반환 완료 |
 | `LINK_REVOKE` | 일반 링크 폐기 요청 완료. 이미 폐기된 링크의 반복 요청도 포함 |
 | `TARGET_CONTRACT_REVOKE` | 대상 규칙 위반 링크의 폐기 완료 |
 | `TARGET_CONTRACT_REVOKE_REPLAY` | 이미 폐기된 대상 규칙 위반 링크의 반복 요청 완료 |
@@ -72,7 +72,7 @@ JWT 원문, 다른 claim, `Authorization`, `Idempotency-Key`, 원문 공개 코�
 
 ## 운영 연결 확인
 
-비공개 경계의 시험용 서비스 JWT와 시험용 링크로 생성·재생·일반 폐기·대상 규칙 위반 링크 폐기를 실행한다.
+비공개 경계의 시험용 서비스 JWT와 시험용 링크로 생성·동일 요청 재시도·일반 폐기·대상 규칙 위반 링크 폐기를 실행한다.
 중앙 로그에서 서비스 식별자·내부 링크 ID·요청 ID와 작업 종류가 맞는지, 인증 실패와 거부된
 쓰기에는 완료 로그가 없는지, 민감 필드가 들어오지 않는지 확인한다. 정리 기능은 기존
 [대상 계약 정리 절차](target-contract-v1-remediation.md)의 활성화 조건을 먼저 따른다.

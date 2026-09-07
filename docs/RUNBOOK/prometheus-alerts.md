@@ -122,7 +122,7 @@ YAML 규칙을 기준으로 하며, 표와 테스트도 같은 변경에서 갱�
   `baton_go_management_authentication_service_failures_total`로 따로 집계한다. JWK 조회 등
   인증 서비스 장애만 포함하고 토큰 누락·서명·클레임 검증 실패인 401과 권한 부족인 403은
   포함하지 않는다. 공개 링크 성공 요청이 많아 전체 5xx 비율이 낮아져도 경보를 발생시킨다.
-  `requestId`로 안전한 오류 로그를 찾고 발급자 상태와 Pod의 JWK HTTPS 접근을 확인한다.
+  `requestId`로 오류 로그를 찾고 발급자 상태와 Pod의 JWK HTTPS 접근을 확인한다.
 - 관리 링크 복구 오류는 `baton_go_management_link_recovery_failures_total`에 아래 네 가지
   `code`만 사용해 집계한다. 각 카운터를 시작 시 0으로 등록하고, 오류 한 건도 다음 규칙
   평가에서 감지하도록 최소 건수나 지속 시간을 두지 않는다. 최초 수집 전 오류와 수집 공백은

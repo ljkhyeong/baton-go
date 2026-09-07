@@ -1,4 +1,4 @@
-# ADR-0005: 교차 서비스 대상을 형식화된 위치 식별자로 제한
+# ADR-0005: 링크 대상을 정해진 서비스 경로로 제한
 
 - 상태: 채택
 - 결정일: 2026-08-02
@@ -20,8 +20,7 @@ ADR-0002는 `targetSystem`과 문법적으로 안전한 경로를 분리해 개�
 
 ## 결정
 
-- 대상을 임의 안전 경로가 아니라 `(TargetSystem, LinkPurpose, 정규 위치 식별자)`의
-  합으로 취급한다.
+- 링크 대상은 시스템·목적·경로 조합으로 검증한다.
 - v1은 다음 두 조합만 허용한다.
   - `BATON + NAVIGATION + /teams/{canonical UUID}/seasons/{canonical UUID}`
   - `ROUND + MEETING_ENTRY + /room/{canonical ROUND room ID}`

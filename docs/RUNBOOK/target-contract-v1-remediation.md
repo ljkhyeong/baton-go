@@ -15,7 +15,7 @@
    탐색한다. BATON GO의 `WWW-Authenticate: Bearer realm="baton-go-management"` 또는 GO
    `X-Request-Id`가 보이면 공개 엣지가 관리 API까지 전달한 것이므로 진행하지 않는다.
 5. 공개 엣지 차단 결과를 배포 증거에 남긴 뒤 유지보수 시간대에만 다음 두 값을
-   모두 설정해 재기동한다. 확인 플래그는 네트워크 경계를 대신하지 않는다.
+   모두 설정해 재기동한다. 이 설정만으로 관리 API의 외부 접근이 차단되지는 않는다.
 
 ```text
 BATON_GO_TARGET_CONTRACT_OPERATIONS_ENABLED=true
@@ -61,7 +61,7 @@ printf 'Authorization: Bearer %s\n' "$BATON_GO_OPS_TOKEN" | \
 
 ## 3. 재발급
 
-`REISSUE_THEN_REVOKE`는 원본 애그리게이트 소유자가 수행한다.
+`REISSUE_THEN_REVOKE`는 원본 데이터를 관리하는 서비스가 수행한다.
 
 1. 기준 BATON/ROUND 매핑을 먼저 커밋한다.
 2. 기존 요청 UUID를 재사용하지 않고 새 정규 UUID로 링크 생성 요청을 저장한다.

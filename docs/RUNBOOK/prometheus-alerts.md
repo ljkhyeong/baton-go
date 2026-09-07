@@ -56,12 +56,12 @@
    시험 알림은 담당자와 정한 채널에서 발생·해제 수신까지 확인한다.
 
 이 설정은 한 운영 환경의 GO를 대상으로 한다. 여러 환경을 하나의 Prometheus에 수집하려면
-아래 수집 계약에 따라 환경별 label과 경보 집계를 먼저 구분한다. Prometheus 자체가 중단되면
-이 규칙도 평가되지 않으므로 수집기 장애 감시는 기존 플랫폼 감시에 연결한다.
+아래 Prometheus 수집 설정에 따라 환경별 label과 경보 집계를 먼저 구분한다.
+Prometheus 자체가 중단되면 이 규칙도 평가되지 않으므로 수집기 장애 감시는 기존 플랫폼 감시에 연결한다.
 표준 기능은 [Prometheus Kubernetes 수집](https://prometheus.io/docs/prometheus/latest/configuration/configuration/#kubernetes_sd_config)과
 [Alertmanager 알림 경로](https://prometheus.io/docs/alerting/latest/configuration/#route)를 따른다.
 
-## 수집 계약
+## Prometheus 수집 설정
 
 - 한 운영 환경의 BATON GO Pod들을 `job="baton-go"`로 수집한다. 다른 환경을 같은 job으로
   합산하지 않는다. 중앙 수집기에 여러 환경을 모으려면 환경 label을 선택 조건과

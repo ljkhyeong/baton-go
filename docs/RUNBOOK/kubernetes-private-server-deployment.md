@@ -144,8 +144,8 @@ kubectl kustomize deploy/k8s/overlays/private-server >/dev/null
 ```
 
 이 점검은 placeholder·가짜 이미지·tag 설정 제거, 애플리케이션 이미지 digest 형식과
-Kustomize 렌더 가능 여부를 확인한다. URL의 정규 HTTPS 출처·동일 출처 정책은 애플리케이션 시작
-검증이 소유하며, 이미지 서명·SBOM·취약점 수용 여부는 위 릴리스 증거와 별도로 대조한다.
+Kustomize 렌더 가능 여부를 확인한다. HTTPS 출처 형식과 동일 출처 조건은 애플리케이션 시작 시
+검사하며, 이미지 서명·SBOM·취약점 수용 여부는 위 릴리스 증거와 별도로 대조한다.
 
 애플리케이션의 `/tmp`는 64Mi 메모리 `emptyDir`이고 나머지 root 파일 시스템은 읽기 전용이다.
 Kubernetes `emptyDir`에는 Compose의 `noexec,nosuid,nodev,mode=1777` 마운트 옵션을 이식성 있게
@@ -192,7 +192,7 @@ kubectl apply -k deploy/k8s/bootstrap
 권한 상승 금지와 Linux capability 전체 제거를 선언한다. MySQL은 공식 이미지의 `mysql`
 사용자와 같은 UID/GID `999`를 사용하고 데이터 PVC는 `fsGroup=999`로 연결한다.
 
-`restricted` 강제 승격 전에는 고정한 MySQL 이미지 다이제스트로 신규 PVC, 운영 백업에서
+`restricted` 정책 강제 적용 전에는 고정한 MySQL 이미지 다이제스트로 신규 PVC, 운영 백업에서
 복원한 PVC와 현재 PVC를 각각 검증한다. 세 경우 모두 MySQL UID/GID가 `999`, 유효 capability가
 비어 있고 TLS startup·readiness, 초기 사용자 생성, 런타임 DML, 마이그레이션 DDL과 재시작이
 성공해야 한다. 하나라도 확인하지 못하면 `deploy/k8s/bootstrap/namespace.yaml`의
@@ -1048,7 +1048,7 @@ StatefulSet 삭제는 기본적으로 PVC를 보존하지만 Namespace 삭제는
 
 이 운영 절차의 완료만으로 공개 운영을 승인하지 않는다. 장기 완료 조건은
 [교차 서비스 링크 계약의 운영 시작 조건](../PRD/0003_cross-service-link-contract/spec.md#9-운영-시작-조건),
-현재 남은 작업은 [인수인계](../../HANDOFF.md#운영-시작-전-확인-사항)를 따른다.
+현재 남은 작업은 [인수인계](../../HANDOFF.md#다음-작업)를 따른다.
 
 참고:
 

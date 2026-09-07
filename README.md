@@ -268,7 +268,7 @@ curl -i http://localhost:8080/api/v1/links \
 
 - [제품 기준선](docs/PRD/0001_product-baseline/spec.md)
 - [API 계약](docs/PRD/0002_api-contract/spec.md)
-- [테스트에서 생성하는 HTTP 계약 조각](docs/API/rest-docs.md)
+- [REST Docs 요청·응답 예시](docs/API/rest-docs.md)
 - [BATON·ROUND 교차 서비스 링크 계약](docs/PRD/0003_cross-service-link-contract/spec.md)
 
 ### 장기 설계 결정
@@ -277,7 +277,7 @@ curl -i http://localhost:8080/api/v1/links \
 - [링크 보안 모델](docs/ADR/0002_link-security/adr.md)
 - [멱등한 링크 생성](docs/ADR/0003_idempotent-link-creation/adr.md)
 - [링크 코드 HMAC 키와 DB 결합](docs/ADR/0004_link-code-key-binding/adr.md)
-- [형식화한 대상 위치 식별자](docs/ADR/0005_trusted-target-locator/adr.md)
+- [링크 대상을 정해진 서비스 경로로 제한](docs/ADR/0005_trusted-target-locator/adr.md)
 - [계약 전 대상 정리](docs/ADR/0006_target-contract-remediation/adr.md)
 - [MySQL 절대 시각 저장 형식](docs/ADR/0007_mysql-instant-storage/adr.md)
 - [비공개 Kubernetes DB 구성](docs/ADR/0008_private-kubernetes-database-topology/adr.md)

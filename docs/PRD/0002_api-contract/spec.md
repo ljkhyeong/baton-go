@@ -63,8 +63,8 @@ XML 등 지원하지 않는 응답 형식만 요청해도 원래 오류 상태·
 - 공용 요청 제한 저장소 장애: `503 RATE_LIMIT_UNAVAILABLE`
 - 허용되지 않은 대상 시스템·목적·위치 식별자 조합: `400 INVALID_LINK`
 - 대상 계약 운영 기능의 목록 조사 요청 값 오류: `400 INVALID_REQUEST`
-- 준수 링크에 정리 폐기를 요청함: `409 REMEDIATION_NOT_APPLICABLE`
-- 목록 조사 뒤 변경된 링크에 정리 폐기를 요청함: `409 REMEDIATION_STALE`
+- 대상 계약 정리 API로 규칙을 충족하는 링크의 폐기를 요청함: `409 REMEDIATION_NOT_APPLICABLE`
+- 대상 계약 정리 API로 목록 조사 뒤 변경된 링크의 폐기를 요청함: `409 REMEDIATION_STALE`
 - 예상하지 못한 오류: `500 INTERNAL_ERROR`
 
 관리 인증 `401` 응답에는

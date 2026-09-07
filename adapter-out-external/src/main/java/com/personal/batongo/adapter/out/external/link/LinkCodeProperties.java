@@ -50,7 +50,7 @@ public record LinkCodeProperties(
             throw new IllegalArgumentException("링크 코드 파생 키는 32자 이상이어야 합니다");
         }
         if (PUBLISHED_CREDENTIALS.contains(secret)) {
-            throw new IllegalArgumentException("공개 예시 credential은 사용할 수 없습니다");
+            throw new IllegalArgumentException("예제에 공개된 비밀값은 사용할 수 없습니다");
         }
     }
 

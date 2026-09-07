@@ -80,8 +80,8 @@ public final class LinkCodeKeyGuardBindingCli {
                         canary
                 );
                 standardOutput.println(result == BindingResult.BOUND
-                        ? "링크 코드 키 guard 결합을 완료했습니다"
-                        : "링크 코드 키 guard가 같은 identity에 이미 결합되어 있습니다");
+                        ? "HMAC 키 정보를 DB에 등록했습니다"
+                        : "동일한 HMAC 키 정보가 이미 등록되어 있습니다");
                 return 0;
             }
         } catch (RuntimeException | SQLException exception) {

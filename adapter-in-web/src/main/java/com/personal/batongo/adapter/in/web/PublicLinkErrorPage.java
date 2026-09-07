@@ -22,6 +22,9 @@ public class PublicLinkErrorPage {
 
     public ResponseEntity<String> render(ResponseEntity<ErrorResponse> error) {
         ErrorResponse body = error.getBody();
+        String title = "RATE_LIMIT_UNAVAILABLE".equals(body.code())
+                ? "지금은 링크를 열 수 없습니다."
+                : body.message();
         String guidance = switch (body.code()) {
             case "LINK_NOT_ACTIVE" -> "링크를 보낸 사람에게 이용 가능한 시간을 확인해 주세요.";
             case "LINK_EXPIRED", "LINK_REVOKED" -> "링크를 보낸 사람에게 새 링크를 요청해 주세요.";
@@ -39,7 +42,7 @@ public class PublicLinkErrorPage {
                 .header("X-Content-Type-Options", "nosniff")
                 .varyBy(HttpHeaders.ACCEPT)
                 .body(template.formatted(
-                        HtmlUtils.htmlEscape(body.message()),
+                        HtmlUtils.htmlEscape(title),
                         HtmlUtils.htmlEscape(guidance),
                         HtmlUtils.htmlEscape(Objects.toString(body.requestId(), ""))
                 ));

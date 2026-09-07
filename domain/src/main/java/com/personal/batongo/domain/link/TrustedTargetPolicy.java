@@ -38,7 +38,7 @@ public final class TrustedTargetPolicy {
 
         if (!isAllowed(targetSystem.name(), purpose.name(), targetPath)) {
             throw new LinkValidationException(
-                    "대상 시스템, 목적과 경로가 v1 신뢰 대상 계약에 맞지 않습니다"
+                    "v1에서 허용하지 않는 대상 시스템·목적·경로 조합입니다"
             );
         }
         return new TrustedTarget(targetSystem, purpose, targetPath);

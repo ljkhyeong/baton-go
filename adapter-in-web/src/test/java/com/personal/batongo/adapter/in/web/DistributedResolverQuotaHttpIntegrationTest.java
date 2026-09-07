@@ -84,11 +84,13 @@ class DistributedResolverQuotaHttpIntegrationTest {
         when(quota.acquireRetryAfterSeconds()).thenThrow(new PublicResolverQuotaUnavailableException());
         var json = client.send(HttpRequest.newBuilder(uri).GET().build(), HttpResponse.BodyHandlers.ofString());
         assertThat(json.statusCode()).isEqualTo(503);
-        assertThat(json.body()).contains("RATE_LIMIT_UNAVAILABLE");
+        assertThat(json.body()).contains("RATE_LIMIT_UNAVAILABLE", "요청 처리 한도를 확인하지 못했습니다");
         var html = client.send(HttpRequest.newBuilder(uri).header("Accept", "text/html").GET().build(),
                 HttpResponse.BodyHandlers.ofString());
         assertThat(html.statusCode()).isEqualTo(503);
-        assertThat(html.body()).contains("잠시 후 다시 열어 주세요");
+        assertThat(html.body())
+                .contains("지금은 링크를 열 수 없습니다.", "잠시 후 다시 열어 주세요")
+                .doesNotContain("요청 처리 한도를 확인하지 못했습니다");
         var head = client.send(HttpRequest.newBuilder(uri).header("Accept", "text/html")
                 .method("HEAD", HttpRequest.BodyPublishers.noBody()).build(), HttpResponse.BodyHandlers.ofString());
         assertThat(head.statusCode()).isEqualTo(503);

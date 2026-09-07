@@ -1,6 +1,6 @@
 # 대상 계약 v1 목록 조사·정리 절차
 
-이 운영 절차는 PRD-0003 이전에 저장된 링크를 조사하고 비준수 링크를 안전하게
+이 운영 절차는 PRD-0003 이전에 저장된 링크를 조사하고 대상 규칙을 위반한 링크를
 폐기하기 위한 절차다. API 구현이나 테스트 DB 정리는 운영 목록 조사 완료 증거를
 대신하지 않는다.
 
@@ -40,7 +40,7 @@ printf 'Authorization: Bearer %s\n' "$BATON_GO_OPS_TOKEN" | \
 ```
 
 `hasMore=true`이면 `nextAfterLinkId`를 다음 요청의 `afterLinkId`로 전달한다. 마지막 페이지까지
-완주한다. 각 항목에는 원시 대상이나 코드가 없으며 다음 정보만 사용한다.
+조회한다. 각 항목에는 원시 대상이나 코드가 없으며 다음 정보만 사용한다.
 
 - `compliance`: `COMPLIANT` 또는 `NON_COMPLIANT`
 - `remediationState`: `NOT_REQUIRED`, `UNREVOKED`, `REVOKED`
@@ -50,8 +50,8 @@ printf 'Authorization: Bearer %s\n' "$BATON_GO_OPS_TOKEN" | \
 승인 명세에는 `linkId`, 목록 조사의 `version`, 조치와 승인자만 기록한다. 조치는
 다음 네 가지로 제한한다.
 
-- `KEEP`: 준수 행
-- `REVOKE_ONLY`: 소유자가 없거나 재발급이 불필요한 비준수 행
+- `KEEP`: 대상 규칙을 충족하는 링크
+- `REVOKE_ONLY`: 소유자가 없거나 재발급이 불필요한 규칙 위반 링크
 - `REISSUE_THEN_REVOKE`: 원본 소유자가 정규 대체 링크를 먼저 만들 수 있는 행
 - `HOLD`: 소유자, 매핑 또는 데이터 정합성을 아직 확정하지 못한 행
 
@@ -83,7 +83,7 @@ printf 'Authorization: Bearer %s\n' "$BATON_GO_OPS_TOKEN" | \
   --data '{"expectedVersion":0}'
 ```
 
-- 준수 행은 `409 REMEDIATION_NOT_APPLICABLE`이며 변경되지 않는다.
+- 대상 규칙을 충족하는 링크는 `409 REMEDIATION_NOT_APPLICABLE`이며 변경되지 않는다.
 - 목록 조사 뒤 변경된 미폐기 행은 `409 REMEDIATION_STALE`이며 다시 조사·승인한다.
 - 성공은 `200`이고, 반복 요청은 최초 `revokedAt`을 보존하며 `alreadyRevoked=true`를 반환한다.
 - 행을 삭제하거나 대상을 수정하지 않는다. 생성 예약도 삭제하지 않는다.

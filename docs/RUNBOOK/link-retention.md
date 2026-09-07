@@ -27,8 +27,8 @@ WHERE s.retired_at <= :approved_cutoff AND r.purged_at IS NULL;
 링크가 복원되지는 않는다. 삭제된 링크의 동일 요청은 `410 LINK_PURGED`이고 새 요청 키가
 있어야 새 링크를 만들 수 있다. 상세 계약은 [ADR-0012](../ADR/0012_link-retention/adr.md)다.
 
-이전 HMAC 키를 제거하기 전에는 해당 키로 발급하는 Pod가 모두 사라졌음을 먼저 확인한다.
-필수 재생 키 확인에는 다음 집계를 사용하고 키 해시나 지문은 출력하지 않는다.
+이전 HMAC 키를 제거하기 전에는 해당 키로 링크를 발급하는 Pod가 모두 종료됐는지 확인한다.
+기존 URL 복원에 필요한 키는 다음 집계로 확인하며 키 해시나 지문은 출력하지 않는다.
 
 ```sql
 SELECT key_id, COUNT(*) AS replay_required
@@ -37,5 +37,5 @@ WHERE purged_at IS NULL
 GROUP BY key_id;
 ```
 
-예약 tombstone과 백업·감사 로그는 별도 보존 대상이다. 이 기능만으로 개인정보 보존 정책이나
+자동 삭제 표시가 있는 생성 예약과 백업·감사 로그는 별도 보존 대상이다. 이 기능만으로 개인정보 보존 정책이나
 PVC 용량 경보·증설 정책이 완료되었다고 판단하지 않는다.

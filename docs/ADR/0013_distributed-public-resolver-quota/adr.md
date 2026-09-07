@@ -34,7 +34,7 @@ Redis는 `noeviction`과 운영 고가용성 정책을 사용하고 기존 로�
 ## 검증 근거와 절차
 
 두 Redis 연결의 동시 요청 합계, 구간 만료, TTL 훼손과 연결 종료를 통합 테스트한다.
-Spring 활성화 조립과 공개 JSON·HTML·HEAD 오류, DB 조회 미실행도 검증한다.
+기능 활성화 시 Spring 빈 구성과 공개 JSON·HTML·HEAD 오류, DB 조회 미실행도 검증한다.
 [운영 절차](../../RUNBOOK/distributed-public-rate-limit.md)를 따른다.
 
 - [Redis INCR의 원자적 요청 제한 예시](https://redis.io/docs/latest/commands/incr/)

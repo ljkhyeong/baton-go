@@ -3,7 +3,7 @@
 BATON GO의 HTTP 동작 기준은 [API 계약](../PRD/0002_api-contract/spec.md)이다. 이 문서는
 기존 MockMvc 계약 테스트로 검증한 요청·응답 예시의 생성 방법과 저장 위치를 안내한다.
 
-다음 명령은 링크 생성·동일 요청 재시도·관리 검색·조회·폐기, 공개 `GET·HEAD`와 한글 오류 화면, 관리 인증 실패와
+다음 명령은 링크 생성·동일 요청 재시도·관리 검색·단건 및 일괄 조회·폐기, 공개 `GET·HEAD`와 한글 오류 화면, 관리 인증 실패와
 대상 계약 운영 API의 대표 요청·응답을 생성해 하나의 압축 파일로 묶는다.
 
 ```bash
@@ -25,6 +25,7 @@ CI가 실패하므로 계약 테스트와 압축 작업이 실행되지 않은 �
 - `links-create`
 - `links-create-replay`
 - `links-get`
+- `links-batch-get`
 - `links-search`
 - `links-revoke`
 - `links-resolve`

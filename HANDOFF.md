@@ -17,24 +17,31 @@
 
 ## 최근 검증
 
-- 2026-09-08 검증 기준은 GO `16c4a2d`다. `6813bd3`의 미커밋 변경이 없는 상태에서 시작했고,
-  검증한 코드 4개 파일을 커밋했다. 이후 변경은 이 인계 문서뿐이다.
-- 생성 예약의 네이티브 SQL을 기존 `JdbcClient`로 옮겨 Spring Data 중간 저장소와 엔티티 접근자를
-  제거했다. 스키마 검증용 JPA 매핑, `INSERT IGNORE`·`FOR SHARE`, 트랜잭션과 UTC 저장은 유지했다.
-  생성 서비스의 전달용 객체와 검증 메서드의 불필요한 반환값도 정리해 코드가 순수 49줄 줄었다.
+- 2026-09-08 검증 기준은 GO `85f6189`다. `8c3d062`의 미커밋 변경이 없는 상태에서 시작했다.
+  검증한 코드·테스트 11개 파일을 커밋했고 이후에는 계약 문서와 인계 기록만 수정했다.
+- `GET /api/v1/links/batch?linkIds=...`를 추가했다. 최대 100개 ID를 한 번의 DB 조회로 읽고,
+  요청 순서·중복 제거·동일 판정 시각을 보장한다. 없거나 비허용인 링크는 `notFoundIds`로 반환한다.
+  기존 읽기 scope와 대상 정책을 사용하고, 목록 조회와 대상 검사·결과 변환을 공유한다.
 - Java 21(`/Library/Java/JavaVirtualMachines/microsoft-21.jdk/Contents/Home`)과 Docker로
-  애플리케이션 테스트 43개, MySQL 통합 테스트 41개를 통과했다. 실패·제외는 없다.
-  최초 실행 로그는 `/private/tmp/baton-go-code-cleanup-tests-20260908.log`에 있다.
+  애플리케이션 46개·웹 124개·MySQL 43개를 확인했다. 최종 실패·제외는 없다.
+  REST Docs 14개 예시와 목록·일괄 조회 예시의 판정 시각 일치, 변경 문서의 로컬 링크 42개도 확인했다.
 
 ```bash
-./gradlew --no-daemon :application:test :bootstrap:mysqlTest
+./gradlew --no-daemon :application:test :adapter-in-web:apiContractDocs :bootstrap:mysqlTest
+./gradlew --no-daemon :adapter-in-web:test --tests '*LinkManagementHttpContractTest' \
+  :adapter-in-web:apiContractDocs :bootstrap:mysqlTest
+./gradlew --no-daemon :adapter-in-web:test --tests '*LinkManagementHttpContractTest' \
+  :adapter-in-web:apiContractDocs
 ```
 
-- 스키마 검증 매핑을 유지하도록 조정한 뒤 `./gradlew --no-daemon :bootstrap:mysqlTest`만 다시 실행했다.
-  최종 MySQL 검증 로그는 `/private/tmp/baton-go-code-cleanup-mysql-final-20260908.log`에 있다.
-  애플리케이션 코드·테스트·의존성·설정은 같아 43개 성공 결과를 재사용했다.
-- 동시 생성·재시도·롤백·자동 삭제·UTC 시각 저장을 확인했다. Redis 코드는 바뀌지 않아 Redis 통합 검증은
-  반복하지 않았고 실제 운영 배포는 실행하지 않았다.
+- 최초 실행은 애플리케이션 46개·웹 123개 통과 후 새 HTTP 테스트의 예시 시각 불일치 1건으로 중단했다.
+  예시를 고친 뒤 해당 클래스 40개와 미실행 MySQL 43개를 통과했다. 기존 목록 예시의 시각도 맞춘 뒤
+  HTTP 40개와 문서 생성만 다시 실행했다. 변경되지 않은 테스트의 성공 결과는 재사용했다.
+- 위 명령 순서의 로그는 `/private/tmp/baton-go-batch-lookup-tests-20260908.log`,
+  `/private/tmp/baton-go-batch-lookup-final-tests-20260908.log`,
+  `/private/tmp/baton-go-batch-lookup-docs-tests-20260908.log`다. 합산 결과와 예시 확인은
+  `/private/tmp/baton-go-batch-lookup-verification-20260908.json`에 있다.
+- Redis 변경이 없어 통합 검증은 반복하지 않았다. 운영 배포와 BATON 호출부의 일괄 조회 전환은 남아 있다.
 - BATON `codex/go-link-integration-20260905`의 `90557822`에 공유 문구와 검증 기록을 반영했다.
   코드 기준은 `bc888b15`다. 타입·빌드 검사와 공유 시나리오 12개를 통과하고, 안내 위치를 맞춘 뒤
   직접 복사 3개만 추가 검증했다. 명령·포트 조건·로그는

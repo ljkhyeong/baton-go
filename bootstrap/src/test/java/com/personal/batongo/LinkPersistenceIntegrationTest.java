@@ -28,6 +28,8 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.util.Collections;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
@@ -99,6 +101,52 @@ class LinkPersistenceIntegrationTest {
 
     @Autowired
     private MockMvc mockMvc;
+
+    @Test
+    @DisplayName("일괄 조회는 요청한 MySQL 링크만 읽고 폐기 상태와 누락 ID를 구분한다")
+    void getsStoredLinksInBatch() throws Exception {
+        var active = smartLinkUseCase.createLink(new CreateLinkCommand(
+                CreationIdempotencyKey.parseRequest(UUID.randomUUID().toString()),
+                TargetSystem.ROUND, "/room/abcd-efgh-jkmn", LinkPurpose.MEETING_ENTRY, null, null
+        )).link();
+        var revoked = smartLinkUseCase.createLink(new CreateLinkCommand(
+                CreationIdempotencyKey.parseRequest(UUID.randomUUID().toString()),
+                TargetSystem.BATON, CANONICAL_BATON_TARGET, LinkPurpose.NAVIGATION, null, null
+        )).link();
+        smartLinkUseCase.revokeLink(revoked.id());
+        UUID missingId = UUID.randomUUID();
+        UUID hiddenId = UUID.randomUUID();
+        insertStoredLink(hiddenId.toString(), UUID.randomUUID().toString().substring(0, 22),
+                "UNKNOWN", "/private-target", "UNKNOWN");
+
+        mockMvc.perform(get("/api/v1/links/batch")
+                        .with(jwt().authorities(new SimpleGrantedAuthority("SCOPE_baton-go.links.read")))
+                        .param("linkIds", revoked.id() + "," + missingId + "," + hiddenId + ","
+                                + active.id() + "," + revoked.id()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items.length()").value(2))
+                .andExpect(jsonPath("$.items[0].id").value(revoked.id().toString()))
+                .andExpect(jsonPath("$.items[0].status").value("REVOKED"))
+                .andExpect(jsonPath("$.items[1].id").value(active.id().toString()))
+                .andExpect(jsonPath("$.items[1].status").value("ACTIVE"))
+                .andExpect(jsonPath("$.notFoundIds[0]").value(missingId.toString()))
+                .andExpect(jsonPath("$.notFoundIds[1]").value(hiddenId.toString()))
+                .andExpect(jsonPath("$.notFoundIds.length()").value(2))
+                .andExpect(jsonPath("$.evaluatedAt").value(FAR_FUTURE_NOW.toString()))
+                .andExpect(content().string(not(containsString("/private-target"))));
+    }
+
+    @Test
+    @DisplayName("일괄 조회의 빈 ID와 100개 초과 입력은 HTTP 400으로 거부한다")
+    void rejectsInvalidBatchInputOverHttp() throws Exception {
+        String id = UUID.randomUUID().toString();
+        for (String ids : List.of("", id + ",," + id, String.join(",", Collections.nCopies(101, id)))) {
+            mockMvc.perform(get("/api/v1/links/batch").param("linkIds", ids)
+                            .with(jwt().authorities(new SimpleGrantedAuthority("SCOPE_baton-go.links.read"))))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+        }
+    }
 
     @Test
     @DisplayName("Flyway와 JPA는 2040년 링크의 생성 재생 폐기 시각을 마이크로초까지 보존한다")

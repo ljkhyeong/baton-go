@@ -29,6 +29,7 @@ import com.personal.batongo.adapter.in.web.WebMvcConfiguration;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.CreatedLinkResult;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.LinkResult;
+import com.personal.batongo.application.link.port.in.SmartLinkUseCase.LinkBatchResult;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.LinkSearchResult;
 import com.personal.batongo.application.link.port.in.TargetContractOperationsUseCase;
 import com.personal.batongo.domain.link.LinkPurpose;
@@ -363,6 +364,22 @@ class ManagementAuthenticationHttpContractTest {
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + MANAGEMENT_JWT))
                 .andExpect(status().isOk());
         verify(useCase).searchLinks(any());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"GET", "HEAD"})
+    @DisplayName("일괄 조회의 GET과 HEAD는 조회 scope로 접근할 수 있다")
+    void acceptsReadScopeForLinkBatch(String method) throws Exception {
+        when(jwtDecoder.decode(MANAGEMENT_JWT)).thenReturn(jwt("baton-go.links.read"));
+        when(useCase.getLinks(any())).thenReturn(new LinkBatchResult(
+                List.of(link()), List.of(), link().evaluatedAt()
+        ));
+
+        mockMvc.perform(request(HttpMethod.valueOf(method), "/api/v1/links/batch")
+                        .param("linkIds", link().id().toString())
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + MANAGEMENT_JWT))
+                .andExpect(status().isOk());
+        verify(useCase).getLinks(List.of(link().id()));
     }
 
     @Test

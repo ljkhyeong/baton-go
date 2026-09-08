@@ -13,6 +13,7 @@ import jakarta.validation.Valid;
 import java.net.URI;
 import java.security.Principal;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
@@ -92,6 +93,11 @@ public class LinkManagementController {
     @GetMapping("/{linkId}")
     public ResponseEntity<LinkResponse> getLink(@PathVariable UUID linkId) {
         return ResponseEntity.ok(LinkResponse.from(smartLinkUseCase.getLink(linkId)));
+    }
+
+    @GetMapping("/batch")
+    public LinkBatchResponse getLinks(@RequestParam("linkIds") List<UUID> linkIds) {
+        return LinkBatchResponse.from(smartLinkUseCase.getLinks(linkIds));
     }
 
     @PutMapping("/{linkId}/revocation")

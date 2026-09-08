@@ -16,6 +16,8 @@ public interface SmartLinkRepository {
 
     Optional<StoredLinkSnapshot> findStoredById(UUID id);
 
+    List<StoredLinkSnapshot> findStoredByIds(List<UUID> ids);
+
     Optional<StoredLinkSnapshot> findStoredByIdForUpdate(UUID id);
 
     List<StoredLinkSnapshot> scanStoredAfter(UUID afterLinkId, int limit);

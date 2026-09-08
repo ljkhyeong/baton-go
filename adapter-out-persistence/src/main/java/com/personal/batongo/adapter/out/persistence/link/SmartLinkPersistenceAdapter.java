@@ -11,6 +11,7 @@ import java.sql.SQLException;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -117,6 +118,15 @@ public class SmartLinkPersistenceAdapter implements SmartLinkRepository {
                 STORED_SNAPSHOT_SELECT + "WHERE stored_link.id = UUID_TO_BIN(?)",
                 id.toString()
         );
+    }
+
+    @Override
+    public List<StoredLinkSnapshot> findStoredByIds(List<UUID> ids) {
+        String placeholders = String.join(", ", Collections.nCopies(ids.size(), "UUID_TO_BIN(?)"));
+        return jdbcClient.sql(STORED_SNAPSHOT_SELECT + "WHERE stored_link.id IN (" + placeholders + ")")
+                .params(ids.stream().map(UUID::toString).toList())
+                .query(this::storedSnapshot)
+                .list();
     }
 
     @Override

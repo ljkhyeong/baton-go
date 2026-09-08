@@ -15,11 +15,20 @@ public interface SmartLinkUseCase {
 
     LinkResult getLink(UUID linkId);
 
+    LinkBatchResult getLinks(List<UUID> linkIds);
+
     LinkSearchResult searchLinks(LinkSearchQuery query);
 
     ResolvedLinkResult resolveLink(String rawCode);
 
     LinkResult revokeLink(UUID linkId);
+
+    record LinkBatchResult(List<LinkResult> items, List<UUID> notFoundIds, Instant evaluatedAt) {
+        public LinkBatchResult {
+            items = List.copyOf(items);
+            notFoundIds = List.copyOf(notFoundIds);
+        }
+    }
 
     record LinkSearchQuery(
             UUID afterLinkId,

@@ -23,6 +23,10 @@ public final class InvalidRequestException extends RuntimeException {
         );
     }
 
+    public static InvalidRequestException linkBatch() {
+        return new InvalidRequestException("linkIds에는 비어 있지 않은 링크 ID를 1개 이상 100개 이하로 지정해야 합니다");
+    }
+
     public static InvalidRequestException targetContractRemediation() {
         return new InvalidRequestException("비허용 링크 폐기 요청이 올바르지 않습니다");
     }

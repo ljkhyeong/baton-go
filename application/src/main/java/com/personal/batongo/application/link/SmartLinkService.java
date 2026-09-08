@@ -29,8 +29,11 @@ import com.personal.batongo.domain.link.TrustedTargetPolicy;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -224,6 +227,27 @@ public class SmartLinkService implements SmartLinkUseCase {
 
     @Override
     @Transactional(readOnly = true)
+    public LinkBatchResult getLinks(List<UUID> linkIds) {
+        if (linkIds == null || linkIds.isEmpty() || linkIds.size() > 100
+                || linkIds.stream().anyMatch(Objects::isNull)) {
+            throw InvalidRequestException.linkBatch();
+        }
+        List<UUID> uniqueIds = linkIds.stream().distinct().toList();
+        List<StoredLinkSnapshot> stored = repository.findStoredByIds(uniqueIds);
+        Instant evaluatedAt = clock.instant();
+        Map<UUID, StoredLinkSnapshot> allowed = stored.stream()
+                .filter(this::isAllowedTarget)
+                .collect(Collectors.toMap(StoredLinkSnapshot::id, Function.identity()));
+        return new LinkBatchResult(
+                uniqueIds.stream().map(allowed::get).filter(Objects::nonNull)
+                        .map(link -> toResult(link, evaluatedAt)).toList(),
+                uniqueIds.stream().filter(id -> !allowed.containsKey(id)).toList(),
+                evaluatedAt
+        );
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public LinkSearchResult searchLinks(LinkSearchQuery query) {
         if (query.limit() < 1 || query.limit() > 500
                 || (query.createdFrom() != null && query.createdBefore() != null
@@ -243,20 +267,8 @@ public class SmartLinkService implements SmartLinkUseCase {
                         || !stored.createdAt().isBefore(query.createdFrom()))
                 .filter(stored -> query.createdBefore() == null
                         || stored.createdAt().isBefore(query.createdBefore()))
-                .filter(stored -> TrustedTargetPolicy.isAllowed(
-                        stored.targetSystem(), stored.purpose(), stored.targetPath()
-                ))
-                .map(stored -> new LinkResult(
-                        stored.id(),
-                        TargetSystem.valueOf(stored.targetSystem()),
-                        stored.targetPath(),
-                        LinkPurpose.valueOf(stored.purpose()),
-                        stored.notBefore(),
-                        stored.expiresAt(),
-                        stored.revokedAt(),
-                        stored.createdAt(),
-                        evaluatedAt
-                ))
+                .filter(this::isAllowedTarget)
+                .map(stored -> toResult(stored, evaluatedAt))
                 .filter(link -> query.status() == null || link.status() == query.status())
                 .toList();
         // 필터 결과가 비어도 검사한 마지막 행 다음으로 진행한다.
@@ -352,6 +364,26 @@ public class SmartLinkService implements SmartLinkUseCase {
         } catch (LinkValidationException exception) {
             throw new LinkNotFoundException();
         }
+    }
+
+    private boolean isAllowedTarget(StoredLinkSnapshot storedLink) {
+        return TrustedTargetPolicy.isAllowed(
+                storedLink.targetSystem(), storedLink.purpose(), storedLink.targetPath()
+        );
+    }
+
+    private LinkResult toResult(StoredLinkSnapshot storedLink, Instant evaluatedAt) {
+        return new LinkResult(
+                storedLink.id(),
+                TargetSystem.valueOf(storedLink.targetSystem()),
+                storedLink.targetPath(),
+                LinkPurpose.valueOf(storedLink.purpose()),
+                storedLink.notBefore(),
+                storedLink.expiresAt(),
+                storedLink.revokedAt(),
+                storedLink.createdAt(),
+                evaluatedAt
+        );
     }
 
     private LinkResult toResult(

@@ -45,6 +45,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.IntStream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -371,6 +372,57 @@ class SmartLinkServiceTest {
         verify(repository).findStoredById(LINK_ID);
         verify(repository).findStoredByIdForUpdate(LINK_ID);
         verify(repository, never()).revokeStored(any(), anyLong(), any());
+    }
+
+    @Test
+    @DisplayName("일괄 조회는 중복 ID를 한 번만 읽고 요청 순서와 같은 판정 시각을 유지한다")
+    void getsLinksInBatch() {
+        var active = searchSnapshot(1, "BATON", BATON_PATH, NOW.minusSeconds(60), null);
+        var expired = searchSnapshot(2, "ROUND", ROUND_PATH, NOW.minusSeconds(60), NOW);
+        var hidden = searchSnapshot(3, "UNKNOWN", "/secret-target", NOW, null);
+        UUID missingId = new UUID(0, 4);
+        List<UUID> uniqueIds = List.of(expired.id(), missingId, active.id(), hidden.id());
+        when(repository.findStoredByIds(uniqueIds)).thenReturn(List.of(active, hidden, expired));
+        Clock clock = mock(Clock.class);
+        when(clock.instant()).thenReturn(NOW, NOW.plusSeconds(1));
+
+        var result = service(linkCodePort, publicLinkOriginPort, clock).getLinks(
+                List.of(expired.id(), missingId, active.id(), expired.id(), hidden.id())
+        );
+
+        assertThat(result.items()).extracting(LinkResult::id).containsExactly(expired.id(), active.id());
+        assertThat(result.items()).extracting(LinkResult::status).containsExactly(Status.EXPIRED, Status.ACTIVE);
+        assertThat(result.notFoundIds()).containsExactly(missingId, hidden.id());
+        assertThat(result.evaluatedAt()).isEqualTo(NOW);
+        assertThat(result.items()).allSatisfy(link -> assertThat(link.evaluatedAt()).isEqualTo(NOW));
+        verify(repository).findStoredByIds(uniqueIds);
+        verify(clock).instant();
+        verify(repository, never()).findStoredById(any());
+        verify(repository, never()).save(any());
+        verify(repository, never()).revokeStored(any(), anyLong(), any());
+    }
+
+    @Test
+    @DisplayName("일괄 조회는 최대 100개 ID를 허용하고 모두 없으면 누락 ID만 반환한다")
+    void acceptsMaximumBatchSize() {
+        List<UUID> ids = IntStream.range(0, 100).mapToObj(id -> new UUID(0, id)).toList();
+
+        var result = service.getLinks(ids);
+
+        assertThat(result.items()).isEmpty();
+        assertThat(result.notFoundIds()).containsExactlyElementsOf(ids);
+        verify(repository).findStoredByIds(ids);
+    }
+
+    @Test
+    @DisplayName("일괄 조회는 비어 있거나 누락된 ID와 한도 초과 요청을 DB 조회 전에 거부한다")
+    void rejectsInvalidBatchBeforeDatabaseRead() {
+        for (List<UUID> ids : java.util.Arrays.asList(
+                null, List.<UUID>of(), java.util.Arrays.asList(LINK_ID, null),
+                java.util.Collections.nCopies(101, LINK_ID))) {
+            assertThatThrownBy(() -> service.getLinks(ids)).isExactlyInstanceOf(InvalidRequestException.class);
+        }
+        verifyNoInteractions(repository);
     }
 
     @Test

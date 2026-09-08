@@ -17,31 +17,29 @@
 
 ## 최근 검증
 
-- 2026-09-08 검증 기준은 GO `81fd4e2`다. 검증 대상 코드·테스트의 미커밋 변경은 없으며 이후에는 문서만 수정했다.
-- 공개 오류 제목, 링크 대상·자동 삭제 오류와 HMAC 키 설정·등록 안내를 수정했다. HTML의 요청 제한 장애 제목은
-  "지금은 링크를 열 수 없습니다."이며 JSON의 상세 원인, 오류 코드와 HTTP 상태는 유지했다.
-- Java 21(`/Library/Java/JavaVirtualMachines/microsoft-21.jdk/Contents/Home`)로 아래 기존 테스트 77개를
-  모두 통과했다. 실패·제외는 없다. 로그는 `/private/tmp/baton-go-wording-tests-20260908.log`에 있다.
+- 2026-09-08 검증 기준은 GO `16c4a2d`다. `6813bd3`의 미커밋 변경이 없는 상태에서 시작했고,
+  검증한 코드 4개 파일을 커밋했다. 이후 변경은 이 인계 문서뿐이다.
+- 생성 예약의 네이티브 SQL을 기존 `JdbcClient`로 옮겨 Spring Data 중간 저장소와 엔티티 접근자를
+  제거했다. 스키마 검증용 JPA 매핑, `INSERT IGNORE`·`FOR SHARE`, 트랜잭션과 UTC 저장은 유지했다.
+  생성 서비스의 전달용 객체와 검증 메서드의 불필요한 반환값도 정리해 코드가 순수 49줄 줄었다.
+- Java 21(`/Library/Java/JavaVirtualMachines/microsoft-21.jdk/Contents/Home`)과 Docker로
+  애플리케이션 테스트 43개, MySQL 통합 테스트 41개를 통과했다. 실패·제외는 없다.
+  최초 실행 로그는 `/private/tmp/baton-go-code-cleanup-tests-20260908.log`에 있다.
 
 ```bash
-./gradlew --no-daemon :domain:test --tests '*TrustedTargetPolicyTest' \
-  :adapter-out-external:test --tests '*LinkCodePropertiesTest' \
-  :adapter-in-web:test --tests '*GlobalExceptionHandlerTest' \
-  --tests '*DistributedResolverQuotaHttpIntegrationTest' --tests '*PublicLinkHttpContractTest' \
-  :guard-tool:test --tests '*LinkCodeKeyGuardBindingCliTest'
+./gradlew --no-daemon :application:test :bootstrap:mysqlTest
 ```
 
+- 스키마 검증 매핑을 유지하도록 조정한 뒤 `./gradlew --no-daemon :bootstrap:mysqlTest`만 다시 실행했다.
+  최종 MySQL 검증 로그는 `/private/tmp/baton-go-code-cleanup-mysql-final-20260908.log`에 있다.
+  애플리케이션 코드·테스트·의존성·설정은 같아 43개 성공 결과를 재사용했다.
+- 동시 생성·재시도·롤백·자동 삭제·UTC 시각 저장을 확인했다. Redis 코드는 바뀌지 않아 Redis 통합 검증은
+  반복하지 않았고 실제 운영 배포는 실행하지 않았다.
 - BATON `codex/go-link-integration-20260905`의 `90557822`에 공유 문구와 검증 기록을 반영했다.
   코드 기준은 `bc888b15`다. 타입·빌드 검사와 공유 시나리오 12개를 통과하고, 안내 위치를 맞춘 뒤
   직접 복사 3개만 추가 검증했다. 명령·포트 조건·로그는
   `/private/tmp/baton-go-integration-20260905/output/verification/latest.md`에 있다.
-- 문구·표시 순서만 바뀌어 실제 MySQL·Redis·배포 검증은 반복하지 않았다. 실제 카카오 전송과 BATON 메인 병합은 남아 있다.
-
-- 2026-09-08 배포·인증 문서 정리는 `5df4b3c`에서 시작했다. 시작 시 미커밋 변경은 없었다.
-  Kubernetes 설계에 현재 Redis 요청 제한 문서를 연결하고 JWT 서명 검증·방 연결 정보의 설명을 정리했다.
-  문서 5개의 로컬 링크 26개(제목 링크 8개 포함)를 확인하고 `git diff --check`를 통과했다.
-  명령·설정 예시와 오류 코드·설정 식별자는 유지했다. 결과는 `/private/tmp/baton-go-doc-round4-check-20260908.log`에 있다.
-  문서만 변경해 빌드·테스트는 반복하지 않았다.
+- 실제 카카오 전송과 BATON 메인 병합은 남아 있다.
 
 ## 다음 작업
 

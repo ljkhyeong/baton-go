@@ -2,8 +2,11 @@ package com.personal.batongo.adapter.out.persistence.link;
 
 import com.personal.batongo.application.link.port.out.LinkCreationReservationPort;
 import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -12,26 +15,36 @@ import org.springframework.transaction.annotation.Transactional;
 public class LinkCreationReservationPersistenceAdapter
         implements LinkCreationReservationPort {
 
-    private final SpringDataLinkCreationRequestRepository repository;
+    private final JdbcClient jdbcClient;
 
     public LinkCreationReservationPersistenceAdapter(
-            SpringDataLinkCreationRequestRepository repository
+            JdbcClient jdbcClient
     ) {
-        this.repository = repository;
+        this.jdbcClient = jdbcClient;
     }
 
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
     public Optional<Reservation> find(String idempotencyKeyHash) {
-        return repository.findCurrent(idempotencyKeyHash)
-                .map(request -> new Reservation(
-                        request.getLinkId(),
-                        request.getPublicOrigin(),
-                        request.getKeyId(),
-                        request.getPurgedAt(),
-                        request.getRequestHash(),
-                        false
-                ));
+        return jdbcClient.sql("""
+                        SELECT BIN_TO_UUID(link_id) AS link_id, public_origin, key_id,
+                               purged_at, request_hash
+                        FROM link_creation_requests
+                        WHERE idempotency_key_hash = ? FOR SHARE
+                        """)
+                .param(idempotencyKeyHash)
+                .query((row, index) -> {
+                    LocalDateTime purgedAt = row.getObject("purged_at", LocalDateTime.class);
+                    return new Reservation(
+                            UUID.fromString(row.getString("link_id")),
+                            row.getString("public_origin"),
+                            row.getString("key_id"),
+                            purgedAt == null ? null : purgedAt.toInstant(ZoneOffset.UTC),
+                            row.getString("request_hash"),
+                            false
+                    );
+                })
+                .optional();
     }
 
     @Override
@@ -43,13 +56,14 @@ public class LinkCreationReservationPersistenceAdapter
             String keyId,
             Instant createdAt
     ) {
-        int inserted = repository.insertIfAbsent(
-                idempotencyKeyHash,
-                proposedLinkId.toString(),
-                publicOrigin,
-                keyId,
-                createdAt
-        );
+        int inserted = jdbcClient.sql("""
+                        INSERT IGNORE INTO link_creation_requests (
+                            idempotency_key_hash, link_id, public_origin, key_id, created_at
+                        ) VALUES (?, UUID_TO_BIN(?), ?, ?, ?)
+                        """)
+                .params(idempotencyKeyHash, proposedLinkId.toString(), publicOrigin, keyId,
+                        LocalDateTime.ofInstant(createdAt, ZoneOffset.UTC))
+                .update();
         if (inserted == 1) {
             return new Reservation(proposedLinkId, publicOrigin, keyId, null, null, true);
         }

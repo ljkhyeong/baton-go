@@ -72,56 +72,60 @@ public class SmartLinkService implements SmartLinkUseCase {
                         command.notBefore(),
                         command.expiresAt()
                 );
-        PreparedCreation prepared = new PreparedCreation(
-                command,
-                admission,
-                linkCodePort.hashIdempotencyKey(command.idempotencyKey().value())
-        );
-        if (!prepared.admission().allowsNewReservation()) {
-            return replayExistingOnly(prepared);
+        String idempotencyKeyHash = linkCodePort.hashIdempotencyKey(command.idempotencyKey().value());
+        if (!admission.allowsNewReservation()) {
+            return replayExistingOnly(command, admission, idempotencyKeyHash);
         }
-        return reserveCreateOrReplay(prepared);
+        return reserveCreateOrReplay(command, admission, idempotencyKeyHash);
     }
 
-    private CreatedLinkResult replayExistingOnly(PreparedCreation prepared) {
+    private CreatedLinkResult replayExistingOnly(
+            CreateLinkCommand command,
+            CreationRequestAdmissionPolicy.Decision admission,
+            String idempotencyKeyHash
+    ) {
         LinkCreationReservationPort.Reservation reservation = reservationPort.find(
-                prepared.idempotencyKeyHash()
-        ).orElseThrow(prepared.admission()::missingReservationException);
-        TrustedTarget requestedTarget = requireAllowedTarget(prepared.command());
-        requireNotPurged(reservation, requestedTarget, prepared);
+                idempotencyKeyHash
+        ).orElseThrow(admission::missingReservationException);
+        TrustedTarget requestedTarget = requireAllowedTarget(command);
+        requireNotPurged(reservation, requestedTarget, admission);
         linkCodeKeyGuard.verifyBound();
         return replayCreation(
                 reservation,
                 requestedTarget,
-                prepared.admission().notBefore(),
-                prepared.admission().expiresAt(),
-                linkCodePort.issue(prepared.command().idempotencyKey().value(), reservation.keyId())
+                admission.notBefore(),
+                admission.expiresAt(),
+                linkCodePort.issue(command.idempotencyKey().value(), reservation.keyId())
         );
     }
 
-    private CreatedLinkResult reserveCreateOrReplay(PreparedCreation prepared) {
-        TrustedTarget requestedTarget = requireAllowedTarget(prepared.command());
+    private CreatedLinkResult reserveCreateOrReplay(
+            CreateLinkCommand command,
+            CreationRequestAdmissionPolicy.Decision admission,
+            String idempotencyKeyHash
+    ) {
+        TrustedTarget requestedTarget = requireAllowedTarget(command);
         linkCodeKeyGuard.verifyBound();
         PublicLinkOrigin currentOrigin = publicLinkOriginPort.current();
         Instant now = clock.instant();
         LinkCreationReservationPort.Reservation reservation = reservationPort.reserve(
-                prepared.idempotencyKeyHash(),
+                idempotencyKeyHash,
                 UUID.randomUUID(),
                 currentOrigin.serialized(),
                 linkCodePort.keyRingIdentity().activeKeyId(),
                 now
         );
-        requireNotPurged(reservation, requestedTarget, prepared);
+        requireNotPurged(reservation, requestedTarget, admission);
         IssuedLinkCode issuedCode = linkCodePort.issue(
-                prepared.command().idempotencyKey().value(), reservation.keyId()
+                command.idempotencyKey().value(), reservation.keyId()
         );
 
         if (!reservation.owner()) {
             return replayCreation(
                     reservation,
                     requestedTarget,
-                    prepared.admission().notBefore(),
-                    prepared.admission().expiresAt(),
+                    admission.notBefore(),
+                    admission.expiresAt(),
                     issuedCode
             );
         }
@@ -130,8 +134,8 @@ public class SmartLinkService implements SmartLinkUseCase {
                 reservation.linkId(),
                 issuedCode.codeHash(),
                 requestedTarget,
-                prepared.admission().notBefore(),
-                prepared.admission().expiresAt(),
+                admission.notBefore(),
+                admission.expiresAt(),
                 now
         ));
         return new CreatedLinkResult(
@@ -140,8 +144,8 @@ public class SmartLinkService implements SmartLinkUseCase {
                         requestedTarget.targetSystem(),
                         requestedTarget.targetPath(),
                         requestedTarget.purpose(),
-                        prepared.admission().notBefore(),
-                        prepared.admission().expiresAt(),
+                        admission.notBefore(),
+                        admission.expiresAt(),
                         null,
                         now,
                         now
@@ -152,29 +156,17 @@ public class SmartLinkService implements SmartLinkUseCase {
     }
 
     private void requireNotPurged(LinkCreationReservationPort.Reservation reservation,
-                                  TrustedTarget target, PreparedCreation prepared) {
+                                  TrustedTarget target, CreationRequestAdmissionPolicy.Decision admission) {
         if (reservation.purgedAt() == null) {
             return;
         }
         String requestHash = LinkCreationFingerprint.of(target.targetSystem().name(),
                 target.purpose().name(), target.targetPath(),
-                prepared.admission().notBefore(), prepared.admission().expiresAt());
+                admission.notBefore(), admission.expiresAt());
         if (!requestHash.equals(reservation.requestHash())) {
             throw new IdempotencyKeyConflictException();
         }
         throw new LinkPurgedException();
-    }
-
-    private record PreparedCreation(
-            CreateLinkCommand command,
-            CreationRequestAdmissionPolicy.Decision admission,
-            String idempotencyKeyHash
-    ) {
-
-        @Override
-        public String toString() {
-            return "PreparedCreation[redacted]";
-        }
     }
 
     private TrustedTarget requireAllowedTarget(CreateLinkCommand command) {
@@ -196,7 +188,7 @@ public class SmartLinkService implements SmartLinkUseCase {
                 .orElseThrow(() -> new LinkCreationReplayUnavailableException(
                         reservation.linkId()
                 ));
-        TrustedTarget trustedTarget = requireSameCreationRequest(
+        requireSameCreationRequest(
                 existing,
                 requestedTarget,
                 notBefore,
@@ -207,7 +199,7 @@ public class SmartLinkService implements SmartLinkUseCase {
         }
         PublicLinkOrigin storedOrigin = requireReplayOrigin(reservation.publicOrigin());
         return new CreatedLinkResult(
-                toResult(existing, trustedTarget),
+                toResult(existing, requestedTarget),
                 storedOrigin.shortUrl(issuedCode.rawCode()),
                 true
         );
@@ -317,7 +309,7 @@ public class SmartLinkService implements SmartLinkUseCase {
         return toResult(storedLink, trustedTarget, revokedAt);
     }
 
-    private TrustedTarget requireSameCreationRequest(
+    private void requireSameCreationRequest(
             StoredLinkReplay existing,
             TrustedTarget requestedTarget,
             Instant notBefore,
@@ -331,7 +323,6 @@ public class SmartLinkService implements SmartLinkUseCase {
         if (!sameRequest) {
             throw new IdempotencyKeyConflictException();
         }
-        return requestedTarget;
     }
 
     private LinkResult toResult(

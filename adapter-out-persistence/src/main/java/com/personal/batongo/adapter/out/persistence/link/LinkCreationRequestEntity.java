@@ -7,6 +7,7 @@ import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.UUID;
 
+/** 생성 예약 테이블의 시작 시 스키마 검증을 위한 매핑입니다. */
 @Entity
 @Table(name = "link_creation_requests")
 class LinkCreationRequestEntity {
@@ -33,22 +34,6 @@ class LinkCreationRequestEntity {
     @Column(name = "request_hash", length = 64)
     private String requestHash;
 
-    Instant getPurgedAt() { return purgedAt; }
-
-    String getRequestHash() { return requestHash; }
-
     protected LinkCreationRequestEntity() {
-    }
-
-    UUID getLinkId() {
-        return linkId;
-    }
-
-    String getPublicOrigin() {
-        return publicOrigin;
-    }
-
-    String getKeyId() {
-        return keyId;
     }
 }

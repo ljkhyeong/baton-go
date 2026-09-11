@@ -149,7 +149,7 @@ class LinkPersistenceIntegrationTest {
     }
 
     @Test
-    @DisplayName("Flyway와 JPA는 2040년 링크의 생성 재생 폐기 시각을 마이크로초까지 보존한다")
+    @DisplayName("Flyway와 JPA는 2040년 링크의 생성·재시도·폐기 시각을 마이크로초까지 보존한다")
     void persistsCreationReplayAndRevocationAfterTimestampLimit() {
         CreateLinkCommand command = new CreateLinkCommand(
                 CreationIdempotencyKey.parseRequest(FAR_FUTURE_IDEMPOTENCY_KEY),
@@ -188,7 +188,7 @@ class LinkPersistenceIntegrationTest {
     }
 
     @Test
-    @DisplayName("API 지원 시각의 양쪽 경계는 생성 응답과 MySQL raw 날짜에서 그대로 보존된다")
+    @DisplayName("API가 지원하는 최소·최대 시각은 생성 응답과 MySQL 원문 날짜에 그대로 보존된다")
     void preservesSupportedTimeBoundariesInMysqlRawValuesAndReplay() throws Exception {
         String idempotencyKey = "5b2355cf-8647-464e-a633-0f8c50ec169c";
         String targetPath = "/room/wxyz-abcd-2345";
@@ -248,7 +248,7 @@ class LinkPersistenceIntegrationTest {
         ));
     }
     @Test
-    @DisplayName("과거 대문자 UUID 요청은 기존 MySQL 예약과 일치할 때 행을 늘리지 않고 재생한다")
+    @DisplayName("과거 대문자 UUID 요청은 기존 MySQL 예약과 일치하면 행을 늘리지 않고 기존 결과를 반환한다")
     void replaysLegacyUppercaseUuidFromExistingMysqlReservation() throws Exception {
         String rawIdempotencyKey = "00000000-0000-7000-8000-00000000000A";
         String normalizedIdempotencyKey = rawIdempotencyKey.toLowerCase(
@@ -315,7 +315,7 @@ class LinkPersistenceIntegrationTest {
     }
 
     @Test
-    @DisplayName("공개 origin 증거가 없는 기존 MySQL 예약은 현재 설정으로 추정하지 않는다")
+    @DisplayName("최초 공개 출처를 확인할 수 없는 기존 예약은 현재 설정으로 채우지 않는다")
     void rejectsExistingMysqlReservationWithoutPublicOrigin() {
         String idempotencyKey = "cc9d17dd-d02d-4c14-842c-afbb03887fc6";
         String linkId = "93d4229a-0edf-4d85-a769-0efb7e58c179";
@@ -362,7 +362,7 @@ class LinkPersistenceIntegrationTest {
     }
 
     @Test
-    @DisplayName("과거 나노초 요청은 기존 MySQL 예약의 마이크로초 payload와 일치할 때 재생한다")
+    @DisplayName("과거 나노초 요청은 기존 MySQL 예약의 마이크로초 요청 내용과 일치하면 기존 결과를 반환한다")
     void replaysLegacySubMicrosecondTimeFromExistingMysqlReservation() throws Exception {
         String idempotencyKey = "61a78df8-4859-4e66-8ad9-57c3a29bd2d2";
         String targetPath = "/room/abcd-2345-efgh";
@@ -407,7 +407,7 @@ class LinkPersistenceIntegrationTest {
     }
 
     @Test
-    @DisplayName("저장된 unknown과 공백 enum의 생성 재생은 raw 값 없이 충돌로 거부한다")
+    @DisplayName("알 수 없거나 공백인 열거형의 재시도는 원문 없이 충돌로 거부한다")
     void rejectsUnsafeStoredReplayEnumsWithoutHydrationOrExposure() throws Exception {
         assertUnsafeStoredReplayIsRejected(
                 "c1478a51-2c84-451f-8291-4f3fb563ac20",
@@ -426,7 +426,7 @@ class LinkPersistenceIntegrationTest {
     }
 
     @Test
-    @DisplayName("저장된 비허용 target과 알 수 없는 enum은 GET과 HEAD에서 각각 숨긴다")
+    @DisplayName("저장된 비허용 대상과 알 수 없는 열거형은 GET과 HEAD에서 숨긴다")
     void hidesUnsafeStoredTargetsFromGetAndHead() throws Exception {
         String invalidTargetCode = "A".repeat(22);
         insertStoredLink(

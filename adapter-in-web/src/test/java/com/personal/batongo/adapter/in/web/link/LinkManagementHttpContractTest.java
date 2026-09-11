@@ -200,7 +200,7 @@ class LinkManagementHttpContractTest {
     }
 
     @Test
-    @DisplayName("링크 생성 응답은 공개 코드가 포함된 short URL과 안정된 필드를 반환한다")
+    @DisplayName("링크 생성 응답은 공개 코드가 포함된 단축 URL과 정해진 필드를 반환한다")
     void createsLinkContract(CapturedOutput output) throws Exception {
         LinkResult link = linkResult();
         when(useCase.createLink(any())).thenReturn(new CreatedLinkResult(
@@ -249,7 +249,7 @@ class LinkManagementHttpContractTest {
     }
 
     @Test
-    @DisplayName("같은 링크 생성 요청의 재시도는 동일한 short URL과 200으로 응답한다")
+    @DisplayName("같은 링크 생성 요청의 재시도는 동일한 단축 URL과 200으로 응답한다")
     void replaysLinkCreationContract(CapturedOutput output) throws Exception {
         when(useCase.createLink(any())).thenReturn(new CreatedLinkResult(
                 linkResult(),
@@ -283,7 +283,7 @@ class LinkManagementHttpContractTest {
 
     @ParameterizedTest(name = "{1}")
     @MethodSource("operationalReplayErrors")
-    @DisplayName("링크 생성·재생 실패는 원인별 오류를 반환하고 완료 이력을 남기지 않는다")
+    @DisplayName("링크 생성·재시도 실패는 원인별 오류를 반환하고 완료 이력을 남기지 않는다")
     void returnsOperationalReplayError(
             RuntimeException exception,
             String code,
@@ -334,7 +334,7 @@ class LinkManagementHttpContractTest {
     }
 
     @Test
-    @DisplayName("관리 링크 조회는 원문 공개 코드와 short URL을 노출하지 않는다")
+    @DisplayName("관리 링크 조회는 원문 공개 코드와 단축 URL을 노출하지 않는다")
     void getsManagedLinkWithoutRawShortUrl(CapturedOutput output) throws Exception {
         when(useCase.getLink(LINK_ID)).thenReturn(linkResult());
 
@@ -364,7 +364,7 @@ class LinkManagementHttpContractTest {
     }
 
     @Test
-    @DisplayName("관리 링크 폐기 응답은 최초 폐기 시각을 유지하고 short URL을 노출하지 않는다")
+    @DisplayName("관리 링크 폐기 응답은 최초 폐기 시각을 유지하고 단축 URL을 노출하지 않는다")
     void revokesManagedLinkWithoutRawShortUrl(CapturedOutput output) throws Exception {
         Instant firstRevokedAt = Instant.parse("2026-07-29T11:00:00Z");
         when(useCase.revokeLink(LINK_ID)).thenReturn(linkResult(firstRevokedAt));
@@ -383,7 +383,7 @@ class LinkManagementHttpContractTest {
     }
 
     @Test
-    @DisplayName("링크 생성 요청에 canonical UUID 멱등성 키가 없으면 400으로 응답한다")
+    @DisplayName("링크 생성 요청에 소문자 표준 UUID 멱등성 키가 없으면 400으로 응답한다")
     void requiresIdempotencyKey() throws Exception {
         mockMvc.perform(post("/api/v1/links")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -407,7 +407,7 @@ class LinkManagementHttpContractTest {
             "targetSystem=\"UNKNOWN_SYSTEM\"",
             "purpose=0"
     })
-    @DisplayName("target enum의 비정확한 입력은 application 호출 전에 400으로 거부한다")
+    @DisplayName("대상 열거형이 정확하지 않으면 서비스 호출 전에 400으로 거부한다")
     void rejectsInexactTargetEnumsBeforeApplication(String input) throws Exception {
         String[] fieldAndValue = input.split("=", 2);
         String targetSystem = fieldAndValue[0].equals("targetSystem")
@@ -434,7 +434,7 @@ class LinkManagementHttpContractTest {
     }
 
     @Test
-    @DisplayName("저장할 수 없는 생성 시각 예외는 안정된 400으로 응답한다")
+    @DisplayName("저장할 수 없는 생성 시각은 정해진 400 오류로 응답한다")
     void mapsUnstorableCreationTimeToInvalidRequest() throws Exception {
         when(useCase.createLink(any())).thenThrow(InvalidRequestException.creationTime());
 
@@ -470,7 +470,7 @@ class LinkManagementHttpContractTest {
             "expiresAt=\"2026-07-30T10:00:00.Z\"",
             "notBefore=1780000000"
     })
-    @DisplayName("비canonical 생성 시각은 예약 전에 400 INVALID_REQUEST로 거부한다")
+    @DisplayName("표준 형식이 아닌 생성 시각은 예약 전에 400 INVALID_REQUEST로 거부한다")
     void rejectsNonCanonicalCreationTimesBeforeApplication(String input)
             throws Exception {
         String[] fieldAndValue = input.split("=", 2);
@@ -535,7 +535,7 @@ class LinkManagementHttpContractTest {
     }
 
     @Test
-    @DisplayName("같은 멱등성 키의 다른 생성 요청은 안정된 409 오류로 응답한다")
+    @DisplayName("같은 멱등성 키의 다른 생성 요청은 정해진 409 오류로 응답한다")
     void rejectsIdempotencyKeyReuse() throws Exception {
         when(useCase.createLink(any())).thenThrow(new IdempotencyKeyConflictException());
 
@@ -555,7 +555,7 @@ class LinkManagementHttpContractTest {
     }
 
     @Test
-    @DisplayName("지원하지 않는 링크 생성 본문 형식은 안정된 415 오류로 응답한다")
+    @DisplayName("지원하지 않는 링크 생성 본문 형식은 정해진 415 오류로 응답한다")
     void rejectsUnsupportedMediaType() throws Exception {
         mockMvc.perform(post("/api/v1/links")
                         .header("Idempotency-Key", IDEMPOTENCY_KEY)
@@ -567,7 +567,7 @@ class LinkManagementHttpContractTest {
     }
 
     @Test
-    @DisplayName("존재하지 않는 링크 API 경로는 안정된 404 오류로 응답한다")
+    @DisplayName("존재하지 않는 링크 API 경로는 정해진 404 오류로 응답한다")
     void returnsNotFoundForUnknownRoute() throws Exception {
         mockMvc.perform(get("/unknown"))
                 .andExpect(status().isNotFound())
@@ -575,7 +575,7 @@ class LinkManagementHttpContractTest {
                 .andExpect(jsonPath("$.requestId").isNotEmpty());
     }
     @Test
-    @DisplayName("빈 target 경로는 도메인 계약의 400 INVALID_LINK로 응답한다")
+    @DisplayName("빈 대상 경로는 400 INVALID_LINK로 응답한다")
     void rejectsBlankTargetPathAsInvalidLink() throws Exception {
         when(useCase.createLink(any())).thenThrow(new LinkValidationException("검증 실패"));
 

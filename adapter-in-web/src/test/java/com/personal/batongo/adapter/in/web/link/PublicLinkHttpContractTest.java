@@ -138,7 +138,7 @@ class PublicLinkHttpContractTest {
             "EXPIRED, 410, LINK_EXPIRED",
             "REVOKED, 410, LINK_REVOKED"
     })
-    @DisplayName("사용할 수 없는 공개 링크는 사유별 안정된 오류로 응답한다")
+    @DisplayName("사용할 수 없는 공개 링크는 사유별로 정해진 오류를 반환한다")
     void returnsUnavailableContract(
             LinkUnavailableException.Reason reason,
             int expectedStatus,
@@ -157,7 +157,7 @@ class PublicLinkHttpContractTest {
     }
 
     @Test
-    @DisplayName("일반 미존재와 저장 target 계약 위반 GET은 같은 공개 404이며 위반만 기록한다")
+    @DisplayName("없는 링크와 대상 규칙 위반 링크는 같은 404를 반환하고 위반만 기록한다")
     void hidesStoredTargetPolicyViolationLikeMissingLinkForGet() throws Exception {
         String missingCode = "missing-link-code";
         when(useCase.resolveLink(missingCode)).thenThrow(new LinkNotFoundException());
@@ -177,7 +177,7 @@ class PublicLinkHttpContractTest {
     }
 
     @Test
-    @DisplayName("일반 미존재와 저장 대상 계약 위반 HEAD는 같은 404와 JSON 형식이며 위반만 기록한다")
+    @DisplayName("없는 링크와 대상 규칙 위반 링크의 HEAD는 같은 JSON 404를 반환하고 위반만 기록한다")
     void hidesStoredTargetPolicyViolationLikeMissingLinkForHead() throws Exception {
         String missingCode = "missing-link-code";
         when(useCase.resolveLink(missingCode)).thenThrow(new LinkNotFoundException());
@@ -228,7 +228,7 @@ class PublicLinkHttpContractTest {
     }
 
     @Test
-    @DisplayName("HTML에서도 미존재와 저장 대상 위반을 같은 화면으로 숨기고 위반만 집계한다")
+    @DisplayName("HTML에서도 없는 링크와 대상 규칙 위반을 같은 화면으로 숨기고 위반만 집계한다")
     void hidesStoredTargetViolationInHtml() throws Exception {
         when(useCase.resolveLink("missing-code")).thenThrow(new LinkNotFoundException());
         when(useCase.resolveLink("violating-code"))

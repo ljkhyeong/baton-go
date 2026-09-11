@@ -87,7 +87,7 @@ class LinkRetentionIntegrationTest {
     private static final Instant EXPIRED = CREATED.plus(Duration.ofDays(1));
 
     @Test
-    @DisplayName("보존 경계의 종료 링크만 나누어 정리하고 생성 키를 재사용하지 않는다")
+    @DisplayName("보존 기간이 지난 종료 링크만 나누어 정리하고 생성 키를 재사용하지 않는다")
     void purgesInChunksAndPreservesIdempotency() {
         var expiredCommand = command(EXPIRED);
         var expired = create(expiredCommand);
@@ -141,7 +141,7 @@ class LinkRetentionIntegrationTest {
     }
 
     @Test
-    @DisplayName("재생 중인 예약은 정리가 건너뛰고 재생 완료 뒤 다음 실행에서 정리한다")
+    @DisplayName("기존 결과를 조회 중인 예약은 건너뛰고 조회 완료 뒤 다음 실행에서 정리한다")
     void skipsReplayHeldReservation() throws Exception {
         var command = command(EXPIRED);
         var created = create(command);
@@ -172,7 +172,7 @@ class LinkRetentionIntegrationTest {
     }
 
     @Test
-    @DisplayName("이전 키의 모든 링크를 정리한 뒤 키를 제거해도 재생은 정리 완료로 응답한다")
+    @DisplayName("이전 키의 모든 링크를 정리한 뒤 키를 제거해도 재시도는 정리 완료로 응답한다")
     void allowsRetirementWithoutReissuingPurgedLink() {
         var command = command(EXPIRED);
         create(command);

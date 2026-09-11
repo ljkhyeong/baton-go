@@ -131,7 +131,7 @@ class ManagementJwtExpiryHttpTest {
     }
 
     @Test
-    @DisplayName("유효한 만료 시각을 가진 관리 JWT는 nbf 없이도 링크를 조회한다")
+    @DisplayName("유효한 만료 시각을 가진 관리 JWT는 활성 시각 nbf 없이도 링크를 조회한다")
     void acceptsValidExpiryWithoutNotBefore() throws Exception {
         when(useCase.getLink(LINK_ID)).thenReturn(new LinkResult(
                 LINK_ID, TargetSystem.ROUND, "/room/abcd-efgh-jkmn", LinkPurpose.MEETING_ENTRY,

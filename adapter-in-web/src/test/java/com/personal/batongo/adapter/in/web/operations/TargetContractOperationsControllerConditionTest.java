@@ -22,7 +22,7 @@ class TargetContractOperationsControllerConditionTest {
 
     @ParameterizedTest(name = "{index}: {0}")
     @ValueSource(strings = {"enabled", "private-ingress-confirmed"})
-    @DisplayName("operations 관리 컨트롤러는 한 설정만 true이면 등록하지 않는다")
+    @DisplayName("운영 관리 컨트롤러는 활성화 설정 하나만 켜면 등록하지 않는다")
     void doesNotRegisterControllerWithOnlyOneConfirmation(String propertyName) {
         contextRunner
                 .withPropertyValues(

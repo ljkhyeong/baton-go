@@ -19,7 +19,7 @@ class CreationRequestAdmissionPolicyTest {
             );
 
     @Test
-    @DisplayName("현재 계약의 키와 마이크로초 시각은 신규 예약 진입을 허용한다")
+    @DisplayName("현재 계약의 키와 마이크로초 시각이면 새 예약을 허용한다")
     void allowsCurrentRequestToCreateReservation() {
         Instant expiresAt = Instant.parse("2026-08-08T01:02:03.123456Z");
 
@@ -52,7 +52,7 @@ class CreationRequestAdmissionPolicyTest {
     }
 
     @Test
-    @DisplayName("과거 나노초 시각은 마이크로초로 정규화해 재생 후보로만 분류한다")
+    @DisplayName("과거 나노초 시각은 마이크로초로 변환해 기존 결과 조회에만 사용한다")
     void normalizesSubMicrosecondTimeForReplayOnlyComparison() {
         Instant historicalTime = Instant.parse("2026-08-08T01:02:03.123456789Z");
 

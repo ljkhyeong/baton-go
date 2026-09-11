@@ -26,7 +26,7 @@ class LinkCodeKeyGuardBindingCliTlsIntegrationTest {
     static final DeploymentMySqlFixture MYSQL = new DeploymentMySqlFixture();
 
     @Test
-    @DisplayName("guard CLI 실행 파일은 운영 TLS 설정으로 기존 데이터베이스 결합을 완료한다")
+    @DisplayName("키 등록 CLI는 운영 TLS 설정으로 기존 데이터베이스에 키 정보를 등록한다")
     void bindsExistingDatabaseThroughVerifiedTls(@TempDir Path directory) throws Exception {
         String jdbcUrl = MYSQL.verifiedJdbcUrl(MYSQL.createTruststore(
                 directory.resolve("trusted-ca.p12")
@@ -76,10 +76,10 @@ class LinkCodeKeyGuardBindingCliTlsIntegrationTest {
                     input.newLine();
                 }
                 assertThat(process.waitFor(30, TimeUnit.SECONDS))
-                        .as("guard CLI가 제한 시간 안에 종료되어야 한다")
+                        .as("키 등록 CLI가 제한 시간 안에 종료되어야 한다")
                         .isTrue();
                 String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-                assertThat(process.exitValue()).as("guard CLI 출력: %s", output).isZero();
+                assertThat(process.exitValue()).as("키 등록 CLI 출력: %s", output).isZero();
             } finally {
                 process.destroyForcibly();
             }

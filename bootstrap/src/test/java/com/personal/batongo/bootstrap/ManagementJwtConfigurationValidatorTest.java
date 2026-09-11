@@ -27,7 +27,7 @@ class ManagementJwtConfigurationValidatorTest {
             );
 
     @Test
-    @DisplayName("관리 JWT audience를 생략하면 기본값으로 시작한다")
+    @DisplayName("관리 JWT 대상을 생략하면 기본값으로 시작한다")
     void acceptsDefaultAudience() {
         contextRunner.run(context -> {
             assertThat(context).hasNotFailed();
@@ -37,7 +37,7 @@ class ManagementJwtConfigurationValidatorTest {
     }
 
     @Test
-    @DisplayName("명시한 관리 JWT audience로 시작한다")
+    @DisplayName("명시한 관리 JWT 대상으로 시작한다")
     void acceptsConfiguredAudience() {
         contextRunner.withPropertyValues("BATON_GO_MANAGEMENT_JWT_AUDIENCE=baton-go-management")
                 .run(context -> {
@@ -54,14 +54,14 @@ class ManagementJwtConfigurationValidatorTest {
             "spring.security.oauth2.resourceserver.jwt.audiences=",
             "spring.security.oauth2.resourceserver.jwt.audiences=baton-go,"
     })
-    @DisplayName("관리 JWT audience 목록이 비어 있거나 빈 항목을 포함하면 시작을 거부한다")
+    @DisplayName("관리 JWT 대상 목록이 비어 있거나 빈 항목을 포함하면 시작을 거부한다")
     void rejectsEmptyAudienceConfiguration(String property) {
         contextRunner.withPropertyValues(property)
                 .run(context -> assertThat(context).hasFailed());
     }
 
     @Test
-    @DisplayName("HTTPS 운영 endpoint와 loopback HTTP 개발 endpoint를 허용한다")
+    @DisplayName("운영 HTTPS 주소와 개발용 루프백 HTTP 주소를 허용한다")
     void acceptsSecureAndLocalEndpoints() {
         assertThatCode(() -> validator(
                 "https://identity.example/issuer",
@@ -74,7 +74,7 @@ class ManagementJwtConfigurationValidatorTest {
     }
 
     @Test
-    @DisplayName("비로컬 HTTP 관리 JWT 발급자를 시작 단계에서 거부한다")
+    @DisplayName("운영 HTTP 관리 JWT 발급자를 시작 단계에서 거부한다")
     void rejectsRemoteHttpIssuer() {
         assertThatThrownBy(() -> validator(
                 "http://identity.example/issuer",
@@ -83,7 +83,7 @@ class ManagementJwtConfigurationValidatorTest {
     }
 
     @Test
-    @DisplayName("비로컬 HTTP 관리 JWT JWK Set을 시작 단계에서 거부한다")
+    @DisplayName("운영 HTTP 관리 JWT JWK Set을 시작 단계에서 거부한다")
     void rejectsRemoteHttpJwkSet() {
         assertThatThrownBy(() -> validator(
                 "https://identity.example/issuer",

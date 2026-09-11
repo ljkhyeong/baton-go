@@ -50,7 +50,7 @@ class TrustedTargetPolicyTest {
             "8e448211-66ae-44ab-b888-c4960648c22b",
             "8e448211-66ae-54ab-8888-c4960648c22b"
     })
-    @DisplayName("BATON 식별자는 UUID version 1부터 5와 RFC variant를 허용한다")
+    @DisplayName("BATON 식별자는 UUID 버전 1~5와 RFC 변형을 허용한다")
     void allowsSupportedUuidVersionsAndVariants(String identifier) {
         TrustedTarget target = TrustedTargetPolicy.requireAllowed(
                 TargetSystem.BATON,
@@ -63,7 +63,7 @@ class TrustedTargetPolicyTest {
 
     @ParameterizedTest(name = "{index}: {0}")
     @MethodSource("invalidBatonUuidPaths")
-    @DisplayName("BATON 식별자의 UUID version과 variant와 대소문자를 엄격히 검증한다")
+    @DisplayName("BATON 식별자의 UUID 버전·RFC 변형·대소문자를 정확히 검증한다")
     void rejectsInvalidUuidVersionVariantAndCase(String description, String targetPath) {
         assertRejected(TargetSystem.BATON, LinkPurpose.NAVIGATION, targetPath);
     }
@@ -73,7 +73,7 @@ class TrustedTargetPolicyTest {
             "/room/pqrs-tuvw-xyz2",
             "/room/3456-789a-bcde"
     })
-    @DisplayName("ROUND 식별자는 고정된 lowercase alphabet을 허용한다")
+    @DisplayName("ROUND 식별자는 정해진 소문자 영문만 허용한다")
     void allowsRoundAlphabet(String targetPath) {
         TrustedTarget target = TrustedTargetPolicy.requireAllowed(
                 TargetSystem.ROUND,
@@ -86,14 +86,14 @@ class TrustedTargetPolicyTest {
 
     @ParameterizedTest(name = "{index}: {0}")
     @MethodSource("invalidRoundPaths")
-    @DisplayName("ROUND 식별자의 alphabet과 대소문자와 그룹 형식을 엄격히 검증한다")
+    @DisplayName("ROUND 식별자의 영문 범위·대소문자·그룹 형식을 정확히 검증한다")
     void rejectsInvalidRoundAlphabetCaseAndGroups(String description, String targetPath) {
         assertRejected(TargetSystem.ROUND, LinkPurpose.MEETING_ENTRY, targetPath);
     }
 
     @ParameterizedTest(name = "{index}: {0}")
     @MethodSource("nonCanonicalPathShapes")
-    @DisplayName("대상 경로의 공백과 trailing slash와 추가 segment를 거부한다")
+    @DisplayName("대상 경로의 공백·끝 슬래시·추가 경로 구간을 거부한다")
     void rejectsWhitespaceTrailingSlashAndAdditionalSegments(
             String description,
             TargetSystem targetSystem,
@@ -105,7 +105,7 @@ class TrustedTargetPolicyTest {
 
     @ParameterizedTest(name = "{index}: {0}")
     @MethodSource("crossedTargetCombinations")
-    @DisplayName("대상 시스템과 목적과 locator를 교차 조합할 수 없다")
+    @DisplayName("대상 시스템·목적·경로를 정의되지 않은 조합으로 사용할 수 없다")
     void rejectsCrossedSystemPurposeAndLocator(
             String description,
             TargetSystem targetSystem,
@@ -129,13 +129,13 @@ class TrustedTargetPolicyTest {
     private static Stream<Arguments> allowedV1Targets() {
         return Stream.of(
                 Arguments.of(
-                        "BATON navigation",
+                        "BATON 이동",
                         TargetSystem.BATON,
                         LinkPurpose.NAVIGATION,
                         BATON_PATH
                 ),
                 Arguments.of(
-                        "ROUND meeting entry",
+                        "ROUND 회의 입장",
                         TargetSystem.ROUND,
                         LinkPurpose.MEETING_ENTRY,
                         ROUND_PATH
@@ -146,27 +146,27 @@ class TrustedTargetPolicyTest {
     private static Stream<Arguments> invalidBatonUuidPaths() {
         return Stream.of(
                 Arguments.of(
-                        "version 0",
+                        "버전 0",
                         batonPath("8e448211-66ae-04ab-9888-c4960648c22b", SEASON_ID)
                 ),
                 Arguments.of(
-                        "version 6",
+                        "버전 6",
                         batonPath(TEAM_ID, "713d9cb7-2842-6f9f-b3cc-e31d98c6238a")
                 ),
                 Arguments.of(
-                        "variant 7",
+                        "변형 7",
                         batonPath("8e448211-66ae-44ab-7888-c4960648c22b", SEASON_ID)
                 ),
                 Arguments.of(
-                        "variant c",
+                        "변형 c",
                         batonPath(TEAM_ID, "713d9cb7-2842-4f9f-c3cc-e31d98c6238a")
                 ),
                 Arguments.of(
-                        "uppercase team UUID",
+                        "대문자 팀 UUID",
                         batonPath("8E448211-66ae-44ab-9888-c4960648c22b", SEASON_ID)
                 ),
                 Arguments.of(
-                        "uppercase season UUID",
+                        "대문자 회차 UUID",
                         batonPath(TEAM_ID, "713d9cb7-2842-4f9f-B3cc-e31d98c6238a")
                 )
         );
@@ -174,12 +174,12 @@ class TrustedTargetPolicyTest {
 
     private static Stream<Arguments> invalidRoundPaths() {
         return Stream.of(
-                Arguments.of("금지 alphabet i", "/room/ibcd-efgh-jkmn"),
-                Arguments.of("금지 alphabet l", "/room/lbcd-efgh-jkmn"),
-                Arguments.of("금지 alphabet o", "/room/obcd-efgh-jkmn"),
-                Arguments.of("금지 alphabet 0", "/room/0bcd-efgh-jkmn"),
-                Arguments.of("금지 alphabet 1", "/room/1bcd-efgh-jkmn"),
-                Arguments.of("uppercase", "/room/Abcd-efgh-jkmn"),
+                Arguments.of("금지 문자 i", "/room/ibcd-efgh-jkmn"),
+                Arguments.of("금지 문자 l", "/room/lbcd-efgh-jkmn"),
+                Arguments.of("금지 문자 o", "/room/obcd-efgh-jkmn"),
+                Arguments.of("금지 문자 0", "/room/0bcd-efgh-jkmn"),
+                Arguments.of("금지 문자 1", "/room/1bcd-efgh-jkmn"),
+                Arguments.of("대문자", "/room/Abcd-efgh-jkmn"),
                 Arguments.of("짧은 첫 그룹", "/room/abc-efgh-jkmn"),
                 Arguments.of("긴 둘째 그룹", "/room/abcd-efgha-jkmn"),
                 Arguments.of("누락된 셋째 그룹", "/room/abcd-efgh"),
@@ -220,13 +220,13 @@ class TrustedTargetPolicyTest {
                         BATON_PATH + " "
                 ),
                 Arguments.of(
-                        "BATON trailing slash",
+                        "BATON 끝 슬래시",
                         TargetSystem.BATON,
                         LinkPurpose.NAVIGATION,
                         BATON_PATH + "/"
                 ),
                 Arguments.of(
-                        "BATON 추가 segment",
+                        "BATON 추가 경로 구간",
                         TargetSystem.BATON,
                         LinkPurpose.NAVIGATION,
                         BATON_PATH + "/resources/123"
@@ -244,13 +244,13 @@ class TrustedTargetPolicyTest {
                         ROUND_PATH + " "
                 ),
                 Arguments.of(
-                        "ROUND trailing slash",
+                        "ROUND 끝 슬래시",
                         TargetSystem.ROUND,
                         LinkPurpose.MEETING_ENTRY,
                         ROUND_PATH + "/"
                 ),
                 Arguments.of(
-                        "ROUND 추가 segment",
+                        "ROUND 추가 경로 구간",
                         TargetSystem.ROUND,
                         LinkPurpose.MEETING_ENTRY,
                         ROUND_PATH + "/join"
@@ -273,13 +273,13 @@ class TrustedTargetPolicyTest {
                         ROUND_PATH
                 ),
                 Arguments.of(
-                        "BATON과 ROUND locator",
+                        "BATON과 ROUND 경로",
                         TargetSystem.BATON,
                         LinkPurpose.NAVIGATION,
                         ROUND_PATH
                 ),
                 Arguments.of(
-                        "ROUND와 BATON locator",
+                        "ROUND와 BATON 경로",
                         TargetSystem.ROUND,
                         LinkPurpose.MEETING_ENTRY,
                         BATON_PATH

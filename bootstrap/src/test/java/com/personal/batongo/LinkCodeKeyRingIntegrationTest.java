@@ -75,7 +75,7 @@ class LinkCodeKeyRingIntegrationTest {
     }
 
     @Test
-    @DisplayName("키 교체 전후의 생성 요청은 각각 저장한 키로 같은 단축 URL을 재생한다")
+    @DisplayName("키 교체 전후의 생성 요청은 각각 저장한 키로 같은 단축 URL을 반환한다")
     void persistsWinningKeyAndReplaysAcrossRotation() {
         var oldCommand = command();
         var oldLink = links.createLink(oldCommand);
@@ -96,7 +96,7 @@ class LinkCodeKeyRingIntegrationTest {
     }
 
     @Test
-    @DisplayName("키 ID의 비밀값 변경과 아직 재생에 필요한 키 제거는 DB 결합에서 거부한다")
+    @DisplayName("키 ID의 비밀값 변경과 기존 결과 반환에 필요한 키 제거는 키 등록 검사에서 거부한다")
     void rejectsChangedOrMissingRequiredKey() {
         withKeys(new LinkCodeProperties(LEGACY, "k202609", Map.of("k202609", CURRENT)),
                 service -> service.createLink(command()));

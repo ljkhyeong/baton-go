@@ -105,7 +105,7 @@ class LinkCodeKeyGuardIntegrationTest {
     }
 
     @Test
-    @DisplayName("빈 데이터베이스의 미결합 sentinel은 시작 검증에서 현재 HMAC 키에 결합된다")
+    @DisplayName("빈 데이터베이스의 키 미등록 행은 시작 검증에서 현재 HMAC 키 정보를 등록한다")
     void bindsEmptyDatabaseDuringStartupValidation() throws Exception {
         unbind();
 
@@ -115,7 +115,7 @@ class LinkCodeKeyGuardIntegrationTest {
     }
 
     @Test
-    @DisplayName("빈 데이터베이스라도 생성 경로는 미결합 HMAC 키를 자동 결합하지 않는다")
+    @DisplayName("빈 데이터베이스라도 생성 요청 중에는 HMAC 키 정보를 자동 등록하지 않는다")
     void rejectsUnboundIdentityOnCreationPath() {
         unbind();
 
@@ -130,7 +130,7 @@ class LinkCodeKeyGuardIntegrationTest {
     }
 
     @Test
-    @DisplayName("저장된 HMAC identity가 다르면 시작과 생성 모두 안전하게 실패한다")
+    @DisplayName("저장된 HMAC 키 정보가 다르면 시작과 생성을 거부한다")
     void rejectsMismatchedIdentityAtStartupAndCreation() {
         LinkCodeDerivationIdentity current = linkCodePort.derivationIdentity();
         LinkCodeDerivationIdentity different = new LinkCodeDerivationIdentity(
@@ -154,7 +154,7 @@ class LinkCodeKeyGuardIntegrationTest {
     }
 
     @Test
-    @DisplayName("HMAC 보호 행이 유실되면 시작과 생성 모두 안전하게 실패한다")
+    @DisplayName("HMAC 키 등록 행이 유실되면 시작과 생성을 거부한다")
     void rejectsMissingGuardRowAtStartupAndCreation() {
         jdbcTemplate.update("DELETE FROM link_code_key_guard WHERE guard_id = 1");
 
@@ -173,7 +173,7 @@ class LinkCodeKeyGuardIntegrationTest {
     }
 
     @Test
-    @DisplayName("기존 링크가 있는 데이터베이스의 미결합 sentinel은 자동 결합하지 않는다")
+    @DisplayName("기존 링크가 있는 데이터베이스의 키 미등록 행은 자동 등록하지 않는다")
     void rejectsUnboundDatabaseWithExistingLink() {
         smartLinkUseCase.createLink(command(
                 "0508cdd2-3b3d-4728-820a-36c135531574"
@@ -189,7 +189,7 @@ class LinkCodeKeyGuardIntegrationTest {
     }
 
     @Test
-    @DisplayName("기존 생성 예약만 있어도 미결합 sentinel은 자동 결합하지 않는다")
+    @DisplayName("기존 생성 예약만 있어도 키 미등록 행은 자동 등록하지 않는다")
     void rejectsUnboundDatabaseWithExistingReservation() {
         jdbcTemplate.update(
                 """
@@ -213,7 +213,7 @@ class LinkCodeKeyGuardIntegrationTest {
     }
 
     @Test
-    @DisplayName("서로 다른 HMAC identity가 동시에 최초 결합하면 한 identity만 성공한다")
+    @DisplayName("서로 다른 HMAC 키 정보를 동시에 처음 등록하면 하나만 성공한다")
     void serializesConcurrentInitialBinding() throws Exception {
         unbind();
         LinkCodeDerivationIdentity first = linkCodePort.derivationIdentity();
@@ -231,13 +231,13 @@ class LinkCodeKeyGuardIntegrationTest {
                     () -> bindAndHoldTransaction(first, firstBound, releaseFirst)
             );
             if (!firstBound.await(10, TimeUnit.SECONDS)) {
-                throw new IllegalStateException("첫 HMAC identity 결합을 기다리지 못했습니다");
+                throw new IllegalStateException("첫 HMAC 키 정보 등록을 기다리지 못했습니다");
             }
             Future<LinkCodeDerivationIdentity> secondFuture = executor.submit(
                     () -> bindInTransaction(second, secondStarted)
             );
             if (!secondStarted.await(10, TimeUnit.SECONDS)) {
-                throw new IllegalStateException("두 번째 HMAC identity 결합 시작을 기다리지 못했습니다");
+                throw new IllegalStateException("두 번째 HMAC 키 정보 등록 시작을 기다리지 못했습니다");
             }
 
             releaseFirst.countDown();
@@ -255,7 +255,7 @@ class LinkCodeKeyGuardIntegrationTest {
     }
 
     @Test
-    @DisplayName("기존 데이터베이스는 보관한 canary가 현재 HMAC 키를 증명하면 한 번 결합된다")
+    @DisplayName("보관한 검증용 요청이 현재 HMAC 키와 맞으면 기존 데이터베이스에 키 정보를 등록한다")
     void bindsExistingDatabaseAfterCanaryVerification() {
         String canaryIdempotencyKey = "60fa8eb4-e104-459d-aa45-e4a07831998e";
         smartLinkUseCase.createLink(command(canaryIdempotencyKey));
@@ -270,7 +270,7 @@ class LinkCodeKeyGuardIntegrationTest {
     }
 
     @Test
-    @DisplayName("기존 MySQL 데이터의 uppercase version 7 canary는 과거 규칙으로 정규화해 결합한다")
+    @DisplayName("기존 MySQL의 대문자 버전 7 검증용 요청은 과거 규칙으로 변환해 키 정보를 등록한다")
     void bindsExistingDatabaseWithLegacyUppercaseVersionSevenCanary() {
         String canonicalCanary = "019ae750-9234-7abc-8def-123456789abc";
         insertLegacyCreation(canonicalCanary);
@@ -287,7 +287,7 @@ class LinkCodeKeyGuardIntegrationTest {
     }
 
     @Test
-    @DisplayName("기존 데이터베이스는 HMAC 키를 증명하지 못하는 canary로 결합하지 않는다")
+    @DisplayName("검증용 요청이 HMAC 키와 맞지 않으면 기존 데이터베이스에 키 정보를 등록하지 않는다")
     void rejectsExistingDatabaseWhenCanaryDoesNotMatch() {
         String storedCanary = "527d7731-0e2a-49f9-a1cc-302673d4253f";
         String wrongCanary = "a95e14e3-92aa-490a-9afe-65c88dbc680e";
@@ -303,7 +303,7 @@ class LinkCodeKeyGuardIntegrationTest {
     }
 
     @Test
-    @DisplayName("같은 identity에 이미 결합된 데이터베이스는 canary 검증 뒤 멱등하게 확인된다")
+    @DisplayName("같은 키 정보가 등록된 데이터베이스는 검증용 요청 확인 뒤 성공한다")
     void confirmsAlreadyBoundDatabaseAfterCanaryVerification() {
         String canaryIdempotencyKey = "b46dd6bc-91f1-4f73-81e4-ceb63a438f66";
         smartLinkUseCase.createLink(command(canaryIdempotencyKey));
@@ -326,13 +326,13 @@ class LinkCodeKeyGuardIntegrationTest {
                     try {
                         if (!release.await(10, TimeUnit.SECONDS)) {
                             throw new IllegalStateException(
-                                    "첫 HMAC identity 결합 트랜잭션을 해제하지 못했습니다"
+                                    "첫 HMAC 키 정보 등록 트랜잭션을 해제하지 못했습니다"
                             );
                         }
                     } catch (InterruptedException exception) {
                         Thread.currentThread().interrupt();
                         throw new IllegalStateException(
-                                "첫 HMAC identity 결합 트랜잭션 대기가 중단됐습니다",
+                                "첫 HMAC 키 정보 등록 트랜잭션 대기가 중단됐습니다",
                                 exception
                         );
                     }

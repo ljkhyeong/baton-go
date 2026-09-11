@@ -20,7 +20,7 @@ class LinkCodeKeyVersionMigrationTest {
             .withUrlParam("connectTimeout", "3000").withUrlParam("socketTimeout", "30000");
 
     @Test
-    @DisplayName("V6는 기존 생성 예약과 DB 결합 정보를 legacy 키 버전으로 보존한다")
+    @DisplayName("V6는 기존 생성 예약과 키 등록 정보를 기존 키 버전으로 보존한다")
     void preservesLegacyReservationAndKeyBinding() throws Exception {
         Flyway.configure().dataSource(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword())
                 .target("5").load().migrate();

@@ -21,7 +21,7 @@ class SensitiveWebValueToStringTest {
                     + "/seasons/713d9cb7-2842-4f9f-b3cc-e31d98c6238a";
 
     @Test
-    @DisplayName("생성 응답의 문자열 표현은 short URL과 target path를 노출하지 않는다")
+    @DisplayName("생성 응답의 문자열 표현은 단축 URL과 대상 경로를 노출하지 않는다")
     void redactsShortUrlAndTargetPathFromStringRepresentation() {
         URI shortUrl = URI.create("https://go.example/l/abcdefghijklmnopqrstuv");
         CreateLinkResponse response = new CreateLinkResponse(
@@ -42,7 +42,7 @@ class SensitiveWebValueToStringTest {
     }
 
     @Test
-    @DisplayName("생성 요청과 관리 응답의 문자열 표현은 target path를 노출하지 않는다")
+    @DisplayName("생성 요청과 관리 응답의 문자열 표현은 대상 경로를 노출하지 않는다")
     void redactsTargetPathFromRequestAndManagementResponse() {
         CreateLinkRequest request = new CreateLinkRequest(
                 TargetSystem.BATON,

@@ -39,7 +39,7 @@ class TargetContractOperationsServiceTest {
     );
 
     @Test
-    @DisplayName("inventory는 허용 범위를 벗어난 limit을 저장소 호출 전에 거부한다")
+    @DisplayName("목록 조회는 허용 범위를 벗어난 건수를 저장소 호출 전에 거부한다")
     void rejectsInvalidInventoryLimitBeforeScanning() {
         assertThatThrownBy(() -> service.inventory(new InventoryQuery(null, 0)))
                 .isInstanceOf(InvalidRequestException.class);
@@ -50,7 +50,7 @@ class TargetContractOperationsServiceTest {
     }
 
     @Test
-    @DisplayName("remediation은 잘못된 명령을 행 잠금 전에 거부한다")
+    @DisplayName("대상 규칙 정리는 잘못된 폐기 요청을 행 잠금 전에 거부한다")
     void rejectsInvalidCommandBeforeLocking() {
         assertThatThrownBy(() -> service.remediate(new RemediationCommand(LINK_ID, -1L)))
                 .isInstanceOf(InvalidRequestException.class);
@@ -62,7 +62,7 @@ class TargetContractOperationsServiceTest {
     }
 
     @Test
-    @DisplayName("remediation은 없는 링크를 찾을 수 없음으로 거부한다")
+    @DisplayName("대상 규칙 정리는 없는 링크를 찾을 수 없음으로 거부한다")
     void rejectsMissingLink() {
         when(repository.findStoredByIdForUpdate(LINK_ID))
                 .thenReturn(Optional.empty());
@@ -74,7 +74,7 @@ class TargetContractOperationsServiceTest {
     }
 
     @Test
-    @DisplayName("계약을 준수하는 링크는 remediation 대상이 아니다")
+    @DisplayName("대상 규칙을 지킨 링크는 정리 대상이 아니다")
     void rejectsCompliantLink() {
         when(repository.findStoredByIdForUpdate(LINK_ID)).thenReturn(Optional.of(
                 new StoredLinkSnapshot(

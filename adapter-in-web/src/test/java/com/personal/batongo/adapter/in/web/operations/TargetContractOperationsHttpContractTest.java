@@ -90,7 +90,7 @@ class TargetContractOperationsHttpContractTest {
     }
 
     @Test
-    @DisplayName("inventory는 안전한 분류 필드와 다음 keyset cursor만 반환한다")
+    @DisplayName("목록 조회는 분류 필드와 다음 페이지 커서만 반환한다")
     void returnsSafeInventoryPage() throws Exception {
         when(operationsUseCase.inventory(new InventoryQuery(AFTER_LINK_ID, 1)))
                 .thenReturn(new InventoryResult(
@@ -135,7 +135,7 @@ class TargetContractOperationsHttpContractTest {
     }
 
     @Test
-    @DisplayName("inventory limit을 생략하면 application에 기본값 100을 전달한다")
+    @DisplayName("목록 조회 건수를 생략하면 서비스에 기본값 100을 전달한다")
     void usesDefaultInventoryLimit() throws Exception {
         when(operationsUseCase.inventory(new InventoryQuery(null, 100)))
                 .thenReturn(new InventoryResult("v1", List.of(), null, false));
@@ -149,7 +149,7 @@ class TargetContractOperationsHttpContractTest {
     }
 
     @Test
-    @DisplayName("inventory limit 경계를 벗어나면 400 INVALID_REQUEST로 응답한다")
+    @DisplayName("목록 조회 건수가 허용 범위를 벗어나면 400 INVALID_REQUEST로 응답한다")
     void rejectsOutOfRangeInventoryLimit() throws Exception {
         when(operationsUseCase.inventory(any()))
                 .thenThrow(InvalidRequestException.targetContractInventory());
@@ -161,7 +161,7 @@ class TargetContractOperationsHttpContractTest {
     }
 
     @Test
-    @DisplayName("inventory UUID cursor 형식이 잘못되면 use case 호출 없이 400으로 응답한다")
+    @DisplayName("목록 조회의 UUID 커서 형식이 잘못되면 서비스 호출 없이 400으로 응답한다")
     void rejectsMalformedInventoryCursor() throws Exception {
         mockMvc.perform(authorized(get(BASE_PATH + "/inventory")
                         .queryParam("afterLinkId", "not-a-uuid")))
@@ -172,7 +172,7 @@ class TargetContractOperationsHttpContractTest {
     }
 
     @Test
-    @DisplayName("승인된 non-compliant 링크 폐기는 계약 버전과 폐기 결과만 반환한다")
+    @DisplayName("승인된 규칙 위반 링크 폐기는 계약 버전과 폐기 결과만 반환한다")
     void remediatesNonCompliantLink(CapturedOutput output) throws Exception {
         when(operationsUseCase.remediate(new RemediationCommand(LINK_ID, 7L)))
                 .thenReturn(new RemediationResult(

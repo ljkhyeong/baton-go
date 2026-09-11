@@ -150,7 +150,7 @@ class ManagementAuthenticationHttpContractTest {
     }
 
     @Test
-    @DisplayName("유효한 관리 JWT와 링크 생성 scope는 링크 생성을 허용한다")
+    @DisplayName("유효한 관리 JWT에 링크 생성 권한이 있으면 링크를 생성한다")
     void acceptsJwtWithLinkCreationScope(CapturedOutput output) throws Exception {
         when(jwtDecoder.decode(MANAGEMENT_JWT)).thenReturn(jwt(
                 "baton-go.links.create"
@@ -226,7 +226,7 @@ class ManagementAuthenticationHttpContractTest {
     }
 
     @Test
-    @DisplayName("검증할 수 없는 관리 JWT는 응답 형식 검사보다 먼저 Bearer challenge가 있는 401로 거부한다")
+    @DisplayName("검증할 수 없는 관리 JWT는 Bearer 인증 안내가 있는 401로 거부한다")
     void rejectsInvalidJwtWithBearerChallenge(CapturedOutput output) throws Exception {
         when(jwtDecoder.decode("invalid-management-jwt"))
                 .thenThrow(new BadJwtException("검증 실패"));
@@ -263,7 +263,7 @@ class ManagementAuthenticationHttpContractTest {
 
     @ParameterizedTest(name = "{0}")
     @MethodSource("managementRequestsWithWrongScope")
-    @DisplayName("관리 API는 작업과 다른 scope를 403으로 거부한다")
+    @DisplayName("관리 API는 작업에 필요한 권한이 없으면 403으로 거부한다")
     void rejectsJwtWithWrongScope(
             String ignoredDescription,
             MockHttpServletRequestBuilder request,
@@ -289,22 +289,22 @@ class ManagementAuthenticationHttpContractTest {
         String linkId = "83a430c4-5c5d-4eb4-a815-7a5ba1fd4aae";
         return Stream.of(
                 Arguments.of(
-                        "조회 scope로 링크 생성을 요청한다",
+                        "조회 권한으로 링크 생성을 요청한다",
                         post("/api/v1/links"),
                         "baton-go.links.read"
                 ),
                 Arguments.of(
-                        "생성 scope로 링크 조회를 요청한다",
+                        "생성 권한으로 링크 조회를 요청한다",
                         get("/api/v1/links/{linkId}", linkId),
                         "baton-go.links.create"
                 ),
                 Arguments.of(
-                        "조회 scope로 링크 폐기를 요청한다",
+                        "조회 권한으로 링크 폐기를 요청한다",
                         put("/api/v1/links/{linkId}/revocation", linkId),
                         "baton-go.links.read"
                 ),
                 Arguments.of(
-                        "조회 scope로 대상 계약 운영을 요청한다",
+                        "조회 권한으로 대상 계약 운영을 요청한다",
                         get("/api/v1/operations/link-target-contract-v1/inventory"),
                         "baton-go.links.read"
                 )
@@ -313,7 +313,7 @@ class ManagementAuthenticationHttpContractTest {
 
     @ParameterizedTest
     @ValueSource(strings = {"baton-go.links.create", "baton-go.links.revoke"})
-    @DisplayName("링크 HEAD 조회는 조회 외 scope를 403으로 거부한다")
+    @DisplayName("링크 HEAD 조회는 조회 권한이 없으면 403으로 거부한다")
     void rejectsHeadRequestWithoutLinkReadScope(String grantedScope) throws Exception {
         when(jwtDecoder.decode(MANAGEMENT_JWT)).thenReturn(jwt(grantedScope));
 
@@ -332,7 +332,7 @@ class ManagementAuthenticationHttpContractTest {
     }
 
     @Test
-    @DisplayName("링크 HEAD 조회는 조회 scope로 현재 상태를 확인한다")
+    @DisplayName("링크 HEAD 조회는 조회 권한으로 현재 상태를 확인한다")
     void acceptsHeadRequestWithLinkReadScope() throws Exception {
         UUID linkId = UUID.fromString("83a430c4-5c5d-4eb4-a815-7a5ba1fd4aae");
         when(jwtDecoder.decode(MANAGEMENT_JWT)).thenReturn(jwt(
@@ -353,7 +353,7 @@ class ManagementAuthenticationHttpContractTest {
 
     @ParameterizedTest
     @ValueSource(strings = {"GET", "HEAD"})
-    @DisplayName("관리 목록의 GET과 HEAD는 조회 scope로 접근할 수 있다")
+    @DisplayName("관리 목록의 GET과 HEAD는 조회 권한으로 접근할 수 있다")
     void acceptsReadScopeForLinkSearch(String method) throws Exception {
         when(jwtDecoder.decode(MANAGEMENT_JWT)).thenReturn(jwt("baton-go.links.read"));
         when(useCase.searchLinks(any())).thenReturn(new LinkSearchResult(
@@ -368,7 +368,7 @@ class ManagementAuthenticationHttpContractTest {
 
     @ParameterizedTest
     @ValueSource(strings = {"GET", "HEAD"})
-    @DisplayName("일괄 조회의 GET과 HEAD는 조회 scope로 접근할 수 있다")
+    @DisplayName("일괄 조회의 GET과 HEAD는 조회 권한으로 접근할 수 있다")
     void acceptsReadScopeForLinkBatch(String method) throws Exception {
         when(jwtDecoder.decode(MANAGEMENT_JWT)).thenReturn(jwt("baton-go.links.read"));
         when(useCase.getLinks(any())).thenReturn(new LinkBatchResult(
@@ -383,7 +383,7 @@ class ManagementAuthenticationHttpContractTest {
     }
 
     @Test
-    @DisplayName("등록된 모든 관리 HTTP 메서드는 작업별 scope를 요구한다")
+    @DisplayName("모든 관리 HTTP 메서드는 작업별 권한을 요구한다")
     void requiresOperationScopeForEveryRegisteredManagementMethod() throws Exception {
         when(jwtDecoder.decode(MANAGEMENT_JWT)).thenReturn(jwt(
                 "baton-go.unrelated"
@@ -435,7 +435,7 @@ class ManagementAuthenticationHttpContractTest {
     }
 
     @Test
-    @DisplayName("비정규 관리 API 경로는 Spring Security 경계에서 거부한다")
+    @DisplayName("표준 형식이 아닌 관리 API 경로는 Spring Security에서 거부한다")
     void rejectsNonCanonicalManagementPath() throws Exception {
         mockMvc.perform(post(URI.create("/api/v1/links;x"))
                         .header("Idempotency-Key", IDEMPOTENCY_KEY)

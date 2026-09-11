@@ -180,7 +180,7 @@ class LinkCreationConcurrencyIntegrationTest {
     }
 
     @Test
-    @DisplayName("공개 origin이 다른 서버에서 동시에 생성해도 먼저 저장된 URL을 반환한다")
+    @DisplayName("공개 출처가 다른 서버에서 동시에 생성해도 먼저 저장된 URL을 반환한다")
     void convergesOnStoredPublicOriginAcrossConcurrentReplicas() throws Exception {
         String idempotencyKey = "f14af1a6-9d56-4a41-8f47-c05f7c8898a1";
         CreateLinkCommand command = new CreateLinkCommand(
@@ -242,7 +242,7 @@ class LinkCreationConcurrencyIntegrationTest {
     }
 
     @Test
-    @DisplayName("첫 생성 transaction이 rollback되면 대기 요청 하나가 승계하고 나머지는 재시도할 수 있다")
+    @DisplayName("첫 생성 트랜잭션이 롤백되면 대기 요청 하나가 이어서 처리하고 나머지는 재시도할 수 있다")
     void transfersOwnershipAfterWinnerRollback() throws Exception {
         CreateLinkCommand command = new CreateLinkCommand(
                 CreationIdempotencyKey.parseRequest(ROLLBACK_IDEMPOTENCY_KEY),

@@ -43,7 +43,7 @@ class DatabaseMigrationRunnerIntegrationTest {
     }
 
     @Test
-    @DisplayName("migration-only 실행은 VERIFY_IDENTITY로 최신 스키마까지 적용한다")
+    @DisplayName("마이그레이션 전용 실행은 VERIFY_IDENTITY로 최신 스키마까지 적용한다")
     void migratesSchemaThroughVerifiedTls() throws SQLException {
         String jdbcUrl = MYSQL.verifiedJdbcUrl(trustedCaStore);
         String[] arguments = MYSQL.migrationArguments(jdbcUrl);
@@ -66,7 +66,7 @@ class DatabaseMigrationRunnerIntegrationTest {
     }
 
     @Test
-    @DisplayName("배포 init script는 runtime 계정에 정확한 DML 권한만 부여한다")
+    @DisplayName("배포 초기화 스크립트는 실행 계정에 DML 권한만 부여한다")
     void createsRuntimeUserWithOnlyDataManipulationPrivileges() throws SQLException {
         String jdbcUrl = MYSQL.verifiedJdbcUrl(trustedCaStore);
 
@@ -88,7 +88,7 @@ class DatabaseMigrationRunnerIntegrationTest {
     }
 
     @Test
-    @DisplayName("배포 MySQL은 비루트 사용자와 제거된 Linux capability로 기동한다")
+    @DisplayName("배포 MySQL은 비루트 사용자로 시작하고 Linux 권한을 모두 제거한다")
     void runsMySqlWithRestrictedContainerPermissions() throws Exception {
         var result = MYSQL.execInContainer(
                 "sh",

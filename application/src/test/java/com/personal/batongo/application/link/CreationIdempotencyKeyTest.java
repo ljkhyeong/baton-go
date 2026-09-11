@@ -19,7 +19,7 @@ class CreationIdempotencyKeyTest {
             "00000000-0000-4000-b000-000000000000",
             "00000000-0000-5000-8000-000000000000"
     })
-    @DisplayName("멱등성 키는 lowercase canonical UUID의 version 1부터 5와 RFC variant를 허용한다")
+    @DisplayName("멱등성 키는 버전 1~5의 소문자 RFC 표준 UUID를 허용한다")
     void acceptsSupportedCanonicalUuids(String value) {
         CreationIdempotencyKey key = CreationIdempotencyKey.parseRequest(value);
 
@@ -34,7 +34,7 @@ class CreationIdempotencyKeyTest {
             "00000000-0000-7000-8000-000000000000",
             "00000000-0000-4000-7000-000000000000"
     })
-    @DisplayName("요청 파서는 과거 canonical UUID를 재생 후보로만 정규화한다")
+    @DisplayName("과거에 허용한 표준 UUID는 기존 결과 조회에만 사용한다")
     void parsesHistoricallyAcceptedUuidsAsReplayOnly(String value) {
         CreationIdempotencyKey key = CreationIdempotencyKey.parseRequest(value);
 

@@ -14,7 +14,7 @@ import org.junit.jupiter.api.Test;
 class TrustedTargetPropertiesTest {
 
     @Test
-    @DisplayName("설정된 대상 시스템의 신뢰 origin 안에서 경로를 해석한다")
+    @DisplayName("설정된 대상 시스템의 허용 출처에서 경로를 만든다")
     void resolvesWithinConfiguredOrigins() {
         TrustedTargetProperties properties = new TrustedTargetProperties(
                 URI.create("http://localhost:3000"),
@@ -38,7 +38,7 @@ class TrustedTargetPropertiesTest {
     }
 
     @Test
-    @DisplayName("로컬 개발의 서로 다른 loopback HTTP origin은 허용한다")
+    @DisplayName("로컬 개발에서는 서로 다른 루프백 HTTP 출처를 허용한다")
     void acceptsSeparateLoopbackOriginsForLocalDevelopment() {
         assertThatCode(() -> new TrustedTargetProperties(
                 URI.create("http://localhost:5173"),
@@ -47,7 +47,7 @@ class TrustedTargetPropertiesTest {
     }
 
     @Test
-    @DisplayName("비로컬 target의 서로 다른 origin은 거부한다")
+    @DisplayName("운영 BATON·ROUND 출처가 서로 다르면 거부한다")
     void rejectsDifferentOriginsOutsideLocalDevelopment() {
         assertThatThrownBy(() -> new TrustedTargetProperties(
                 URI.create("https://baton.example"),
@@ -57,7 +57,7 @@ class TrustedTargetPropertiesTest {
     }
 
     @Test
-    @DisplayName("비로컬 target의 HTTP origin은 거부한다")
+    @DisplayName("운영 대상의 HTTP 출처는 거부한다")
     void rejectsHttpOriginsOutsideLocalDevelopment() {
         assertThatThrownBy(() -> new TrustedTargetProperties(
                 URI.create("http://baton.example"),
@@ -67,7 +67,7 @@ class TrustedTargetPropertiesTest {
     }
 
     @Test
-    @DisplayName("loopback과 비로컬 target을 섞은 설정은 거부한다")
+    @DisplayName("루프백과 운영 대상 URL을 섞은 설정은 거부한다")
     void rejectsMixedLoopbackAndRemoteOrigins() {
         assertThatThrownBy(() -> new TrustedTargetProperties(
                 URI.create("http://localhost:5173"),

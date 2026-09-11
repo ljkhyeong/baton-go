@@ -28,7 +28,7 @@ class SensitiveValueToStringTest {
     private static final URI SHORT_URL = URI.create("https://go.example/l/" + RAW_CODE);
 
     @Test
-    @DisplayName("링크 생성과 해석 값의 문자열 표현은 키·코드·대상을 노출하지 않는다")
+    @DisplayName("링크 생성·접속 처리 값의 문자열 표현은 키·코드·대상을 노출하지 않는다")
     void redactsSensitiveApplicationValuesFromStringRepresentations() {
         CreationIdempotencyKey idempotencyKey =
                 CreationIdempotencyKey.parseRequest(IDEMPOTENCY_KEY);

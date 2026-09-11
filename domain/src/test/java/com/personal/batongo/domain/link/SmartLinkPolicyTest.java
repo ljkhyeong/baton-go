@@ -23,7 +23,7 @@ class SmartLinkPolicyTest {
 
     @ParameterizedTest
     @MethodSource("availabilityCases")
-    @DisplayName("상태 조회와 공개 해석은 활성·만료 경계와 폐기 우선순위를 함께 적용한다")
+    @DisplayName("상태 조회와 공개 링크 처리는 활성·만료 시각과 폐기 우선순위를 함께 적용한다")
     void evaluatesAvailabilityAndResolution(
             Instant revokedAt, Instant notBefore, Instant expiresAt, Instant now, Status expected
     ) {

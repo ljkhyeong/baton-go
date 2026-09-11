@@ -17,7 +17,7 @@ class HttpOriginTest {
             "http://127.0.0.2:8080",
             "http://[0:0:0:0:0:0:0:1]:8080"
     })
-    @DisplayName("canonical loopback HTTP origin을 의미에 따라 판정한다")
+    @DisplayName("표준 루프백 HTTP 출처를 정확히 판정한다")
     void recognizesCanonicalLoopbackOrigins(String rawOrigin) {
         assertThat(HttpOrigin.require(URI.create(rawOrigin), "origin").isLoopback()).isTrue();
     }
@@ -31,13 +31,13 @@ class HttpOriginTest {
             "http://[::ffff:7f00:1]:8080",
             "https://go.example"
     })
-    @DisplayName("모호한 주소와 비로컬 host는 loopback으로 분류하지 않는다")
+    @DisplayName("모호한 주소와 운영 호스트는 루프백으로 분류하지 않는다")
     void rejectsAmbiguousLoopbackRepresentations(String rawOrigin) {
         assertThat(HttpOrigin.require(URI.create(rawOrigin), "origin").isLoopback()).isFalse();
     }
 
     @Test
-    @DisplayName("기본 HTTPS 포트와 명시적 443 포트는 같은 origin이다")
+    @DisplayName("기본 HTTPS 포트와 명시적 443 포트는 같은 출처다")
     void comparesOriginsUsingEffectivePorts() {
         HttpOrigin origin = HttpOrigin.require(URI.create("https://go.example"), "origin");
         HttpOrigin explicitDefault = HttpOrigin.require(
@@ -54,7 +54,7 @@ class HttpOriginTest {
     }
 
     @Test
-    @DisplayName("동등한 origin 표현은 scheme과 host와 기본 포트와 root 경로를 정규화한다")
+    @DisplayName("같은 출처의 스킴·호스트·기본 포트·루트 경로를 표준 형식으로 바꾼다")
     void canonicalizesEquivalentOriginRepresentations() {
         HttpOrigin canonical = HttpOrigin.require(
                 URI.create("HTTPS://GO.Example:443/"),
@@ -65,7 +65,7 @@ class HttpOriginTest {
     }
 
     @Test
-    @DisplayName("동등한 IPv6 표기는 하나의 안정된 origin URI로 정규화한다")
+    @DisplayName("같은 IPv6 주소 표기는 하나의 출처 URI로 통일한다")
     void canonicalizesEquivalentIpv6Representations() {
         HttpOrigin compressed = HttpOrigin.require(
                 URI.create("https://[2001:db8::1]"),
@@ -91,7 +91,7 @@ class HttpOriginTest {
             "https://go.example:0",
             "https://go.example:65536"
     })
-    @DisplayName("origin이 아닌 URI와 사용할 수 없는 포트는 거부한다")
+    @DisplayName("출처 형식이 아닌 URI와 사용할 수 없는 포트는 거부한다")
     void rejectsValuesThatAreNotUsableOrigins(String rawOrigin) {
         assertThatThrownBy(() -> HttpOrigin.require(URI.create(rawOrigin), "origin"))
                 .isInstanceOf(IllegalArgumentException.class);

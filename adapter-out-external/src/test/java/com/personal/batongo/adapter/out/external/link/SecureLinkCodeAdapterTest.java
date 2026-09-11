@@ -18,7 +18,7 @@ class SecureLinkCodeAdapterTest {
             new SecureLinkCodeAdapter(new LinkCodeProperties(SECRET));
 
     @Test
-    @DisplayName("현재 발급 키를 바꿔도 기존 키를 지정한 재생 코드는 유지한다")
+    @DisplayName("현재 발급 키를 바꿔도 기존 키로 만든 코드는 유지한다")
     void replaysWithStoredKeyVersionAfterRotation() {
         var rotated = new SecureLinkCodeAdapter(new LinkCodeProperties(
                 SECRET, "k202609", Map.of("k202609", "new-test-key-that-is-at-least-thirty-two-characters")
@@ -41,7 +41,7 @@ class SecureLinkCodeAdapterTest {
     }
 
     @Test
-    @DisplayName("HMAC 키 identity는 파생 버전과 별도 context의 고정 fingerprint를 사용한다")
+    @DisplayName("HMAC 키 정보는 파생 버전과 전용 구분 문자열로 만든 고정 지문을 사용한다")
     void createsStableDerivationIdentity() {
         var identity = adapter.derivationIdentity();
 

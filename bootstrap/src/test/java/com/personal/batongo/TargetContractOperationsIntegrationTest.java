@@ -93,7 +93,7 @@ class TargetContractOperationsIntegrationTest {
     }
 
     @Test
-    @DisplayName("inventory는 알 수 없는 enum을 포함한 저장 행을 raw target 노출 없이 페이지로 분류한다")
+    @DisplayName("목록 조회는 알 수 없는 열거형이 있는 행도 원문 대상 없이 분류한다")
     void inventoriesStoredTargetsWithoutExposingRawValues() throws Exception {
         insertStoredLink(
                 VALID_LINK_ID,
@@ -174,7 +174,7 @@ class TargetContractOperationsIntegrationTest {
     }
 
     @Test
-    @DisplayName("unknown enum 링크의 remediation은 version을 재검증하고 최초 폐기 시각을 보존한다")
+    @DisplayName("알 수 없는 열거형 링크를 폐기할 때 버전을 다시 확인하고 최초 폐기 시각을 보존한다")
     void remediatesUnknownEnumIdempotentlyWithVersionCheck() throws Exception {
         insertStoredLink(
                 UNKNOWN_ENUM_LINK_ID,
@@ -279,7 +279,7 @@ class TargetContractOperationsIntegrationTest {
             "{\"expectedVersion\":7.9}",
             "{\"expectedVersion\":7,\"targetPath\":\"/must-not-be-accepted\"}"
     })
-    @DisplayName("실제 Spring JSON 조립은 비정확한 폐기 본문을 변경 전에 거부한다")
+    @DisplayName("실제 Spring JSON 처리는 잘못된 폐기 본문을 변경 전에 거부한다")
     void rejectsInvalidBodyWithConfiguredSpringJsonMapper(String body) throws Exception {
         insertStoredLink(
                 INVALID_LINK_ID,

@@ -75,7 +75,7 @@ class PublicErrorResponseIntegrationTest {
     private JsonMapper jsonMapper;
 
     @Test
-    @DisplayName("비지원 응답 형식을 요청해도 미존재 링크는 JSON 404를 반환한다")
+    @DisplayName("지원하지 않는 응답 형식을 요청해도 없는 링크는 JSON 404를 반환한다")
     void keepsNotFoundForUnsupportedResponseType() throws Exception {
         when(useCase.resolveLink(PUBLIC_CODE)).thenThrow(new LinkNotFoundException());
 

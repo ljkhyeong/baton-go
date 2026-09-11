@@ -142,7 +142,7 @@ class SmartLinkServiceTest {
     }
 
     @Test
-    @DisplayName("재생 전용 요청은 기존 예약만 조회하고 새 행을 만들지 않는다")
+    @DisplayName("기존 결과 조회 전용 요청은 기존 예약만 읽고 새 행을 만들지 않는다")
     void keepsReplayOnlyRequestOutOfCreationPorts() {
         assertThatThrownBy(() -> service.createLink(new CreateLinkCommand(
                 CreationIdempotencyKey.parseRequest(
@@ -160,7 +160,7 @@ class SmartLinkServiceTest {
     }
 
     @Test
-    @DisplayName("현재 코드 파생 결과가 저장 해시와 다르면 재생하지 않는다")
+    @DisplayName("현재 키로 만든 코드 해시가 저장값과 다르면 기존 결과를 반환하지 않는다")
     void rejectsReplayWhenCodeDerivationChanges() {
         Instant expiresAt = NOW.plusSeconds(300);
         configureReplay(PUBLIC_ORIGIN.serialized(), expiresAt);
@@ -215,7 +215,7 @@ class SmartLinkServiceTest {
     }
 
     @Test
-    @DisplayName("링크가 만료된 뒤 생성 요청을 재시도해도 기존 응답을 재생한다")
+    @DisplayName("링크가 만료된 뒤 생성 요청을 재시도해도 기존 응답을 반환한다")
     void replaysCreationAfterExpiry() {
         Instant expiresAt = NOW.plusSeconds(60);
         configureReplay(PUBLIC_ORIGIN.serialized(), expiresAt);
@@ -233,7 +233,7 @@ class SmartLinkServiceTest {
     }
 
     @Test
-    @DisplayName("활성 링크 해석은 신뢰 대상 포트가 만든 URL을 반환한다")
+    @DisplayName("활성 링크 접속은 대상 URL 생성 포트가 만든 URL을 반환한다")
     void resolvesThroughTrustedTargetPort() {
         StoredLinkResolution resolution = new StoredLinkResolution(
                 LINK_ID,
@@ -259,7 +259,7 @@ class SmartLinkServiceTest {
     }
 
     @Test
-    @DisplayName("저장된 known enum 대상의 정책 위반은 수명주기보다 먼저 숨긴다")
+    @DisplayName("저장된 열거형 대상이 정책을 위반하면 수명주기 확인 전에 숨긴다")
     void hidesKnownStoredPolicyViolationBeforeLifecycleCheck() {
         when(repository.findResolutionByCodeHash(CODE_HASH)).thenReturn(Optional.of(
                 new StoredLinkResolution(

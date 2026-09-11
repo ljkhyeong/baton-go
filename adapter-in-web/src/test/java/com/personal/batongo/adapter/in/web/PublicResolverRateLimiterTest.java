@@ -23,7 +23,7 @@ class PublicResolverRateLimiterTest {
     private static final Instant START = Instant.parse("2026-08-02T00:00:00Z");
 
     @Test
-    @DisplayName("설정한 용량까지 허용하고 초과 요청에는 남은 window를 초 단위로 안내한다")
+    @DisplayName("설정한 용량까지 허용하고 초과 요청에는 남은 시간 구간을 초 단위로 안내한다")
     void rejectsAfterCapacityWithRoundedRetryAfter() {
         Clock clock = mock(Clock.class);
         when(clock.instant()).thenReturn(
@@ -43,7 +43,7 @@ class PublicResolverRateLimiterTest {
     }
 
     @Test
-    @DisplayName("window 경계 시각부터 용량을 새로 부여한다")
+    @DisplayName("새 시간 구간이 시작되면 용량을 다시 부여한다")
     void resetsCapacityAtWindowBoundary() {
         Clock clock = mock(Clock.class);
         when(clock.instant()).thenReturn(
@@ -60,7 +60,7 @@ class PublicResolverRateLimiterTest {
     }
 
     @Test
-    @DisplayName("시스템 시계가 뒤로 이동해도 이전 window에 영구적으로 갇히지 않는다")
+    @DisplayName("시스템 시계가 뒤로 이동해도 이전 시간 구간에 머물지 않는다")
     void resetsWindowWhenClockMovesBackward() {
         Clock clock = mock(Clock.class);
         when(clock.instant()).thenReturn(START, START.minusSeconds(1));

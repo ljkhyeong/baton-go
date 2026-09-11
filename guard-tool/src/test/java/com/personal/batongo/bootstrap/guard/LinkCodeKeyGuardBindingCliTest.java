@@ -21,7 +21,7 @@ class LinkCodeKeyGuardBindingCliTest {
     private static final String CANARY = "8e448211-66ae-44ab-9888-c4960648c22b";
 
     @Test
-    @DisplayName("writer 중지 확인 인자가 없으면 DB에 연결하지 않고 사용법만 반환한다")
+    @DisplayName("쓰기 중지 확인 인자가 없으면 DB에 연결하지 않고 사용법만 반환한다")
     void requiresExplicitWriterStopConfirmation() {
         CapturedOutput output = run(new String[0], Map.of());
 
@@ -31,12 +31,12 @@ class LinkCodeKeyGuardBindingCliTest {
     }
 
     @Test
-    @DisplayName("canary 입력이 없으면 설정 조회와 DB 연결 전에 안전하게 실패한다")
+    @DisplayName("검증용 요청이 없으면 설정 조회와 DB 연결 전에 실패한다")
     void rejectsMissingCanaryBeforeRuntimeConfiguration() {
         Map<String, String> unreadableEnvironment = new HashMap<>() {
             @Override
             public String get(Object key) {
-                throw new AssertionError("canary 검증 전에 설정을 조회하면 안 됩니다");
+                throw new AssertionError("검증용 요청 확인 전에 설정을 조회하면 안 됩니다");
             }
         };
 
@@ -54,7 +54,7 @@ class LinkCodeKeyGuardBindingCliTest {
     }
 
     @Test
-    @DisplayName("필수 설정이 없거나 공백이면 비밀값을 노출하지 않고 안전하게 실패한다")
+    @DisplayName("필수 설정이 없거나 공백이면 실패하고 비밀값을 노출하지 않는다")
     void hidesSensitiveInputWhenConfigurationIsMissingOrBlank() {
         String secret = "secret-value-that-must-not-be-printed";
         Map<String, String> blankEnvironment = validEnvironment(secret);

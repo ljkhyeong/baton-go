@@ -2,7 +2,7 @@
 
 이 문서는 BATON GO 애플리케이션과 GO 전용 MySQL을 비공개 Kubernetes에 처음 배포하고
 업데이트·복구하는 절차다. BATON 또는 ROUND의 데이터베이스, 사용자, 볼륨이나 Secret은 사용하지
-않는다. 저장소의 Kustomize overlay는 다음 경계를 만든다.
+않는다. 저장소의 Kustomize overlay는 다음 자원을 배포한다.
 
 | 자원 | 역할 | 기본 노출 |
 |---|---|---|
@@ -21,7 +21,7 @@
 | `ConfigMap/baton-go-mysql-runtime-user-init-*` | DML 전용 런타임 사용자 초기화 스크립트 | MySQL 초기화 디렉터리에 마운트 |
 
 이 배포만으로 공개 운영 배포가 승인되지는 않는다. PRD-0003의 BATON 세션,
-참여 허가, 회의실 매핑, 외부 경계 라우팅과 기존 데이터 목록 조사는 별도로 점검해야 한다.
+참여 허가, 회의실 매핑, 외부 프록시 라우팅과 기존 데이터 목록 조사는 별도로 점검해야 한다.
 
 ## 1. 배포 전 결정
 
@@ -38,13 +38,14 @@
    방화벽 또는 CNI 정책으로 별도 보완한다. host-network ingress controller를 쓰면
    출처 selector 적용 여부도 확인한다.
 5. 플랫폼 운영 담당자가 관리할 DB 백업 정책을 확정한다. 정책에는 RPO, RTO, 실행 주기,
-   보존 기간, 담당자, 실패 경보와 증거 저장 위치를 포함하고 HMAC Secret 버전을 DB와 같은
+   보존 기간, 담당자, 실패 경보와 검증 기록 저장 위치를 포함하고 HMAC Secret 버전을 DB와 같은
    복구 단위로 관리한다.
 6. Kubernetes Secret의 저장 시 암호화를 활성화한다. `baton-go` Namespace의 Secret
    `get/list/watch`, Pod `exec/attach/ephemeralcontainers`, Pod·Deployment·StatefulSet·Job의
    `create/update/patch`는 직접 또는 워크로드 마운트를 통해 Secret을 읽을 수 있는 권한으로
    취급하고 승인된 배포·운영 주체에만 최소 부여한다. Secret 객체는 base64 인코딩만으로
-   보호되지 않으며 클러스터·노드 관리자와 워크로드 생성 권한자는 별도 신뢰 경계다.
+   보호되지 않는다. 클러스터·노드 관리자와 워크로드 생성 권한자도 Secret을 읽을 수 있으므로
+   같은 보안 등급으로 관리한다.
 7. MySQL 서버 인증서를 발급할 PKI와 CA 회전 담당자를 정한다. 인증서 SAN에는
    JDBC URL의 host인 `baton-go-mysql`을 반드시 넣고, 필요하면
    `baton-go-mysql.baton-go.svc`와 클러스터 도메인 FQDN도 함께 넣는다. IP SAN만으로 대체하지
@@ -87,8 +88,8 @@ kubectl cluster-info
 JWK Set 주소를 명시하면 애플리케이션 시작이 discovery 서버 가용성에 묶이지 않으면서 설정한
 `iss` 검증은 유지된다.
 
-비로컬 BATON·ROUND 출처는 scheme, host와 port까지 같아야 한다. 경로, query,
-fragment와 userinfo를 넣지 않는다. 운영 기능 두 설정값은 평상시에 모두 `false`로 둔다.
+운영 BATON·ROUND 출처는 스킴·호스트·포트까지 같아야 한다. 경로·쿼리·프래그먼트와
+사용자 정보를 넣지 않는다. 운영 기능 두 설정값은 평상시에 모두 `false`로 둔다.
 `SPRING_FLYWAY_ENABLED=false`는 장기 실행 애플리케이션에서 변경하지 않는다. Flyway는 아래의
 일회성 마이그레이션 Job만 실행한다.
 
@@ -100,16 +101,16 @@ fragment와 userinfo를 넣지 않는다. 운영 기능 두 설정값은 평상�
 백업·복원 검증을 포함한 별도 DB 업그레이드로 다룬다.
 
 릴리스마다 애플리케이션 이미지 다이제스트와 함께 SBOM, 취약점 검사 결과,
-서명·provenance 검증 결과를 배포 증거에 보존한다. 조직의 취약점 수용 정책을 통과하지
+서명·provenance 검증 결과를 배포 검증 기록에 보존한다. 조직의 취약점 수용 정책을 통과하지
 못했거나 서명 주체·소스 커밋·빌드 정보를 대조할 수 없는 이미지는 배포하지 않는다.
-이미지 태그, 로컬 빌드 성공과 레지스트리 화면만은 변경 불가 증거가 아니다.
+이미지 태그, 로컬 빌드 성공과 레지스트리 화면만으로는 배포 이미지를 검증할 수 없다.
 
 비공개 레지스트리를 사용하는 기본 오버레이는 `imagePullSecret` 이름
 `baton-go-registry`를 참조한다. 노드 수준 레지스트리 인증이나 미리 적재한 이미지를 쓰는
 환경만 `app-private-registry-patch.yaml` 적용을 제거한다.
 
 렌더링 결과에는 Secret 객체나 값, 인증서와 신뢰 저장소가 들어가지 않는다. 기본본은 외부
-Secret의 이름과 키만 참조하므로 3절의 구체화가 먼저 완료되어야 실제 Pod가
+Secret의 이름과 키만 참조하므로 3절에 따라 Secret을 먼저 생성해야 실제 Pod가
 시작한다.
 
 ```bash
@@ -145,7 +146,7 @@ kubectl kustomize deploy/k8s/overlays/private-server >/dev/null
 
 이 점검은 placeholder·가짜 이미지·tag 설정 제거, 애플리케이션 이미지 digest 형식과
 Kustomize 렌더 가능 여부를 확인한다. HTTPS 출처 형식과 동일 출처 조건은 애플리케이션 시작 시
-검사하며, 이미지 서명·SBOM·취약점 수용 여부는 위 릴리스 증거와 별도로 대조한다.
+검사하며, 이미지 서명·SBOM·취약점 수용 여부는 위 배포 검증 기록과 별도로 대조한다.
 
 애플리케이션의 `/tmp`는 64Mi 메모리 `emptyDir`이고 나머지 root 파일 시스템은 읽기 전용이다.
 Kubernetes `emptyDir`에는 Compose의 `noexec,nosuid,nodev,mode=1777` 마운트 옵션을 이식성 있게
@@ -176,7 +177,7 @@ Spring 속성 이름은 각각 `baton-go.management-jwk.connect-timeout`과
 JWK 조회가 시간 초과되면 기존 인증 서비스 장애와 같이 `500 INTERNAL_ERROR`로 응답하고
 관리 인증 서비스 장애 카운터에 집계한다. 이를 토큰 만료나 잘못된 서명의 `401`로 처리하지
 않는다. 단축 링크 접속 처리에는 이 의존성이 없으며, 원격 조회가 필요 없는 캐시 키 검증도 유지된다.
-운영 전 비공개 경계에서 JWK 응답 지연과 복구를 시험하고
+운영 전 비공개 관리 API에서 JWK 응답 지연과 복구를 시험하고
 [인증 서비스 장애 경보](prometheus-alerts.md)가 실제로 전달되는지 확인한다.
 
 ## 3. Namespace와 Secret 준비
@@ -196,7 +197,7 @@ kubectl apply -k deploy/k8s/bootstrap
 복원한 PVC와 현재 PVC를 각각 검증한다. 세 경우 모두 MySQL UID/GID가 `999`, 유효 capability가
 비어 있고 TLS startup·readiness, 초기 사용자 생성, 런타임 DML, 마이그레이션 DDL과 재시작이
 성공해야 한다. 하나라도 확인하지 못하면 `deploy/k8s/bootstrap/namespace.yaml`의
-`pod-security.kubernetes.io/enforce`를 `baseline`으로 유지한다. 검증 증거를 승인한 뒤 해당 값을
+`pod-security.kubernetes.io/enforce`를 `baseline`으로 유지한다. 검증 결과를 승인한 뒤 해당 값을
 `restricted`로 변경하고 먼저 서버 측 dry-run과 diff를 확인한 후 적용한다.
 
 ```bash
@@ -210,7 +211,7 @@ kubectl -n baton-go exec pod/baton-go-mysql-0 -- sh -ec \
 마지막 명령은 차례로 `999`, `999`, `0000000000000000`을 출력해야 한다. 이 확인은 PVC
 복원·재시작과 데이터베이스 기능 검증을 대신하지 않는다.
 
-비밀값 관리자 또는 External Secrets controller를 사용한다면 다음 이름과 키로 구체화한다.
+비밀값 관리자 또는 External Secrets controller를 사용한다면 다음 이름과 키로 Secret을 생성한다.
 
 ```text
 baton-go-link-code-secret
@@ -380,8 +381,8 @@ MySQL Pod에만, 클라이언트 신뢰 저장소는 애플리케이션과 마�
 값을 렌더 검증을 위해 임시 매니페스트에 넣지 않는다.
 
 기존 `baton-go-runtime-credentials` 또는 `baton-go-management-credentials`를 사용하는 환경은
-새 JWT 발급자와 호출자 scope 검증을 먼저 완료한다. `baton-go-link-code-secret`은 기존 DB와
-결합한 비밀값 관리자 버전으로 별도 생성하고 `kubectl get secret -o yaml`로 값을 출력하지 않는다.
+새 JWT 발급자와 호출자 scope 검증을 먼저 완료한다. `baton-go-link-code-secret`은 기존 DB에
+등록한 HMAC 키 버전으로 별도 생성하고 `kubectl get secret -o yaml`로 값을 출력하지 않는다.
 새 Pod가 JWT 설정과 분리된 HMAC Secret으로 Ready가 되고 모든 호출자가 JWT로 전환된 뒤 다른
 워크로드가 이전 Secret을 참조하지 않는지 확인한 후 기존 관리 토큰 Secret을 폐기한다.
 
@@ -436,8 +437,8 @@ PVC에는 사용자 분리 초기화 스크립트도 다시 실행되지 않는�
 비공개 서버 배포는 신규 빈 DB를 전제로 한다.
 
 일회성 Job이 Flyway 스키마를 만든 뒤 장기 실행 애플리케이션은 DML 사용자로 JPA 스키마를
-검증한다. 신규 빈 DB의 링크 코드 HMAC 보호 장치는 애플리케이션 시작 시 현재 HMAC 비밀값에 자동
-결합된다. 이후에는 DB와 `BATON_GO_LINK_CODE_SECRET`을 항상 같은 시점의 복구 단위로
+검증한다. 신규 빈 DB는 애플리케이션 시작 시 현재 HMAC 키 정보를 자동 등록한다. 이후에는 DB와
+`BATON_GO_LINK_CODE_SECRET`을 항상 같은 시점의 복구 단위로
 보존한다. HMAC 키 교체는 [키 교체 절차](link-code-key-rotation.md)의 키 ID 추가·선배포·전환 순서를 따른다.
 
 ### 부분 초기화 실패 복구
@@ -447,7 +448,7 @@ MySQL 공식 진입점이 시스템 스키마를 만들고 계정·초기화 스
 데이터베이스로 판단하므로 초기화 환경 변수와 `/docker-entrypoint-initdb.d`를 다시 실행하지 않는다.
 Pod 재시작이나 Secret 수정만으로 런타임·마이그레이션 계정이 복구된다고 가정하지 않는다.
 
-PVC 삭제·재생성은 다음 증거를 모두 확인하고 서비스·DB 운영자가 승인한 **신규 빈 DB의 첫
+PVC 삭제·재생성은 다음 조건을 모두 확인하고 서비스·DB 운영자가 승인한 **신규 빈 DB의 첫
 배포**에만 허용한다.
 
 1. PVC가 이번 최초 배포에서 새로 할당됐고 스냅샷·복원이나 기존 볼륨 재결합 이력이 없다.
@@ -458,7 +459,7 @@ PVC 삭제·재생성은 다음 증거를 모두 확인하고 서비스·DB 운�
 확인된 빈 PVC만 대상으로 애플리케이션 Deployment와 마이그레이션 Job을 먼저 중지한다.
 애플리케이션 Pod는 0개, 마이그레이션 Job은 `suspend=true`·활성 작업 0이고 Pending·Running Pod가
 0개임을 확인한 뒤 StatefulSet을 0으로 내린다. Failed·Succeeded Job Pod는 활성 쓰기 프로세스가
-아니므로 삭제를 기다리지 않고 복구 증거로 보존한다. 호출자 아웃박스·관리 쓰기 경로 차단도
+아니므로 삭제를 기다리지 않고 복구 기록으로 보존한다. 호출자 아웃박스·관리 쓰기 경로 차단도
 별도로 유지한다. 현재 클러스터 컨텍스트, PVC UID·PV·StorageClass와 PV의 실제 회수 정책을
 승인 기록과 대조한다. 아래 PVC 삭제는 볼륨을 복구 불가능하게 제거할 수 있는 파괴
 작업이므로 승인 기록 없이 실행하지 않는다.
@@ -483,7 +484,7 @@ kubectl -n baton-go get pod \
 
 Job 출력이 `SUSPEND=true`, `ACTIVE=<none>` 또는 `0`이고 바로 다음 Pod 조회가 행을 반환하지
 않는지 확인한다. Pending·Running·Terminating Pod가 하나라도 보이면 DB 중지로 진행하지
-않는다. Failed·Succeeded Pod와 Job 로그는 비밀값을 제외한 실패 증거로 보존한다.
+않는다. Failed·Succeeded Pod와 Job 로그는 비밀값을 제외한 장애 기록으로 보존한다.
 
 ```bash
 kubectl -n baton-go scale statefulset/baton-go-mysql --replicas=0
@@ -539,7 +540,7 @@ kubectl -n baton-go scale deployment/baton-go --replicas=1
 kubectl -n baton-go rollout status deployment/baton-go --timeout=10m
 ```
 
-어느 분기에서도 관리 외부 경계·호출자 쓰기 경로 차단과 애플리케이션 복제본 0은 마이그레이션
+어느 분기에서도 관리 API 외부 접근·호출자 쓰기 차단과 애플리케이션 복제본 0은 마이그레이션
 Job이 `Complete`가 될 때까지 유지한다. 종료된 Job 재생성 분기에서도 마지막 두 애플리케이션
 규모 조정·배포 명령만 마이그레이션 완료 뒤 실행한다.
 
@@ -558,7 +559,7 @@ Job이 `Complete`가 될 때까지 유지한다. 종료된 Job 재생성 분기�
 - 계정 수동 복구 뒤 마이그레이션 Job `Complete`, 런타임 사용자의 DML 성공·DDL 거부, 애플리케이션
   준비 상태를 차례로 확인한다.
 
-## 5. 접근 경계
+## 5. 접근 제한
 
 기본본은 `Service/baton-go-http:8080`만 만든다. 이 포트에는 다음 경로가 함께 있다.
 
@@ -567,7 +568,7 @@ Job이 `Complete`가 될 때까지 유지한다. 종료된 Job 재생성 분기�
 - 내부 상태 확인: `/livez`, `/readyz`
 
 Ingress 컨트롤러, 호스트 이름, TLS 발급 방식과 요청 제한 제품이 정해지지 않았으므로
-저장소는 Ingress를 만들지 않는다. 환경별 외부 경계는 다음을 강제해야 한다.
+저장소는 Ingress를 만들지 않는다. 환경별 외부 프록시는 다음을 강제해야 한다.
 
 아래 `/l/**`, `/api/v1/**` 표기는 경로 집합을 뜻하며 Ingress 매니페스트의 와일드카드 문법이
 아니다. 표준 Kubernetes Ingress에서는 각각 `path: /l`, `path: /api/v1`과
@@ -587,10 +588,10 @@ kubectl label namespace <approved-edge-or-caller-namespace> \
    `/api/v1` Prefix를 노출하지 않는다.
 2. 비공개 관리 ingress 또는 서비스 간 경로만 `path: /api/v1`,
    `pathType: Prefix`를 전달한다.
-3. 공개 외부 경계는 분산 요청 제한을 적용하고 접근 로그에서 `/l/{code}`의 코드를
+3. 공개 외부 프록시는 분산 요청 제한을 적용하고 접근 로그에서 `/l/{code}`의 코드를
    마스킹한다.
 4. 관리 JWT, Authorization, `Idempotency-Key`, 대상 경로와 전체 단축 URL을
-   외부 경계·APM 로그에 기록하지 않는다.
+   외부 프록시·APM 로그에 기록하지 않는다.
 5. Actuator `8081`과 주 포트의 `/livez`·`/readyz`는 공개/비공개 Ingress에 연결하지 않는다.
 
 `management.endpoint.health.probes.add-additional-paths=true`로 Spring Boot의 상태 확인 경로를
@@ -645,13 +646,13 @@ MySQL NetworkPolicy는 같은 Namespace의 BATON GO 애플리케이션과 databa
 - 이미지 pull·노드 DNS·kubelet probe: Pod egress와 노드 흐름을 구분해 CNI별로 검증
 
 DNS Namespace·Pod label, Service IP와 host-network 처리는 클러스터마다 다르므로 저장소
-기본본에 예시 selector를 고정하지 않는다. DNS 증거 없이 egress 기본 차단만 적용해
+기본본에 예시 selector를 고정하지 않는다. DNS 동작 확인 없이 egress 기본 차단만 적용해
 시작·준비 탐지를 깨뜨리지 않는다.
 
 ### 수집과 경보 확인 사항
 
 `/actuator/prometheus`와 health endpoint가 켜져 있다는 사실만으로는 운영 감시가 완료되지
-않는다. 공개 운영 전에 실제 수집기의 target이 `UP`인지 확인하고, 임계치·지속 시간·
+않는다. 공개 운영 전에 실제 수집 대상이 `UP`인지 확인하고, 임계치·지속 시간·
 알림 경로·응답 담당자를 명시한 최소 경보를 연결한다.
 
 저장소에는 5xx·429·저장 대상 계약 위반의
@@ -670,7 +671,7 @@ Pod 자동 발견 설정과 Namespace 범위 조회 권한이 있다. 수집 실
 - 백업 실패와 정책에서 정한 시간 동안 성공 백업 부재
 
 각 경보는 데이터를 조작하지 않는 방식으로 시험하고 규칙 버전, 경보 발생 시각, 알림
-수신·확인 결과와 담당자를 운영 증거에 남긴다. 대시보드 화면만 있거나 알림을
+수신·확인 결과와 담당자를 운영 검증 기록에 남긴다. 대시보드 화면만 있거나 알림을
 실제로 전송하지 않은 규칙은 경보 점검을 완료한 근거가 되지 않는다.
 
 ## 6. 배포 검증
@@ -692,14 +693,14 @@ kubectl -n baton-go get events --sort-by=.lastTimestamp
   런타임·root 비밀번호가 없다.
 - MySQL은 `require_secure_transport=ON`이고 승인된 세션의 `Ssl_cipher`가 비어 있지 않다.
   별도 격리 검증에서는 잘못된 CA 또는 JDBC host로 `VERIFY_IDENTITY` 연결이 실패한다. 인증서와
-  JDBC URL 전체는 증거에 기록하지 않는다.
+  JDBC URL 전체는 검증 기록에 남기지 않는다.
 - 승인하지 않은 Namespace에서 애플리케이션 `8080`, 일반 Pod에서 Actuator `8081`, 애플리케이션과
   마이그레이션 label이 아닌 Pod에서 MySQL `3306` 연결이 실패한다.
 - 평상시 운영 기능 두 설정값은 `false`다.
 
 그 다음 비공개 관리 경로에서 새 정규 UUID로 링크를 생성한다. 같은 요청의 재시도, 리다이렉트와
 폐기를 검증한다. 실제 관리 JWT, `Idempotency-Key`, 공개 코드,
-대상 경로와 전체 단축 URL을 셸 기록이나 검증 증거에 복사하지 않는다. 증거에는 HTTP
+대상 경로와 전체 단축 URL을 셸 기록이나 검증 기록에 복사하지 않는다. 검증 기록에는 HTTP
 상태, 링크 ID, 요청 ID와 시각처럼 허용된 메타데이터만 남긴다.
 
 ## 7. 업데이트와 되돌리기
@@ -709,16 +710,16 @@ kubectl -n baton-go get events --sort-by=.lastTimestamp
 Pod 템플릿은 변경 불가이고 같은 배포 이미지를 사용한다. 이전 Job이 `Complete`이면
 필요한 비밀값 제외 메타데이터를 보존하고 Job만 삭제한다. `Failed`이거나 성공 여부가
 불명확하면 아래 실패 복구 절차 전에 Job을 삭제·재생성하지 않는다.
-마이그레이션 Job에는 고정 TTL을 두지 않는다. 성공 Job은 완료 증거를 보존한 뒤 아래 절차로
-삭제하고, 실패 Job과 Pod는 복구 분류와 증거 보존이 끝날 때까지 유지한다.
+마이그레이션 Job에는 고정 TTL을 두지 않는다. 성공 Job은 완료 기록을 보존한 뒤 아래 절차로
+삭제하고, 실패 Job과 Pod는 복구 분류와 기록 보존이 끝날 때까지 유지한다.
 
 업데이트를 시작할 때 이전 Job 상태는 다음 세 가지로 분류한다.
 
 - Job이 있고 `Complete=True`이면 완료 메타데이터를 보존한 뒤 Job만 삭제한다.
-- Job이 없으면 부재 자체를 성공 증거로 사용하지 않는다. 직전
-  릴리스의 Job 완료 증거와 이미지 다이제스트·Flyway 스키마 버전을 확인하고, 승인된 읽기 전용
-  DB 관리 채널에서 현재 `flyway_schema_history`의 마지막 성공 버전이 그 증거와 일치할 때만
-  다음 적용으로 진행한다. 어느 증거든 없거나 일치하지 않으면 아래 실패 복구 절차로 전환한다.
+- Job이 없으면 부재 자체를 성공으로 판단하지 않는다. 직전
+  릴리스의 Job 완료 기록과 이미지 다이제스트·Flyway 스키마 버전을 확인하고, 승인된 읽기 전용
+  DB 관리 채널에서 현재 `flyway_schema_history`의 마지막 성공 버전이 그 기록과 일치할 때만
+  다음 적용으로 진행한다. 기록이 없거나 일치하지 않으면 아래 실패 복구 절차로 전환한다.
 - Job이 `Active`, `Failed`이거나 상태를 판정할 수 없으면 삭제·재생성하지 않고 아래 실패
   복구 절차로 전환한다.
 
@@ -737,12 +738,12 @@ if test -n "$migration_job"; then
     -o 'custom-columns=NAME:.metadata.name,IMAGE:.spec.template.spec.containers[0].image,COMPLETED:.status.completionTime'
   kubectl -n baton-go delete job baton-go-database-migration --wait=true
 else
-  echo "마이그레이션 Job이 없습니다. 직전 완료 증거와 현재 Flyway 성공 버전을 대조한 뒤 진행하십시오." >&2
+  echo "마이그레이션 Job이 없습니다. 직전 완료 기록과 현재 Flyway 성공 버전을 대조한 뒤 진행하십시오." >&2
   exit 2
 fi
 ```
 
-`Complete` Job을 위 명령으로 삭제했거나, Job 부재 분기에서 직전 완료 증거와 현재 Flyway
+`Complete` Job을 위 명령으로 삭제했거나, Job 부재 분기에서 직전 완료 기록과 현재 Flyway
 성공 버전의 일치를 확인한 뒤에만 다음 적용 명령을 실행한다.
 
 ```bash
@@ -777,7 +778,7 @@ V4는 `smart_links`의 시각 열을 바꾸는 첫 `ALTER TABLE`과
 
 Job이 `Failed`이거나 결과가 불명확하면 다음 순서를 지킨다.
 
-1. 비공개 `/api/v1` 경계와 BATON 호출자 아웃박스 전송을 차단하고 처리 중인
+1. 외부에서 비공개 `/api/v1`로 들어오는 요청과 BATON 호출자 아웃박스 전송을 차단하고 처리 중인
    쓰기가 없음을 확인한다. 애플리케이션을 복제본 `0`으로 축소하고 스키마 분류가
    끝날 때까지 공개 `/l`도 계획 중단 상태로 유지한다. Job Pod가 아직 DDL을
    실행 중이면 강제 삭제하지 않고 현재 시도의 종료 상태를 확인한다.
@@ -791,7 +792,7 @@ Job이 `Failed`이거나 결과가 불명확하면 다음 순서를 지킨다.
      -o 'custom-columns=NAME:.metadata.name,SUCCEEDED:.status.succeeded,FAILED:.status.failed,ACTIVE:.status.active'
    ```
 
-2. 남아 있는 Job과 Pod에서 접근이 제한된 사고 저장소로 비밀값 제외 증거를 보존한다. 아래
+2. 남아 있는 Job과 Pod에서 접근이 제한된 사고 저장소로 비밀값 제외 기록을 보존한다. 아래
    변수는 새 빈 디렉터리로 지정하고,
    저장 후 로그에 JDBC URL, 인증서 경로나 자격 증명 원문이 없는지 제한된
    환경에서 검토한다. 검토 전 파일을 티켓·채팅·CI 산출물로 복사하지 않는다.
@@ -801,7 +802,7 @@ Job이 `Failed`이거나 결과가 불명확하면 다음 순서를 지킨다.
      || ! test -d "${BATON_GO_MIGRATION_EVIDENCE_DIR}" \
      || test -n "$(find "${BATON_GO_MIGRATION_EVIDENCE_DIR}" \
        -mindepth 1 -maxdepth 1 -print -quit)"; then
-     echo "마이그레이션 증거 디렉터리는 비어 있는 기존 디렉터리여야 합니다." >&2
+     echo "마이그레이션 기록 디렉터리는 비어 있는 기존 디렉터리여야 합니다." >&2
      exit 1
    fi
    (
@@ -871,12 +872,12 @@ Job이 `Failed`이거나 결과가 불명확하면 다음 순서를 지킨다.
    ```
 
    이 집계만으로는 실패 구간의 쓰기 부재를 증명할 수 없다. Job 시작 시각, 구 Pod
-   종료, 외부 경계·아웃박스 차단 증거와 해당 구간 `created_at` 행 수를 함께 대조한다.
+   종료, 외부 프록시·아웃박스 차단 기록과 해당 구간 `created_at` 행 수를 함께 대조한다.
    V5 실행 전부터 쓰기 차단이 유지됐고 값이 한 건도 없음을 증명한 경우에만 일관된 백업 후
    격리된 복구 환경에서 Flyway 성공 이력 없는 열 제거·변경하지 않은 V5 재실행 절차를
    검증한다. 값이 있거나 쓰기 차단을 증명할 수 없으면 열을 삭제하지 않고 이전 일관된 백업
    복원 또는 데이터를 보존하는 별도 DBA 복구 계획을 사용한다. 컬럼 정의가 다르면
-   drift로 분류한다.
+   스키마 불일치로 분류한다.
 
 6. `flyway_schema_history.success=1`인데 실제 컬럼 정의가 기대와 다르면 적용된
    마이그레이션을 수정하지 않고 백업 복원 또는 다음 버전의 마이그레이션으로
@@ -887,7 +888,7 @@ Job이 `Failed`이거나 결과가 불명확하면 다음 순서를 지킨다.
 
 7. 확정한 복구를 격리 환경에서 먼저 재현한다. 실제 환경에서는 Job `Complete`,
    Flyway 이력과 실제 컬럼 정의 일치, 애플리케이션 준비 상태, 새 생성·동일 요청
-   재시도·단축 링크 접속 처리·폐기를 순서대로 확인한 뒤에만 호출자 쓰기와 공개 경계를
+   재시도·단축 링크 접속 처리·폐기를 순서대로 확인한 뒤에만 호출자 쓰기와 공개 링크 접속을
    다시 연다.
 
 단, V5의 `public_origin` 추가는 스키마 변경만 하위 호환되며, 이전 버전의 링크 저장
@@ -896,16 +897,16 @@ Job이 `Failed`이거나 결과가 불명확하면 다음 순서를 지킨다.
 비공개 서버의 신규 빈 DB 첫 배포에는 구 Pod가 없으므로 해당 경합이 없지만, 이미 애플리케이션이
 실행 중인 환경에 V5를 도입할 때는 다음 유지 보수 순서를 사용한다.
 
-1. 비공개 관리 외부 경계와 모든 BATON 호출자에서 링크 생성 쓰기 경로를 차단하고 처리 중
+1. 외부에서 비공개 관리 API로 들어오는 경로와 모든 BATON 호출자의 링크 생성 경로를 차단하고 처리 중
    요청과 아웃박스 전송을 비운다. 단축 링크 접속 처리는 비우는 동안과 구 Pod가 남아 있는
    동안에만 계속 운영할 수 있다.
 2. `Deployment/baton-go`를 복제본 0으로 축소하고 구 Pod가 0개이며 생성 쓰기 경로가 남지 않았음을
    확인한다. 복제본 0 확인 시점부터 5단계에서 새 Deployment 준비 상태가 회복될 때까지
    단축 링크 접속 처리도 계획 중단 상태다.
 3. V5 이전 예약의 최초 출처 목록을 조사한다. 증명할 수 있는 행만 정규 출처로
-   유지 보수 중 채우고, 증거가 없는 행을 현재 설정으로 일괄 추정하지 않는다.
+   유지 보수 중 채우고, 확인 자료가 없는 행을 현재 설정으로 일괄 추정하지 않는다.
 4. 완료된 이전 마이그레이션 Job을 위 절차로 삭제한 뒤 Kustomize를 적용한다. 새 애플리케이션이 먼저
-   시작하더라도 외부 경계의 쓰기 경로 차단은 유지한다.
+   시작하더라도 외부 프록시의 쓰기 경로 차단은 유지한다.
 5. 마이그레이션 Job `Complete`, 새 Deployment 준비 상태, 새 링크 생성과 같은 요청의 재시도 시 기존 URL 반환을
    순서대로 확인한 뒤 쓰기 경로를 다시 연다.
 
@@ -983,10 +984,10 @@ Flyway 마이그레이션은 자동으로 역적용되지 않는다. DB 스키�
 정기 백업의 실행·보존·실패 경보·접근 통제는 플랫폼 운영 담당자가 관리한다.
 이 저장소는 백업 스케줄러나 원격 저장소를 제공하지 않으며, 복구에 필요한 자료와
 복원 검증 절차를 정의한다. 공개 운영 전에는 환경별 플랫폼 백업 정책의 위치와 RPO, RTO,
-실행 주기, 보존 기간, 담당자, 실패 경보를 운영 증거에 기록한다. 정책이나 증거 위치가
+실행 주기, 보존 기간, 담당자, 실패 경보를 운영 검증 기록에 남긴다. 정책이나 기록 위치가
 확정되지 않았으면 공개 운영을 시작하지 않는다.
 
-각 백업 증거는 최소한 다음을 하나의 식별 가능한 복구 세트로 묶는다.
+각 백업 기록은 최소한 다음을 하나의 식별 가능한 복구 세트로 묶는다.
 
 - MySQL 인식 논리/물리 백업 또는 일관성이 검증된 볼륨 스냅샷
 - 그 시점의 `BATON_GO_LINK_CODE_SECRET` 비밀값 관리자 버전
@@ -999,7 +1000,7 @@ Flyway 마이그레이션은 자동으로 역적용되지 않는다. DB 스키�
 런타임·마이그레이션·초기 설정 Secret 버전을 맞추고, 복구 환경 Service DNS를 SAN에 포함한
 서버 인증서와 그 CA 신뢰 저장소를 주입한다. 마이그레이션 Job `Complete` 뒤 같은 HMAC Secret
 버전으로 시작 보호 장치, 준비 상태와 보관된 검증용 생성 요청의 기존 URL 반환을 검증한다. 전체
-단축 URL, 코드 해시, HMAC 지문, JDBC URL이나 Secret 값은 복원 증거에 남기지
+단축 URL, 코드 해시, HMAC 지문, JDBC URL이나 Secret 값은 복원 검증 기록에 남기지
 않는다.
 
 다음 작업은 일반적인 되돌리기나 정리 명령으로 사용하지 않는다.
@@ -1041,9 +1042,9 @@ StatefulSet 삭제는 기본적으로 PVC를 보존하지만 Namespace 삭제는
 
 ## 10. 운영 기능 유지 보수와 운영 시작 조건
 
-대상 계약 목록 조사가 필요한 유지 보수 시간에만 비공개 외부 경계 차단 증거와 쓰기 경로
-중지를 먼저 확인한 뒤 운영 기능 두 설정값을 함께 활성화한다. 설정값은 네트워크 경계가
-아니며 작업 직후 다시 `false`로 배포한다. 상세 절차는
+대상 계약 목록 조사가 필요한 유지 보수 시간에만 관리 API 외부 접근 차단 기록과 쓰기 경로
+중지를 먼저 확인한 뒤 운영 기능 두 설정값을 함께 활성화한다. 설정값은 네트워크 접근을 제한하지
+않으며 작업 직후 다시 `false`로 배포한다. 상세 절차는
 [대상 계약 v1 정리 절차](target-contract-v1-remediation.md)를 따른다.
 
 이 운영 절차의 완료만으로 공개 운영을 승인하지 않는다. 장기 완료 조건은

@@ -7,10 +7,10 @@
 
 BATON GO는 ADR-0001에서 BATON·ROUND와 분리된 데이터베이스와 배포 수명주기를 갖는
 마이크로서비스로 결정했다. 첫 운영 환경은 비공개 Kubernetes 서버이며, BATON의 MySQL
-인스턴스·스키마·계정을 공유할지 또는 GO 전용 MySQL을 함께 배포할지 구체화해야 한다.
+인스턴스·스키마·계정을 공유할지 GO 전용 MySQL을 따로 배포할지 결정해야 한다.
 
 BATON MySQL을 공유하면 초기 인프라 수는 줄지만 백업, 장애, 마이그레이션, 자격 증명과
-용량 계획이 다시 BATON 배포에 결합된다. 스키마만 구분해도 root 운영 권한, 저장 볼륨과
+용량 계획이 다시 BATON 배포와 묶인다. 스키마만 구분해도 root 운영 권한, 저장 볼륨과
 복구 시점이 같으면 GO의 DB를 BATON과 독립적으로 운영할 수 없다.
 
 ## 결정
@@ -56,8 +56,8 @@ BATON MySQL을 공유하면 초기 인프라 수는 줄지만 백업, 장애, �
   정의한다.
 - Namespace 매니페스트는 워크로드 Kustomization에서 분리한다.
   워크로드를 제거할 때 Namespace와 PVC까지 함께 삭제되는 것을 막는다.
-- 저장소의 HTTP Service는 `ClusterIP:8080`만 제공한다. 공개 외부 경계는 `/l` Prefix만,
-  비공개 관리 경계는 `/api/v1` Prefix만 같은 Service로 라우팅한다. Actuator `8081`은
+- 저장소의 HTTP Service는 `ClusterIP:8080`만 제공한다. 외부 프록시는 공개 `/l` Prefix와
+  비공개 `/api/v1` Prefix를 같은 Service의 서로 다른 경로로 전달한다. Actuator `8081`은
   Ingress와 Service로 기본 노출하지 않고 제한된 모니터링·운영 접근에만 사용한다.
 - 생존·준비 탐침은 Spring Boot의 `management.endpoint.health.probes.add-additional-paths`
   설정으로 주 HTTP 포트 `8080`의 `/livez`·`/readyz`를 사용한다. 주 포트가 요청을 처리하지
@@ -80,7 +80,7 @@ BATON MySQL을 공유하면 초기 인프라 수는 줄지만 백업, 장애, �
   시작, 호스트 이름 검증은 Connector/J `VERIFY_IDENTITY`가 담당한다. startup·readiness probe는
   런타임 계정의 로컬 TCP TLS 세션으로 실행해 socket만 살아 있는 상태를 Ready로 보지 않는다.
 - 초기 운영은 애플리케이션과 MySQL 모두 단일 복제본이다. MySQL HA와 다중 노드 저장소 장애 조치는
-  별도 운영 결정이 필요하다. Redis 공용 요청 제한은 [ADR-0013](../0013_distributed-public-resolver-quota/adr.md)을
+  별도 운영 결정이 필요하다. Redis 분산 요청 제한은 [ADR-0013](../0013_distributed-public-resolver-quota/adr.md)을
   따르며 기본 비활성화 상태다. 운영 Redis 연결과 검증은 [분산 요청 제한 절차](../../RUNBOOK/distributed-public-rate-limit.md)를 따른다.
 
 ## 결과
@@ -108,7 +108,7 @@ BATON MySQL을 공유하면 초기 인프라 수는 줄지만 백업, 장애, �
   없다고 확인된 최초 배포에만 허용하고, 데이터 존재 가능성이 있으면 백업 뒤 승인된
   MySQL 관리 채널에서 계정을 수동 복구한다.
 - 인증서 발급·SAN, 신뢰 저장소 생성·교체와 CA 회전은 클러스터 PKI 운영 담당자가 관리한다.
-- 표준 NetworkPolicy는 HTTP 경로, 노드 호스트 방화벽과 일부 host-network 경로를 표현하지
-  못하므로 CNI·외부 경계별 사전 검증과 추가 정책이 필요하다.
-- 배포 매니페스트는 런타임 기반일 뿐 공개 운영 승인 증거가 아니다. PRD-0003의
-  세션·참여 허가·외부 경계·목록 조사는 계속 별도로 점검해야 한다.
+- 표준 NetworkPolicy는 HTTP 경로, 노드 호스트 방화벽과 일부 host-network 경로를 제어하지
+  못하므로 CNI와 외부 프록시를 각각 검증하고 필요한 정책을 추가해야 한다.
+- 배포 매니페스트는 실행 자원만 정의하며 공개 운영 승인을 대신하지 않는다. PRD-0003의
+  세션·참여 허가·외부 프록시·목록 조사는 계속 별도로 점검해야 한다.

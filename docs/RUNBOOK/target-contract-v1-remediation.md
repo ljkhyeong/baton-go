@@ -1,7 +1,7 @@
 # 대상 계약 v1 목록 조사·정리 절차
 
 이 운영 절차는 PRD-0003 이전에 저장된 링크를 조사하고 대상 규칙을 위반한 링크를
-폐기하기 위한 절차다. API 구현이나 테스트 DB 정리는 운영 목록 조사 완료 증거를
+폐기하기 위한 절차다. API 구현이나 테스트 DB 정리는 운영 목록 조사 완료 기록을
 대신하지 않는다.
 
 ## 1. 사전 조건
@@ -14,7 +14,7 @@
 4. 외부 네트워크에서 공개 출처의 운영 경로와 다른 `/api/v1` 관리 경로를 인증 없이
    탐색한다. BATON GO의 `WWW-Authenticate: Bearer realm="baton-go-management"` 또는 GO
    `X-Request-Id`가 보이면 공개 엣지가 관리 API까지 전달한 것이므로 진행하지 않는다.
-5. 공개 엣지 차단 결과를 배포 증거에 남긴 뒤 유지보수 시간대에만 다음 두 값을
+5. 외부 프록시의 관리 API 차단 결과를 배포 검증 기록에 남긴 뒤 유지보수 시간대에만 다음 두 값을
    모두 설정해 재기동한다. 이 설정만으로 관리 API의 외부 접근이 차단되지는 않는다.
 
 ```text
@@ -24,7 +24,7 @@ BATON_GO_TARGET_CONTRACT_OPERATIONS_PRIVATE_INGRESS_CONFIRMED=true
 
 ## 2. 읽기 전용 목록 조사
 
-`baton-go.target-contract.operate` scope와 `aud=baton-go`를 가진 짧은 수명의 관리 JWT를
+`baton-go.target-contract.operate` 권한(scope)과 `aud=baton-go`를 가진 짧은 수명의 관리 JWT를
 승인된 발급 절차로 받는다. JWT를 셸 기록, 프로세스 인자와 터미널 녹화에 남기지 않고 현재
 셸의 export하지 않은 변수로 읽어 curl 인자가 아닌 표준 입력 헤더로 전달한다. 기존 작업과
 분리한 전용 유지보수 셸에서 종료·인터럽트 정리 `trap`을 먼저 등록한다. 다음 `read` 입력값은
@@ -103,7 +103,7 @@ printf 'Authorization: Bearer %s\n' "$BATON_GO_OPS_TOKEN" | \
 7. 운영 기능 활성화 값과 비공개 인그레스 확인 값을 모두 `false`로 되돌려 재기동하고
    인증된 내부 요청에도 엔드포인트가 `404 RESOURCE_NOT_FOUND`인지 확인한다.
 8. 목록 조사 실행 시각, 배포 SHA, 승인 명세 다이제스트, 결과 집계와 검증 결과만 배포
-   증거에 남긴다.
+   검증 기록에 남긴다.
 
 마지막 운영 API 호출 뒤 토큰 변수를 제거하고 전용 유지보수 셸의 정리 `trap`을 해제한다.
 

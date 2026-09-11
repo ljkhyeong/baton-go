@@ -1,6 +1,6 @@
 # PRD-0002: BATON GO API 계약
 
-- 상태: 초기 기준선
+- 상태: 초기 기준
 - 기본 경로: `/api/v1`
 
 ## 공통 응답
@@ -53,14 +53,14 @@ XML 등 지원하지 않는 응답 형식만 요청해도 원래 오류 상태·
   `500 LINK_CODE_REPLAY_UNAVAILABLE`
 - 최초 생성에 사용한 정규 공개 출처를 기존 예약에서 복구할 수 없음:
   `500 PUBLIC_LINK_ORIGIN_REPLAY_UNAVAILABLE`
-- 링크 코드 파생 키와 데이터베이스 바인딩 불일치:
+- 링크 코드 키와 데이터베이스 등록 정보 불일치:
   `500 LINK_CODE_CONFIGURATION_MISMATCH`
 - 존재하지 않는 API 경로: `404 RESOURCE_NOT_FOUND`
 - 지원하지 않는 HTTP 메서드: `405 METHOD_NOT_ALLOWED`
 - 관리 API에서 지원하지 않는 응답 형식만 요청함: `406 INVALID_REQUEST`
 - 지원하지 않는 요청 본문 형식: `415 UNSUPPORTED_MEDIA_TYPE`
 - 단축 링크 요청 한도 초과: `429 RATE_LIMIT_EXCEEDED`
-- 공용 요청 제한 저장소 장애: `503 RATE_LIMIT_UNAVAILABLE`
+- Redis 분산 요청 제한 장애: `503 RATE_LIMIT_UNAVAILABLE`
 - 허용되지 않은 대상 시스템·목적·위치 식별자 조합: `400 INVALID_LINK`
 - 대상 계약 운영 기능의 목록 조사 요청 값 오류: `400 INVALID_REQUEST`
 - 대상 계약 정리 API로 규칙을 충족하는 링크의 폐기를 요청함: `409 REMEDIATION_NOT_APPLICABLE`
@@ -102,7 +102,7 @@ Idempotency-Key: 8e448211-66ae-44ab-9888-c4960648c22b
 ^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$
 ```
 
-- 호출자는 하나의 링크 생성 요청에 같은 키를 사용하고 원본 도메인 상태와 함께 영속화한다.
+- 호출자는 하나의 링크 생성 요청에 같은 키를 사용하고 원본 서비스의 DB에 함께 저장한다.
 - 성공 응답의 `Location`은 `/api/v1/links/{id}`다.
 - 최초 성공은 `201 Created`와 `Idempotency-Replayed: false`를 반환한다.
 - 같은 키와 같은 요청 내용의 재시도는 동일한 `id`, `shortUrl`, `Location`을
@@ -162,7 +162,7 @@ Idempotency-Key: 8e448211-66ae-44ab-9888-c4960648c22b
   동일한 멱등성 키 해시의 기존 예약이 있고, 같은 마이크로초 절삭 결과가 저장 요청 내용과
   일치할 때만 기존 결과를 `200`으로 반환한다. 예약이 없으면 `400 INVALID_REQUEST`로 거부하며 새 행을
   만들지 않는다. 지원 저장 범위 밖 시각은 기존 예약 여부와 관계없이 항상 거부한다.
-- 호출자는 재시도할 때 두 시각을 포함한 동일한 정규 요청 내용을 사용한다.
+- 호출자는 재시도할 때 두 시각을 포함해 최초 요청과 같은 값을 사용한다.
 
 최초 생성 응답 `201`, 동일 요청 재시도 응답 `200`:
 
@@ -187,8 +187,8 @@ Idempotency-Key: 8e448211-66ae-44ab-9888-c4960648c22b
 
 생성 가능한 조합은 다음 두 개뿐이다.
 
-- `BATON + NAVIGATION + /teams/{canonical-team-uuid}/seasons/{canonical-season-uuid}`
-- `ROUND + MEETING_ENTRY + /room/{canonical-room-id}`
+- `BATON + NAVIGATION + /teams/{team-uuid}/seasons/{season-uuid}`
+- `ROUND + MEETING_ENTRY + /room/{room-id}`
 
 `RESOURCE_OPEN`과 표 밖 조합, 비정규 식별자, 끝 슬래시와 추가 경로 구간은
 `400 INVALID_LINK`로 거부하며 링크와 생성 예약을 저장하지 않는다. 정확한 정규식, 클릭
@@ -323,11 +323,11 @@ Idempotency-Key: 8e448211-66ae-44ab-9888-c4960648c22b
 ## 대상 계약 v1 운영 기능
 
 이 API는 계약 전 저장 데이터의 일회성 목록 조사와 승인된 개별 폐기를 위한 관리 기능이다.
-기본값은 비활성화이며 유지보수 시간대에 공개 경계 차단을 검증한 뒤
+기본값은 비활성화이며 유지보수 시간대에 공개 링크 경로가 차단됐는지 확인한 뒤
 `BATON_GO_TARGET_CONTRACT_OPERATIONS_ENABLED=true`와
 `BATON_GO_TARGET_CONTRACT_OPERATIONS_PRIVATE_INGRESS_CONFIRMED=true`를 모두 설정해야 등록한다.
 확인 값은 네트워크 차단을 대신하지 않으며,
-`baton-go.target-contract.operate` scope가 있는 관리 JWT와 비공개 Ingress를
+`baton-go.target-contract.operate` 권한(scope)이 있는 관리 JWT와 비공개 Ingress를
 모두 요구한다.
 
 관리 인증은 운영 컨트롤러의 등록 여부보다 먼저 적용한다.
@@ -458,8 +458,8 @@ DB에 저장된 대상이 현재 PRD-0003 계약을 위반하면 존재 여부�
 
 `GET·HEAD /l/{code}`는 데이터베이스 조회 전에 인스턴스 단위 통합 요청률 제한을
 적용한다. 존재 여부와 코드 형식에 관계없이 이 경로의 모든 `GET`과 `HEAD`가 하나의
-고정 용량 버킷을 공유한다. 클라이언트 IP나 `X-Forwarded-For`는 식별자 또는 신뢰
-경계로 사용하지 않는다.
+고정 시간 구간의 한도를 공유한다. 클라이언트 IP나 `X-Forwarded-For`는 요청자를
+식별하거나 신뢰하는 기준으로 사용하지 않는다.
 
 용량과 시간 구간은 배포 환경이 명시적으로 설정하는 운영 안전값이며 사용자별 제품 할당량이
 아니다. 한도를 초과하면 `429 RATE_LIMIT_EXCEEDED`와 현재 시간 구간이 갱신될 때까지의
@@ -467,10 +467,10 @@ DB에 저장된 대상이 현재 PRD-0003 계약을 위반하면 존재 여부�
 
 `HEAD`의 `429`도 같은 상태와 헤더를 반환하지만 응답 본문은 없다. 이 안전장치는
 인스턴스 메모리만 사용하므로 여러 복제본의 합산 요청량을 제한하지 않는다. 운영 공개
-경로에는 별도의 경계 또는 분산 요청률 제한과 접근 로그 코드 마스킹을 반드시
+경로에는 외부 프록시 또는 분산 요청률 제한과 접근 로그 코드 마스킹을 반드시
 적용한다.
 
-## 공용 요청 제한
+## Redis 분산 요청 제한
 
 분산 제한을 활성화하면 공개 `GET·HEAD /l/{code}`의 허용량을 모든 Pod가 공유한다.
 한도 초과는 기존 `429 RATE_LIMIT_EXCEEDED`와 `Retry-After`이며, Redis 오류는

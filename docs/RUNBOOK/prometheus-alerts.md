@@ -106,7 +106,7 @@ YAML 규칙을 기준으로 하며, 표와 테스트도 같은 변경에서 갱�
 | `BatonGoPublicResolverRateLimited` | 최근 5분 GET·HEAD 429 10건 이상이 5분 지속 | `warning` |
 | `BatonGoStoredTargetContractViolation` | 최근 5분 계약 위반 카운터 증가 | `critical` |
 | `BatonGoLinkRetentionFailure` | 최근 5분 링크 정리 실패 증가 | `warning` |
-| `BatonGoDistributedResolverQuotaFailure` | 최근 5분 공용 제한 저장소 장애 증가 | `critical` |
+| `BatonGoDistributedResolverQuotaFailure` | 최근 5분 분산 제한 저장소 장애 증가 | `critical` |
 
 - 5xx 계산의 분자·분모에서 `/actuator...`, `/livez`, `/readyz`를 제외하고, 오류율 분모에서도
   429 응답을 제외한다. 상태 확인 성공이나 요청 제한 응답이 늘어도 업무 요청의 서버 오류율이
@@ -149,11 +149,11 @@ YAML 규칙을 기준으로 하며, 표와 테스트도 같은 변경에서 갱�
 | `code` | 확인할 내용 |
 | --- | --- |
 | `LINK_CREATION_REPLAY_UNAVAILABLE` | 생성 예약이 가리키는 링크의 누락과 DB 복원·수동 변경 이력을 확인한다. 예약을 삭제하거나 새 링크로 대체하기 전에 저장 일관성을 복구한다. |
-| `LINK_CODE_REPLAY_UNAVAILABLE` | 현재 파생 코드와 저장 코드 해시가 일치하지 않는다. 생성 당시 HMAC 비밀값·파생 버전과 데이터 이력을 확인하고 [키·DB 결합 절차](../ADR/0004_link-code-key-binding/adr.md)를 따른다. |
-| `LINK_CODE_CONFIGURATION_MISMATCH` | 현재 HMAC 설정이 DB 보호 정보와 일치하는지 확인한다. 비밀값이나 보호 정보를 임의로 덮어쓰지 않고 [키·DB 결합 절차](../ADR/0004_link-code-key-binding/adr.md)를 따른다. |
-| `PUBLIC_LINK_ORIGIN_REPLAY_UNAVAILABLE` | 최초 생성 예약의 공개 출처가 없거나 정규 형식이 아니다. 현재 출처를 추정 입력하지 않고 [공개 출처 보존 결정](../ADR/0009_idempotent-public-origin-replay/adr.md)에 따라 최초 출처 증거를 복구한다. |
+| `LINK_CODE_REPLAY_UNAVAILABLE` | 현재 파생 코드와 저장 코드 해시가 일치하지 않는다. 생성 당시 HMAC 비밀값·파생 버전과 데이터 이력을 확인하고 [키 정보 등록 절차](../ADR/0004_link-code-key-binding/adr.md)를 따른다. |
+| `LINK_CODE_CONFIGURATION_MISMATCH` | 현재 HMAC 설정이 DB 보호 정보와 일치하는지 확인한다. 비밀값이나 보호 정보를 임의로 덮어쓰지 않고 [키 정보 등록 절차](../ADR/0004_link-code-key-binding/adr.md)를 따른다. |
+| `PUBLIC_LINK_ORIGIN_REPLAY_UNAVAILABLE` | 최초 생성 예약의 공개 출처가 없거나 표준 URL 형식이 아니다. 현재 출처를 추정 입력하지 않고 [공개 출처 보존 결정](../ADR/0009_idempotent-public-origin-replay/adr.md)에 따라 최초 출처를 복구한다. |
 
-이 카운터는 HTTP 요청 처리 중 발생한 오류만 집계한다. 시작 단계의 키 결합 실패로 프로세스가
+이 카운터는 HTTP 요청 처리 중 발생한 오류만 집계한다. 시작 단계의 키 정보 등록 실패로 프로세스가
 종료된 경우는 Pod·기동 실패 경보와 시작 로그로 확인한다. JWT 인증 장애와 일반 `500`,
 `409 IDEMPOTENCY_KEY_REUSED`는 이 카운터에 포함하지 않는다.
 
@@ -231,6 +231,6 @@ MVC 인터셉터가 차단한 429와 공개 경로의 1초·2초 지연 버킷�
 다른 서비스 제외, 대상 누락, 지속 시간과 복구 후 해제를 확인한다. 수집 예시는 클러스터 자격
 증명 없이 문법을 검증하며, 실제 Pod 발견·접근과 운영 수신자 연결 성공을 대신하지 않는다.
 
-운영 적용 후에는 target `UP`, 규칙 로딩, Alertmanager 라우팅과 담당자 수신을 각각 확인한다.
+운영 적용 후에는 수집 대상의 `UP` 상태, 규칙 로딩, Alertmanager 라우팅과 담당자 수신을 각각 확인한다.
 실제 저장 데이터를 훼손해 오류를 만들지 말고 격리된 환경의 합성 시계열·시험 알림을 사용한다.
 규칙 버전, 경보 발생·해제 시각, 알림 수신·확인 결과를 배포 기록에 남긴다.

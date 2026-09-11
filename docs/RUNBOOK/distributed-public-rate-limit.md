@@ -1,11 +1,11 @@
 # 공개 링크 분산 요청 제한
 
 기본 구성에서는 인스턴스별 요청 제한만 실행한다. 복제본을 공개하기 전에 같은 Redis DB를
-사용하는 공용 제한을 활성화한다. 이 기능의 한도는 전체 유입량 기준이며 사용자별 한도가 아니다.
+사용하는 분산 제한을 활성화한다. 이 기능의 한도는 전체 유입량 기준이며 사용자별 한도가 아니다.
 
 | 환경 변수 | 의미 |
 | --- | --- |
-| `BATON_GO_DISTRIBUTED_RESOLVER_QUOTA_ENABLED` | 기본 `false`, 공용 제한 활성화 |
+| `BATON_GO_DISTRIBUTED_RESOLVER_QUOTA_ENABLED` | 기본 `false`, 분산 제한 활성화 |
 | `BATON_GO_REDIS_URI` | 활성화 시 필수, Lettuce Redis URI. 운영은 `rediss://` TLS 사용 |
 | `BATON_GO_DISTRIBUTED_RESOLVER_QUOTA_CAPACITY` | 시간 구간당 전체 허용량, 기본 `300`, `1..1000000000` |
 | `BATON_GO_DISTRIBUTED_RESOLVER_QUOTA_WINDOW` | 요청 수를 집계하는 시간 구간, 기본 `1m`, `1ms..1d` |
@@ -26,10 +26,10 @@ URI에 자격 증명이 들어가므로 Secret이나 비밀값 관리자로 주�
 진행하지 않는다. `BatonGoDistributedResolverQuotaFailure` 경보로 연결·TLS·ACL·Redis 상태를
 확인한다. 복구 후 카운터 허용량 안에서 공개 조회가 다시 진행되는지 검사한다.
 
-배포 검증에서는 서로 다른 두 Pod로 보낸 요청의 합계가 공용 한도를 넘지 않는지 확인하고,
+배포 검증에서는 서로 다른 두 Pod로 보낸 요청의 합계가 분산 한도를 넘지 않는지 확인하고,
 초과 요청의 `429`·`Retry-After`, Redis 차단 시 `503`, 관리 폐기 계속 사용을 확인한다.
 Ingress의 `/api/v1` 비공개 분리와 `/l/{code}` 로그 마스킹은 별도로 검증한다.
-실제 클러스터·Ingress 정보가 없는 상태의 로컬 테스트는 이 배포 증거를 대신하지 않는다.
+실제 클러스터·Ingress 정보가 없는 상태의 로컬 테스트는 운영 배포 검증을 대신하지 않는다.
 
 ```bash
 ./gradlew --no-daemon :bootstrap:redisTest

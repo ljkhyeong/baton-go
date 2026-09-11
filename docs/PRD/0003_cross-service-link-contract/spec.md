@@ -13,7 +13,7 @@
 
 - 제품 원칙과 링크 수명주기는 PRD-0001을 따른다.
 - GO의 HTTP 상태·헤더·오류 형식은 PRD-0002를 따른다.
-- 대상 조합, 위치 식별자 문법과 클릭 시점 권한 경계는 이 문서를 우선한다.
+- 대상 조합, 위치 식별자 형식과 링크를 연 뒤의 권한 검사는 이 문서를 우선한다.
 - 이 계약의 확정은 통합 구현 완료나 운영 배포 승인을 뜻하지 않는다. 9절의 운영 시작 조건을
   모두 충족하기 전에는 해당 흐름을 공개하지 않는다.
 
@@ -95,7 +95,7 @@ BATON v1 위치 식별자는 실제 화면 경로인 `/teams/{teamId}/seasons/{s
 `GET`만으로 시그널링 입장을 허가하지 않으며 카메라·마이크 권한도 사용자 입장 전 확인 동작
 전에 요청하지 않는다.
 
-### 5.1 동일 공개 출처와 경계 구성
+### 5.1 같은 공개 출처와 프록시 라우팅
 
 BATON 모드에서 BATON과 ROUND는 브라우저에 **하나의 동일한 HTTPS 출처**로 보여야 한다.
 운영의 `BATON_GO_BATON_BASE_URL`과 `BATON_GO_ROUND_BASE_URL`은 스킴, 호스트와 포트까지 같은
@@ -106,7 +106,7 @@ GO 설정의 로컬 예외는 `localhost`, 선행 0이 없는 정규 점 구분 
 `127.0.0.0/8`과 IPv6 루프백 리터럴에만 적용한다. 브라우저와 서버의 주소 해석이 달라질
 수 있는 비정규 IPv4 표기는 루프백으로 간주하지 않는다.
 
-외부 경계는 더 구체적인 경로를 먼저 평가해 다음과 같이 라우팅한다.
+외부 프록시는 더 구체적인 경로를 먼저 확인해 다음과 같이 전달한다.
 
 | 용도 | 브라우저 경로 | 처리 서비스·라우팅 |
 | --- | --- | --- |
@@ -114,8 +114,8 @@ GO 설정의 로컬 예외는 `localhost`, 선행 0이 없는 정규 점 구분 
 | ROUND 정적 자산 | `GET /round-ui/**` | BATON 전용 `round-baton-web` 자산 |
 | BATON 세션 | `GET /api/v1/auth/session` | BATON이 직접 처리 |
 | 참여 허가 갱신 | `POST /round/rooms/{roomId}/participation-grant/refresh` | BATON이 직접 처리하며 ROUND로 프록시하지 않음 |
-| 시그널링 | `/round/rooms/{roomId}/signal` | 경계가 ROUND `/rooms/{roomId}/signal`로 전달 |
-| TURN | `POST /round/rooms/{roomId}/turn-credentials` | 경계가 ROUND `/api/rooms/{roomId}/turn-credentials`로 전달 |
+| 시그널링 | `/round/rooms/{roomId}/signal` | 외부 프록시가 ROUND `/rooms/{roomId}/signal`로 전달 |
+| TURN | `POST /round/rooms/{roomId}/turn-credentials` | 외부 프록시가 ROUND `/api/rooms/{roomId}/turn-credentials`로 전달 |
 
 참여 허가 갱신의 정확한 경로는 범용 `/round/**` 프록시보다 우선한다. `/room/**`가 BATON SPA로,
 `/round-ui/**`가 독립형 ROUND 자산으로 잘못 라우팅되는 배포도 허용하지 않는다.
@@ -246,7 +246,7 @@ Domain 생략(host-only)
 만료 응답은 같은 쿠키 이름·`Path`·보안 속성과 `Max-Age=0`을 사용한다. 쿠키를 만료해도
 이미 연결된 소켓은 연결 수립 당시 참여 허가의 `exp`까지 유지될 수 있다.
 
-### 5.5 JWT와 클레임 결합
+### 5.5 JWT와 클레임 일치 조건
 
 BATON은 참여권을 `RS256`으로만 서명하고 JOSE 헤더에 BATON JWK Set의 공개키를 식별하는
 비어 있지 않은 `kid`를 넣는다. ROUND는 `RS256`, `kid`에 해당하는 공개키, 설정된 `iss`,
@@ -283,24 +283,24 @@ ROUND는 진행 중인 연결 수립과 활성 소켓을 합쳐 동일 `jti`당 
 이 시각에 `4001 / Participation grant expired`로 닫힌다.
 TURN 자격 증명도 해당 참여 허가의 `exp`보다 늦게 만료될 수 없다.
 
-### 5.6 경계와 시그널링 운영 범위
+### 5.6 외부 프록시와 시그널링 운영 범위
 
-- 경계는 WebSocket upgrade와 브라우저의 원본 `Origin`을 보존하고 신뢰 출처를 합성하지
+- 외부 프록시는 WebSocket upgrade와 브라우저의 원본 `Origin`을 유지하고 임의의 출처를 만들지
   않는다. 클라이언트가 보낸 `Forwarded`와 `X-Forwarded-*`는 제거한 뒤 정규 호스트, HTTPS
-  스킴과 클라이언트 주소를 경계가 다시 설정한다.
+  스킴과 클라이언트 주소를 외부 프록시가 다시 설정한다.
 - ROUND `ALLOWED_ORIGINS`에는 BATON의 정확한 공개 HTTPS 출처만 둔다. 와일드카드, `null`,
   비루프백 HTTP와 CORS 대체 동작은 허용하지 않는다.
 - 웹은 BATON용 `round-baton-web`과 `VITE_ROUND_AUTH_MODE=baton`을 사용하고 엔드포인트 재정의를
   비운다. 시그널링도 `ROUND_AUTH_MODE=baton`과 운영 프로필로 시작하며 JWK·발급자
   설정 누락을 독립형 대체 동작으로 처리하지 않는다.
 - 시그널링은 `ROUND_AUTH_MAX_GRANT_LIFETIME_SECONDS=300`, 계약된 정확한 발급자,
-  `ROUND_AUTH_AUDIENCE=round`와 HTTPS JWK Set URI를 사용한다. 경계는 BATON의 `Set-Cookie`와
+  `ROUND_AUTH_AUDIENCE=round`와 HTTPS JWK Set URI를 사용한다. 외부 프록시는 BATON의 `Set-Cookie`와
   브라우저의 방 한정 참여 허가 쿠키를 제거하거나 다른 경로로 다시 쓰지 않는다.
 - 독립형 공개 `/signal`, `/api/turn-credentials`와 독립형 웹 이미지는 BATON 공개
-  경계에 노출하지 않는다.
+  경로에 노출하지 않는다.
 - 갱신, 시그널링, TURN의 세 방 한정 공개 경로에는 6인의 정상 갱신·재연결 급증을
   허용하는 상한 있는 사전 인증 요청률 제한을 둔다.
-- Java 시그널링 포트는 경계와 비공개 모니터링 네트워크만 접근하고 호스트, 공개 로드
+- Java 시그널링 포트는 외부 프록시와 비공개 모니터링 네트워크만 접근하고 호스트, 공개 로드
   밸런서와 보안 그룹에 노출하지 않는다.
 - 방·입장·할당량 상태를 여러 인스턴스가 공유하도록 분리하기 전에는 시그널링을 한 복제본으로 운영한다.
 - BATON 페이지의 `Permissions-Policy`는 `camera`, `microphone`, `display-capture`를 허용하고 CSP
@@ -314,7 +314,7 @@ TURN 자격 증명도 해당 참여 허가의 `exp`보다 늦게 만료될 수 �
 2. 링크 생성 요청의 정규 UUID를 원본 상태 또는 아웃박스에 저장한다.
 3. 원본 DB 트랜잭션 밖에서 `POST /api/v1/links`를 호출한다.
 4. 시간 초과, 연결 실패와 재시도 가능한 `5xx`는 backoff와 jitter를 적용해 같은
-   `Idempotency-Key`와 동일한 정규 요청 내용으로 재시도한다.
+   `Idempotency-Key`와 최초 요청과 같은 값으로 재시도한다.
 5. 최초 생성의 `201` 또는 동일 요청 재시도의 `200`을 받으면 GO `linkId`와 사용자에게 표시할 단축 URL을 필요한
    범위에서 보관한다. 전체 단축 URL, 코드와 멱등성 키는 로그에 남기지 않는다.
 
@@ -381,18 +381,18 @@ GO는 링크 접속 시 BATON 또는 ROUND를 동기 조회하지 않는다.
 
 ## 9. 운영 시작 조건
 
-공개 운영 전에는 다음 조건을 모두 충족하고 실행 증거를 남긴다. 현재 완료 여부와 확인한
+공개 운영 전에는 다음 조건을 모두 충족하고 검증 결과를 기록한다. 현재 완료 여부와 확인한
 외부 저장소 커밋은 `HANDOFF.md`에서 관리하며 이 문서에 중복 기록하지 않는다.
 
 - 배포 DB 전체 목록 조사를 실행하고 비허용 링크 폐기·재발급 뒤
   `unrevoked non-compliant=0`, 미승인 `HOLD=0`을 확인한다.
 - BATON 계정 세션·CSRF, 접근 키가 없는 신규 브라우저의 기존 BATON 공유 링크 안내,
   일대일 활성 방 매핑과 영구 종료 표식, 참여권·JWK·쿠키 계약을 실제 공개 경로에서 검증한다.
-- BATON과 ROUND의 동일 HTTPS 출처, 정확한 `Origin`, CORS 미사용, 쿠키·헤더 보존,
-  경로 우선순위와 사전 인증 요청 한도를 경계 E2E로 검증한다.
+- BATON과 ROUND의 동일 HTTPS 출처, 정확한 `Origin`, CORS 미사용, 쿠키·헤더 유지,
+  경로 우선순위와 사전 인증 요청 한도를 외부 프록시를 통한 E2E 테스트로 확인한다.
 - 호출자는 원본 상태를 변경하는 트랜잭션에서 생성·폐기 요청과 같은 `Idempotency-Key`를
   순서 보장 아웃박스에 저장한다. 생성 응답이 유실된 뒤 취소해도 같은 요청으로 생성 결과를 확인하고 폐기를 완료하는지 검증한다.
-- 공개 `/l`과 비공개 `/api/v1` 경계를 분리하고 분산 요청 제한과 접근 로그 코드 마스킹을
+- 외부 프록시에서 공개 `/l`과 비공개 `/api/v1` 라우팅을 분리하고 분산 요청 제한과 접근 로그 코드 마스킹을
   적용한다.
 - 실제 클러스터에서 DNS·TLS·CNI·NetworkPolicy·probe·PVC·Secret 수명주기와 플랫폼 백업
   정책에 따른 격리 복원 훈련을 완료한다.
@@ -411,7 +411,7 @@ GO는 링크 접속 시 BATON 또는 ROUND를 동기 조회하지 않는다.
   않는다.
 - ROUND 미리 가져오기만으로 참여 허가, TURN 자격 증명 또는 WebSocket 입장이
   발생하지 않는다.
-- BATON·ROUND GO 출처가 다르거나 경계 경로 우선순위가 틀리면 배포 검증이 실패한다.
+- BATON·ROUND GO 출처가 다르거나 외부 프록시의 경로 우선순위가 틀리면 배포 검증이 실패한다.
 - 세션·CSRF 필수 제약이나 갱신 요청 본문·응답의 정확한 전송 형식과 다르면 안전하게 차단한다.
 - 동일 방의 두 활성 매핑, 삭제 표식이 있는 방 재사용, `study_id != teamId` 또는 v1 `host`
   클레임 발급은 거부한다.

@@ -7,7 +7,7 @@ GO `bc241e2`의 HANDOFF에 있던 완료 내역과 이전 검증 기록을 옮�
 ## GO 구현·검증 기록
 
 - BATON GO의 링크 생성·조회·접속 처리·폐기, 동일 요청 재시도와 v1 링크 대상 규칙은 구현되어 있다.
-  제품 동작은 [제품 기준선](../../docs/PRD/0001_product-baseline/spec.md), HTTP 동작은
+  제품 동작은 [제품 기준](../../docs/PRD/0001_product-baseline/spec.md), HTTP 동작은
   [API 계약](../../docs/PRD/0002_api-contract/spec.md)을 기준으로 삼는다.
 - 관리 조회·폐기는 단축 링크 접속 처리와 같은 시간·폐기 정책의 이용 상태와 판정 시각을 반환한다.
   생성·재생 응답과 저장 스키마는 유지하며 BATON·ROUND 접근 권한을 나타내지 않는다.
@@ -15,7 +15,7 @@ GO `bc241e2`의 HANDOFF에 있던 완료 내역과 이전 검증 기록을 옮�
   검사량을 제한하고 필터로 빈 페이지가 되어도 다음 커서로 진행하며, 비허용 저장 대상은 제외한다.
 - 공개 링크의 HTML 안내는 GO의 요청 제한·서버 오류도 포함한다. JSON 클라이언트와 관리
   인증 오류는 기존 형식을 유지하며, 요청 제한 화면의 대기 시간은 `Retry-After`와 같다.
-- BATON·ROUND 위치 식별자와 최종 권한 경계는
+- BATON·ROUND 위치 식별자와 최종 접근 권한 확인은
   [교차 서비스 링크 계약](../../docs/PRD/0003_cross-service-link-contract/spec.md)을 따른다.
   GO 링크는 위치만 제공하며 BATON 접근 권한이나 ROUND 입장 권한을 부여하지 않는다.
 - 링크 코드 HMAC 보호 장치, 재시도 시 최초 공개 출처 유지와 MySQL 절대 시각 저장 결정은
@@ -27,12 +27,12 @@ GO `bc241e2`의 HANDOFF에 있던 완료 내역과 이전 검증 기록을 옮�
 - V6는 기존 예약을 `legacy` 키로 이관하고 새 예약에 발급 키 ID를 저장한다. 키 교체와
   이전 키 제거 조건은 [ADR-0011](../../docs/ADR/0011_link-code-key-ring/adr.md)을 따른다.
   실제 운영 키 묶음 배포·전환·복원 훈련은 [운영 절차](../../docs/RUNBOOK/link-code-key-rotation.md)에 따라 남아 있다.
-- 계약 전 저장 데이터 조사·폐기 API는 구현되어 있지만 기본 비활성화 상태다. 공개 경계 차단을
+- 계약 전 저장 데이터 조사·폐기 API는 구현되어 있지만 기본 비활성화 상태다. 공개 링크 접속 차단을
   확인한 유지 보수 시간에만 두 활성화 값을 함께 사용하며, 일반 운영에서는 모두 `false`로 둔다.
-- Redis 공용 요청 제한은 기본 중지하며 [분산 요청 제한 절차](../../docs/RUNBOOK/distributed-public-rate-limit.md)에
+- Redis 분산 요청 제한은 기본 중지하며 [분산 요청 제한 절차](../../docs/RUNBOOK/distributed-public-rate-limit.md)에
   따라 운영 Redis를 연결해야 한다. 두 연결 동시성·실패 차단과 공개 HTTP 검증은 준비되어 있다.
 - GO 전용 MySQL과 비공개 Kubernetes 기본 구성은 준비되어 있다. 이는 배포 기반일 뿐 실제
-  클러스터 검증이나 공개 운영 승인 증거가 아니다. MySQL 워크로드는 비루트 UID/GID와 Linux
+  클러스터 검증이나 공개 운영 승인 기록이 아니다. MySQL 워크로드는 비루트 UID/GID와 Linux
   capability 제거를 선언하지만, Namespace의 `restricted` 정책 강제 적용 전에는 고정 이미지로 신규·
   복원·현재 PVC의 기동과 TLS·초기화·마이그레이션을 실제 클러스터에서 검증해야 한다.
 - 공개·관리 응답 지연과 전체·관리 API 5xx·관리 JWT 서비스 장애·관리 링크 복구 오류·429·저장 대상 계약 위반의 [Prometheus 경보 규칙](../../deploy/prometheus/baton-go-alerts.yml)과
@@ -50,7 +50,7 @@ GO `bc241e2`의 HANDOFF에 있던 완료 내역과 이전 검증 기록을 옮�
   Java·DB 변경이 없어 해당 테스트는 생략했다. 운영 Kubernetes context와 수신자 설정을 확인할 수
   없어 실제 Pod 발견·네트워크 접근·배포·알림 발송은 미실행이다.
 - CI는 검사한 커밋·이미지 구성 다이제스트·아카이브 체크섬과 SBOM·취약점 보고서를
-  `baton-go-image-security`로 보존한다. 취약점 등급별 자동 차단이나 릴리스 이미지 승인 증거는
+  `baton-go-image-security`로 보존한다. 취약점 등급별 자동 차단이나 릴리스 이미지 승인 기록은
   아니며, [이미지 검사 절차](../../docs/RUNBOOK/image-security-reports.md)에 따라 결과를 검토한다.
 - 대표 HTTP 요청·응답은 기존 계약 테스트에서 REST Docs 조각으로 생성하며
   `:adapter-in-web:apiContractDocs`가 압축 산출물을 만들고 CI가 `baton-go-rest-docs`로
@@ -64,9 +64,9 @@ GO `bc241e2`의 HANDOFF에 있던 완료 내역과 이전 검증 기록을 옮�
 ## BATON·ROUND 구현·검증 기록
 
 - 2026-08-27 BATON `2ddfed0bd6fbd5c4a4e1595110d3b46bb6ab32dd`에서 계정 세션,
-  구성원 연결, ROUND 방 매핑·참여권·JWK와 선택 실행 경계 검증 구현을 확인했다.
+  구성원 연결, ROUND 방 매핑·참여권·JWK와 선택 실행 조건 검증 구현을 확인했다.
 - 2026-08-27 ROUND `a67df4ba89e935b623d58f2ce7542a5dbbbaea7f`에서 BATON 모드
-  브라우저 진입, 참여권 검증, TURN·WebSocket 방 경계 구현을 확인했다.
+  브라우저 진입, 참여권 검증, TURN·WebSocket 방 접근 제한 구현을 확인했다.
 - 위 커밋 확인은 실제 릴리스 이미지, 공개 HTTPS, 외부 coturn과 운영 자격 증명 검증을
   대신하지 않는다.
 - 2026-09-05 BATON의 `codex/go-link-integration-20260905` 브랜치 `e5685e6f`에 ROUND 방의

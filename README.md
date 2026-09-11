@@ -5,7 +5,7 @@ BATON GO는 BATON·ROUND용 단축 링크 서비스다. 링크 생성·활성 �
 
 ## 첫 구현 범위
 
-- 정규 UUID 멱등성 키와 HMAC 기반 128비트 공개 코드 발급
+- 표준 UUID 멱등성 키와 HMAC 기반 128비트 공개 코드 발급
 - 발급 키 버전 저장과 키 교체 후 같은 생성 요청에 기존 URL 반환
 - 보존 기간을 명시한 종료 링크 자동 정리와 생성 예약 보존(기본 중지)
 - 원문 코드 대신 SHA-256 해시 저장
@@ -41,17 +41,17 @@ BATON의 `#accessKey`나 ROUND 참여 허가를 GO의 URL, DB 또는 로그에 �
 작업 공간으로 복귀할 때만 사용한다. 신규 브라우저는 기존 BATON 공유 링크를 계속 사용하며,
 향후 계정 기반 초대·claim 계약이 생기기 전에는 GO 링크만으로 권한을 부여하지 않는다.
 
-교차 서비스 계약 v1의 허용 대상, 서비스별 권한 검사, 동일 출처 구성과 운영
-차단 조건은 [교차 서비스 링크 계약](docs/PRD/0003_cross-service-link-contract/spec.md)이
+교차 서비스 계약 v1의 허용 대상, 서비스별 권한 검사, 같은 HTTPS 출처 구성과 운영 전
+확인 사항은 [교차 서비스 링크 계약](docs/PRD/0003_cross-service-link-contract/spec.md)이
 기준 문서다. GO는 링크 생성과 접속 처리 시 계약에 맞지 않는 요청을 거부하고,
 비허용 저장 대상은 원문을 노출하지 않은 채 `404 LINK_NOT_FOUND`로
-숨긴다. 이 구현만으로 BATON·ROUND 권한과 실제 경계 검증이 완료되지는 않는다.
+숨긴다. 이 구현만으로 BATON·ROUND 권한과 실제 연동 검증이 끝나는 것은 아니다.
 
-계약 강화 전 저장 데이터는 기본 비활성화된 비공개 운영 API로 조사하고,
-원본 도메인 소유자가 승인한 링크만 폐기·재발급한다. 활성화 조건, 민감 필드
-비노출 및 완료 판정은 [대상 계약 v1 정리 절차](docs/RUNBOOK/target-contract-v1-remediation.md)를
+v1 규칙 적용 전에 저장된 데이터는 기본 비활성화된 비공개 운영 API로 조사한다.
+BATON·ROUND가 대상을 확인한 링크만 폐기·재발급한다. 활성화 조건, 민감 필드
+비노출과 정리 완료 조건은 [대상 계약 v1 정리 절차](docs/RUNBOOK/target-contract-v1-remediation.md)를
 따른다. 로컬 기본 출처는 개발용이며 운영 출처·라우팅·쿠키 계약은 기준 문서의
-종단 간 검증을 통과해야 한다.
+전체 연동 검증을 통과해야 한다.
 
 ## 기술 스택
 
@@ -62,8 +62,7 @@ BATON의 `#accessKey`나 ROUND 참여 허가를 GO의 URL, DB 또는 로그에 �
 - Spring Data JPA
 - Actuator, Micrometer Prometheus
 
-내부 구조는 BATON과 happyGallery에서 검증한 포트·어댑터 방향을 따르지만 배포 단위는
-하나의 독립 마이크로서비스다.
+내부 코드는 포트·어댑터 구조를 사용하며 하나의 독립 마이크로서비스로 배포한다.
 
 ## 로컬 실행
 
@@ -74,21 +73,21 @@ cp .env.example .env
 vim .env
 ```
 
-관리 API는 `BATON_GO_MANAGEMENT_JWT_ISSUER_URI`의 발급자가 서명한 JWT를 사용한다. 운영 발급자
-URI는 HTTPS이며 JWT의 `aud`는 기본 `baton-go`와 일치해야 한다. 다른 audience가 필요하면
+관리 API는 `BATON_GO_MANAGEMENT_JWT_ISSUER_URI`의 발급자가 서명한 JWT를 사용한다.
+운영 발급자 URI는 HTTPS여야 하며 JWT의 `aud`는 기본 `baton-go`와 일치해야 한다. 다른 audience가 필요하면
 `BATON_GO_MANAGEMENT_JWT_AUDIENCE`를 명시한다. audience 목록이 비어 있거나 빈 값·공백뿐인
-항목을 포함하면 시작을 거부한다. Spring Boot 표준
+항목이 있으면 시작을 거부한다. Spring Boot 표준
 `SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI`에는 발급자의 HTTPS JWK Set 주소를
-설정한다. 두 endpoint의 HTTP는 loopback 로컬 개발에서만 허용한다. 이 설정은 시작할 때
-discovery 서버에 의존하지 않으면서 `iss` 검증을 유지한다. 링크
+설정한다. 두 주소의 HTTP는 로컬 루프백 개발 환경에서만 허용한다. 이 설정은 시작할 때
+발급자 검색 서버를 호출하지 않으면서 `iss` 검증을 유지한다. 링크
 생성·조회·폐기에는 각각 `baton-go.links.create`,
 `baton-go.links.read`, `baton-go.links.revoke` scope가 필요하다.
 JWT에는 만료 시각 `exp`가 반드시 있어야 하며, 누락하거나 이미 만료된 토큰은 `401`로 거부한다.
 JWK 조회에는 별도의 연결·읽기 제한을 적용한다. 기본값과 변경 방법은
 [관리 JWK 대기 시간](docs/RUNBOOK/kubernetes-private-server-deployment.md#관리-jwk-대기-시간)을 따른다.
 
-`BATON_GO_LINK_CODE_SECRET`은 32자 이상의 별도 무작위 값이어야 한다. 기존 DB-키 결합과 복구
-호환성을 위해 길이 외의 문법을 추가 제한하거나 공백 제거·Unicode 정규화하지 않고 설정 문자열
+`BATON_GO_LINK_CODE_SECRET`은 32자 이상의 별도 무작위 값이어야 한다. 기존 DB와 키의 연결을
+유지하고 복구할 수 있도록 길이 외의 문법을 제한하지 않는다. 공백 제거·Unicode 정규화 없이 설정 문자열을
 그대로 사용한다. 서버 설정은 Spring Boot의 표준 외부 설정 우선순위와 바인딩을 그대로 사용한다.
 새 비밀값은 base64url 또는 hex처럼 셸, dotenv와 Spring 자리 표시자 문법에 걸리지 않는 문자
 집합으로 생성하고 로그나 명령행에 출력하지 않는다. `.env.example`의 짧은 `REPLACE_ME_TOO` 값은
@@ -96,18 +95,18 @@ JWK 조회에는 별도의 연결·읽기 제한을 적용한다. 기본값과 �
 복구 뒤에도 같은 값을 유지해야 같은 생성 요청에 기존 URL을 반환할 수 있다.
 
 `BATON_GO_PUBLIC_BASE_URL`도 모든 실행 환경에서 명시한다. 로컬 개발의 루프백 HTTP는
-허용하지만, 사용자에게 반환되는 비로컬 단축 URL 출처(origin)는 HTTPS여야 한다. 값은 경로, 쿼리,
+허용하지만, 사용자에게 반환하는 운영 단축 URL 출처는 HTTPS여야 한다. 값은 경로, 쿼리,
 프래그먼트나 사용자 정보가 없는 출처여야 한다. 스킴·호스트 대소문자, 기본 포트와 루트 슬래시는
 정규화해 생성 예약에 저장한다. 같은 요청을 재시도할 때는 현재 설정이
-아니라 최초 예약의 출처를 사용하므로 출처 이전 뒤에도 같은 단축 URL을 반환한다. V5 이전
-예약처럼 최초 발급 시 사용한 origin을 확인할 수 없으면 현재 설정으로 대체하지 않고
+아니라 최초 예약의 출처를 사용하므로 공개 도메인을 바꾼 뒤에도 같은 단축 URL을 반환한다. V5 이전
+예약처럼 최초 발급 시 사용한 공개 출처를 확인할 수 없으면 현재 설정으로 대체하지 않고
 오류를 반환한다.
 
-비로컬 공개 기본 URL을 사용하면서 BATON·ROUND 대상 환경 변수를 생략해 localhost 기본값이
+운영 공개 기본 URL을 사용하면서 BATON·ROUND 대상 환경 변수를 생략해 localhost 기본값이
 남은 설정은 시작 단계에서 거부한다. 로컬 기본값은 루프백 공개 출처를 사용하는 개발에만
 허용되며 운영 배포는 세 출처를 모두 명시한다.
 
-### HMAC 키와 데이터베이스 결합
+### HMAC 키 정보 등록
 
 신규 빈 DB에는 현재 파생 버전과 HMAC 키 지문을 자동 등록한다. 링크 데이터가 있지만
 HMAC 키가 등록되지 않은 DB에서는 서버 시작을 거부한다. DB 백업과 해당 시점의
@@ -153,7 +152,7 @@ docker compose --env-file .env ps
 
 ## 비공개 Kubernetes 배포
 
-`deploy/k8s`에는 Kubernetes 기본 Kustomize로 조립하는 애플리케이션과 GO 전용 MySQL
+`deploy/k8s`에는 Kubernetes Kustomize로 배포하는 애플리케이션과 GO 전용 MySQL
 매니페스트가 있다. MySQL은 BATON의 인스턴스·데이터베이스 사용자·PVC를 공유하지 않으며,
 `baton_go` 데이터베이스와 별도 Secret·10Gi PVC를 사용한다. 장기 실행 애플리케이션은 DML 전용
 계정만 받고, Flyway DDL 자격 증명은 컴포넌트 스캔 없는 일회성 마이그레이션 Job에만 주입한다.
@@ -169,7 +168,7 @@ kubectl kustomize deploy/k8s/bootstrap >/dev/null
 kubectl kustomize deploy/k8s/overlays/private-server >/dev/null
 ```
 
-실제 Secret 생성, 레지스트리 인증, 배포·백업·복구와 경계 구성은
+실제 Secret 생성, 레지스트리 인증, 배포·백업·복구, 외부 라우팅과 접근 제한은
 [비공개 Kubernetes 배포 절차](docs/RUNBOOK/kubernetes-private-server-deployment.md)를
 따른다. 공개 Ingress는 `/l` 접두 경로만, 비공개 관리 경로는 `/api/v1` 접두 경로만 같은
 HTTP Service로 분리해야 하며 Actuator `8081`은 기본 노출하지 않는다. 이 인프라 구성은
@@ -189,17 +188,17 @@ DB 대기 시간은 Hikari·Connector/J 설정으로 제한하며, 마이그레�
 소켓 읽기 대기 시간을 사용한다. 기본값과 변경 방법은
 [DB 대기 시간](docs/RUNBOOK/kubernetes-private-server-deployment.md#db-대기-시간)을 따른다.
 
-공개 `GET·HEAD /l/{code}`에는 DB 조회 전 인스턴스 집계 요청률 제한 안전장치가
+공개 `GET·HEAD /l/{code}`에는 DB 조회 전 인스턴스별 전체 요청률 제한이
 적용된다. `BATON_GO_PUBLIC_RESOLVER_RATE_LIMIT_CAPACITY`와
 `BATON_GO_PUBLIC_RESOLVER_RATE_LIMIT_WINDOW`는 배포 트래픽에 맞춰 명시적으로 설정한다.
 용량은 1 이상, 시간 구간은 양수여야 하며 유효하지 않은 설정은 Spring 설정 바인딩 단계에서
 거부한다.
-이 제한에 더해 [Redis 공용 요청 제한](docs/RUNBOOK/distributed-public-rate-limit.md)을
+이 제한에 더해 [Redis 분산 요청 제한](docs/RUNBOOK/distributed-public-rate-limit.md)을
 선택적으로 활성화할 수 있다. 모든 복제본의 전체 허용량을 공유하며 Redis 장애는 공개 조회를
 `503`으로 막는다. 클라이언트 IP와 전달 헤더는 사용하지 않는다. 실제 Ingress의 경로 분리와
-`/l/{code}` 접근 로그 가림, 사용자별 트래픽 제한은 공개 경계에서 함께 적용한다.
+`/l/{code}` 접근 로그 가림과 사용자별 트래픽 제한은 외부 프록시에서 함께 적용한다.
 
-별도 서비스 요금 없이 기존 Prometheus·Alertmanager를 연결하려면
+기존 Prometheus·Alertmanager를 연결하려면
 [수집·알림 연결 절차](docs/RUNBOOK/prometheus-alerts.md#추가-서비스-요금-없는-연결)를 따른다.
 Pod 자동 발견 설정과 최소 조회 권한을 제공하며 새 서버나 유료 API를 추가하지 않는다.
 
@@ -230,7 +229,7 @@ Gradle은 `gradle/verification-metadata.xml`의 SHA-256으로 내려받은 의�
 Flyway/JPA와 동시 생성 동작을 포함한 MySQL 통합 검증은 Docker가 실행 중인 환경에서
 별도로 수행한다. 이 테스트 묶음은 Kubernetes 배포용 MySQL 초기화 스크립트, TLS
 `VERIFY_IDENTITY`, 실행 계정의 DML 전용 권한, 마이그레이션 전용 실행기,
-guard CLI 실행 파일의 기존 DB 결합, Testcontainers·Compose 이미지 일치도를 함께 검증한다.
+기존 DB에 HMAC 키 정보를 등록하는 CLI 실행 파일과 Testcontainers·Compose 이미지 일치도를 함께 검증한다.
 CI는 Compose가 해석한 MySQL 이미지 digest와 Kubernetes 오버레이의 최종 렌더 digest도 비교한다.
 TLS 호스트 이름 검증용 테스트 별칭을 루프백에 고정하므로 로컬 Docker 소켓 또는 일반
 GitHub 실행기를 기준으로 하며, 원격 `DOCKER_HOST`는 현재 지원하지 않는다.
@@ -267,17 +266,17 @@ curl -i http://localhost:8080/api/v1/links \
 
 ### 제품과 HTTP 계약
 
-- [제품 기준선](docs/PRD/0001_product-baseline/spec.md)
+- [제품 기준](docs/PRD/0001_product-baseline/spec.md)
 - [API 계약](docs/PRD/0002_api-contract/spec.md)
 - [REST Docs 요청·응답 예시](docs/API/rest-docs.md)
 - [BATON·ROUND 교차 서비스 링크 계약](docs/PRD/0003_cross-service-link-contract/spec.md)
 
 ### 장기 설계 결정
 
-- [마이크로서비스 경계](docs/ADR/0001_microservice-boundary/adr.md)
+- [마이크로서비스 분리 결정](docs/ADR/0001_microservice-boundary/adr.md)
 - [링크 보안 모델](docs/ADR/0002_link-security/adr.md)
 - [멱등한 링크 생성](docs/ADR/0003_idempotent-link-creation/adr.md)
-- [링크 코드 HMAC 키와 DB 결합](docs/ADR/0004_link-code-key-binding/adr.md)
+- [링크 코드 HMAC 키 정보 등록](docs/ADR/0004_link-code-key-binding/adr.md)
 - [링크 대상을 정해진 서비스 경로로 제한](docs/ADR/0005_trusted-target-locator/adr.md)
 - [계약 전 대상 정리](docs/ADR/0006_target-contract-remediation/adr.md)
 - [MySQL 절대 시각 저장 형식](docs/ADR/0007_mysql-instant-storage/adr.md)
@@ -286,7 +285,7 @@ curl -i http://localhost:8080/api/v1/links \
 - [관리 API의 발급자 서명 JWT 인증](docs/ADR/0010_management-jwt-authentication/adr.md)
 - [링크 코드 키 묶음과 교체](docs/ADR/0011_link-code-key-ring/adr.md)
 - [종료 링크 정리와 멱등 예약](docs/ADR/0012_link-retention/adr.md)
-- [공개 링크 공용 요청 제한](docs/ADR/0013_distributed-public-resolver-quota/adr.md)
+- [공개 링크 Redis 분산 요청 제한](docs/ADR/0013_distributed-public-resolver-quota/adr.md)
 
 ### 운영 절차
 

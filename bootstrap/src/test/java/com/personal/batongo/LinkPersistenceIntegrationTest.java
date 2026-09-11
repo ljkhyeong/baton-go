@@ -20,6 +20,7 @@ import com.personal.batongo.application.link.port.in.SmartLinkUseCase.CreateLink
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.CreatedLinkResult;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.LinkResult;
 import com.personal.batongo.application.link.port.out.LinkCodePort;
+import com.personal.batongo.application.link.port.out.LinkCreationReservationPort;
 import com.personal.batongo.domain.link.LinkPurpose;
 import com.personal.batongo.domain.link.TargetSystem;
 import java.sql.ResultSet;
@@ -42,12 +43,15 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.mysql.MySQLContainer;
@@ -100,7 +104,35 @@ class LinkPersistenceIntegrationTest {
     private LinkCodePort linkCodePort;
 
     @Autowired
+    private LinkCreationReservationPort reservationPort;
+
+    @Autowired
+    private PlatformTransactionManager transactionManager;
+
+    @Autowired
     private MockMvc mockMvc;
+
+    @Test
+    @DisplayName("링크 생성 예약은 중복 키가 아닌 MySQL 저장 오류를 숨기지 않는다")
+    void reportsUnexpectedReservationInsertFailure() {
+        String idempotencyKeyHash = "a".repeat(64);
+        String tooLongPublicOrigin = "https://go.example/" + "a".repeat(240);
+
+        assertThatThrownBy(() -> new TransactionTemplate(transactionManager)
+                .executeWithoutResult(status -> reservationPort.reserve(
+                        idempotencyKeyHash,
+                        UUID.fromString("7f9b3635-cbd1-4936-8384-7fc42d4264e5"),
+                        tooLongPublicOrigin,
+                        "legacy",
+                        FAR_FUTURE_NOW
+                )))
+                .isInstanceOf(DataIntegrityViolationException.class);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM link_creation_requests WHERE idempotency_key_hash = ?",
+                Long.class,
+                idempotencyKeyHash
+        )).isZero();
+    }
 
     @Test
     @DisplayName("일괄 조회는 요청한 MySQL 링크만 읽고 폐기 상태와 누락 ID를 구분한다")

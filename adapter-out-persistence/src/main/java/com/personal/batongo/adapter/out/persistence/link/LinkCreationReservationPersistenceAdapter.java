@@ -6,6 +6,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Propagation;
@@ -56,19 +57,22 @@ public class LinkCreationReservationPersistenceAdapter
             String keyId,
             Instant createdAt
     ) {
-        int inserted = jdbcClient.sql("""
-                        INSERT IGNORE INTO link_creation_requests (
-                            idempotency_key_hash, link_id, public_origin, key_id, created_at
-                        ) VALUES (?, UUID_TO_BIN(?), ?, ?, ?)
-                        """)
-                .params(idempotencyKeyHash, proposedLinkId.toString(), publicOrigin, keyId,
-                        LocalDateTime.ofInstant(createdAt, ZoneOffset.UTC))
-                .update();
-        if (inserted == 1) {
+        try {
+            int inserted = jdbcClient.sql("""
+                            INSERT INTO link_creation_requests (
+                                idempotency_key_hash, link_id, public_origin, key_id, created_at
+                            ) VALUES (?, UUID_TO_BIN(?), ?, ?, ?)
+                            """)
+                    .params(idempotencyKeyHash, proposedLinkId.toString(), publicOrigin, keyId,
+                            LocalDateTime.ofInstant(createdAt, ZoneOffset.UTC))
+                    .update();
+            if (inserted != 1) {
+                throw new IllegalStateException("링크 생성 예약을 저장하지 못했습니다");
+            }
             return new Reservation(proposedLinkId, publicOrigin, keyId, null, null, true);
+        } catch (DuplicateKeyException exception) {
+            return find(idempotencyKeyHash)
+                    .orElseThrow(() -> new IllegalStateException("링크 생성 예약을 찾을 수 없습니다"));
         }
-
-        return find(idempotencyKeyHash)
-                .orElseThrow(() -> new IllegalStateException("링크 생성 예약을 찾을 수 없습니다"));
     }
 }

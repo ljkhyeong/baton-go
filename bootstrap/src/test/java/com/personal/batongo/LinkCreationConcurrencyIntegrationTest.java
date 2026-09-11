@@ -345,7 +345,7 @@ class LinkCreationConcurrencyIntegrationTest {
                                 FROM information_schema.PROCESSLIST
                                 WHERE DB = DATABASE()
                                   AND COMMAND = 'Query'
-                                  AND INFO LIKE 'INSERT IGNORE INTO link_creation_requests%'
+                                  AND INFO LIKE 'INSERT INTO link_creation_requests%'
                                 """,
                         Long.class
                 ) >= expectedWaiters);

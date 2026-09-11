@@ -19,6 +19,7 @@
   `PUBLIC_LINK_ORIGIN_REPLAY_UNAVAILABLE`로 처리한다. 그 밖의 실행 오류는 복구 오류로 바꾸지 않는다.
 - 종료 링크 정리와 Redis 분산 요청 제한의 수치·시간 범위는 Spring `@ConfigurationProperties`
   검증을 사용한다. 기능 활성화에 따른 필수값 조건만 생성자에서 확인한다.
+- 종료 링크 자동 정리 실행 간격은 최소 1초다. 빈 값과 `0s`는 설정 바인딩 단계에서 거부한다.
 - 준비 상태는 DB와 활성화한 분산 요청 제한 Redis를 확인한다. Redis `PING`이 실패하면
   `/readyz`는 503이며 `/livez`는 정상 상태를 유지한다.
 - `BatonGoReadinessFailed`는 Pod별 `/readyz` 요청이 최근 2분간 12건 이상이고 503 비율이
@@ -35,6 +36,9 @@
 
 ## 최근 검증
 
+- 2026-09-12 `6414c83`에서 종료 링크 자동 정리 실행 간격에 Spring 설정 검증을 추가했다.
+  빈 값·`0s` 거부를 포함한 설정 테스트 7건과 `./gradlew --no-daemon test`가 성공했다.
+  DB·Redis 동작은 바뀌지 않아 태그 통합 테스트는 반복하지 않았다.
 - 2026-09-12 `75690fd`에서 Deployment 롤링 업데이트의 가용 Pod 유지와 10초 안정화 조건을
   명시했다. Kubernetes 1.36.1 엄격 스키마로 bootstrap 1개, private-server 10개, monitoring
   2개 리소스를 검증해 모두 통과했다. 애플리케이션 코드는 바뀌지 않아 Gradle 테스트는 반복하지 않았다.

@@ -15,6 +15,8 @@
   관리 작업 전에 `401 MANAGEMENT_AUTHENTICATION_REQUIRED`로 거부한다.
 - 링크 생성 예약은 일반 `INSERT`를 사용하며 Spring이 변환한 중복 키 오류만 기존 예약 조회로
   처리한다. 다른 MySQL 저장 오류는 성공이나 재시도로 바꾸지 않는다.
+- 멱등 예약의 공개 출처 복구는 저장값 누락과 잘못된 URL 형식만
+  `PUBLIC_LINK_ORIGIN_REPLAY_UNAVAILABLE`로 처리한다. 그 밖의 실행 오류는 복구 오류로 바꾸지 않는다.
 - 종료 링크 정리와 Redis 분산 요청 제한의 수치·시간 범위는 Spring `@ConfigurationProperties`
   검증을 사용한다. 기능 활성화에 따른 필수값 조건만 생성자에서 확인한다.
 - BATON 연동 작업 공간은 `/private/tmp/baton-go-integration-20260905`, 브랜치는
@@ -25,6 +27,9 @@
 
 ## 최근 검증
 
+- 2026-09-12 `e4c2c0a`에서 공개 출처 복구의 광범위한 `RuntimeException` 처리를 제거했다.
+  애플리케이션 대상 테스트, 공개 출처가 없는 기존 MySQL 예약 통합 테스트와
+  `./gradlew --no-daemon test`가 성공했다. Redis 동작은 바뀌지 않아 Redis 통합 테스트는 반복하지 않았다.
 - 2026-09-12 `19a2823`에서 종료 링크 정리와 Redis 분산 요청 제한의 직접 범위 비교를
   `@Min`·`@Max`·`@DurationMin`·`@DurationMax`로 교체했다. 설정 경계 13건, 실제 Redis 제한
   동작 2건과 `./gradlew --no-daemon test`가 성공했다. DB 동작은 바뀌지 않아 MySQL 통합

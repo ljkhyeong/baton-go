@@ -73,7 +73,7 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
-    @DisplayName("예상하지 못한 오류 로그는 제한된 진단 정보만 남기고 원문을 노출하지 않는다")
+    @DisplayName("예상하지 못한 오류 로그는 오류 종류·호출 위치만 남기고 원문을 숨긴다")
     void redactsUnexpectedExceptionDetailsFromLog(CapturedOutput output) {
         String sensitiveMessage = "sensitive-exception-message";
         String sensitiveCause = "sensitive-cause-message";

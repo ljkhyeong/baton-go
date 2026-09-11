@@ -65,7 +65,7 @@ class SecureLinkCodeAdapterTest {
     }
 
     @Test
-    @DisplayName("정확한 형식이 아닌 공개 코드는 해시하지 않는다")
+    @DisplayName("22자 Base64 URL 형식이 아닌 공개 코드는 해시하지 않는다")
     void rejectsMalformedCode() {
         assertThatThrownBy(() -> adapter.hash("short"))
                 .isInstanceOf(LinkNotFoundException.class);

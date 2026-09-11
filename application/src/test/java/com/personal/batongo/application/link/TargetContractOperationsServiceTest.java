@@ -50,7 +50,7 @@ class TargetContractOperationsServiceTest {
     }
 
     @Test
-    @DisplayName("대상 규칙 정리는 잘못된 폐기 요청을 행 잠금 전에 거부한다")
+    @DisplayName("계약 위반 링크 폐기는 잘못된 요청을 행 잠금 전에 거부한다")
     void rejectsInvalidCommandBeforeLocking() {
         assertThatThrownBy(() -> service.remediate(new RemediationCommand(LINK_ID, -1L)))
                 .isInstanceOf(InvalidRequestException.class);
@@ -62,7 +62,7 @@ class TargetContractOperationsServiceTest {
     }
 
     @Test
-    @DisplayName("대상 규칙 정리는 없는 링크를 찾을 수 없음으로 거부한다")
+    @DisplayName("계약 위반 링크 폐기는 없는 링크에 LINK_NOT_FOUND 오류를 반환한다")
     void rejectsMissingLink() {
         when(repository.findStoredByIdForUpdate(LINK_ID))
                 .thenReturn(Optional.empty());

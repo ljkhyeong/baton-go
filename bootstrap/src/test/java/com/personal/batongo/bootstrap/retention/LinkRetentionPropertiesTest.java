@@ -7,7 +7,7 @@ import org.junit.jupiter.api.Test;
 
 class LinkRetentionPropertiesTest {
     @Test
-    @DisplayName("자동 정리는 명시한 양수 보존 기간과 제한된 처리량을 요구한다")
+    @DisplayName("자동 정리의 보존 기간은 양수이고 실행당 링크 수는 1~500개여야 한다")
     void requiresRetentionAndBoundedBatch() {
         assertThatThrownBy(() -> new LinkRetentionProperties(true, null, 100))
                 .isInstanceOf(IllegalArgumentException.class);

@@ -172,7 +172,7 @@ class ManagementAuthenticationHttpContractTest {
 
     @ParameterizedTest(name = "{0}")
     @MethodSource("managementWritesWithUnsupportedResponseTypes")
-    @DisplayName("관리 쓰기는 비지원 응답 형식을 서비스 실행과 완료 이력 기록 전에 406으로 거부한다")
+    @DisplayName("관리 쓰기는 지원하지 않는 응답 형식을 서비스 호출·완료 기록 전에 406으로 거부한다")
     void rejectsUnsupportedResponseTypeBeforeMutation(
             String ignoredDescription,
             MockHttpServletRequestBuilder request,
@@ -215,7 +215,7 @@ class ManagementAuthenticationHttpContractTest {
                         "baton-go.links.revoke"
                 ),
                 Arguments.of(
-                        "대상 계약 정리 폐기의 XML 응답 요청",
+                        "계약 위반 링크 폐기의 XML 응답 요청",
                         put("/api/v1/operations/link-target-contract-v1/links/{linkId}/revocation", linkId)
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content("{\"expectedVersion\":7}")

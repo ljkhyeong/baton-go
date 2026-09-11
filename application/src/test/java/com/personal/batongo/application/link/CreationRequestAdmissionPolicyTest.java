@@ -34,7 +34,7 @@ class CreationRequestAdmissionPolicyTest {
     }
 
     @Test
-    @DisplayName("과거 키는 기존 예약만 조회하고 예약 부재를 키 오류로 분류한다")
+    @DisplayName("과거 키는 기존 예약만 조회하고 예약이 없으면 키 오류를 반환한다")
     void classifiesLegacyKeyAsReplayOnly() {
         CreationIdempotencyKey legacyKey = CreationIdempotencyKey.parseRequest(
                 "8E448211-66AE-44AB-9888-C4960648C22B"
@@ -70,7 +70,7 @@ class CreationRequestAdmissionPolicyTest {
     }
 
     @Test
-    @DisplayName("지원 범위 밖 시각은 과거 키 여부보다 먼저 거부한다")
+    @DisplayName("MySQL 저장 범위를 벗어난 시각은 과거 키 여부보다 먼저 거부한다")
     void rejectsOutOfRangeTimeBeforeReplayCompatibility() {
         CreationIdempotencyKey legacyKey = CreationIdempotencyKey.parseRequest(
                 "00000000-0000-7000-8000-00000000000A"

@@ -93,7 +93,7 @@ class TargetContractOperationsIntegrationTest {
     }
 
     @Test
-    @DisplayName("목록 조회는 알 수 없는 열거형이 있는 행도 원문 대상 없이 분류한다")
+    @DisplayName("목록 조회는 알 수 없는 열거형이 있는 행도 저장값을 노출하지 않고 분류한다")
     void inventoriesStoredTargetsWithoutExposingRawValues() throws Exception {
         insertStoredLink(
                 VALID_LINK_ID,
@@ -227,7 +227,7 @@ class TargetContractOperationsIntegrationTest {
     }
 
     @Test
-    @DisplayName("비허용 링크를 동시에 폐기해도 폐기 시각을 유지하고 버전은 한 번만 증가한다")
+    @DisplayName("허용되지 않은 링크를 동시에 폐기해도 시각을 유지하고 버전은 한 번만 증가한다")
     void serializesConcurrentRemediation() throws Exception {
         insertStoredLink(
                 UNKNOWN_ENUM_LINK_ID,
@@ -279,7 +279,7 @@ class TargetContractOperationsIntegrationTest {
             "{\"expectedVersion\":7.9}",
             "{\"expectedVersion\":7,\"targetPath\":\"/must-not-be-accepted\"}"
     })
-    @DisplayName("실제 Spring JSON 처리는 잘못된 폐기 본문을 변경 전에 거부한다")
+    @DisplayName("Spring JSON 역직렬화는 잘못된 폐기 본문을 변경 전에 거부한다")
     void rejectsInvalidBodyWithConfiguredSpringJsonMapper(String body) throws Exception {
         insertStoredLink(
                 INVALID_LINK_ID,

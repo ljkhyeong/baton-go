@@ -207,7 +207,7 @@ class TargetContractOperationsHttpContractTest {
     }
 
     @Test
-    @DisplayName("이미 폐기된 비준수 링크의 정리 요청은 재처리 이력으로 구분한다")
+    @DisplayName("이미 폐기한 규칙 위반 링크는 반복 폐기 이력으로 기록한다")
     void recordsRepeatedRemediation(CapturedOutput output) throws Exception {
         when(operationsUseCase.remediate(new RemediationCommand(LINK_ID, 7L)))
                 .thenReturn(new RemediationResult(
@@ -222,7 +222,7 @@ class TargetContractOperationsHttpContractTest {
     }
 
     @Test
-    @DisplayName("준수 링크의 정리 폐기는 409 REMEDIATION_NOT_APPLICABLE로 응답한다")
+    @DisplayName("규칙을 충족한 링크의 폐기는 409 REMEDIATION_NOT_APPLICABLE로 응답한다")
     void rejectsRemediationForCompliantLink(CapturedOutput output) throws Exception {
         when(operationsUseCase.remediate(new RemediationCommand(LINK_ID, 7L)))
                 .thenThrow(new TargetContractRemediationNotApplicableException());

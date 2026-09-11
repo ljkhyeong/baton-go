@@ -178,7 +178,7 @@ class LinkManagementHttpContractTest {
     }
 
     @Test
-    @DisplayName("관리 검색 조건을 생략하면 기본 검사 한도와 필터 없는 조회를 사용한다")
+    @DisplayName("관리 검색 조건을 생략하면 기본 조회 한도와 필터 없는 조회를 사용한다")
     void searchesWithDefaultParameters() throws Exception {
         when(useCase.searchLinks(any())).thenReturn(new LinkSearchResult(List.of(), null, false, CREATED_AT));
 

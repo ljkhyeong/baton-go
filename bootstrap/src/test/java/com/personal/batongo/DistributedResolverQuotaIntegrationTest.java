@@ -38,7 +38,7 @@ class DistributedResolverQuotaIntegrationTest {
     static class QuotaConfiguration { }
 
     @Test
-    @DisplayName("분산 제한은 기본 중지하고 활성화한 Spring 구성에서 실제 Redis를 사용한다")
+    @DisplayName("분산 제한은 기본 중지하며 활성화하면 Redis 서버를 사용한다")
     void assemblesOnlyWhenEnabled() {
         var runner = new ApplicationContextRunner().withUserConfiguration(QuotaConfiguration.class);
         runner.run(context -> assertThat(context).doesNotHaveBean(PublicResolverQuotaPort.class));

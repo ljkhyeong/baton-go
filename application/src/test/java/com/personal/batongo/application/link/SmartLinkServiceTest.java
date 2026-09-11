@@ -97,7 +97,7 @@ class SmartLinkServiceTest {
     }
 
     @Test
-    @DisplayName("비허용 대상 생성은 예약과 저장소 접근 전에 거부한다")
+    @DisplayName("허용되지 않은 대상은 예약과 저장소 접근 전에 거부한다")
     void rejectsInvalidTargetBeforeReservationAndRepository() {
         assertThatThrownBy(() -> service.createLink(new CreateLinkCommand(
                 IDEMPOTENCY_KEY,
@@ -176,7 +176,7 @@ class SmartLinkServiceTest {
     }
 
     @Test
-    @DisplayName("멱등 예약의 링크가 사라졌으면 찾을 수 없음으로 숨기지 않는다")
+    @DisplayName("멱등 예약의 링크가 없으면 LINK_CREATION_REPLAY_UNAVAILABLE 오류를 반환한다")
     void reportsMissingReservedLinkAsReplayFailure() {
         Instant expiresAt = NOW.plusSeconds(300);
         when(reservationPort.reserve(
@@ -259,7 +259,7 @@ class SmartLinkServiceTest {
     }
 
     @Test
-    @DisplayName("저장된 열거형 대상이 정책을 위반하면 수명주기 확인 전에 숨긴다")
+    @DisplayName("저장 대상이 규칙을 위반하면 활성·만료 확인 전에 거부한다")
     void hidesKnownStoredPolicyViolationBeforeLifecycleCheck() {
         when(repository.findResolutionByCodeHash(CODE_HASH)).thenReturn(Optional.of(
                 new StoredLinkResolution(
@@ -359,7 +359,7 @@ class SmartLinkServiceTest {
     }
 
     @Test
-    @DisplayName("없는 링크의 관리 조회와 폐기는 찾을 수 없음으로 끝난다")
+    @DisplayName("없는 링크의 관리 조회와 폐기는 LINK_NOT_FOUND 오류를 반환한다")
     void rejectsMissingManagedLink() {
         when(repository.findStoredById(LINK_ID)).thenReturn(Optional.empty());
         when(repository.findStoredByIdForUpdate(LINK_ID)).thenReturn(Optional.empty());
@@ -426,7 +426,7 @@ class SmartLinkServiceTest {
     }
 
     @Test
-    @DisplayName("관리 검색은 대상 생성 기간과 이용 상태를 함께 적용하고 같은 시각으로 판정한다")
+    @DisplayName("관리 검색은 링크 생성 기간과 상태를 함께 적용하고 같은 시각으로 판정한다")
     void searchesLinksWithCombinedFilters() {
         Clock clock = mock(Clock.class);
         when(clock.instant()).thenReturn(NOW, NOW.plusSeconds(1));
@@ -459,7 +459,7 @@ class SmartLinkServiceTest {
     }
 
     @Test
-    @DisplayName("관리 검색은 비허용 저장 대상을 제외한 빈 페이지에서도 다음 커서로 진행한다")
+    @DisplayName("관리 검색은 허용되지 않은 저장값만 읽어도 다음 커서로 진행한다")
     void advancesSearchCursorAcrossHiddenTargets() {
         var invalidPath = searchSnapshot(1, "BATON", "/teams/legacy", NOW, null);
         var unknownSystem = searchSnapshot(2, "UNKNOWN", "/secret-target", NOW, null);
@@ -481,7 +481,7 @@ class SmartLinkServiceTest {
     }
 
     @Test
-    @DisplayName("관리 검색은 잘못된 검사 한도와 생성 기간을 DB 조회 전에 거부한다")
+    @DisplayName("관리 검색은 잘못된 조회 한도와 생성 기간을 DB 조회 전에 거부한다")
     void rejectsInvalidSearchBeforeDatabaseRead() {
         List<LinkSearchQuery> queries = List.of(
                 new LinkSearchQuery(null, 0, null, null, null, null),

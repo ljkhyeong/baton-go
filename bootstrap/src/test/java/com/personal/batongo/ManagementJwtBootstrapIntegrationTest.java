@@ -84,7 +84,7 @@ class ManagementJwtBootstrapIntegrationTest {
     private MockMvc mockMvc;
 
     @Test
-    @DisplayName("실제 Spring 빈 구성은 서명·발급자·대상을 검증한 관리 JWT만 허용한다")
+    @DisplayName("Spring 통합 구성은 서명·발급자·대상을 검증한 관리 JWT만 허용한다")
     void assemblesManagementJwtAuthentication() throws Exception {
         mockMvc.perform(get("/api/v1/operations/link-target-contract-v1/inventory"))
                 .andExpect(status().isUnauthorized())

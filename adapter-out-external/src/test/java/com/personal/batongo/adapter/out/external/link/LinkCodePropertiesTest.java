@@ -31,7 +31,7 @@ class LinkCodePropertiesTest {
     }
 
     @Test
-    @DisplayName("키 묶음은 현재 발급 키 누락과 기존 키의 중복 설정을 거부한다")
+    @DisplayName("현재 발급 키가 없거나 기존 키를 두 곳에 설정하면 거부한다")
     void rejectsMissingActiveKeyAndDuplicateLegacyConfiguration() {
         String secret = "test-secret-that-is-at-least-thirty-two-characters";
         assertThatThrownBy(() -> new LinkCodeProperties(secret, "missing", Map.of()))
@@ -61,7 +61,7 @@ class LinkCodePropertiesTest {
     }
 
     @Test
-    @DisplayName("기존 데이터베이스 복구를 위해 링크 코드 파생 키의 원문 문법을 바꾸지 않는다")
+    @DisplayName("기존 데이터베이스 복구를 위해 파생 키의 공백과 줄바꿈을 유지한다")
     void preservesLegacySecretSyntax() {
         String legacySecret = " ".repeat(31) + "\n";
 

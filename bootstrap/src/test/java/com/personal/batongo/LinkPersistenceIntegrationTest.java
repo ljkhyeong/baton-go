@@ -407,7 +407,7 @@ class LinkPersistenceIntegrationTest {
     }
 
     @Test
-    @DisplayName("알 수 없거나 공백인 열거형의 재시도는 원문 없이 충돌로 거부한다")
+    @DisplayName("알 수 없거나 공백인 열거형의 재시도는 원문을 숨기고 충돌로 거부한다")
     void rejectsUnsafeStoredReplayEnumsWithoutHydrationOrExposure() throws Exception {
         assertUnsafeStoredReplayIsRejected(
                 "c1478a51-2c84-451f-8291-4f3fb563ac20",
@@ -426,7 +426,7 @@ class LinkPersistenceIntegrationTest {
     }
 
     @Test
-    @DisplayName("저장된 비허용 대상과 알 수 없는 열거형은 GET과 HEAD에서 숨긴다")
+    @DisplayName("허용되지 않은 저장 대상과 알 수 없는 열거형은 GET과 HEAD에서 숨긴다")
     void hidesUnsafeStoredTargetsFromGetAndHead() throws Exception {
         String invalidTargetCode = "A".repeat(22);
         insertStoredLink(

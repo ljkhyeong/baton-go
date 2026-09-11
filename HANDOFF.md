@@ -15,6 +15,8 @@
   관리 작업 전에 `401 MANAGEMENT_AUTHENTICATION_REQUIRED`로 거부한다.
 - 링크 생성 예약은 일반 `INSERT`를 사용하며 Spring이 변환한 중복 키 오류만 기존 예약 조회로
   처리한다. 다른 MySQL 저장 오류는 성공이나 재시도로 바꾸지 않는다.
+- 종료 링크 정리와 Redis 분산 요청 제한의 수치·시간 범위는 Spring `@ConfigurationProperties`
+  검증을 사용한다. 기능 활성화에 따른 필수값 조건만 생성자에서 확인한다.
 - BATON 연동 작업 공간은 `/private/tmp/baton-go-integration-20260905`, 브랜치는
   `codex/go-link-integration-20260905`다. 최근 확인 리비전은 `90557822`, 코드 기준은 `bc888b15`다.
   GO 연동·카카오톡 공유·QR 기능을 반영했으며 BATON 메인 병합과 실제 전송·스캔 검증은 남아 있다.
@@ -23,6 +25,10 @@
 
 ## 최근 검증
 
+- 2026-09-12 `19a2823`에서 종료 링크 정리와 Redis 분산 요청 제한의 직접 범위 비교를
+  `@Min`·`@Max`·`@DurationMin`·`@DurationMax`로 교체했다. 설정 경계 13건, 실제 Redis 제한
+  동작 2건과 `./gradlew --no-daemon test`가 성공했다. DB 동작은 바뀌지 않아 MySQL 통합
+  테스트는 반복하지 않았다.
 - 2026-09-12 `41cd625`에서 링크 생성 예약의 `INSERT IGNORE`를 제거했다. 변경 후 같은 요청의
   동시 생성·최초 트랜잭션 롤백·서버별 공개 출처 차이 3건과 비중복 MySQL 저장 오류 전파 1건이
   통과했다. `./gradlew --no-daemon test`도 성공했으며 Redis 동작은 바뀌지 않아 Redis 통합

@@ -24,8 +24,9 @@ URI에 자격 증명이 들어가므로 Secret이나 비밀값 관리자로 주�
 모든 Pod의 대상 Redis DB·허용량·시간 구간을 일치시킨다. 연결하지 못한 Pod는 시작하지 않으며 실행
 중 Redis 실패는 공개 링크에 `503 RATE_LIMIT_UNAVAILABLE`를 반환한다. 이때 DB 링크 조회는
 진행하지 않는다. `/readyz`도 Redis `PING` 실패를 `503`으로 반환하지만 `/livez`는 정상 상태를
-유지한다. `BatonGoDistributedResolverQuotaFailure` 경보로 연결·TLS·ACL·Redis 상태를 확인한다.
-복구 후 준비 상태와 카운터 허용량 안에서 공개 조회가 다시 진행되는지 검사한다.
+유지한다. `BatonGoReadinessFailed`와 `BatonGoDistributedResolverQuotaFailure` 경보로
+연결·TLS·ACL·Redis 상태를 확인한다. 복구 후 준비 상태와 카운터 허용량 안에서 공개 조회가
+다시 진행되는지 검사한다.
 
 배포 검증에서는 서로 다른 두 Pod로 보낸 요청의 합계가 분산 한도를 넘지 않는지 확인하고,
 초과 요청의 `429`·`Retry-After`, Redis 차단 시 `503`, 관리 폐기 계속 사용을 확인한다.

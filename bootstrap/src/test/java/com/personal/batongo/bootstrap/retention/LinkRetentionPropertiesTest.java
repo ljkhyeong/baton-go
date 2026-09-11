@@ -17,12 +17,15 @@ class LinkRetentionPropertiesTest {
             .withPropertyValues(
                     "baton-go.link-retention.enabled=true",
                     "baton-go.link-retention.period=30d",
-                    "baton-go.link-retention.batch-size=100"
+                    "baton-go.link-retention.batch-size=100",
+                    "baton-go.link-retention.interval=60s"
             );
 
     @ParameterizedTest
-    @ValueSource(strings = {"period=", "period=0s", "batch-size=0", "batch-size=501"})
-    @DisplayName("자동 정리의 보존 기간은 양수이고 실행당 링크 수는 1~500개여야 한다")
+    @ValueSource(strings = {
+            "period=", "period=0s", "batch-size=0", "batch-size=501", "interval=", "interval=0s"
+    })
+    @DisplayName("자동 정리의 보존 기간과 실행 간격은 양수이고 실행당 링크 수는 1~500개여야 한다")
     void rejectsInvalidConfiguration(String property) {
         contextRunner.withPropertyValues("baton-go.link-retention." + property)
                 .run(context -> assertThat(context).hasFailed());
@@ -33,6 +36,7 @@ class LinkRetentionPropertiesTest {
     void allowsMissingPeriodWhenDisabled() {
         new ApplicationContextRunner()
                 .withUserConfiguration(PropertiesConfiguration.class)
+                .withPropertyValues("baton-go.link-retention.interval=60s")
                 .run(context -> assertThat(context).hasNotFailed());
     }
 

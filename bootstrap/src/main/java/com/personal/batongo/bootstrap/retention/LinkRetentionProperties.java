@@ -2,6 +2,7 @@ package com.personal.batongo.bootstrap.retention;
 
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotNull;
 import java.time.Duration;
 import org.hibernate.validator.constraints.time.DurationMin;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -17,7 +18,10 @@ public record LinkRetentionProperties(
         @DefaultValue("100")
         @Min(value = 1, message = "한 번에 정리할 링크 수는 1개 이상이어야 합니다")
         @Max(value = 500, message = "한 번에 정리할 링크 수는 500개 이하여야 합니다")
-        int batchSize
+        int batchSize,
+        @NotNull(message = "링크 정리 실행 간격은 필수입니다")
+        @DurationMin(seconds = 1, message = "링크 정리 실행 간격은 1초 이상이어야 합니다")
+        Duration interval
 ) {
     public LinkRetentionProperties {
         if (enabled && period == null) {

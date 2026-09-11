@@ -9,7 +9,8 @@ BATON GO는 다음 관리 쓰기 요청이 완료되면
 | --- | --- |
 | `LINK_CREATE` | 새 링크 생성 완료 |
 | `LINK_CREATE_REPLAY` | 동일 생성 요청에 기존 결과 반환 완료 |
-| `LINK_REVOKE` | 일반 링크 폐기 요청 완료. 이미 폐기된 링크의 반복 요청도 포함 |
+| `LINK_REVOKE` | 일반 링크 최초 폐기 완료 |
+| `LINK_REVOKE_REPLAY` | 이미 폐기된 일반 링크의 반복 요청 완료 |
 | `TARGET_CONTRACT_REVOKE` | 대상 규칙 위반 링크의 폐기 완료 |
 | `TARGET_CONTRACT_REVOKE_REPLAY` | 이미 폐기된 대상 규칙 위반 링크의 반복 요청 완료 |
 
@@ -55,8 +56,8 @@ JWT 원문, 다른 claim, `Authorization`, `Idempotency-Key`, 원문 공개 코�
    입력하지 않는다.
 3. `requestId`와 호출 서비스의 처리 기록을 함께 확인한다. 이 값은 호출자가 재사용할 수
    있으므로 고유 이벤트 ID로 취급하지 않는다.
-4. 재시도는 별도의 완료 로그를 만든다. 로그 건수를 신규 링크 수나 최초 폐기 건수로 합산하지
-   않는다. 특히 `LINK_REVOKE`만으로 최초 폐기와 반복 요청을 구분할 수 없다.
+4. 재시도는 별도의 완료 로그를 만든다. `LINK_CREATE_REPLAY`, `LINK_REVOKE_REPLAY`,
+   `TARGET_CONTRACT_REVOKE_REPLAY`를 신규 생성이나 최초 폐기 건수에 합산하지 않는다.
 
 ## 보존과 보장 범위
 
@@ -72,7 +73,8 @@ JWT 원문, 다른 claim, `Authorization`, `Idempotency-Key`, 원문 공개 코�
 
 ## 운영 연결 확인
 
-비공개 관리 API에서 시험용 서비스 JWT와 시험용 링크로 생성·동일 요청 재시도·일반 폐기·대상 규칙 위반 링크 폐기를 실행한다.
+비공개 관리 API에서 시험용 서비스 JWT와 시험용 링크로 생성·동일 요청 재시도·일반 링크의 최초·반복
+폐기·대상 규칙 위반 링크 폐기를 실행한다.
 중앙 로그에서 서비스 식별자·내부 링크 ID·요청 ID와 작업 종류가 맞는지, 인증 실패와 거부된
 쓰기에는 완료 로그가 없는지, 민감 필드가 들어오지 않는지 확인한다. 정리 기능은 기존
 [대상 계약 점검·폐기 절차](target-contract-v1-remediation.md)의 활성화 조건을 먼저 따른다.

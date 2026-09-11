@@ -69,10 +69,12 @@ XML 등 지원하지 않는 응답 형식만 요청해도 원래 오류 상태·
 
 관리 인증 `401` 응답에는
 `WWW-Authenticate: Bearer realm="baton-go-management"`를 포함한다. 관리 호출자는
-`iss`가 설정한 발급자, `aud`가 `baton-go`, 유효 시간이 현재 범위이며 요청 작업의 scope를
-포함한 서명 JWT를 표준 `Authorization: Bearer <jwt>` 형식으로 보낸다. JWT 서명·시간·발급자·
-대상 검증과 scope 권한 변환은 Spring Security OAuth2 Resource Server가 수행한다.
-만료 시각 `exp`는 필수이며 누락하거나 이미 만료된 JWT는 같은 `401`로 거부한다.
+`iss`가 설정한 발급자, `aud`가 `baton-go`, `sub`가 공백이 아닌 안정적인 서비스 식별자이며
+유효 시간이 현재 범위이고 요청 작업의 scope를 포함한 서명 JWT를 표준
+`Authorization: Bearer <jwt>` 형식으로 보낸다. JWT 서명·시간·발급자·대상·서비스 식별자 검증과
+scope 권한 변환은 Spring Security OAuth2 Resource Server가 수행한다.
+`sub`와 만료 시각 `exp`는 필수다. `sub`가 없거나 빈 문자열·공백뿐이거나,
+`exp`가 없거나 이미 지난 JWT는 같은 `401`로 거부한다.
 `nbf`는 선택 사항으로 유지하고, 시각 비교에는 Spring의 기본 시계 오차 허용 범위를 적용한다.
 JWK 조회 등 인증 서비스 장애는 토큰 오류와 구분해 `500 INTERNAL_ERROR`로 응답하고 관리
 작업을 실행하지 않는다. 공통 오류 본문과 `requestId`를 유지하며 `WWW-Authenticate`는
@@ -80,8 +82,8 @@ JWK 조회 등 인증 서비스 장애는 토큰 오류와 구분해 `500 INTERN
 세미콜론이나 허용되지 않은 인코딩을 포함한 관리 경로는 인증 처리 전에 Spring Security HTTP 방화벽이
 `400`으로 거부할 수 있으며 이를 정규 경로로 보정하지 않는다.
 
-관리 쓰기 완료 이력은 JWT의 `sub`를 서비스 식별자로 사용한다. 기존 HTTP 인증 조건과
-응답 형식은 바꾸지 않는다. 기록 대상, 민감정보 제외와 보존 정책은
+관리 쓰기 완료 이력은 JWT의 `sub`를 서비스 식별자로 사용한다. `sub`가 없거나
+빈 문자열·공백뿐이면 관리 작업을 실행하지 않는다. 기록 대상, 민감정보 제외와 보존 정책은
 [관리 작업 이력 운영 절차](../../RUNBOOK/management-operation-history.md)를 따른다.
 
 ## POST `/api/v1/links`

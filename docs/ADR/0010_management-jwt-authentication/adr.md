@@ -31,6 +31,9 @@ BATON GO는 브라우저 사용자가 아니라 신뢰된 서버 호출자가 �
   이 검증기를 빈으로 등록해 Spring Boot 자동 설정이 기존 시간 검증 대신 사용하게 한다.
   서명·발급자·audience 검증과 JWK 조회·캐시는 유지한다. `nbf`는 계속 선택 사항이며
   시계 오차 허용 범위도 Spring 기본값을 유지한다.
+- `sub`는 공백이 아닌 안정적인 서비스 식별자로 필수다. Spring 표준 `JwtClaimValidator`를
+  빈으로 등록해 Spring Boot가 기존 서명·발급자·audience·시간 검증과 함께 실행하게 한다.
+  다른 claim이나 요청 헤더를 대신 사용하거나 JWT를 직접 파싱하지 않는다.
 - JWK HTTP 대기 시간은 Spring Boot의 `JwkSetUriJwtDecoderBuilderCustomizer`로 조정한다.
   Nimbus가 받는 `RestOperations`에 Spring의 `RestTemplate`과
   `SimpleClientHttpRequestFactory`를 연결하고, JWT 디코더·검증기·JWK 캐시는 교체하지 않는다.
@@ -57,18 +60,19 @@ BATON GO는 브라우저 사용자가 아니라 신뢰된 서버 호출자가 �
 - 관리 보안 체인은 세션을 만들지 않고 CSRF 상태를 사용하지 않는다. 공개 `/l/**`와 Actuator는
   이 체인에 포함하지 않으며 기존 네트워크 접근 제한을 계속 적용한다.
 - JWT 원문, `Authorization` 헤더와 토큰 claim 전체를 로그·지표·오류에 기록하지 않는다.
-- 관리 쓰기 완료 이력은 검증된 JWT의 `sub`를 서비스 식별자로 사용한다. 기존 인증 조건을
-  변경하거나 다른 claim으로 대체하지 않는다. 컨트롤러에서 트랜잭션 서비스의 성공 반환 뒤
-  허용한 필드만 기존 로그에 기록하며, 별도 감사 DB나 보존 기간을 만들지 않는다. 기록 범위,
-  식별자 누락과 수집 실패의 의미는 [관리 작업 이력 운영 절차](../../RUNBOOK/management-operation-history.md)를 따른다.
+- 관리 쓰기 완료 이력은 검증된 JWT의 `sub`를 서비스 식별자로 사용한다. `sub`가 없거나
+  빈 문자열·공백뿐이면 인증 단계에서 거부한다. 컨트롤러에서 트랜잭션 서비스의 성공 반환 뒤
+  허용한 필드만 기존 로그에 기록하며, 별도 감사 DB나 보존 기간을 만들지 않는다. 기록 범위와
+  수집 실패의 의미는 [관리 작업 이력 운영 절차](../../RUNBOOK/management-operation-history.md)를 따른다.
 - JWT 발급, 서비스 신원 등록, 개인 키 보관과 서명 키 교체는 발급자가 담당한다. GO는
   JWK 공개키로 JWT 서명을 검증하며 정적 관리 토큰 Secret이나 자체 JWT 파서를 두지 않는다.
 
 ## 전환
 
 1. 발급자에 `aud=baton-go`와 필요한 scope를 가진 서비스 신원을 먼저 준비하고 JWT에
-   유효한 `exp`를 포함하도록 설정한다.
-2. 비공개 네트워크에서 각 scope의 허용과 누락 scope의 `403`, `exp` 누락·만료의 `401`을 검증한다.
+   공백이 아닌 안정적인 `sub`와 유효한 `exp`를 포함하도록 설정한다.
+2. 비공개 네트워크에서 각 scope의 허용과 누락 scope의 `403`, `sub` 누락·빈 문자열·
+   공백 문자열과 `exp` 누락·만료의 `401`을 검증한다.
 3. 호출자를 JWT로 전환한 뒤 정적 `BATON_GO_MANAGEMENT_TOKEN` 설정과
    `baton-go-management-credentials` Secret을 폐기한다.
 4. 새 JWK를 먼저 게시하고 발급 키를 전환한 뒤 기존 JWT 최대 수명과 캐시 관찰 시간이 지난

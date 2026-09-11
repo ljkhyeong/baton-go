@@ -82,7 +82,8 @@ vim .env
 OIDC 검색 엔드포인트를 호출하지 않으면서 `iss` 검증을 유지한다. 링크
 생성·조회·폐기에는 각각 `baton-go.links.create`,
 `baton-go.links.read`, `baton-go.links.revoke` scope가 필요하다.
-JWT에는 만료 시각 `exp`가 반드시 있어야 하며, 누락하거나 이미 만료된 토큰은 `401`로 거부한다.
+JWT에는 공백이 아닌 안정적인 서비스 식별자 `sub`와 만료 시각 `exp`가 반드시 있어야 한다.
+`sub`가 없거나 빈 문자열·공백뿐이거나, `exp`가 없거나 이미 지난 토큰은 `401`로 거부한다.
 JWK 조회에는 별도의 연결·읽기 제한을 적용한다. 기본값과 변경 방법은
 [관리 JWK 대기 시간](docs/RUNBOOK/kubernetes-private-server-deployment.md#관리-jwk-대기-시간)을 따른다.
 

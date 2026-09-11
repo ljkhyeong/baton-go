@@ -46,7 +46,7 @@ public final class TrustedTargetProperties implements TargetUrlPort {
                 || !roundOrigin.isHttps()
                 || !batonOrigin.sameOrigin(roundOrigin)) {
             throw new IllegalArgumentException(
-                    "비로컬 BATON·ROUND base URL은 동일한 HTTPS origin이어야 합니다"
+                    "운영 BATON·ROUND 기본 URL은 같은 HTTPS 출처여야 합니다"
             );
         }
     }

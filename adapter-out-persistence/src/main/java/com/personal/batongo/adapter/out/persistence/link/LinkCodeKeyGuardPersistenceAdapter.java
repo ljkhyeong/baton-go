@@ -41,7 +41,7 @@ public class LinkCodeKeyGuardPersistenceAdapter implements LinkCodeKeyGuardPort 
                     .params(active.version(), active.hmacFingerprint(), SINGLETON_GUARD_ID)
                     .update();
         } else if (stored.isEmpty()) {
-            // V6 적용 뒤 기존 guard-tool로 최초 결합한 DB의 기존 키를 확인한다.
+            // V6 적용 뒤 guard-tool로 처음 등록한 DB의 기존 키를 확인한다.
             requireMatchingIdentity(guard, ring.keys().get("legacy"));
         } else {
             requireAnchoredGuard(guard, stored);

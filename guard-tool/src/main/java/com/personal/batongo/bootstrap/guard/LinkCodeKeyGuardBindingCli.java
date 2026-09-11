@@ -18,7 +18,7 @@ import java.util.Map;
 import java.util.Properties;
 import org.springframework.jdbc.datasource.SingleConnectionDataSource;
 
-/** 기존 데이터베이스 HMAC guard 최초 결합을 위한 one-shot CLI입니다. */
+/** 기존 데이터베이스에 HMAC 키 정보를 처음 등록하는 일회성 CLI입니다. */
 public final class LinkCodeKeyGuardBindingCli {
 
     private static final int EXIT_USAGE = 2;
@@ -86,7 +86,7 @@ public final class LinkCodeKeyGuardBindingCli {
             }
         } catch (RuntimeException | SQLException exception) {
             standardError.println(
-                    "링크 코드 키 guard 결합에 실패했습니다. 설정, canary와 DB 상태를 확인하세요"
+                    "HMAC 키 정보 등록에 실패했습니다. 설정, 검증용 요청과 DB 상태를 확인하세요"
             );
             return EXIT_VERIFICATION_FAILED;
         }

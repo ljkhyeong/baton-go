@@ -15,7 +15,9 @@ public record DistributedResolverQuotaProperties(@DefaultValue("false") boolean 
         if (capacity < 1 || capacity > 1_000_000_000L || window.compareTo(Duration.ofMillis(1)) < 0
                 || window.compareTo(Duration.ofDays(1)) > 0 || timeout.compareTo(Duration.ofMillis(1)) < 0
                 || timeout.compareTo(Duration.ofSeconds(5)) > 0) {
-            throw new IllegalArgumentException("분산 요청 제한의 용량·시간 구간·대기 시간이 지원 범위를 벗어났습니다");
+            throw new IllegalArgumentException(
+                    "분산 요청 제한 용량은 1~1,000,000,000, 시간 구간은 1ms~1일, Redis 대기 시간은 1ms~5초여야 합니다"
+            );
         }
     }
 

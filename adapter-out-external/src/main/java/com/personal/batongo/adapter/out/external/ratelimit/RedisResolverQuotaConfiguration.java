@@ -27,7 +27,7 @@ public class RedisResolverQuotaConfiguration {
                     .build());
             return client;
         } catch (RuntimeException exception) {
-            throw new IllegalArgumentException("분산 요청 제한의 Redis 연결 설정을 확인하세요");
+            throw new IllegalArgumentException("분산 요청 제한 Redis 주소와 대기 시간 설정을 확인하세요");
         }
     }
 
@@ -36,7 +36,7 @@ public class RedisResolverQuotaConfiguration {
         try {
             return resolverRedisClient.connect();
         } catch (RuntimeException exception) {
-            throw new IllegalStateException("분산 요청 제한 Redis에 연결하지 못했습니다");
+            throw new IllegalStateException("분산 요청 제한용 Redis에 연결하지 못했습니다");
         }
     }
 }

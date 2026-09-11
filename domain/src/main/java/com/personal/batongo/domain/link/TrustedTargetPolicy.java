@@ -57,7 +57,7 @@ public final class TrustedTargetPolicy {
             );
         } catch (IllegalArgumentException | NullPointerException exception) {
             throw new LinkValidationException(
-                    "저장된 대상 시스템 또는 목적이 v1 신뢰 대상 계약에 맞지 않습니다"
+                    "저장된 대상 시스템 또는 목적은 v1에서 허용하지 않습니다"
             );
         }
     }

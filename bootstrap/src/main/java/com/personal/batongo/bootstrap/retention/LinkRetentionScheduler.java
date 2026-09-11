@@ -35,7 +35,7 @@ public class LinkRetentionScheduler {
             purged.increment(retention.purge(properties.period(), properties.batchSize()));
         } catch (RuntimeException exception) {
             failures.increment();
-            LOG.error("링크 보존 기간 정리 실패 exceptionType={}", exception.getClass().getName());
+            LOG.error("종료 링크 자동 정리 실패 exceptionType={}", exception.getClass().getName());
         }
     }
 }

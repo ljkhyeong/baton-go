@@ -38,7 +38,9 @@ public record LinkCodeProperties(
         }
         configured.forEach((keyId, value) -> {
             if (!KEY_ID.matcher(keyId).matches()) {
-                throw new IllegalArgumentException("키 식별자는 영문 소문자로 시작하는 32자 이내의 소문자와 숫자여야 합니다");
+                throw new IllegalArgumentException(
+                        "키 ID는 영문 소문자로 시작하며 소문자와 숫자만 사용해 32자 이내로 입력해야 합니다"
+                );
             }
             requireSafe(value);
         });

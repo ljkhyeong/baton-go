@@ -3,6 +3,6 @@ package com.personal.batongo.application.link.error;
 public class LinkCodeKeyBindingException extends RuntimeException {
 
     public LinkCodeKeyBindingException() {
-        super("링크 코드 파생 키를 현재 데이터베이스에 안전하게 결합할 수 없습니다");
+        super("링크 코드 키가 데이터베이스의 등록 정보와 일치하지 않습니다");
     }
 }

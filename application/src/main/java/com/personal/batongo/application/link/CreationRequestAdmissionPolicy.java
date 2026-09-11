@@ -72,7 +72,7 @@ final class CreationRequestAdmissionPolicy {
                 case LEGACY_IDEMPOTENCY_KEY -> new InvalidIdempotencyKeyException();
                 case SUB_MICROSECOND_TIME -> InvalidRequestException.creationTime();
                 case NONE -> new IllegalStateException(
-                        "신규 생성 가능한 요청에는 기존 예약이 필수일 수 없습니다"
+                        "새 링크 요청에는 기존 예약 누락 오류를 사용할 수 없습니다"
                 );
             };
         }

@@ -14,20 +14,20 @@ public final class InvalidRequestException extends RuntimeException {
     }
 
     public static InvalidRequestException targetContractInventory() {
-        return new InvalidRequestException("링크 점검 목록 조회 조건이 올바르지 않습니다");
+        return new InvalidRequestException("대상 계약 점검 목록의 limit은 1~500이어야 합니다");
     }
 
     public static InvalidRequestException linkSearch() {
         return new InvalidRequestException(
-                "limit은 1..500이어야 하며 createdBefore는 createdFrom보다 뒤여야 합니다"
+                "limit은 1~500이고 createdBefore는 createdFrom보다 뒤여야 합니다"
         );
     }
 
     public static InvalidRequestException linkBatch() {
-        return new InvalidRequestException("linkIds에는 비어 있지 않은 링크 ID를 1개 이상 100개 이하로 지정해야 합니다");
+        return new InvalidRequestException("linkIds는 빈 값 없이 1~100개 지정해야 합니다");
     }
 
     public static InvalidRequestException targetContractRemediation() {
-        return new InvalidRequestException("비허용 링크 폐기 요청이 올바르지 않습니다");
+        return new InvalidRequestException("expectedVersion은 0~9223372036854775806이어야 합니다");
     }
 }

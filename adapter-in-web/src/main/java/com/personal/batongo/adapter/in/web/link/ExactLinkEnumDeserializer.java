@@ -8,7 +8,7 @@ import tools.jackson.core.JsonToken;
 import tools.jackson.databind.DeserializationContext;
 import tools.jackson.databind.deser.std.StdDeserializer;
 
-/** Jackson의 enum ordinal과 문자열 trim 없이 v1 wire 이름을 그대로 해석합니다. */
+/** 숫자 변환이나 공백 제거 없이 v1 열거형 이름을 그대로 읽습니다. */
 public abstract class ExactLinkEnumDeserializer<E extends Enum<E>>
         extends StdDeserializer<E> {
 
@@ -32,7 +32,7 @@ public abstract class ExactLinkEnumDeserializer<E extends Enum<E>>
             return enumType.cast(context.handleWeirdStringValue(
                     enumType,
                     rawValue,
-                    "enum 이름은 계약 값과 정확히 일치해야 합니다"
+                    "열거형 이름은 API에 정의된 값과 정확히 일치해야 합니다"
             ));
         }
     }

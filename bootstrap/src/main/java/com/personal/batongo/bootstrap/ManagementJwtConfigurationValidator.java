@@ -6,7 +6,7 @@ import org.springframework.boot.security.oauth2.server.resource.autoconfigure.OA
 import org.springframework.stereotype.Component;
 import org.springframework.util.Assert;
 
-/** 관리 JWT의 전송 경계와 필수 audience 설정을 시작 단계에서 검증합니다. */
+/** 관리 JWT 주소의 HTTPS 사용 여부와 필수 audience 설정을 시작할 때 확인합니다. */
 @Component
 public class ManagementJwtConfigurationValidator {
 
@@ -35,7 +35,7 @@ public class ManagementJwtConfigurationValidator {
         }
         if (!origin.isHttps() && !origin.isLoopback()) {
             throw new IllegalArgumentException(
-                    name + "는 HTTPS여야 하며 로컬 개발에서만 loopback HTTP를 사용할 수 있습니다"
+                    name + "는 HTTPS여야 합니다. 루프백 HTTP는 로컬 개발에서만 사용할 수 있습니다"
             );
         }
     }

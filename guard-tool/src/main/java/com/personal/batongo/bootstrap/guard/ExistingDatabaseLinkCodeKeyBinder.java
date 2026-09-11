@@ -11,12 +11,12 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.jdbc.support.JdbcTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
-/** 기존 데이터베이스의 HMAC guard를 검증 후 한 번만 결합하는 JDBC 도구입니다. */
+/** 검증용 요청을 확인한 뒤 기존 데이터베이스에 HMAC 키 정보를 등록합니다. */
 final class ExistingDatabaseLinkCodeKeyBinder {
 
     private static final int SINGLETON_GUARD_ID = 1;
     private static final String SAFE_MESSAGE =
-            "기존 데이터베이스의 링크 코드 키 결합 검증에 실패했습니다";
+            "기존 데이터베이스의 HMAC 키 정보 등록 조건을 확인하지 못했습니다";
 
     BindingResult bind(
             DataSource dataSource,

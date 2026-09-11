@@ -13,12 +13,14 @@ public record LinkCodeDerivationIdentity(
 
     public LinkCodeDerivationIdentity {
         Objects.requireNonNull(version, "링크 코드 파생 버전은 필수입니다");
-        Objects.requireNonNull(hmacFingerprint, "HMAC fingerprint는 필수입니다");
+        Objects.requireNonNull(hmacFingerprint, "HMAC 키 지문은 필수입니다");
         if (!VERSION.matcher(version).matches()) {
-            throw new IllegalArgumentException("링크 코드 파생 버전 형식이 올바르지 않습니다");
+            throw new IllegalArgumentException(
+                    "링크 코드 파생 버전은 소문자나 숫자로 시작하고 소문자·숫자·하이픈으로 64자 이하여야 합니다"
+            );
         }
         if (!FINGERPRINT.matcher(hmacFingerprint).matches()) {
-            throw new IllegalArgumentException("HMAC fingerprint 형식이 올바르지 않습니다");
+            throw new IllegalArgumentException("HMAC 키 지문은 64자리 소문자 16진수여야 합니다");
         }
     }
 

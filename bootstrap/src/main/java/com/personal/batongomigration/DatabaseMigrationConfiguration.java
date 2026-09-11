@@ -6,7 +6,7 @@ import org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration;
 import org.springframework.context.annotation.Configuration;
 
 /**
- * 일반 {@code com.personal.batongo} component scan 바깥에 둔 migration-only 구성입니다.
+ * 일반 {@code com.personal.batongo} 컴포넌트 검색에서 제외한 DB 마이그레이션 전용 구성입니다.
  */
 @Configuration(proxyBeanMethods = false)
 @ImportAutoConfiguration({

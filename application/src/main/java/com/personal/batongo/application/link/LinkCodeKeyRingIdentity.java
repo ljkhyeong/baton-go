@@ -9,7 +9,7 @@ public record LinkCodeKeyRingIdentity(
     public LinkCodeKeyRingIdentity {
         keys = Map.copyOf(keys);
         if (!keys.containsKey(activeKeyId)) {
-            throw new IllegalArgumentException("현재 발급 키가 키 묶음에 있어야 합니다");
+            throw new IllegalArgumentException("현재 발급 키 ID가 키 목록에 없습니다");
         }
     }
 

@@ -209,9 +209,12 @@ public class SmartLinkService implements SmartLinkUseCase {
     }
 
     private PublicLinkOrigin requireReplayOrigin(String storedOrigin) {
+        if (storedOrigin == null) {
+            throw new PublicLinkOriginReplayUnavailableException();
+        }
         try {
             return PublicLinkOrigin.fromStored(storedOrigin);
-        } catch (RuntimeException exception) {
+        } catch (IllegalArgumentException exception) {
             throw new PublicLinkOriginReplayUnavailableException();
         }
     }

@@ -4,6 +4,35 @@ rule_files:
 evaluation_interval: 30s
 
 tests:
+  - name: 준비 상태 실패가 지속된 Pod만 경보를 발생시키고 회복하면 해제한다
+    interval: 30s
+    input_series:
+      - series: 'http_server_requests_seconds_count{job="baton-go",instance="unready",method="GET",status="503",uri="/readyz"}'
+        values: '0+6x8 48x8'
+      - series: 'http_server_requests_seconds_count{job="baton-go",instance="healthy",method="GET",status="200",uri="/readyz"}'
+        values: '0+6x16'
+      - series: 'http_server_requests_seconds_count{job="baton-go",instance="intermittent",method="GET",status="503",uri="/readyz"}'
+        values: '0+2x16'
+      - series: 'http_server_requests_seconds_count{job="baton-go",instance="intermittent",method="GET",status="200",uri="/readyz"}'
+        values: '0+4x16'
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: BatonGoReadinessFailed
+        exp_alerts: []
+      - eval_time: 3m
+        alertname: BatonGoReadinessFailed
+        exp_alerts:
+          - exp_labels:
+              job: baton-go
+              instance: unready
+              severity: critical
+            exp_annotations:
+              summary: BATON GO 준비 상태 실패
+              description: 2분간 unready Pod의 준비 상태 503 비율이 50%를 넘었습니다. DB와 분산 요청 제한 Redis 연결, 최근 배포를 확인하세요.
+      - eval_time: 7m
+        alertname: BatonGoReadinessFailed
+        exp_alerts: []
+
   - name: 트래픽이 없으면 요청 경보를 발생시키지 않는다
     interval: 1m
     input_series:
@@ -46,8 +75,11 @@ tests:
       - eval_time: 10m
         alertname: BatonGoManagementLinkRecoveryFailure
         exp_alerts: []
+      - eval_time: 10m
+        alertname: BatonGoReadinessFailed
+        exp_alerts: []
 
-  - name: 소수 오류와 다른 서비스 및 상태 확인 오류는 경보에서 제외한다
+  - name: 소수 오류와 다른 서비스 및 상태 확인 오류는 업무 요청 경보에서 제외한다
     interval: 1m
     input_series:
       - series: 'http_server_requests_seconds_count{job="baton-go",method="GET",status="500",uri="/l/{code}"}'

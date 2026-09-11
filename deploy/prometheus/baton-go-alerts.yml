@@ -20,6 +20,22 @@ groups:
           summary: BATON GO 지표 수집 대상 없음
           description: 2분간 지표 수집 대상이 없습니다. 배포 상태와 Prometheus의 Pod 조회 권한, 수집 설정을 확인하세요.
 
+      - alert: BatonGoReadinessFailed
+        expr: |
+          (
+            sum by (job, instance) (rate(http_server_requests_seconds_count{job="baton-go",method="GET",uri="/readyz",status="503"}[2m]))
+            /
+            sum by (job, instance) (rate(http_server_requests_seconds_count{job="baton-go",method="GET",uri="/readyz"}[2m]))
+          ) > 0.5
+          and
+          sum by (job, instance) (increase(http_server_requests_seconds_count{job="baton-go",method="GET",uri="/readyz"}[2m])) >= 12
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: BATON GO 준비 상태 실패
+          description: 2분간 {{ $labels.instance }} Pod의 준비 상태 503 비율이 50%를 넘었습니다. DB와 분산 요청 제한 Redis 연결, 최근 배포를 확인하세요.
+
       - alert: BatonGoPublicResolverLatency
         expr: |
           (

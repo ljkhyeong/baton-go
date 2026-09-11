@@ -162,6 +162,21 @@ groups:
           summary: BATON GO 링크 정리 실패
           description: 보존 기간이 지난 링크 정리에 실패했습니다. DB 상태와 정리 예외 종류를 확인하세요. 실패한 묶음은 다음 실행에서 재시도합니다.
 
+      - alert: BatonGoLinkRetentionSchedulerStalled
+        expr: |
+          (
+            time() - baton_go_link_retention_scheduler_heartbeat_seconds{job="baton-go"}
+          ) > clamp_min(
+            3 * baton_go_link_retention_scheduler_interval_seconds{job="baton-go"},
+            180
+          )
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: BATON GO 링크 정리 실행 정체
+          description: 자동 정리 실행 완료 신호가 설정 간격의 3배(최소 3분) 동안 갱신되지 않았습니다. Pod의 스케줄러 스레드와 DB 쿼리 실행 시간을 확인하세요.
+
       - alert: BatonGoDistributedResolverQuotaFailure
         expr: |
           sum by (job) (increase(baton_go_public_resolver_quota_failures_total{job="baton-go"}[5m])) > 0

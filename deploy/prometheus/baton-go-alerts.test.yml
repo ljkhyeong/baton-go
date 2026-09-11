@@ -545,6 +545,39 @@ tests:
         alertname: BatonGoLinkRetentionFailure
         exp_alerts: []
 
+  - name: 링크 정리 실행 완료 신호가 지연된 Pod만 감지하고 다음 실행 뒤 해제한다
+    interval: 1m
+    input_series:
+      - series: 'baton_go_link_retention_scheduler_heartbeat_seconds{job="baton-go",instance="stalled"}'
+        values: '0x7 420+60x3'
+      - series: 'baton_go_link_retention_scheduler_interval_seconds{job="baton-go",instance="stalled"}'
+        values: '60x10'
+      - series: 'baton_go_link_retention_scheduler_heartbeat_seconds{job="baton-go",instance="healthy"}'
+        values: '0+60x10'
+      - series: 'baton_go_link_retention_scheduler_interval_seconds{job="baton-go",instance="healthy"}'
+        values: '60x10'
+      - series: 'baton_go_link_retention_scheduler_heartbeat_seconds{job="baton-go",instance="long-interval"}'
+        values: '0x10'
+      - series: 'baton_go_link_retention_scheduler_interval_seconds{job="baton-go",instance="long-interval"}'
+        values: '300x10'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: BatonGoLinkRetentionSchedulerStalled
+        exp_alerts: []
+      - eval_time: 6m
+        alertname: BatonGoLinkRetentionSchedulerStalled
+        exp_alerts:
+          - exp_labels:
+              job: baton-go
+              instance: stalled
+              severity: warning
+            exp_annotations:
+              summary: BATON GO 링크 정리 실행 정체
+              description: 자동 정리 실행 완료 신호가 설정 간격의 3배(최소 3분) 동안 갱신되지 않았습니다. Pod의 스케줄러 스레드와 DB 쿼리 실행 시간을 확인하세요.
+      - eval_time: 8m
+        alertname: BatonGoLinkRetentionSchedulerStalled
+        exp_alerts: []
+
   - name: 공용 요청 제한 저장소 장애를 감지한다
     interval: 1m
     input_series:

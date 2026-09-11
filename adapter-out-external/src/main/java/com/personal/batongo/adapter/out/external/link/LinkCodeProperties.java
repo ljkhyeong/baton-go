@@ -34,7 +34,7 @@ public record LinkCodeProperties(
             }
         }
         if (!configured.containsKey(activeKeyId)) {
-            throw new IllegalArgumentException("현재 발급 키와 해당 비밀값을 설정해야 합니다");
+            throw new IllegalArgumentException("현재 발급 키 ID와 비밀값을 설정해야 합니다");
         }
         configured.forEach((keyId, value) -> {
             if (!KEY_ID.matcher(keyId).matches()) {

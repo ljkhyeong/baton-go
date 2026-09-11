@@ -8,7 +8,7 @@ import java.net.UnknownHostException;
 import java.util.Locale;
 import java.util.Objects;
 
-/** HTTP(S) 출처의 형식과 브라우저의 동일 출처 판정 규칙을 관리합니다. */
+/** HTTP(S) 출처를 표준화하고 브라우저의 동일 출처 여부를 판단합니다. */
 public final class HttpOrigin {
 
     private final URI value;
@@ -86,7 +86,7 @@ public final class HttpOrigin {
         try {
             return new URI(scheme, null, host, port, null, null, null);
         } catch (URISyntaxException exception) {
-            throw new IllegalArgumentException("HTTP 출처를 정규 형식으로 바꿀 수 없습니다", exception);
+            throw new IllegalArgumentException("HTTP 출처를 표준 URL 형식으로 바꿀 수 없습니다", exception);
         }
     }
 
@@ -99,7 +99,7 @@ public final class HttpOrigin {
                     return address.getHostAddress().toLowerCase(Locale.ROOT);
                 }
             } catch (UnknownHostException ignored) {
-                // JDK가 허용하는 다른 주소 형식은 호스트의 대소문자만 정리한다.
+                // 나머지 JDK 지원 주소는 호스트만 소문자로 바꾼다.
             }
         }
         return literal.toLowerCase(Locale.ROOT);

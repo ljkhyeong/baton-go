@@ -5,7 +5,7 @@ import com.personal.batongo.adapter.out.external.link.TrustedTargetProperties;
 import com.personal.batongo.domain.link.HttpOrigin;
 import org.springframework.stereotype.Component;
 
-/** 운영 공개 URL에 로컬 대상 URL이 섞인 설정을 시작할 때 차단합니다. */
+/** 운영 공개 URL과 로컬 대상 URL을 함께 사용한 설정을 시작할 때 거부합니다. */
 @Component
 public class PublicDeploymentTopologyValidator {
 

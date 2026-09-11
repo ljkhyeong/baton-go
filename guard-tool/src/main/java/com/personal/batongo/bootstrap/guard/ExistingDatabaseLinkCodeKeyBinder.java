@@ -16,7 +16,7 @@ final class ExistingDatabaseLinkCodeKeyBinder {
 
     private static final int SINGLETON_GUARD_ID = 1;
     private static final String SAFE_MESSAGE =
-            "기존 데이터베이스의 HMAC 키 정보 등록 조건을 확인하지 못했습니다";
+            "기존 데이터베이스에 HMAC 키 정보를 등록할 수 없습니다";
 
     BindingResult bind(
             DataSource dataSource,

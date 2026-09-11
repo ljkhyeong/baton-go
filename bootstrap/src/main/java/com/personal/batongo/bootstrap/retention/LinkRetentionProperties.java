@@ -12,7 +12,7 @@ public record LinkRetentionProperties(@DefaultValue("false") boolean enabled, Du
             throw new IllegalArgumentException("링크 정리를 사용하려면 양수인 보존 기간을 명시해야 합니다");
         }
         if (batchSize < 1 || batchSize > 500) {
-            throw new IllegalArgumentException("링크 정리 처리량은 1에서 500 사이여야 합니다");
+            throw new IllegalArgumentException("한 번에 정리할 링크 수는 1~500개여야 합니다");
         }
     }
 }

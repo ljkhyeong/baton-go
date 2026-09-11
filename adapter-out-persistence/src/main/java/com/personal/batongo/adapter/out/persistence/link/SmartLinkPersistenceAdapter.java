@@ -87,7 +87,7 @@ public class SmartLinkPersistenceAdapter implements SmartLinkRepository {
 
     @Override
     public Optional<StoredLinkResolution> findResolutionByCodeHash(String codeHash) {
-        // 알 수 없는 저장값도 404로 처리할 수 있도록 대상 필드를 enum 변환 전에 원문으로 읽는다.
+        // 알 수 없는 열거형 값도 404로 숨기기 위해 대상 필드를 문자열로 읽는다.
         return jdbcClient.sql("""
                         SELECT BIN_TO_UUID(id) AS id,
                                target_system,

@@ -271,7 +271,7 @@ public class SmartLinkService implements SmartLinkUseCase {
                 .map(stored -> toResult(stored, evaluatedAt))
                 .filter(link -> query.status() == null || link.status() == query.status())
                 .toList();
-        // 필터 결과가 비어도 검사한 마지막 행 다음으로 진행한다.
+        // 반환할 링크가 없어도 마지막으로 읽은 행 다음부터 조회한다.
         UUID nextAfterLinkId = hasMore ? scanned.get(query.limit() - 1).id() : null;
         return new LinkSearchResult(items, nextAfterLinkId, hasMore, evaluatedAt);
     }

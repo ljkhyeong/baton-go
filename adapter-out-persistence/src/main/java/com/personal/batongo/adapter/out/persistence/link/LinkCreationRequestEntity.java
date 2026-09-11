@@ -7,7 +7,7 @@ import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.UUID;
 
-/** 애플리케이션 시작 시 생성 예약 테이블의 스키마를 확인하는 JPA 매핑입니다. */
+/** 애플리케이션 시작 시 링크 생성 예약 테이블 스키마를 검증하는 JPA 엔티티입니다. */
 @Entity
 @Table(name = "link_creation_requests")
 class LinkCreationRequestEntity {

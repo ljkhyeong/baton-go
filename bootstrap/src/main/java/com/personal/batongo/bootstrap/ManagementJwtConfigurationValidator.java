@@ -6,7 +6,7 @@ import org.springframework.boot.security.oauth2.server.resource.autoconfigure.OA
 import org.springframework.stereotype.Component;
 import org.springframework.util.Assert;
 
-/** 관리 JWT 주소의 HTTPS 사용 여부와 필수 audience 설정을 시작할 때 확인합니다. */
+/** 시작할 때 관리 JWT 발급자·JWK 주소의 HTTPS 사용과 audience 설정을 확인합니다. */
 @Component
 public class ManagementJwtConfigurationValidator {
 

@@ -8,7 +8,7 @@ import tools.jackson.core.JsonToken;
 import tools.jackson.databind.DeserializationContext;
 import tools.jackson.databind.deser.std.StdDeserializer;
 
-/** 숫자 변환이나 공백 제거 없이 v1 열거형 이름을 그대로 읽습니다. */
+/** 숫자나 공백을 보정하지 않고 v1 열거형 이름을 그대로 읽습니다. */
 public abstract class ExactLinkEnumDeserializer<E extends Enum<E>>
         extends StdDeserializer<E> {
 

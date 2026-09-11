@@ -1,6 +1,8 @@
 spring:
   application:
     name: baton-go
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
   security:
     oauth2:
       resourceserver:
@@ -35,6 +37,9 @@ spring:
       hibernate:
         jdbc:
           time_zone: UTC
+
+server:
+  shutdown: graceful
 
 management:
   metrics:

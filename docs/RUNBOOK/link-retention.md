@@ -8,7 +8,7 @@
 | --- | --- |
 | `BATON_GO_LINK_RETENTION_ENABLED` | 자동 정리 여부, 기본 `false` |
 | `BATON_GO_LINK_RETENTION_PERIOD` | 종료 후 보존 기간, 활성화 시 필수. `90d` 같은 Spring Duration 형식 |
-| `BATON_GO_LINK_RETENTION_BATCH_SIZE` | 실행당 처리량, 기본 `100`, 범위 `1..500` |
+| `BATON_GO_LINK_RETENTION_BATCH_SIZE` | 실행당 정리 건수, 기본 `100`, 범위 `1..500` |
 | `BATON_GO_LINK_RETENTION_INTERVAL` | 이전 실행 완료 후 간격과 최초 실행 지연, 기본 `60s` |
 
 V7 적용과 전체 Pod 교체, DB·키 묶음 복구본을 확인한다. 정리 시점은 Pod에 주입된 UTC Clock을
@@ -21,7 +21,7 @@ FROM smart_links s JOIN link_creation_requests r ON r.link_id = s.id
 WHERE s.retired_at <= :approved_cutoff AND r.purged_at IS NULL;
 ```
 
-승인한 기간과 처리량을 배포 설정에 넣어 활성화한다. `baton_go_link_retention_purged_total`의
+승인한 기간과 실행당 정리 건수를 배포 설정에 넣어 활성화한다. `baton_go_link_retention_purged_total`의
 증가와 `baton_go_link_retention_failures_total`을 관찰한다. `BatonGoLinkRetentionFailure`가
 발생하면 DB 상태와 정리 예외 종류를 확인한다. 기능을 끄면 후속 실행이 중단되며 이미 정리한
 링크가 복원되지는 않는다. 삭제된 링크의 동일 요청은 `410 LINK_PURGED`이고 새 요청 키가

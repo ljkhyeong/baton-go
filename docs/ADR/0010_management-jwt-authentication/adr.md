@@ -43,7 +43,7 @@ BATON GO는 브라우저 사용자가 아니라 신뢰된 서버 호출자가 �
 | 링크 생성 | `baton-go.links.create` |
 | 링크 관리 조회 | `baton-go.links.read` |
 | 링크 폐기 | `baton-go.links.revoke` |
-| 대상 계약 목록 조사·정리 | `baton-go.target-contract.operate` |
+| 대상 계약 점검·폐기 | `baton-go.target-contract.operate` |
 
 - 인증 누락·JWT 검증 실패는 `401 MANAGEMENT_AUTHENTICATION_REQUIRED`, 유효한 JWT에 scope가
   없으면 `403 MANAGEMENT_AUTHORIZATION_REQUIRED`로 응답한다. `401`에는

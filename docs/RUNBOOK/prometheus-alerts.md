@@ -96,7 +96,7 @@ YAML 규칙을 기준으로 하며, 표와 테스트도 같은 변경에서 갱�
 | 경보 | 발생 조건 | 우선순위 |
 | --- | --- | --- |
 | `BatonGoMetricsScrapeFailed` | 특정 Pod의 지표 수집 실패가 2분 지속 | `critical` |
-| `BatonGoMetricsTargetMissing` | GO의 `up` 시계열 부재가 2분 지속 | `critical` |
+| `BatonGoMetricsTargetMissing` | GO의 `up` 시계열이 2분 동안 없음 | `critical` |
 | `BatonGoPublicResolverLatency` | 최근 5분 공개 요청 100건 이상·1초 초과 비율 5% 초과가 5분 지속 | `warning` |
 | `BatonGoManagementApiLatency` | 최근 5분 관리 요청 20건 이상·2초 초과 비율 5% 초과가 5분 지속 | `warning` |
 | `BatonGoHttpServerErrors` | 최근 5분 5xx 5건 이상·429 제외 응답의 오류율 5% 초과가 5분 지속 | `critical` |

@@ -50,9 +50,9 @@ BATON MySQL을 공유하면 초기 인프라 수는 줄지만 백업, 장애, �
   만들지 않는다. 애플리케이션은 root가 아닌 GO 전용 사용자로만 연결한다.
 - PVC의 `storageClassName`은 지정하지 않는다. 비공개 클러스터의 기본 StorageClass를
   사용하고 실제 공급자, 노드 장애 복구와 스냅샷 정책은 클러스터 운영 계층에서 정한다.
-- Kubernetes 기본 Kustomize의 기본본/오버레이 구조를 사용한다. Secret 값, 레지스트리 자격 증명,
-  실제 TLS 인증서, Ingress 컨트롤러 주석과 환경별 호스트는 기본본에 넣지 않는다.
-  기본본은 외부 MySQL 서버 TLS Secret과 클라이언트 신뢰 저장소 Secret의 이름·키·마운트 계약만
+- Kubernetes Kustomize의 `base`와 `overlay` 구조를 사용한다. Secret 값, 레지스트리 자격 증명,
+  실제 TLS 인증서, Ingress 컨트롤러 주석과 환경별 호스트는 `base`에 넣지 않는다.
+  `base`는 외부 MySQL 서버 TLS Secret과 클라이언트 신뢰 저장소 Secret의 이름·키·마운트 계약만
   정의한다.
 - Namespace 매니페스트는 워크로드 Kustomization에서 분리한다.
   워크로드를 제거할 때 Namespace와 PVC까지 함께 삭제되는 것을 막는다.
@@ -111,4 +111,4 @@ BATON MySQL을 공유하면 초기 인프라 수는 줄지만 백업, 장애, �
 - 표준 NetworkPolicy는 HTTP 경로, 노드 호스트 방화벽과 일부 host-network 경로를 제어하지
   못하므로 CNI와 외부 프록시를 각각 검증하고 필요한 정책을 추가해야 한다.
 - 배포 매니페스트는 실행 자원만 정의하며 공개 운영 승인을 대신하지 않는다. PRD-0003의
-  세션·참여 허가·외부 프록시·목록 조사는 계속 별도로 점검해야 한다.
+  세션·참여 허가·외부 프록시·기존 데이터는 계속 별도로 점검해야 한다.

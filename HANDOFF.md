@@ -7,7 +7,7 @@
   [API 계약](docs/PRD/0002_api-contract/spec.md),
   [BATON·ROUND 연동 계약](docs/PRD/0003_cross-service-link-contract/spec.md)이다.
   GO 링크는 위치만 제공하며 접근 권한은 BATON·ROUND가 판단한다.
-- 종료 링크 자동 삭제, Redis 분산 요청 제한, 대상 계약 정리 API는 기본 중지 상태다.
+- 종료 링크 자동 삭제, Redis 분산 요청 제한, 대상 계약 점검·폐기 API는 기본 중지 상태다.
   실제 운영 환경 검증과 배포는 남아 있다.
 - BATON 연동 작업 공간은 `/private/tmp/baton-go-integration-20260905`, 브랜치는
   `codex/go-link-integration-20260905`다. 최근 확인 리비전은 `90557822`, 코드 기준은 `bc888b15`다.
@@ -20,7 +20,7 @@
 - 2026-09-08 검증 기준은 GO `85f6189`다. `8c3d062`의 미커밋 변경이 없는 상태에서 시작했다.
   검증한 코드·테스트 11개 파일을 커밋했고 이후에는 계약 문서와 인계 기록만 수정했다.
 - `GET /api/v1/links/batch?linkIds=...`를 추가했다. 최대 100개 ID를 한 번의 DB 조회로 읽고,
-  요청 순서·중복 제거·동일 판정 시각을 보장한다. 없거나 비허용인 링크는 `notFoundIds`로 반환한다.
+  요청 순서·중복 제거·동일 판정 시각을 보장한다. 없거나 허용되지 않은 링크는 `notFoundIds`로 반환한다.
   기존 읽기 scope와 대상 정책을 사용하고, 목록 조회와 대상 검사·결과 변환을 공유한다.
 - Java 21(`/Library/Java/JavaVirtualMachines/microsoft-21.jdk/Contents/Home`)과 Docker로
   애플리케이션 46개·웹 124개·MySQL 43개를 확인했다. 최종 실패·제외는 없다.
@@ -50,14 +50,14 @@
 
 ## 다음 작업
 
-1. 배포 DB 전체를 [대상 계약 v1 정리 절차](docs/RUNBOOK/target-contract-v1-remediation.md)로
-   조사하고 `unrevoked non-compliant=0`, 미승인 `HOLD=0` 결과를 기록한다.
-2. BATON·ROUND 인증 구성을 실제 릴리스 이미지, 공개 HTTPS와 외부 coturn에 연결한다.
+1. [대상 계약 v1 점검·폐기 절차](docs/RUNBOOK/target-contract-v1-remediation.md)에 따라
+   배포 DB의 모든 링크를 점검하고 `unrevoked non-compliant=0`, 승인되지 않은 `HOLD=0` 결과를 기록한다.
+2. 실제 릴리스 이미지에서 BATON·ROUND 인증, 공개 HTTPS와 외부 coturn을 연결한다.
    세션·CSRF·쿠키·JWK 교체·TURN·WebSocket 검증 결과를 기록한다. GO 관리 API는
    Spring Security JWT와 작업별 scope로 전환했으므로 실제 발급자 식별자·JWK, 서비스 신원,
    audience·scope와 키 교체를 비공개 네트워크에서 검증한다.
 3. 최신 BATON 변경과 GO 연동 브랜치를 병합하고 충돌한 동작을 검증한다.
-   GO 연동과 이후 BATON·공휴일 기능을 함께 유지한다. 미배포 GO 마이그레이션 V40~V42는
+   GO 연동과 이후 BATON·공휴일 기능을 함께 유지한다. 아직 배포하지 않은 GO 마이그레이션 V40~V42는
    계정 비활성화 V39 다음 순서이며, 운영 DB에 적용한 파일은 교체하지 않는다.
    고정 GO 커밋 `b4b4df22cbabf7a71697d60db5294ecfeb857e86`의 원격 반영과 BATON Actions의
    `BATON_GO_CONTRACT_READ_TOKEN` 등록을 확인한 뒤 GitHub 품질 게이트를 실행한다.
@@ -67,12 +67,12 @@
    카카오 앱의 무료 사용 설정·실제 메시지 전송과 실기기 QR 스캔을 확인한다.
 4. 외부 프록시에서 공개 `/l`과 비공개 `/api/v1` 라우팅을 분리하고, 분산 요청률 제한과
    `/l/{code}` 접근 로그 마스킹을 적용한다. 분산 제한 구현은 준비되었으며 실제 Redis·Ingress 검증은 남아 있다.
-5. 실제 비공개 클러스터에서 DNS·TLS·CNI·NetworkPolicy·startup/liveness/readiness probe,
-   PVC와 Secret 수명주기를 검증한다. 현재 ingress 전용 NetworkPolicy에 더해 환경별 DNS·MySQL
+5. 실제 비공개 클러스터에서 DNS·TLS·CNI·NetworkPolicy·startup/liveness/readiness probe와
+   PVC·Secret의 생성·교체·복구·삭제를 검증한다. 현재 ingress 전용 NetworkPolicy에 더해 환경별 DNS·MySQL
    egress 허용 목록과 기본 차단 정책을 정하고 실제 CNI의 허용·차단 결과를 기록한다.
    `restricted` 정책 강제 적용 전에는 고정 MySQL 이미지로 신규·복원·현재 PVC의 기동,
    TLS·초기화·마이그레이션을 검증한다.
-6. 릴리스 이미지 다이제스트, SBOM, 취약점 검사, 서명·provenance 검증 결과를 보존하고
+6. 릴리스 이미지 다이제스트, SBOM, 취약점 검사, 서명·빌드 출처 검증 결과를 보존하고
    승인된 이미지만 배포되는지 확인한다.
 7. Prometheus 수집, 경보 규칙, 알림 경로와 담당자를 연결하고 마이그레이션 실패,
    Pod 비정상, 5xx·429, DB 준비 상태, 저장 대상 계약 위반, PVC 용량과 백업 실패 경보의

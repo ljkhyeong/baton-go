@@ -2,8 +2,8 @@
 
 ## 작업 기준
 
-- 사용자 요청과 대화에서 정한 범위에 맞춰 작업을 끝낸다. 일반적인 구현 선택은 직접 결정하고,
-  결과를 바꿀 필수 정보가 없을 때 질문한다. 지시 때문에 중단하면 해당 파일과 근거를 설명한다.
+- 사용자 요청과 대화에서 정한 범위에 맞춰 작업을 끝낸다. 세부 구현 방식은 직접 결정하고,
+  결과를 결정할 정보가 없을 때만 질문한다. 지시 때문에 중단하면 해당 파일과 근거를 설명한다.
 - 응답·문서·주석·PR은 간결한 한국어로 작성한다. API 식별자·명령·표준 용어는 유지하고,
   변경을 마치면 `Fix`·`Refactor`·`Docs` 등 종류별로 한글 커밋한다.
 - 시작할 때 `README.md`와 `HANDOFF.md`를 확인한다. 같은 세션에서 읽은 파일은 변경 여부와 관련 부분만
@@ -22,7 +22,7 @@
   `guard-tool → adapter-out-external/application → domain`이다.
   `domain`은 상태·시간 규칙, `application`은 사용 사례와 포트, `adapter-in-web`은 HTTP,
   `adapter-out-persistence`는 JPA·SQL, `adapter-out-external`은 코드 발급·대상 URL 조립,
-  `guard-tool`은 기존 DB의 HMAC 보호 장치 최초 등록, `bootstrap`은 설정·Flyway를 담당한다.
+  `guard-tool`은 기존 DB의 HMAC 키 최초 등록, `bootstrap`은 설정·Flyway를 담당한다.
   컨트롤러에 업무 규칙을 두거나 application에서 adapter를 참조하지 않는다.
 
 ## 구현 규칙

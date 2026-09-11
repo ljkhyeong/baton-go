@@ -1,7 +1,7 @@
 # BATON GO
 
 BATON GO는 BATON·ROUND용 단축 링크 서비스다. 링크 생성·활성 시간·만료·폐기와
-허용된 주소로의 연결을 관리한다. 각 제품의 접근 권한은 해당 서비스가 판단한다.
+허용된 대상 주소로의 리다이렉트를 관리한다. 접근 권한은 대상 서비스가 판단한다.
 
 ## 첫 구현 범위
 
@@ -12,10 +12,10 @@ BATON GO는 BATON·ROUND용 단축 링크 서비스다. 링크 생성·활성 �
 - v1에 정의된 `BATON`·`ROUND`의 시스템·목적·경로 조합만 허용
 - 시작 시각, 만료 시각과 즉시 폐기
 - 공개 `GET·HEAD /l/{code}` 리다이렉트
-- 브라우저의 미존재·미활성·만료·폐기 링크와 GO의 요청 제한·서버 오류에 대한 한글 안내 화면
+- 없는 링크와 활성 전·만료·폐기 링크, GO의 요청 제한·서버 오류를 설명하는 브라우저용 한글 화면
 - 발급자 서명 JWT와 작업별 scope로 보호하는 `/api/v1/links` 생성·조회·폐기 API
-- 관리 조회·폐기 응답의 이용 상태와 서버 판정 시각
-- 대상 시스템·생성 기간·이용 상태 필터와 커서 방식의 관리 링크 목록 조회
+- 관리 조회·폐기 응답의 링크 상태와 서버 판정 시각
+- 대상 시스템·생성 기간·링크 상태 필터와 커서 방식의 관리 링크 목록 조회
 - 최대 100개 링크 ID의 일괄 조회와 동일 시각의 상태 확인
 - 서비스 식별자를 포함한 링크 생성·동일 요청 재시도·폐기의 관리 작업 완료 이력
 - MySQL/Flyway 영속화, 상태 확인과 Prometheus 엔드포인트
@@ -42,15 +42,15 @@ BATON의 `#accessKey`나 ROUND 참여 허가를 GO의 URL, DB 또는 로그에 �
 향후 계정 기반 초대·claim 계약이 생기기 전에는 GO 링크만으로 권한을 부여하지 않는다.
 
 교차 서비스 계약 v1의 허용 대상, 서비스별 권한 검사, 같은 HTTPS 출처 구성과 운영 전
-확인 사항은 [교차 서비스 링크 계약](docs/PRD/0003_cross-service-link-contract/spec.md)이
-기준 문서다. GO는 링크 생성과 접속 처리 시 계약에 맞지 않는 요청을 거부하고,
-비허용 저장 대상은 원문을 노출하지 않은 채 `404 LINK_NOT_FOUND`로
+확인 사항은 [교차 서비스 링크 계약](docs/PRD/0003_cross-service-link-contract/spec.md)에
+정의한다. GO는 링크 생성과 접속 처리 시 계약에 맞지 않는 요청을 거부하고,
+허용되지 않은 저장 대상은 원문을 노출하지 않은 채 `404 LINK_NOT_FOUND`로
 숨긴다. 이 구현만으로 BATON·ROUND 권한과 실제 연동 검증이 끝나는 것은 아니다.
 
-v1 규칙 적용 전에 저장된 데이터는 기본 비활성화된 비공개 운영 API로 조사한다.
-BATON·ROUND가 대상을 확인한 링크만 폐기·재발급한다. 활성화 조건, 민감 필드
-비노출과 정리 완료 조건은 [대상 계약 v1 정리 절차](docs/RUNBOOK/target-contract-v1-remediation.md)를
-따른다. 로컬 기본 출처는 개발용이며 운영 출처·라우팅·쿠키 계약은 기준 문서의
+v1 규칙 적용 전에 저장된 데이터는 기본 비활성화된 비공개 운영 API로 점검한다.
+BATON·ROUND가 대상을 확인한 링크만 폐기·재발급한다. 활성화 조건, 숨길 필드와
+완료 조건은 [대상 계약 v1 점검·폐기 절차](docs/RUNBOOK/target-contract-v1-remediation.md)를
+따른다. 로컬 기본 출처는 개발용이며 운영 출처·라우팅·쿠키 계약은 교차 서비스 계약의
 전체 연동 검증을 통과해야 한다.
 
 ## 기술 스택
@@ -79,7 +79,7 @@ vim .env
 항목이 있으면 시작을 거부한다. Spring Boot 표준
 `SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI`에는 발급자의 HTTPS JWK Set 주소를
 설정한다. 두 주소의 HTTP는 로컬 루프백 개발 환경에서만 허용한다. 이 설정은 시작할 때
-발급자 검색 서버를 호출하지 않으면서 `iss` 검증을 유지한다. 링크
+OIDC 검색 엔드포인트를 호출하지 않으면서 `iss` 검증을 유지한다. 링크
 생성·조회·폐기에는 각각 `baton-go.links.create`,
 `baton-go.links.read`, `baton-go.links.revoke` scope가 필요하다.
 JWT에는 만료 시각 `exp`가 반드시 있어야 하며, 누락하거나 이미 만료된 토큰은 `401`로 거부한다.
@@ -89,7 +89,7 @@ JWK 조회에는 별도의 연결·읽기 제한을 적용한다. 기본값과 �
 `BATON_GO_LINK_CODE_SECRET`은 32자 이상의 별도 무작위 값이어야 한다. 기존 DB와 키의 연결을
 유지하고 복구할 수 있도록 길이 외의 문법을 제한하지 않는다. 공백 제거·Unicode 정규화 없이 설정 문자열을
 그대로 사용한다. 서버 설정은 Spring Boot의 표준 외부 설정 우선순위와 바인딩을 그대로 사용한다.
-새 비밀값은 base64url 또는 hex처럼 셸, dotenv와 Spring 자리 표시자 문법에 걸리지 않는 문자
+새 비밀값은 Base64 URL 또는 16진수처럼 셸, dotenv와 Spring 자리 표시자 문법에 걸리지 않는 문자
 집합으로 생성하고 로그나 명령행에 출력하지 않는다. `.env.example`의 짧은 `REPLACE_ME_TOO` 값은
 최소 길이 검증에서 바로 실패하므로 실제 값으로 교체해야 한다. 링크 코드 파생 비밀값은 재시작과
 복구 뒤에도 같은 값을 유지해야 같은 생성 요청에 기존 URL을 반환할 수 있다.
@@ -213,7 +213,7 @@ Pod 자동 발견 설정과 최소 조회 권한을 제공하며 새 서버나 �
 ./gradlew --no-daemon build
 ```
 
-CI는 운영 이미지를 Compose로 실행해 상태 확인, 미존재 링크의 HTML·기본 JSON 오류 본문,
+CI는 운영 이미지를 Compose로 실행해 상태 확인, 없는 링크의 HTML·기본 JSON 오류 본문,
 HEAD의 응답 형식·빈 본문과 요청률 제한 `429`를 점검한다. 오류 상태별 세부 계약은 웹 테스트에서 검증한다.
 같은 이미지의 SBOM·취약점 보고서와 검사 대상 정보를 `baton-go-image-security` 산출물로 보존한다.
 검사 실행 실패는 CI를 실패시키지만 취약점 발견만으로 배포를 차단하지는 않는다.
@@ -229,7 +229,7 @@ Gradle은 `gradle/verification-metadata.xml`의 SHA-256으로 내려받은 의�
 Flyway/JPA와 동시 생성 동작을 포함한 MySQL 통합 검증은 Docker가 실행 중인 환경에서
 별도로 수행한다. 이 테스트 묶음은 Kubernetes 배포용 MySQL 초기화 스크립트, TLS
 `VERIFY_IDENTITY`, 실행 계정의 DML 전용 권한, 마이그레이션 전용 실행기,
-기존 DB에 HMAC 키 정보를 등록하는 CLI 실행 파일과 Testcontainers·Compose 이미지 일치도를 함께 검증한다.
+기존 DB에 HMAC 키 정보를 등록하는 CLI JAR과 Testcontainers·Compose 이미지 일치도를 함께 검증한다.
 CI는 Compose가 해석한 MySQL 이미지 digest와 Kubernetes 오버레이의 최종 렌더 digest도 비교한다.
 TLS 호스트 이름 검증용 테스트 별칭을 루프백에 고정하므로 로컬 Docker 소켓 또는 일반
 GitHub 실행기를 기준으로 하며, 원격 `DOCKER_HOST`는 현재 지원하지 않는다.
@@ -296,4 +296,4 @@ curl -i http://localhost:8080/api/v1/links \
 - [종료 링크 보존 기간 설정](docs/RUNBOOK/link-retention.md)
 - [HMAC 키 교체](docs/RUNBOOK/link-code-key-rotation.md)
 - [기존 DB의 HMAC 키 정보 최초 등록 절차](docs/RUNBOOK/link-code-key-guard-binding.md)
-- [대상 계약 v1 정리 절차](docs/RUNBOOK/target-contract-v1-remediation.md)
+- [대상 계약 v1 점검·폐기 절차](docs/RUNBOOK/target-contract-v1-remediation.md)

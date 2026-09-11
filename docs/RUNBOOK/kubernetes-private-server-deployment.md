@@ -603,6 +603,11 @@ kubectl label namespace <approved-edge-or-caller-namespace> \
 DB 장애와 분산 요청 제한을 켠 경우의 Redis `PING` 실패는 준비 상태만 503으로 바꾸며
 생존 상태에는 포함하지 않는다. Prometheus 등 나머지 Actuator 경로는 `8081`을 유지한다.
 
+애플리케이션은 Spring Boot 정상 종료를 사용한다. 종료 신호를 받으면 새 요청 수락을 멈추고
+진행 중인 요청을 최대 30초 기다린다. Kubernetes의 `terminationGracePeriodSeconds`와 Compose의
+`stop_grace_period`는 모두 40초다. 종료 제한을 늘릴 때는 컨테이너 강제 종료 제한도 같은 값보다
+길게 유지한다.
+
 `8081`은 위 HTTP label로 열리지 않는다. 모니터링 Pod에서 직접 수집해야 한다면 모니터링
 Namespace와 실제 수집기 Pod 템플릿에 각각 다음 label을 부여해야 한다. 두 selector는 AND
 조건이다. Actuator Service는 기본 생성하지 않으므로 환경별 Pod 탐색도 별도 구성한다.
@@ -760,6 +765,9 @@ kubectl -n baton-go wait --for=condition=complete \
   job/baton-go-database-migration --timeout=10m
 kubectl -n baton-go rollout status deployment/baton-go --timeout=10m
 ```
+
+배포 중 이전 Pod가 종료 신호를 받은 뒤 40초 안에 정상 종료되는지 확인한다. 해당 구간의 5xx와
+강제 종료 기록이 있으면 배포를 완료로 판단하지 말고, 요청 처리 시간과 종료 제한을 함께 점검한다.
 
 위 삭제는 `Complete`인 마이그레이션 Job 객체만 대상으로 하며 StatefulSet, PVC, Namespace와
 Secret에는 사용하지 않는다. Job이 아직 실행 중이면 중단하지 말고 원인을 확인한다. 한 번의

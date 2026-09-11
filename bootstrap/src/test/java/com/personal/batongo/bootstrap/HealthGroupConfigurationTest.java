@@ -44,18 +44,27 @@ class HealthGroupConfigurationTest {
     @MockitoBean(name = "db", answers = Answers.CALLS_REAL_METHODS)
     private HealthIndicator databaseHealth;
 
+    @MockitoBean(name = "resolverQuotaRedis", answers = Answers.CALLS_REAL_METHODS)
+    private HealthIndicator resolverQuotaRedisHealth;
+
     @Value("${local.server.port}")
     private int port;
 
     @Test
-    @DisplayName("주 HTTP 포트의 상태 확인은 DB 장애 때 준비 상태만 실패한다")
-    void probesOnMainPortIncludeDatabaseOnlyInReadiness() throws Exception {
+    @DisplayName("주 HTTP 포트의 상태 확인은 DB나 Redis 장애 때 준비 상태만 실패한다")
+    void probesOnMainPortIncludeDependenciesOnlyInReadiness() throws Exception {
         try (var client = HttpClient.newHttpClient()) {
             when(databaseHealth.health()).thenReturn(Health.up().build());
+            when(resolverQuotaRedisHealth.health()).thenReturn(Health.up().build());
             assertStatus(client, "/readyz", 200);
             assertStatus(client, "/livez", 200);
 
             when(databaseHealth.health()).thenReturn(Health.down().build());
+            assertStatus(client, "/readyz", 503);
+            assertStatus(client, "/livez", 200);
+
+            when(databaseHealth.health()).thenReturn(Health.up().build());
+            when(resolverQuotaRedisHealth.health()).thenReturn(Health.down().build());
             assertStatus(client, "/readyz", 503);
             assertStatus(client, "/livez", 200);
         }

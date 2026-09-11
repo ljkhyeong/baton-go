@@ -3,23 +3,26 @@ package com.personal.batongo;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.personal.batongo.adapter.out.external.ratelimit.RedisResolverQuotaAdapter;
 import com.personal.batongo.adapter.out.external.ratelimit.DistributedResolverQuotaProperties;
-import com.personal.batongo.application.link.error.PublicResolverQuotaUnavailableException;
-import io.lettuce.core.RedisClient;
+import com.personal.batongo.adapter.out.external.ratelimit.RedisResolverQuotaAdapter;
 import com.personal.batongo.adapter.out.external.ratelimit.RedisResolverQuotaConfiguration;
+import com.personal.batongo.application.link.error.PublicResolverQuotaUnavailableException;
 import com.personal.batongo.application.link.port.out.PublicResolverQuotaPort;
-import org.springframework.boot.test.context.runner.ApplicationContextRunner;
-import org.springframework.boot.context.properties.EnableConfigurationProperties;
-import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Import;
+import com.personal.batongo.bootstrap.DistributedResolverQuotaHealthIndicator;
+import io.lettuce.core.RedisClient;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Optional;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.health.contributor.Status;
+import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Import;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -85,6 +88,27 @@ class DistributedResolverQuotaIntegrationTest {
             first.sync().flushdb();
             second.close();
             assertThatThrownBy(two::acquireRetryAfterSeconds).isInstanceOf(PublicResolverQuotaUnavailableException.class);
+        } finally {
+            client.shutdown();
+        }
+    }
+
+    @Test
+    @DisplayName("분산 제한 Redis 연결이 끊기면 준비 상태를 장애로 반환한다")
+    void reportsClosedRedisConnectionAsUnhealthy() {
+        RedisClient client = RedisClient.create(
+                "redis://" + REDIS.getHost() + ":" + REDIS.getMappedPort(6379)
+        );
+        try (var connection = client.connect()) {
+            var properties = new DistributedResolverQuotaProperties(true, "redis://localhost", 10,
+                    Duration.ofSeconds(30), Duration.ofMillis(500));
+            var health = new DistributedResolverQuotaHealthIndicator(
+                    properties, Optional.of(connection)
+            );
+
+            assertThat(health.health().getStatus()).isEqualTo(Status.UP);
+            connection.close();
+            assertThat(health.health().getStatus()).isEqualTo(Status.DOWN);
         } finally {
             client.shutdown();
         }

@@ -53,7 +53,7 @@ management:
         add-additional-paths: true
       group:
         readiness:
-          include: readinessState,db
+          include: readinessState,db,resolverQuotaRedis
 
 baton-go:
   public-base-url: ${BATON_GO_PUBLIC_BASE_URL}

@@ -19,6 +19,8 @@
   `PUBLIC_LINK_ORIGIN_REPLAY_UNAVAILABLE`로 처리한다. 그 밖의 실행 오류는 복구 오류로 바꾸지 않는다.
 - 종료 링크 정리와 Redis 분산 요청 제한의 수치·시간 범위는 Spring `@ConfigurationProperties`
   검증을 사용한다. 기능 활성화에 따른 필수값 조건만 생성자에서 확인한다.
+- 준비 상태는 DB와 활성화한 분산 요청 제한 Redis를 확인한다. Redis `PING`이 실패하면
+  `/readyz`는 503이며 `/livez`는 정상 상태를 유지한다.
 - BATON 연동 작업 공간은 `/private/tmp/baton-go-integration-20260905`, 브랜치는
   `codex/go-link-integration-20260905`다. 최근 확인 리비전은 `90557822`, 코드 기준은 `bc888b15`다.
   GO 연동·카카오톡 공유·QR 기능을 반영했으며 BATON 메인 병합과 실제 전송·스캔 검증은 남아 있다.
@@ -27,6 +29,9 @@
 
 ## 최근 검증
 
+- 2026-09-12 `4beed9d`에서 분산 요청 제한 Redis 상태 확인을 준비 상태에 추가했다.
+  상태 확인 대상 테스트 3건, 실제 Redis 통합 테스트 3건과 `./gradlew --no-daemon test`가
+  성공했다. MySQL 동작은 바뀌지 않아 MySQL 통합 테스트는 반복하지 않았다.
 - 2026-09-12 `e4c2c0a`에서 공개 출처 복구의 광범위한 `RuntimeException` 처리를 제거했다.
   애플리케이션 대상 테스트, 공개 출처가 없는 기존 MySQL 예약 통합 테스트와
   `./gradlew --no-daemon test`가 성공했다. Redis 동작은 바뀌지 않아 Redis 통합 테스트는 반복하지 않았다.

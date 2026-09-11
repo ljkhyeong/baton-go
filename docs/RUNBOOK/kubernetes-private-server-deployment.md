@@ -600,8 +600,8 @@ kubectl label namespace <approved-edge-or-caller-namespace> \
 주 HTTP 포트에도 등록한다. Kubernetes 탐침의 포트 이름은 `http`(`8080`)이며 시작·준비
 탐침은 `/readyz`, 생존 탐침은 `/livez`를 호출한다. Docker 상태 확인도 `8080/readyz`를
 사용한다. 주 HTTP 포트 장애를 관리 포트의 정상 응답이 가리지 않게 하기 위한 설정이다.
-DB 장애는 준비 상태만 503으로 바꾸며 생존 상태에는 포함하지 않는다. Prometheus 등
-나머지 Actuator 경로는 `8081`을 유지한다.
+DB 장애와 분산 요청 제한을 켠 경우의 Redis `PING` 실패는 준비 상태만 503으로 바꾸며
+생존 상태에는 포함하지 않는다. Prometheus 등 나머지 Actuator 경로는 `8081`을 유지한다.
 
 `8081`은 위 HTTP label로 열리지 않는다. 모니터링 Pod에서 직접 수집해야 한다면 모니터링
 Namespace와 실제 수집기 Pod 템플릿에 각각 다음 label을 부여해야 한다. 두 selector는 AND
@@ -667,7 +667,7 @@ Pod 자동 발견 설정과 Namespace 범위 조회 권한이 있다. 수집 실
 - `Job/baton-go-database-migration` 실패·시간 초과
 - 애플리케이션·MySQL Pod `NotReady`, 재시작과 배포 상태 이상
 - HTTP 5xx 오류율과 단축 링크 접속의 429 응답 지속 증가
-- DB를 포함한 readiness 실패
+- DB와 활성화한 분산 요청 제한 Redis를 포함한 readiness 실패
 - `baton.go.public.resolver.target.contract.violations` 증가
 - PVC 사용률·증가 추세·확장 실패
 - 백업 실패와 정책에서 정한 시간 동안 성공한 백업이 없는 상태

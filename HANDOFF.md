@@ -13,6 +13,8 @@
   `LINK_REVOKE_REPLAY`로 구분한다. HTTP 응답과 폐기 시각 보존 동작은 바뀌지 않았다.
 - 관리 JWT는 공백이 아닌 `sub`를 서비스 식별자로 요구한다. 누락·빈 문자열·공백 문자열은
   관리 작업 전에 `401 MANAGEMENT_AUTHENTICATION_REQUIRED`로 거부한다.
+- 링크 생성 예약은 일반 `INSERT`를 사용하며 Spring이 변환한 중복 키 오류만 기존 예약 조회로
+  처리한다. 다른 MySQL 저장 오류는 성공이나 재시도로 바꾸지 않는다.
 - BATON 연동 작업 공간은 `/private/tmp/baton-go-integration-20260905`, 브랜치는
   `codex/go-link-integration-20260905`다. 최근 확인 리비전은 `90557822`, 코드 기준은 `bc888b15`다.
   GO 연동·카카오톡 공유·QR 기능을 반영했으며 BATON 메인 병합과 실제 전송·스캔 검증은 남아 있다.
@@ -21,6 +23,10 @@
 
 ## 최근 검증
 
+- 2026-09-12 `41cd625`에서 링크 생성 예약의 `INSERT IGNORE`를 제거했다. 변경 후 같은 요청의
+  동시 생성·최초 트랜잭션 롤백·서버별 공개 출처 차이 3건과 비중복 MySQL 저장 오류 전파 1건이
+  통과했다. `./gradlew --no-daemon test`도 성공했으며 Redis 동작은 바뀌지 않아 Redis 통합
+  테스트는 반복하지 않았다.
 - 2026-09-12 `bf93553`에서 Spring `JwtClaimValidator`로 관리 JWT의 `sub`를 필수화했다.
   실제 서명 JWT의 `sub` 누락·빈 문자열·공백 거부와 기존 유효 토큰을 대상 테스트 7건으로
   확인했다. `./gradlew --no-daemon test`도 성공했다. DB·Redis 동작은 바뀌지 않아 태그 통합

@@ -21,12 +21,22 @@ FROM smart_links s JOIN link_creation_requests r ON r.link_id = s.id
 WHERE s.retired_at <= :approved_cutoff AND r.purged_at IS NULL;
 ```
 
-승인한 기간과 실행당 정리 건수를 배포 설정에 넣어 활성화한다. `baton_go_link_retention_purged_total`의
-증가와 `baton_go_link_retention_failures_total`을 관찰한다. `BatonGoLinkRetentionFailure`가
-발생하면 DB 상태와 정리 예외 종류를 확인한다. 기능을 끄면 후속 실행이 중단되며 이미 정리한
-링크가 복원되지는 않는다. 삭제된 링크의 동일 요청은 `410 LINK_PURGED`이고 새 요청 키가
-있어야 새 링크를 만들 수 있다. 상세 계약은 [ADR-0012](../ADR/0012_link-retention/adr.md)다.
-실행 간격이 비어 있거나 1초보다 짧으면 애플리케이션 시작 단계에서 거부한다.
+승인한 기간과 실행당 정리 건수를 배포 설정에 넣어 활성화한다. 다음 지표와 경보를 함께 확인한다.
+
+- `baton_go_link_retention_purged_total`: 정리한 링크 수
+- `baton_go_link_retention_failures_total`: 실패한 실행 수. 증가하면 `BatonGoLinkRetentionFailure` 발생
+- `baton_go_link_retention_scheduler_heartbeat_seconds`: 스케줄러 시작 또는 최근 실행 완료 시각
+- `baton_go_link_retention_scheduler_interval_seconds`: 설정한 실행 간격
+
+완료 시각이 실행 간격의 3배(최소 3분)를 넘긴 상태로 2분 지속되면
+`BatonGoLinkRetentionSchedulerStalled`가 발생한다. 실패한 실행도 완료 시각은 갱신하므로 실패 원인은
+실패 경보에서 확인한다. 정리 호출이 끝나지 않거나 스케줄러가 실행되지 않을 때는 정체 경보에서
+스케줄러 스레드와 DB 쿼리 실행 시간을 확인한다. 자동 정리를 끄면 지표와 경보가 생성되지 않는다.
+
+기능을 끄면 후속 실행이 중단되며 이미 정리한 링크가 복원되지는 않는다. 삭제된 링크의 동일 요청은
+`410 LINK_PURGED`이고 새 요청 키가 있어야 새 링크를 만들 수 있다. 상세 계약은
+[ADR-0012](../ADR/0012_link-retention/adr.md)다. 실행 간격이 비어 있거나 1초보다 짧으면
+애플리케이션 시작 단계에서 거부한다.
 
 이전 HMAC 키를 제거하기 전에는 해당 키로 링크를 발급하는 Pod가 모두 종료됐는지 확인한다.
 기존 URL 복원에 필요한 키는 다음 집계로 확인하며 키 해시나 지문은 출력하지 않는다.

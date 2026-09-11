@@ -678,6 +678,7 @@ Pod 자동 발견 설정과 Namespace 범위 조회 권한이 있다. 수집 실
 - HTTP 5xx 오류율과 단축 링크 접속의 429 응답 지속 증가
 - DB와 활성화한 분산 요청 제한 Redis를 포함한 readiness 실패(`BatonGoReadinessFailed`)
 - `baton.go.public.resolver.target.contract.violations` 증가
+- 링크 자동 정리 실패와 실행 완료 신호 정체
 - PVC 사용률·증가 추세·확장 실패
 - 백업 실패와 정책에서 정한 시간 동안 성공한 백업이 없는 상태
 

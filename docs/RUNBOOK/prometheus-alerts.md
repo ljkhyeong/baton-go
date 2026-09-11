@@ -4,7 +4,7 @@
 
 [경보 규칙](../../deploy/prometheus/baton-go-alerts.yml)은 기존 Actuator·Micrometer 지표로
 Pod 준비 상태 지속 실패, 공개·관리 응답 지연, 전체·관리 API 5xx, 관리 JWT 검증 서비스 장애,
-관리 링크 복구 오류, 단축 링크 요청 제한과 저장 대상 계약 위반을 감지한다.
+관리 링크 복구 오류, 단축 링크 요청 제한, 저장 대상 계약 위반과 링크 정리 실행 정체를 감지한다.
 규칙 추가만으로 수집기나 Alertmanager가 배포되지는 않는다. 실제 운영 수집기 연결,
 알림 경로·수신자 설정과 경보 발생 테스트는 [배포 문서의 수집·경보 확인 절차](kubernetes-private-server-deployment.md#수집과-경보-확인-사항)를 따른다.
 
@@ -107,6 +107,7 @@ YAML 규칙을 기준으로 하며, 표와 테스트도 같은 변경에서 갱�
 | `BatonGoPublicResolverRateLimited` | 최근 5분 GET·HEAD 429 10건 이상이 5분 지속 | `warning` |
 | `BatonGoStoredTargetContractViolation` | 최근 5분 계약 위반 카운터 증가 | `critical` |
 | `BatonGoLinkRetentionFailure` | 최근 5분 링크 정리 실패 증가 | `warning` |
+| `BatonGoLinkRetentionSchedulerStalled` | 실행 완료 신호가 실행 간격의 3배(최소 3분)를 넘긴 상태로 2분 지속 | `warning` |
 | `BatonGoDistributedResolverQuotaFailure` | 최근 5분 분산 제한 저장소 장애 증가 | `critical` |
 
 - 5xx 계산의 분자·분모에서 `/actuator...`, `/livez`, `/readyz`를 제외하고, 오류율 분모에서도
@@ -142,6 +143,10 @@ YAML 규칙을 기준으로 하며, 표와 테스트도 같은 변경에서 갱�
   애플리케이션 시작 시 0으로 등록하여 오류 발생 전 기준값을 수집할 수 있게 한다.
   `increase`에는 관측값이 두 개 이상 필요하므로 최초 수집 전 오류나 수집 공백은 로그로도
   확인한다. 카운터가 초기화되어도 저장 데이터 문제가 해결된 것은 아니다.
+- 링크 자동 정리를 켜면 Pod별 `baton_go_link_retention_scheduler_heartbeat_seconds`와
+  `baton_go_link_retention_scheduler_interval_seconds`를 수집한다. 완료 신호는 스케줄러 시작 시각으로
+  초기화하고 성공·실패 실행이 끝날 때 갱신한다. 실패 카운터는 오류를, 완료 신호는 끝나지 않은
+  DB 호출이나 실행 중단을 감지한다. 자동 정리를 끈 Pod에는 두 지표가 없으므로 정체 경보도 발생하지 않는다.
 - 증가량은 수집 간격을 보정한 추정치다. 감사용 요청 건수나 청구 집계로 사용하지 않는다.
   관리 인증 서비스 장애 카운터도 시작 시 0으로 등록하며 최초 수집 전 장애와 수집 공백은
   로그로 함께 확인한다. 최근 5분에 새 장애가 관측되지 않으면 경보가 해제되지만, 관리 요청이

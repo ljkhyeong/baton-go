@@ -170,7 +170,7 @@ class LinkPersistenceIntegrationTest {
         assertThat(replayed.link().notBefore()).isEqualTo(FAR_FUTURE_NOT_BEFORE);
         assertThat(replayed.link().expiresAt()).isEqualTo(FAR_FUTURE_EXPIRES_AT);
 
-        LinkResult revoked = smartLinkUseCase.revokeLink(created.link().id());
+        LinkResult revoked = smartLinkUseCase.revokeLink(created.link().id()).link();
         CreatedLinkResult replayedAfterRevocation = smartLinkUseCase.createLink(command);
 
         assertThat(revoked.revokedAt()).isEqualTo(FAR_FUTURE_NOW);

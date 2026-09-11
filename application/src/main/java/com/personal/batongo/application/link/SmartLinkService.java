@@ -302,12 +302,15 @@ public class SmartLinkService implements SmartLinkUseCase {
     }
 
     @Override
-    public LinkResult revokeLink(UUID linkId) {
+    public RevokedLinkResult revokeLink(UUID linkId) {
         StoredLinkSnapshot storedLink = repository.findStoredByIdForUpdate(linkId)
                 .orElseThrow(LinkNotFoundException::new);
         TrustedTarget trustedTarget = requireManagedTrustedTarget(storedLink);
         if (storedLink.revokedAt() != null) {
-            return toResult(storedLink, trustedTarget, storedLink.revokedAt());
+            return new RevokedLinkResult(
+                    toResult(storedLink, trustedTarget, storedLink.revokedAt()),
+                    true
+            );
         }
         Instant revokedAt = LinkRevocationPolicy.requireFirstRevocationAt(
                 storedLink.createdAt(),
@@ -318,7 +321,10 @@ public class SmartLinkService implements SmartLinkUseCase {
                 storedLink.version(),
                 revokedAt
         );
-        return toResult(storedLink, trustedTarget, revokedAt);
+        return new RevokedLinkResult(
+                toResult(storedLink, trustedTarget, revokedAt),
+                false
+        );
     }
 
     private void requireSameCreationRequest(

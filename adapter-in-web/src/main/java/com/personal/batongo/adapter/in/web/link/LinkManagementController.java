@@ -5,8 +5,8 @@ import com.personal.batongo.application.link.CreationIdempotencyKey;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.CreateLinkCommand;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.CreatedLinkResult;
-import com.personal.batongo.application.link.port.in.SmartLinkUseCase.LinkResult;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.LinkSearchQuery;
+import com.personal.batongo.application.link.port.in.SmartLinkUseCase.RevokedLinkResult;
 import com.personal.batongo.domain.link.LinkAvailabilityPolicy.Status;
 import com.personal.batongo.domain.link.TargetSystem;
 import jakarta.validation.Valid;
@@ -102,8 +102,12 @@ public class LinkManagementController {
 
     @PutMapping("/{linkId}/revocation")
     public ResponseEntity<LinkResponse> revokeLink(@PathVariable UUID linkId, Principal principal) {
-        LinkResult result = smartLinkUseCase.revokeLink(linkId);
-        operationLogger.completed("LINK_REVOKE", result.id(), principal);
-        return ResponseEntity.ok(LinkResponse.from(result));
+        RevokedLinkResult result = smartLinkUseCase.revokeLink(linkId);
+        operationLogger.completed(
+                result.alreadyRevoked() ? "LINK_REVOKE_REPLAY" : "LINK_REVOKE",
+                result.link().id(),
+                principal
+        );
+        return ResponseEntity.ok(LinkResponse.from(result.link()));
     }
 }

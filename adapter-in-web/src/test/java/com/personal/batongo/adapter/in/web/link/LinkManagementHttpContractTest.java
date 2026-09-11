@@ -367,7 +367,9 @@ class LinkManagementHttpContractTest {
     @DisplayName("관리 링크 폐기 응답은 최초 폐기 시각을 유지하고 단축 URL을 노출하지 않는다")
     void revokesManagedLinkWithoutRawShortUrl(CapturedOutput output) throws Exception {
         Instant firstRevokedAt = Instant.parse("2026-07-29T11:00:00Z");
-        when(useCase.revokeLink(LINK_ID)).thenReturn(linkResult(firstRevokedAt));
+        when(useCase.revokeLink(LINK_ID)).thenReturn(
+                new SmartLinkUseCase.RevokedLinkResult(linkResult(firstRevokedAt), false)
+        );
 
         mockMvc.perform(put("/api/v1/links/{linkId}/revocation", LINK_ID))
                 .andExpect(status().isOk())
@@ -380,6 +382,20 @@ class LinkManagementHttpContractTest {
 
         verify(useCase).revokeLink(LINK_ID);
         assertThat(output).contains("\"operation\":\"LINK_REVOKE\"");
+    }
+
+    @Test
+    @DisplayName("이미 폐기한 링크의 반복 요청은 별도 완료 이력으로 남긴다")
+    void recordsRepeatedRevocationSeparately(CapturedOutput output) throws Exception {
+        Instant firstRevokedAt = Instant.parse("2026-07-29T11:00:00Z");
+        when(useCase.revokeLink(LINK_ID)).thenReturn(
+                new SmartLinkUseCase.RevokedLinkResult(linkResult(firstRevokedAt), true)
+        );
+
+        mockMvc.perform(put("/api/v1/links/{linkId}/revocation", LINK_ID))
+                .andExpect(status().isOk());
+
+        assertThat(output).contains("\"operation\":\"LINK_REVOKE_REPLAY\"");
     }
 
     @Test

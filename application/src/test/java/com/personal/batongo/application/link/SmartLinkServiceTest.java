@@ -304,9 +304,10 @@ class SmartLinkServiceTest {
         assertThat(found.revokedAt()).isNull();
         assertThat(found.status()).isEqualTo(Status.ACTIVE);
         assertThat(found.evaluatedAt()).isEqualTo(NOW);
-        assertThat(revoked.revokedAt()).isEqualTo(NOW);
-        assertThat(revoked.status()).isEqualTo(Status.REVOKED);
-        assertThat(revoked.evaluatedAt()).isEqualTo(NOW);
+        assertThat(revoked.alreadyRevoked()).isFalse();
+        assertThat(revoked.link().revokedAt()).isEqualTo(NOW);
+        assertThat(revoked.link().status()).isEqualTo(Status.REVOKED);
+        assertThat(revoked.link().evaluatedAt()).isEqualTo(NOW);
         verify(repository).findStoredById(LINK_ID);
         verify(repository).findStoredByIdForUpdate(LINK_ID);
         verify(repository).revokeStored(LINK_ID, 3L, NOW);
@@ -332,9 +333,10 @@ class SmartLinkServiceTest {
 
         var result = service.revokeLink(LINK_ID);
 
-        assertThat(result.revokedAt()).isEqualTo(firstRevokedAt);
-        assertThat(result.status()).isEqualTo(Status.REVOKED);
-        assertThat(result.evaluatedAt()).isEqualTo(NOW);
+        assertThat(result.alreadyRevoked()).isTrue();
+        assertThat(result.link().revokedAt()).isEqualTo(firstRevokedAt);
+        assertThat(result.link().status()).isEqualTo(Status.REVOKED);
+        assertThat(result.link().evaluatedAt()).isEqualTo(NOW);
         verify(repository, never()).revokeStored(any(), anyLong(), any());
     }
 

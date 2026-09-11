@@ -21,7 +21,7 @@ public interface SmartLinkUseCase {
 
     ResolvedLinkResult resolveLink(String rawCode);
 
-    LinkResult revokeLink(UUID linkId);
+    RevokedLinkResult revokeLink(UUID linkId);
 
     record LinkBatchResult(List<LinkResult> items, List<UUID> notFoundIds, Instant evaluatedAt) {
         public LinkBatchResult {
@@ -84,6 +84,12 @@ public interface SmartLinkUseCase {
         public String toString() {
             return "ResolvedLinkResult[destination=redacted]";
         }
+    }
+
+    record RevokedLinkResult(
+            LinkResult link,
+            boolean alreadyRevoked
+    ) {
     }
 
     record LinkResult(

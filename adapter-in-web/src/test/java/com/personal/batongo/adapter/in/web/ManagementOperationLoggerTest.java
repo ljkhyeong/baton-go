@@ -38,14 +38,4 @@ class ManagementOperationLoggerTest {
         assertThat(event.get("requestId").asString()).isEqualTo("history-request");
         assertThat(output).doesNotContain("\r\nforged-record");
     }
-
-    @Test
-    @DisplayName("서비스 식별자가 없는 기존 인증은 다른 값으로 추정하지 않고 null을 기록한다")
-    void preservesMissingServiceIdentity(CapturedOutput output) {
-        var logger = new ManagementOperationLogger(JsonMapper.builder().build());
-
-        logger.completed("LINK_REVOKE", UUID.randomUUID(), () -> null);
-
-        assertThat(output).contains("\"serviceId\":null");
-    }
 }

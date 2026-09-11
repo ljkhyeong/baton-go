@@ -35,6 +35,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.NullAndEmptySource;
 import org.junit.jupiter.params.provider.NullSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -147,11 +148,31 @@ class ManagementJwtExpiryHttpTest {
         verify(useCase).getLink(LINK_ID);
     }
 
+    @ParameterizedTest
+    @NullAndEmptySource
+    @ValueSource(strings = " ")
+    @DisplayName("서비스 식별자가 없거나 비어 있는 관리 JWT는 401로 거부한다")
+    void rejectsMissingOrBlankSubject(String subject) throws Exception {
+        mockMvc.perform(get("/api/v1/links/{linkId}", LINK_ID)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token(300L, subject)))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("MANAGEMENT_AUTHENTICATION_REQUIRED"));
+
+        verifyNoInteractions(useCase);
+    }
+
     private String token(Long expiryOffsetSeconds) {
+        return token(expiryOffsetSeconds, "test-client");
+    }
+
+    private String token(Long expiryOffsetSeconds, String subject) {
         Instant now = Instant.now();
         var claims = JwtClaimsSet.builder().issuer("https://identity.example")
-                .subject("test-client").audience(List.of("baton-go"))
+                .audience(List.of("baton-go"))
                 .issuedAt(now.minusSeconds(86400)).claim("scope", "baton-go.links.read");
+        if (subject != null) {
+            claims.claim("sub", subject);
+        }
         if (expiryOffsetSeconds != null) {
             claims.expiresAt(now.plusSeconds(expiryOffsetSeconds));
         }

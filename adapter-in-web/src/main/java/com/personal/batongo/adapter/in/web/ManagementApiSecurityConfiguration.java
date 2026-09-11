@@ -18,12 +18,16 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.oauth2.core.OAuth2TokenValidator;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.JwtClaimValidator;
 import org.springframework.security.oauth2.jwt.JwtTimestampValidator;
 import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.AccessDeniedHandler;
 import org.springframework.security.web.authentication.AuthenticationEntryPointFailureHandler;
+import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestTemplate;
 
 @Configuration(proxyBeanMethods = false)
@@ -53,6 +57,11 @@ public class ManagementApiSecurityConfiguration {
         var validator = new JwtTimestampValidator();
         validator.setAllowEmptyExpiryClaim(false);
         return validator;
+    }
+
+    @Bean
+    OAuth2TokenValidator<Jwt> managementJwtSubjectValidator() {
+        return new JwtClaimValidator<String>("sub", StringUtils::hasText);
     }
 
     @Bean

@@ -608,6 +608,10 @@ DB 장애와 분산 요청 제한을 켠 경우의 Redis `PING` 실패는 준비
 `stop_grace_period`는 모두 40초다. 종료 제한을 늘릴 때는 컨테이너 강제 종료 제한도 같은 값보다
 길게 유지한다.
 
+Deployment는 롤링 업데이트 중 가용 Pod를 줄이지 않고(`maxUnavailable: 0`) 최대 한 개의 새 Pod만
+추가한다(`maxSurge: 1`). 새 Pod가 10초간 준비 상태를 유지해야 가용 상태로 인정한다. 클러스터에
+추가 Pod를 실행할 자원이 없으면 기존 Pod를 먼저 종료하지 않고 롤아웃이 대기한다.
+
 `8081`은 위 HTTP label로 열리지 않는다. 모니터링 Pod에서 직접 수집해야 한다면 모니터링
 Namespace와 실제 수집기 Pod 템플릿에 각각 다음 label을 부여해야 한다. 두 selector는 AND
 조건이다. Actuator Service는 기본 생성하지 않으므로 환경별 Pod 탐색도 별도 구성한다.
@@ -766,8 +770,9 @@ kubectl -n baton-go wait --for=condition=complete \
 kubectl -n baton-go rollout status deployment/baton-go --timeout=10m
 ```
 
-배포 중 이전 Pod가 종료 신호를 받은 뒤 40초 안에 정상 종료되는지 확인한다. 해당 구간의 5xx와
-강제 종료 기록이 있으면 배포를 완료로 판단하지 말고, 요청 처리 시간과 종료 제한을 함께 점검한다.
+새 Pod가 10초간 준비 상태를 유지한 뒤 이전 Pod가 종료되는지 확인한다. 이전 Pod는 종료 신호를
+받은 뒤 40초 안에 정상 종료되어야 한다. 롤아웃이 대기하면 먼저 새 Pod의 준비 상태와 자원 부족을
+확인한다. 해당 구간의 5xx나 강제 종료 기록이 있으면 배포를 완료로 판단하지 않는다.
 
 위 삭제는 `Complete`인 마이그레이션 Job 객체만 대상으로 하며 StatefulSet, PVC, Namespace와
 Secret에는 사용하지 않는다. Job이 아직 실행 중이면 중단하지 말고 원인을 확인한다. 한 번의

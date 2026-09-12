@@ -23,6 +23,7 @@ dependencies {
 	testImplementation 'org.springframework.security:spring-security-test'
 	testImplementation 'org.testcontainers:testcontainers-junit-jupiter'
 	testImplementation 'org.testcontainers:testcontainers-mysql'
+	testImplementation 'com.tngtech.archunit:archunit-junit6:1.5.0'
 	testImplementation project(':guard-tool')
 }
 

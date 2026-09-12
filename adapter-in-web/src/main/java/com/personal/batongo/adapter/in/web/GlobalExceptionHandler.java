@@ -29,16 +29,19 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.TypeMismatchException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.ServletWebRequest;
 import org.springframework.web.context.request.WebRequest;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
 @RestControllerAdvice
@@ -273,6 +276,41 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     ) {
         linkRecoveryFailureCounters.get(code).increment();
         return error(HttpStatus.INTERNAL_SERVER_ERROR, code, message, request);
+    }
+
+    @Override
+    protected ResponseEntity<Object> handleTypeMismatch(
+            TypeMismatchException exception,
+            HttpHeaders headers,
+            HttpStatusCode status,
+            WebRequest request
+    ) {
+        if (exception instanceof MethodArgumentTypeMismatchException argumentException) {
+            return handleExceptionInternal(
+                    exception,
+                    errorBody("INVALID_REQUEST", argumentException.getName() + ": 요청 값이 올바르지 않습니다", request),
+                    headers,
+                    status,
+                    request
+            );
+        }
+        return super.handleTypeMismatch(exception, headers, status, request);
+    }
+
+    @Override
+    protected ResponseEntity<Object> handleMissingServletRequestParameter(
+            MissingServletRequestParameterException exception,
+            HttpHeaders headers,
+            HttpStatusCode status,
+            WebRequest request
+    ) {
+        return handleExceptionInternal(
+                exception,
+                errorBody("INVALID_REQUEST", exception.getParameterName() + ": 필수 요청 값이 없습니다", request),
+                headers,
+                status,
+                request
+        );
     }
 
     @Override

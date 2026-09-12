@@ -166,7 +166,8 @@ class TargetContractOperationsHttpContractTest {
         mockMvc.perform(authorized(get(BASE_PATH + "/inventory")
                         .queryParam("afterLinkId", "not-a-uuid")))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
+                .andExpect(jsonPath("$.message").value("afterLinkId: 요청 값이 올바르지 않습니다"));
 
         verifyNoInteractions(operationsUseCase);
     }

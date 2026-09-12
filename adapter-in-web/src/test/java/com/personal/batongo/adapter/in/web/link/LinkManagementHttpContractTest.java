@@ -133,14 +133,19 @@ class LinkManagementHttpContractTest {
     }
 
     @Test
-    @DisplayName("일괄 조회에서 ID 매개변수 누락과 잘못된 UUID는 서비스 호출 전에 거부한다")
+    @DisplayName("일괄 조회의 ID 누락과 형식 오류는 항목 이름만 안내하고 서비스 호출 전에 거부한다")
     void rejectsMalformedBatchIds() throws Exception {
         mockMvc.perform(get("/api/v1/links/batch"))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
+                .andExpect(jsonPath("$.message").value("linkIds: 필수 요청 값이 없습니다"))
+                .andExpect(jsonPath("$.requestId").isNotEmpty())
+                .andDo(document("links-batch-missing-ids"));
         mockMvc.perform(get("/api/v1/links/batch").param("linkIds", LINK_ID + ",invalid"))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
+                .andExpect(jsonPath("$.message").value("linkIds: 요청 값이 올바르지 않습니다"))
+                .andDo(document("links-batch-invalid-ids"));
         verifyNoInteractions(useCase);
     }
 
@@ -194,12 +199,37 @@ class LinkManagementHttpContractTest {
     }
 
     @Test
-    @DisplayName("관리 검색의 잘못된 시각 표현은 서비스 호출 전에 요청 오류로 반환한다")
-    void rejectsMalformedSearchTime() throws Exception {
-        for (String parameter : List.of("createdFrom", "createdBefore", "expiresFrom", "expiresBefore")) {
-            mockMvc.perform(get("/api/v1/links").param(parameter, "not-a-time"))
+    @DisplayName("관리 검색의 형식 오류는 입력값 대신 항목 이름을 안내하고 서비스 호출 전에 거부한다")
+    void rejectsMalformedSearchParameters() throws Exception {
+        for (String parameter : List.of(
+                "createdFrom", "createdBefore", "expiresFrom", "expiresBefore",
+                "afterLinkId", "limit", "targetSystem", "status"
+        )) {
+            mockMvc.perform(get("/api/v1/links")
+                            .header("X-Request-Id", "invalid-search-parameter")
+                            .param(parameter, "private-invalid-value"))
                     .andExpect(status().isBadRequest())
-                    .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+                    .andExpect(header().string(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE))
+                    .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
+                    .andExpect(header().string("X-Request-Id", "invalid-search-parameter"))
+                    .andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
+                    .andExpect(jsonPath("$.message").value(parameter + ": 요청 값이 올바르지 않습니다"))
+                    .andExpect(jsonPath("$.requestId").value("invalid-search-parameter"));
+        }
+        verifyNoInteractions(useCase);
+    }
+
+    @Test
+    @DisplayName("조회·폐기 경로의 UUID 오류는 원문 값 없이 링크 ID 항목을 안내한다")
+    void rejectsMalformedLinkId() throws Exception {
+        for (var request : List.of(
+                get("/api/v1/links/private-invalid-id"),
+                put("/api/v1/links/private-invalid-id/revocation")
+        )) {
+            mockMvc.perform(request)
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
+                    .andExpect(jsonPath("$.message").value("linkId: 요청 값이 올바르지 않습니다"));
         }
         verifyNoInteractions(useCase);
     }

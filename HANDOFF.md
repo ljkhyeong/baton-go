@@ -99,6 +99,15 @@
 
 ## 최근 검증
 
+- 커서 조회 정리는 미커밋 변경이 없는 `main`의 `72ff402`에서 시작해 `6b5ec8b`에 저장했다.
+  `scanStoredAfter`의 첫 페이지·다음 페이지 조회 실행부를 통합해 운영 코드 7줄을 줄였다.
+  Java 21에서 `./gradlew --no-daemon :bootstrap:mysqlTest
+  --tests '*TargetContractOperationsIntegrationTest' :bootstrap:bootJar`를 통과했다.
+  MySQL 통합 테스트 6개에 실패·제외가 없고, 첫 페이지·다음 페이지의 순서·커서·한도를 확인했다.
+  로그는 `/private/tmp/baton-go-pagination-simplification-20260912.log`, JAR은
+  `bootstrap/build/libs/baton-go.jar`다. 이후 인계 문서만 변경했다. HTTP 계약·Redis·의존 구조가
+  같아 별도 검증은 확대하지 않았다. 조회 조건의 `@DateTimeFormat`은 유지한다. Spring 7.0.9의
+  기본 `InstantFormatter`는 숫자를 밀리초 시각으로도 변환하므로 제거하면 ISO 입력 정책이 달라진다.
 - 오류 처리 정리는 미커밋 변경이 없는 `main`의 `fece2b4`에서 시작해 `54f27fa`에 저장했다.
   `GlobalExceptionHandler`의 첫 입력 오류 조회와 헤더 복사를 Spring의 `getFieldError()`와
   `HttpHeaders.copyOf()`로 대체했다. 오류 코드·메시지·HTTP 상태와 응답 헤더는 유지한다.

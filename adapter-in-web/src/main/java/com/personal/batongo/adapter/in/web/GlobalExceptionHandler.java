@@ -35,6 +35,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -43,6 +44,8 @@ import org.springframework.web.context.request.ServletWebRequest;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
+import tools.jackson.databind.exc.MismatchedInputException;
+import tools.jackson.databind.exc.PropertyBindingException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
@@ -311,6 +314,31 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                 status,
                 request
         );
+    }
+
+    @Override
+    protected ResponseEntity<Object> handleHttpMessageNotReadable(
+            HttpMessageNotReadableException exception,
+            HttpHeaders headers,
+            HttpStatusCode status,
+            WebRequest request
+    ) {
+        // 등록되지 않은 항목 이름은 호출자가 보낸 값이므로 표시하지 않는다.
+        if (exception.getCause() instanceof MismatchedInputException input
+                && !(input instanceof PropertyBindingException)) {
+            String field = input.getPath().stream()
+                    .map(reference -> reference.getPropertyName())
+                    .filter(Objects::nonNull)
+                    .findFirst().orElse(null);
+            if (field != null) {
+                return handleExceptionInternal(
+                        exception,
+                        errorBody("INVALID_REQUEST", field + ": 요청 값이 올바르지 않습니다", request),
+                        headers, status, request
+                );
+            }
+        }
+        return super.handleHttpMessageNotReadable(exception, headers, status, request);
     }
 
     @Override

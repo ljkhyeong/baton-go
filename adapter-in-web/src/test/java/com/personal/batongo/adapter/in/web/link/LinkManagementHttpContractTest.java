@@ -67,6 +67,7 @@ import org.springframework.restdocs.mockmvc.RestDocumentationResultHandler;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.servlet.config.annotation.DelegatingWebMvcConfiguration;
+import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.json.JsonMapper;
 
 @ExtendWith({RestDocumentationExtension.class, OutputCaptureExtension.class})
@@ -87,6 +88,7 @@ class LinkManagementHttpContractTest {
         useCase = mock(SmartLinkUseCase.class);
         var jsonMapper = JsonMapper.builder()
                 .findAndAddModules()
+                .enable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
                 .build();
         LinkManagementController controller = new LinkManagementController(
                 useCase, new ManagementOperationLogger(jsonMapper)
@@ -458,7 +460,7 @@ class LinkManagementHttpContractTest {
             "targetSystem=\"UNKNOWN_SYSTEM\"",
             "purpose=0"
     })
-    @DisplayName("대상 열거형이 정확하지 않으면 서비스 호출 전에 400으로 거부한다")
+    @DisplayName("대상 열거형 오류는 입력값 없이 문제 항목을 안내하고 서비스 호출 전에 거부한다")
     void rejectsInexactTargetEnumsBeforeApplication(String input) throws Exception {
         String[] fieldAndValue = input.split("=", 2);
         String targetSystem = fieldAndValue[0].equals("targetSystem")
@@ -479,7 +481,8 @@ class LinkManagementHttpContractTest {
                                 }
                                 """.formatted(targetSystem, BATON_TARGET_PATH, purpose)))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
+                .andExpect(jsonPath("$.message").value(fieldAndValue[0] + ": 요청 값이 올바르지 않습니다"));
 
         verifyNoInteractions(useCase);
     }
@@ -521,7 +524,7 @@ class LinkManagementHttpContractTest {
             "expiresAt=\"2026-07-30T10:00:00.Z\"",
             "notBefore=1780000000"
     })
-    @DisplayName("표준 형식이 아닌 생성 시각은 예약 전에 400 INVALID_REQUEST로 거부한다")
+    @DisplayName("생성 시각의 형식 오류는 문제 항목을 안내하고 예약 전에 거부한다")
     void rejectsNonCanonicalCreationTimesBeforeApplication(String input)
             throws Exception {
         String[] fieldAndValue = input.split("=", 2);
@@ -541,9 +544,35 @@ class LinkManagementHttpContractTest {
                                         fieldAndValue[1]
                                 )))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
+                .andExpect(jsonPath("$.message").value(fieldAndValue[0] + ": 요청 값이 올바르지 않습니다"));
 
         verifyNoInteractions(useCase);
+    }
+
+    @Test
+    @DisplayName("알 수 없는 항목과 깨진 JSON은 입력값이나 내부 오류 없이 공통 형식 오류로 안내한다")
+    void rejectsUnknownOrMalformedBodyWithoutEchoingValues(CapturedOutput output) throws Exception {
+        for (String body : List.of(
+                """
+                {"targetSystem":"BATON","targetPath":"%s","purpose":"NAVIGATION",
+                 "private-input-field":"private-input-value"}
+                """.formatted(BATON_TARGET_PATH),
+                "{\"targetSystem\":", "[]"
+        )) {
+            mockMvc.perform(post("/api/v1/links")
+                            .header("Idempotency-Key", IDEMPOTENCY_KEY)
+                            .header("X-Request-Id", "invalid-json-body")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(body))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(header().string(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE))
+                    .andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
+                    .andExpect(jsonPath("$.message").value("요청 형식이 올바르지 않습니다"))
+                    .andExpect(jsonPath("$.requestId").value("invalid-json-body"));
+        }
+        verifyNoInteractions(useCase);
+        assertThat(output).doesNotContain("private-input-field", "private-input-value", BATON_TARGET_PATH);
     }
 
     @ParameterizedTest(name = "{index}: {0}")

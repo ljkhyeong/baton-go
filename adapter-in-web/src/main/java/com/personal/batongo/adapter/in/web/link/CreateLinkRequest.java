@@ -7,13 +7,9 @@ import java.time.Instant;
 import tools.jackson.databind.annotation.JsonDeserialize;
 
 public record CreateLinkRequest(
-        @NotNull
-        @JsonDeserialize(using = ExactLinkEnumDeserializer.TargetSystemDeserializer.class)
-        TargetSystem targetSystem,
+        @NotNull TargetSystem targetSystem,
         @NotNull String targetPath,
-        @NotNull
-        @JsonDeserialize(using = ExactLinkEnumDeserializer.LinkPurposeDeserializer.class)
-        LinkPurpose purpose,
+        @NotNull LinkPurpose purpose,
         @JsonDeserialize(using = StrictUtcInstantDeserializer.class) Instant notBefore,
         @JsonDeserialize(using = StrictUtcInstantDeserializer.class) Instant expiresAt
 ) {

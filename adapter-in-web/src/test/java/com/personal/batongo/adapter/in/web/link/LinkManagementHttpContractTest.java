@@ -68,6 +68,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.servlet.config.annotation.DelegatingWebMvcConfiguration;
 import tools.jackson.databind.DeserializationFeature;
+import tools.jackson.databind.cfg.EnumFeature;
 import tools.jackson.databind.json.JsonMapper;
 
 @ExtendWith({RestDocumentationExtension.class, OutputCaptureExtension.class})
@@ -89,6 +90,7 @@ class LinkManagementHttpContractTest {
         var jsonMapper = JsonMapper.builder()
                 .findAndAddModules()
                 .enable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
+                .enable(EnumFeature.FAIL_ON_NUMBERS_FOR_ENUMS)
                 .build();
         LinkManagementController controller = new LinkManagementController(
                 useCase, new ManagementOperationLogger(jsonMapper)
@@ -456,9 +458,12 @@ class LinkManagementHttpContractTest {
     @ValueSource(strings = {
             "targetSystem=0",
             "targetSystem=\"0\"",
-            "targetSystem=\" BATON\"",
+            "targetSystem=\"baton\"",
             "targetSystem=\"UNKNOWN_SYSTEM\"",
-            "purpose=0"
+            "purpose=0",
+            "purpose=\"0\"",
+            "purpose=\"navigation\"",
+            "purpose=\"UNKNOWN_PURPOSE\""
     })
     @DisplayName("대상 열거형 오류는 입력값 없이 문제 항목을 안내하고 서비스 호출 전에 거부한다")
     void rejectsInexactTargetEnumsBeforeApplication(String input) throws Exception {

@@ -10,6 +10,9 @@ spring:
           issuer-uri: ${BATON_GO_MANAGEMENT_JWT_ISSUER_URI}
           audiences: ${BATON_GO_MANAGEMENT_JWT_AUDIENCE:baton-go}
   jackson:
+    datatype:
+      enum:
+        fail-on-numbers-for-enums: true
     mapper:
       allow-coercion-of-scalars: false
     deserialization:

@@ -135,6 +135,49 @@ class LinkPersistenceIntegrationTest {
     }
 
     @Test
+    @DisplayName("Spring 열거형 설정은 숫자를 거부하고 공백 차이가 있는 재시도에 같은 링크를 반환한다")
+    void normalizesRequestEnumsWithConfiguredSpringJsonMapper() throws Exception {
+        String idempotencyKey = "cd019db4-5944-4c5f-9791-097790e080cd";
+        String requestBody = """
+                {"targetSystem": %s, "targetPath": "%s", "purpose": %s}
+                """;
+
+        mockMvc.perform(post("/api/v1/links")
+                        .with(linkCreateJwt())
+                        .header("Idempotency-Key", idempotencyKey)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody.formatted("0", CANONICAL_BATON_TARGET, "\"NAVIGATION\"")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
+                .andExpect(jsonPath("$.message").value("targetSystem: 요청 값이 올바르지 않습니다"));
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM link_creation_requests WHERE idempotency_key_hash = ?",
+                Long.class,
+                linkCodePort.hashIdempotencyKey(idempotencyKey)
+        )).isZero();
+
+        String createdBody = mockMvc.perform(post("/api/v1/links")
+                        .with(linkCreateJwt())
+                        .header("Idempotency-Key", idempotencyKey)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody.formatted("\" BATON \"", CANONICAL_BATON_TARGET, "\" NAVIGATION \"")))
+                .andExpect(status().isCreated())
+                .andExpect(header().string("Idempotency-Replayed", "false"))
+                .andExpect(jsonPath("$.targetSystem").value("BATON"))
+                .andExpect(jsonPath("$.purpose").value("NAVIGATION"))
+                .andReturn().getResponse().getContentAsString();
+
+        mockMvc.perform(post("/api/v1/links")
+                        .with(linkCreateJwt())
+                        .header("Idempotency-Key", idempotencyKey)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody.formatted("\"BATON\"", CANONICAL_BATON_TARGET, "\"NAVIGATION\"")))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Idempotency-Replayed", "true"))
+                .andExpect(content().json(createdBody));
+    }
+
+    @Test
     @DisplayName("일괄 조회는 요청한 MySQL 링크만 읽고 폐기 상태와 누락 ID를 구분한다")
     void getsStoredLinksInBatch() throws Exception {
         var active = smartLinkUseCase.createLink(new CreateLinkCommand(

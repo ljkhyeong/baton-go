@@ -7,6 +7,9 @@
   [API 계약](docs/PRD/0002_api-contract/spec.md),
   [BATON·ROUND 연동 계약](docs/PRD/0003_cross-service-link-contract/spec.md)이다.
   GO 링크는 위치만 제공하며 접근 권한은 BATON·ROUND가 판단한다.
+- 관리 API의 잘못된 쿼리·경로 값과 필수 쿼리 누락 오류에 문제 항목을 표시한다.
+  Spring의 기존 입력 변환·검증을 사용하며 원문 값은 오류 응답에 넣지 않는다.
+  HTTP 상태·오류 코드·JSON 구조와 서비스 호출 전 거부 시점은 유지한다.
 - 공개 링크의 활성 전·요청 제한·일시적 서버 오류 화면에 `다시 열기` 버튼을 추가했다.
   누를 때만 같은 주소를 다시 요청한다. 만료·폐기·없는 링크에는 표시하지 않으며,
   기존 JSON·HEAD 응답과 요청 제한·보안 헤더를 유지한다.
@@ -86,6 +89,12 @@
 
 ## 최근 검증
 
+- 관리 입력 오류 개선은 미커밋 변경이 없는 `main`의 `306349e`에서 시작했고 코드·테스트는
+  `f7f60cd`에 저장했다. Java 21에서 `./gradlew --no-daemon :adapter-in-web:apiContractDocs`로
+  웹 테스트 128개와 REST Docs 생성을 통과했다. 날짜·UUID·숫자·열거형 변환, 필수 쿼리 누락,
+  조회·폐기 경로와 운영 목록의 오류 항목 표시, 서비스 미호출과 기존 공통 응답을 확인했다.
+  테스트 로그는 `/private/tmp/baton-go-input-error-tests-20260912.log`에 있다.
+  애플리케이션·DB·Redis·모듈 의존·배포 설정은 바뀌지 않아 해당 검증과 배포는 실행하지 않았다.
 - 오류 화면 개선은 미커밋 변경이 없는 `main`의 `96f9986`에서 시작했고 코드·테스트는 `a5b0bd4`에 저장했다.
   Java 21에서 `./gradlew --no-daemon :adapter-in-web:apiContractDocs`로 웹 테스트 127개와 REST Docs
   생성을 통과했다. 문서 링크 46개도 확인했다. 테스트 로그는

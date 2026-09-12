@@ -34,6 +34,11 @@ XML 등 지원하지 않는 응답 형식만 요청해도 원래 오류 상태·
 }
 ```
 
+관리 API의 쿼리·경로 값 형식이 잘못되면 `expiresBefore: 요청 값이 올바르지 않습니다`처럼
+문제 항목을 안내한다. 필수 쿼리가 없으면 `linkIds: 필수 요청 값이 없습니다`로 안내한다.
+원문 입력값과 내부 변환 오류는 응답에 포함하지 않는다. 호출자의 오류 분기는 `message` 대신
+HTTP 상태와 `code`를 기준으로 처리한다.
+
 - 입력 형식 오류: `400 INVALID_REQUEST`
 - 멱등성 키 누락·형식 오류: `400 INVALID_IDEMPOTENCY_KEY`
 - 생성 시각이 Java/JDBC의 UTC 지원 저장 범위나 정밀도를 벗어남: `400 INVALID_REQUEST`

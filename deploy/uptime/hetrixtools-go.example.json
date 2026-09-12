@@ -22,6 +22,6 @@
   "HTTPCodes": "404",
   "MaxRedirects": "0",
   "SSLExpiryReminder": "7",
-  "DomainExpiryReminder": "0",
-  "NSChangeAlert": "0"
+  "DomainExpiryReminder": "15",
+  "NSChangeAlert": "1"
 }

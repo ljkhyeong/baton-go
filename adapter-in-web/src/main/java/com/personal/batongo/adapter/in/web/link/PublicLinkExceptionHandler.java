@@ -44,7 +44,7 @@ public class PublicLinkExceptionHandler {
     public ResponseEntity<String> unavailableHtml(
             LinkUnavailableException exception, HttpServletRequest request
     ) {
-        return errorPage.render(unavailableJson(exception, request));
+        return errorPage.render(unavailableJson(exception, request), exception.notBefore());
     }
 
     @ExceptionHandler(

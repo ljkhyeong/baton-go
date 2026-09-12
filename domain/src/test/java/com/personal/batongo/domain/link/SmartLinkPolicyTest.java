@@ -35,9 +35,11 @@ class SmartLinkPolicyTest {
             assertThatThrownBy(() -> LinkAvailabilityPolicy.requireResolvableAt(
                     revokedAt, notBefore, expiresAt, now
             ))
-                    .isInstanceOf(LinkUnavailableException.class)
-                    .extracting(exception -> ((LinkUnavailableException) exception).reason().name())
-                    .isEqualTo(expected.name());
+                    .isInstanceOfSatisfying(LinkUnavailableException.class, exception -> {
+                        assertThat(exception.reason().name()).isEqualTo(expected.name());
+                        assertThat(exception.notBefore())
+                                .isEqualTo(expected == Status.NOT_ACTIVE ? notBefore : null);
+                    });
         }
     }
 

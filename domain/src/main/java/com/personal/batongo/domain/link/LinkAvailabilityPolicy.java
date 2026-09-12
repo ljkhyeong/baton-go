@@ -21,7 +21,7 @@ public final class LinkAvailabilityPolicy {
         switch (evaluate(revokedAt, notBefore, expiresAt, now)) {
             case ACTIVE -> { }
             case NOT_ACTIVE -> throw new LinkUnavailableException(
-                    LinkUnavailableException.Reason.NOT_ACTIVE, "아직 사용할 수 없는 링크입니다"
+                    LinkUnavailableException.Reason.NOT_ACTIVE, "아직 사용할 수 없는 링크입니다", notBefore
             );
             case EXPIRED -> throw new LinkUnavailableException(
                     LinkUnavailableException.Reason.EXPIRED, "만료된 링크입니다"

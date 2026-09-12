@@ -27,6 +27,7 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.io.IOException;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
@@ -52,6 +53,7 @@ import tools.jackson.databind.json.JsonMapper;
 class PublicLinkHttpContractTest {
 
     private static final UUID LINK_ID = UUID.fromString("83a430c4-5c5d-4eb4-a815-7a5ba1fd4aae");
+    private static final Instant NOT_BEFORE = Instant.parse("2026-07-29T15:30:00Z");
     private static final String BATON_TARGET_PATH =
             "/teams/8e448211-66ae-44ab-9888-c4960648c22b"
                     + "/seasons/713d9cb7-2842-4f9f-b3cc-e31d98c6238a";
@@ -147,12 +149,15 @@ class PublicLinkHttpContractTest {
         when(useCase.resolveLink("VOvLShvx93kQpj8x7w2HYQ"))
                 .thenThrow(new LinkUnavailableException(
                         reason,
-                        "링크를 사용할 수 없습니다"
+                        "링크를 사용할 수 없습니다",
+                        reason == LinkUnavailableException.Reason.NOT_ACTIVE ? NOT_BEFORE : null
                 ));
 
         mockMvc.perform(get("/l/VOvLShvx93kQpj8x7w2HYQ"))
                 .andExpect(status().is(expectedStatus))
                 .andExpect(jsonPath("$.code").value(expectedCode))
+                .andExpect(jsonPath("$.message").value("링크를 사용할 수 없습니다"))
+                .andExpect(jsonPath("$.notBefore").doesNotExist())
                 .andExpect(jsonPath("$.requestId").isNotEmpty());
     }
 
@@ -197,7 +202,7 @@ class PublicLinkHttpContractTest {
 
     @ParameterizedTest
     @CsvSource({
-            "NOT_ACTIVE, 404, 아직 사용할 수 없는 링크입니다, 이용 가능한 시간을 확인",
+            "NOT_ACTIVE, 404, 아직 사용할 수 없는 링크입니다, 2026-07-30 00:30:00 (한국 시간)부터 이용할 수 있습니다.",
             "EXPIRED, 410, 만료된 링크입니다, 새 링크를 요청",
             "REVOKED, 410, 폐기된 링크입니다, 새 링크를 요청"
     })
@@ -207,7 +212,8 @@ class PublicLinkHttpContractTest {
             String message, String guidance
     ) throws Exception {
         when(useCase.resolveLink("private-link-code"))
-                .thenThrow(new LinkUnavailableException(reason, message));
+                .thenThrow(new LinkUnavailableException(reason, message,
+                        reason == LinkUnavailableException.Reason.NOT_ACTIVE ? NOT_BEFORE : null));
 
         var response = mockMvc.perform(get("/l/private-link-code")
                         .accept(MediaType.TEXT_HTML)
@@ -230,6 +236,25 @@ class PublicLinkHttpContractTest {
         } else {
             assertThat(response.getContentAsString()).doesNotContain("다시 열기");
         }
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+            "2026-07-29T15:30:00.123456Z, 2026-07-30 00:30:00.123456 (한국 시간)부터 이용할 수 있습니다.",
+            ", 링크를 보낸 사람에게 이용 가능한 시간을 확인해 주세요."
+    })
+    @DisplayName("이용 시작 시각은 정밀도를 유지하고 시각이 없으면 기존 안내를 표시한다")
+    void rendersStartTimeGuidance(Instant notBefore, String guidance) throws Exception {
+        when(useCase.resolveLink("private-link-code"))
+                .thenThrow(new LinkUnavailableException(LinkUnavailableException.Reason.NOT_ACTIVE,
+                        "아직 사용할 수 없는 링크입니다", notBefore));
+
+        var response = mockMvc.perform(get("/l/private-link-code").accept(MediaType.TEXT_HTML))
+                .andExpect(status().isNotFound())
+                .andReturn().getResponse();
+
+        assertThat(response.getContentAsString()).contains(guidance)
+                .doesNotContain("private-link-code", BATON_TARGET_PATH);
     }
 
     @Test

@@ -13,12 +13,14 @@ import com.personal.batongo.adapter.in.web.WebMvcConfiguration;
 import com.personal.batongo.application.link.error.LinkNotFoundException;
 import com.personal.batongo.application.link.error.StoredTargetPolicyViolationException;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase;
+import com.personal.batongo.domain.link.LinkUnavailableException;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.UUID;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.DisplayName;
@@ -139,6 +141,9 @@ class PublicErrorResponseIntegrationTest {
 
     private static Stream<Arguments> headErrors() {
         return Stream.of(
+                Arguments.of(new LinkUnavailableException(LinkUnavailableException.Reason.NOT_ACTIVE,
+                        "아직 사용할 수 없는 링크입니다", Instant.parse("2026-07-29T15:30:00Z")),
+                        MediaType.TEXT_HTML_VALUE, 404),
                 Arguments.of(new IllegalStateException("서버 오류"), MediaType.TEXT_HTML_VALUE, 500),
                 Arguments.of(new StoredTargetPolicyViolationException(UUID.fromString(
                         "70f147f2-b02a-4a63-bc27-bf60e44db591"

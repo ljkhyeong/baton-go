@@ -10,7 +10,6 @@ import java.security.Principal;
 import java.util.UUID;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
 import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -39,18 +38,17 @@ public class TargetContractOperationsController {
     }
 
     @GetMapping("/inventory")
-    public ResponseEntity<TargetContractInventoryResponse> inventory(
+    public TargetContractInventoryResponse inventory(
             @RequestParam(value = "afterLinkId", required = false) UUID afterLinkId,
             @RequestParam(value = "limit", defaultValue = "100") int limit
     ) {
-        TargetContractInventoryResponse response = TargetContractInventoryResponse.from(
+        return TargetContractInventoryResponse.from(
                 operationsUseCase.inventory(new InventoryQuery(afterLinkId, limit))
         );
-        return ResponseEntity.ok(response);
     }
 
     @PutMapping("/links/{linkId}/revocation")
-    public ResponseEntity<TargetContractRemediationResponse> remediate(
+    public TargetContractRemediationResponse remediate(
             @PathVariable UUID linkId,
             @Valid @RequestBody TargetContractRemediationRequest request,
             Principal principal
@@ -64,6 +62,6 @@ public class TargetContractOperationsController {
                 result.linkId(),
                 principal
         );
-        return ResponseEntity.ok(TargetContractRemediationResponse.from(result));
+        return TargetContractRemediationResponse.from(result);
     }
 }

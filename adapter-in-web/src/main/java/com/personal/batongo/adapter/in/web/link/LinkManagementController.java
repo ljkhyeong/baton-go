@@ -75,7 +75,7 @@ public class LinkManagementController {
     }
 
     @GetMapping
-    public ResponseEntity<LinkSearchResponse> searchLinks(
+    public LinkSearchResponse searchLinks(
             @RequestParam(value = "afterLinkId", required = false) UUID afterLinkId,
             @RequestParam(value = "limit", defaultValue = "100") int limit,
             @RequestParam(value = "targetSystem", required = false) TargetSystem targetSystem,
@@ -89,16 +89,16 @@ public class LinkManagementController {
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant expiresBefore,
             @RequestParam(value = "status", required = false) Status status
     ) {
-        return ResponseEntity.ok(LinkSearchResponse.from(smartLinkUseCase.searchLinks(
+        return LinkSearchResponse.from(smartLinkUseCase.searchLinks(
                 new LinkSearchQuery(
                         afterLinkId, limit, targetSystem, createdFrom, createdBefore, expiresFrom, expiresBefore, status
                 )
-        )));
+        ));
     }
 
     @GetMapping("/{linkId}")
-    public ResponseEntity<LinkResponse> getLink(@PathVariable UUID linkId) {
-        return ResponseEntity.ok(LinkResponse.from(smartLinkUseCase.getLink(linkId)));
+    public LinkResponse getLink(@PathVariable UUID linkId) {
+        return LinkResponse.from(smartLinkUseCase.getLink(linkId));
     }
 
     @GetMapping("/batch")
@@ -107,13 +107,13 @@ public class LinkManagementController {
     }
 
     @PutMapping("/{linkId}/revocation")
-    public ResponseEntity<LinkResponse> revokeLink(@PathVariable UUID linkId, Principal principal) {
+    public LinkResponse revokeLink(@PathVariable UUID linkId, Principal principal) {
         RevokedLinkResult result = smartLinkUseCase.revokeLink(linkId);
         operationLogger.completed(
                 result.alreadyRevoked() ? "LINK_REVOKE_REPLAY" : "LINK_REVOKE",
                 result.link().id(),
                 principal
         );
-        return ResponseEntity.ok(LinkResponse.from(result.link()));
+        return LinkResponse.from(result.link());
     }
 }

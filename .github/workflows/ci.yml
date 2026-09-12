@@ -153,23 +153,26 @@ jobs:
             --entrypoint /bin/promtool "$PROMTOOL_IMAGE" \
             test rules baton-go-alerts.test.yml baton-go-availability.test.yml
 
-      - name: Discord 알림 설정·라우팅 검증
+      - name: Discord·Slack 알림 설정·라우팅 검증
         run: |
           set -euo pipefail
-          docker run --rm --network none --read-only \
-            --volume "$PWD/deploy/prometheus:/rules:ro" \
-            --entrypoint /bin/amtool "$ALERTMANAGER_IMAGE" \
-            check-config /rules/alertmanager-discord.example.yml
-          docker run --rm --network none --read-only \
-            --volume "$PWD/deploy/prometheus:/rules:ro" \
-            --entrypoint /bin/amtool "$ALERTMANAGER_IMAGE" \
-            config routes test --config.file=/rules/alertmanager-discord.example.yml \
-            --verify.receivers=discord-go job=baton-go alertname=BatonGoReadinessFailed
-          docker run --rm --network none --read-only \
-            --volume "$PWD/deploy/prometheus:/rules:ro" \
-            --entrypoint /bin/amtool "$ALERTMANAGER_IMAGE" \
-            config routes test --config.file=/rules/alertmanager-discord.example.yml \
-            --verify.receivers=unmatched job=another-service
+          for channel in discord slack; do
+            config="/rules/alertmanager-${channel}.example.yml"
+            docker run --rm --network none --read-only \
+              --volume "$PWD/deploy/prometheus:/rules:ro" \
+              --entrypoint /bin/amtool "$ALERTMANAGER_IMAGE" \
+              check-config "$config"
+            docker run --rm --network none --read-only \
+              --volume "$PWD/deploy/prometheus:/rules:ro" \
+              --entrypoint /bin/amtool "$ALERTMANAGER_IMAGE" \
+              config routes test --config.file="$config" \
+              --verify.receivers="${channel}-go" job=baton-go alertname=BatonGoReadinessFailed
+            docker run --rm --network none --read-only \
+              --volume "$PWD/deploy/prometheus:/rules:ro" \
+              --entrypoint /bin/amtool "$ALERTMANAGER_IMAGE" \
+              config routes test --config.file="$config" \
+              --verify.receivers=unmatched job=another-service
+          done
 
       - name: 정적·단위·패키징 검증
         run: ./gradlew --no-daemon build

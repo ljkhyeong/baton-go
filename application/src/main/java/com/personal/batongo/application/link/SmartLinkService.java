@@ -224,8 +224,8 @@ public class SmartLinkService implements SmartLinkUseCase {
     public LinkResult getLink(UUID linkId) {
         StoredLinkSnapshot storedLink = repository.findStoredById(linkId)
                 .orElseThrow(LinkNotFoundException::new);
-        TrustedTarget trustedTarget = requireManagedTrustedTarget(storedLink);
-        return toResult(storedLink, trustedTarget, storedLink.revokedAt());
+        requireManagedTrustedTarget(storedLink);
+        return toResult(storedLink, clock.instant());
     }
 
     @Override
@@ -314,10 +314,10 @@ public class SmartLinkService implements SmartLinkUseCase {
     public RevokedLinkResult revokeLink(UUID linkId) {
         StoredLinkSnapshot storedLink = repository.findStoredByIdForUpdate(linkId)
                 .orElseThrow(LinkNotFoundException::new);
-        TrustedTarget trustedTarget = requireManagedTrustedTarget(storedLink);
+        requireManagedTrustedTarget(storedLink);
         if (storedLink.revokedAt() != null) {
             return new RevokedLinkResult(
-                    toResult(storedLink, trustedTarget, storedLink.revokedAt()),
+                    toResult(storedLink, clock.instant()),
                     true
             );
         }
@@ -331,7 +331,7 @@ public class SmartLinkService implements SmartLinkUseCase {
                 revokedAt
         );
         return new RevokedLinkResult(
-                toResult(storedLink, trustedTarget, revokedAt),
+                toResult(storedLink, revokedAt, clock.instant()),
                 false
         );
     }
@@ -369,14 +369,8 @@ public class SmartLinkService implements SmartLinkUseCase {
         );
     }
 
-    private TrustedTarget requireManagedTrustedTarget(StoredLinkSnapshot storedLink) {
-        try {
-            return TrustedTargetPolicy.requireAllowed(
-                    storedLink.targetSystem(),
-                    storedLink.purpose(),
-                    storedLink.targetPath()
-            );
-        } catch (LinkValidationException exception) {
+    private void requireManagedTrustedTarget(StoredLinkSnapshot storedLink) {
+        if (!isAllowedTarget(storedLink)) {
             throw new LinkNotFoundException();
         }
     }
@@ -388,6 +382,14 @@ public class SmartLinkService implements SmartLinkUseCase {
     }
 
     private LinkResult toResult(StoredLinkSnapshot storedLink, Instant evaluatedAt) {
+        return toResult(storedLink, storedLink.revokedAt(), evaluatedAt);
+    }
+
+    private LinkResult toResult(
+            StoredLinkSnapshot storedLink,
+            Instant revokedAt,
+            Instant evaluatedAt
+    ) {
         return new LinkResult(
                 storedLink.id(),
                 TargetSystem.valueOf(storedLink.targetSystem()),
@@ -395,27 +397,9 @@ public class SmartLinkService implements SmartLinkUseCase {
                 LinkPurpose.valueOf(storedLink.purpose()),
                 storedLink.notBefore(),
                 storedLink.expiresAt(),
-                storedLink.revokedAt(),
-                storedLink.createdAt(),
-                evaluatedAt
-        );
-    }
-
-    private LinkResult toResult(
-            StoredLinkSnapshot storedLink,
-            TrustedTarget trustedTarget,
-            Instant revokedAt
-    ) {
-        return new LinkResult(
-                storedLink.id(),
-                trustedTarget.targetSystem(),
-                trustedTarget.targetPath(),
-                trustedTarget.purpose(),
-                storedLink.notBefore(),
-                storedLink.expiresAt(),
                 revokedAt,
                 storedLink.createdAt(),
-                clock.instant()
+                evaluatedAt
         );
     }
 }

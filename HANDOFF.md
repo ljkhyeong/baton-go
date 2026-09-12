@@ -99,6 +99,13 @@
 
 ## 최근 검증
 
+- 생성 예약 정리는 미커밋 변경이 없는 `main`의 `58288b4`에서 시작해 `c98ee63`에 저장했다.
+  단일 행 `INSERT`의 성공 건수 재검사를 제거했다. 중복 키 조회와 나머지 DB 오류 전달은 유지한다.
+  Java 21에서 `./gradlew --no-daemon :bootstrap:mysqlTest --tests '*LinkPersistenceIntegrationTest'
+  --tests '*LinkCreationConcurrencyIntegrationTest' :bootstrap:bootJar`를 통과했다.
+  MySQL 통합 테스트 13개에 실패·제외가 없고, 로그는 `/private/tmp/baton-go-reservation-simplification-20260912.log`,
+  JAR은 `bootstrap/build/libs/baton-go.jar`다. 이후 인계 문서만 변경했다. HTTP·Redis·의존 구조는
+  바뀌지 않아 해당 검증은 반복하지 않았다.
 - 컨트롤러 정리는 미커밋 변경이 없는 `main`의 `8c5539c`에서 시작해 `6fe8da0`에 저장했다.
   고정된 200 JSON 응답 5곳에서 `ResponseEntity`를 제거하고 응답 DTO를 직접 반환한다.
   Java 21에서 `./gradlew --no-daemon :adapter-in-web:test :adapter-in-web:apiContractDocs :bootstrap:bootJar`를

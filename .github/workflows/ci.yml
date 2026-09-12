@@ -190,6 +190,10 @@ jobs:
               --verify.receivers=unmatched job=another-service
           done
 
+      - name: Discord·Slack 웹훅 전달 검증
+        timeout-minutes: 3
+        run: python3 tools/verify-webhooks.py --output "$RUNNER_TEMP/webhook-verification"
+
       - name: 감시 시스템 중단 알림 설정·라우팅 검증
         run: |
           set -euo pipefail
@@ -507,6 +511,8 @@ jobs:
           path: |
             **/build/test-results/**/*.xml
             **/build/reports/tests/**
+            ${{ runner.temp }}/webhook-verification/*.log
+            ${{ runner.temp }}/webhook-verification/report.json
           if-no-files-found: ignore
           retention-days: 14
 

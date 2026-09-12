@@ -5,6 +5,10 @@ build/
 .DS_Store
 .env*
 !.env.example
+/deploy/app.env
+/deploy/prometheus/slack-webhook-url
+/deploy/prometheus/discord-webhook-url
+/deploy/prometheus/healthchecks-ping-url
 *.key
 *.pem
 *.p12

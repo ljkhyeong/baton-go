@@ -9,7 +9,7 @@
   GO 링크는 위치만 제공하며 접근 권한은 BATON·ROUND가 판단한다.
 - 종료 링크 자동 삭제, Redis 분산 요청 제한, 대상 계약 점검·폐기 API는 기본 중지 상태다.
   실제 운영 환경 검증과 배포는 남아 있다.
-- `go.b4ton.com` 운영 예시와 Cloudflare DNS API 인증서 갱신·Discord 웹훅 알림의 선택 설정을
+- `go.b4ton.com` 운영 예시와 Cloudflare DNS API 인증서 갱신·Discord·Slack 웹훅 알림의 선택 설정을
   추가했다. [외부 API 연동 절차](docs/RUNBOOK/external-api-integrations.md)를 따르며
   서버 설치, 실제 토큰 연결, DNS 변경, 인증서 발급과 메시지 전송은 실행하지 않았다.
 - 일반 링크 폐기 완료 이력은 최초 요청을 `LINK_REVOKE`, 이미 폐기된 링크의 반복 요청을
@@ -41,6 +41,14 @@
 
 ## 최근 검증
 
+- Slack 추가는 미커밋 변경이 없는 `main`의 `6e9d39f`에서 시작해 `ec44c1d`에 설정·CI를 저장했다.
+  기존 검증 환경으로 변경한 CI 단계의 YAML·Bash·ShellCheck, Alertmanager `v0.34.0`의
+  `amtool check-config`와 `config routes test`를 통과했다. Discord·Slack 각각의 GO 경보 전달과
+  다른 서비스 제외를 확인했다. `template render`로 Slack 발생·해제 메시지 5개 필드의
+  표시 내용과 비밀 필드 제외를 확인했다. 입력은 상태별 파일로 분리했고 재시도 없이 성공했다.
+  로그는 `/private/tmp/baton-go-integration-validation-20260912/slack-validation.log`다.
+  이후 README·RUNBOOK·HANDOFF 문서만 변경했다. Java·DB·Redis·인증서 설정은 바뀌지 않아
+  해당 검증은 반복하지 않았다. 실제 웹훅 등록·메시지 전송과 GitHub CI 전체 실행은 하지 않았다.
 - 2026-09-12 기준 리비전 `400b739`의 깨끗한 `main`에서 시작했고 연동 설정은 `051c2aa`에 저장했다.
   이어진 문서 변경은 README·RUNBOOK·HANDOFF이며 애플리케이션 코드·의존성 변경은 없다.
   `kubectl kustomize`로 `deploy/k8s/overlays/private-server`와

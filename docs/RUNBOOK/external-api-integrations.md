@@ -9,7 +9,7 @@ GO에서 직접 구현을 줄일 수 있는 연동과 적용 설정을 정리한
 | 대상 | 사용할 연동 | 반영 상태 |
 | --- | --- | --- |
 | 인증서 갱신 | cert-manager → Cloudflare DNS API + Let's Encrypt ACME | `go.b4ton.com` 발급·갱신 설정 추가. 준비된 인증서를 유지하면 적용하지 않아도 된다. |
-| 장애 알림 | Alertmanager → Discord Webhook API | 기존 GO 경보의 발생·해제 알림 설정과 CI 검증 추가. Discord를 사용할 때 선택한다. |
+| 장애 알림 | Alertmanager → Discord·Slack Webhook API | 기존 GO 경보의 발생·해제 알림 설정과 CI 검증 추가. 사용할 채널을 선택한다. |
 | 관리 API 인증 | Spring Security → 발급자의 JWK Set | 이미 구현됨. 발급자·JWK 주소를 설정하면 서명 키 조회와 캐시를 프레임워크가 처리한다. |
 | DNS 레코드 | 기존 Cloudflare DNS | 공인 IP가 유지되면 초기 레코드만 필요하다. 주기적 DNS API 호출은 추가하지 않는다. |
 | 링크 생성·폐기 | 기존 GO API | 같은 요청의 URL 복원·활성 시간·폐기·대상 제한을 보장하므로 외부 단축 URL 서비스로 대체하지 않는다. |
@@ -19,7 +19,7 @@ BATON의 카카오톡 공유·브라우저 QR 기능은
 [기존 연동 상태](../../HANDOFF.md#현재-상태)를 따른다.
 
 선정한 연동은 유료 플랜이나 무료 체험을 전제로 하지 않는다. Cloudflare의 기존 DNS와
-Let's Encrypt 무료 인증서, Discord 기본 웹훅을 사용하며 별도 유료 메시지 서비스를 두지 않는다.
+Let's Encrypt 무료 인증서, Discord·Slack 기본 웹훅을 사용하며 별도 유료 메시지 서비스를 두지 않는다.
 API 호출 제한은 각 제공자의 정책을 따르고, Prometheus·Alertmanager·cert-manager의 실행 자원은
 기존 홈서버에서 사용한다. 아직 없는 도구는 향후 해당 연동을 선택할 때 준비해야 한다.
 
@@ -108,7 +108,40 @@ Origin CA 인증서는 브라우저가 직접 신뢰하는 인증서가 아니�
 
 Alertmanager가 같은 경보를 묶고 반복 알림 간격과 장애 해제 알림을 처리한다.
 기존에 다른 알림 채널을 사용한다면 해당 receiver를 유지하면 된다.
-프로젝트 CI는 공식 Alertmanager `v0.34.0`으로 예시의 구문과 GO·다른 서비스의 분기만 검사하며
+프로젝트 CI는 공식 Alertmanager `v0.34.0`으로 Discord·Slack 예시의 구문과 GO·다른 서비스의 분기를 검사하며
 네트워크를 차단해 실제 메시지를 보내지 않는다. 웹훅 파일 읽기와 발생·해제 수신은
 선택한 채널을 연결한 뒤 별도로 확인한다.
 설정 기준: [Alertmanager Discord 연동](https://prometheus.io/docs/alerting/latest/configuration/#discord_config).
+
+## Slack으로 GO 장애 알림
+
+[Slack 설정 예시](../../deploy/prometheus/alertmanager-slack.example.yml)는 Discord와 같은
+GO 경보·그룹화·반복 간격을 사용하고 발생·해제 알림을 모두 보낸다.
+본문은 경보 제목과 건수만 표시하며, 알림 미리보기에도 전체 label이나 내부 관리 주소를 넣지 않는다.
+
+1. Slack 앱에서 `Incoming Webhooks`를 켜고 `Add New Webhook to Workspace`로 수신 채널을 선택한다.
+   기존 앱이 있으면 재사용한다. 비공개 채널은 웹훅을 등록하는 사용자가 먼저 참여해야 한다.
+2. 웹훅 URL을 Secret으로 보관하고 Alertmanager 컨테이너의
+   `/etc/alertmanager/secrets/slack-webhook-url`에 UTF-8 파일로 읽기 전용 마운트한다.
+3. 공용 Alertmanager에는 예시의 `route.routes` 항목과 `slack-go` receiver만 병합한다.
+   기존 최상위 route와 다른 서비스의 receiver는 유지하고, 예시의 `unmatched`는 옮기지 않는다.
+4. 앞선 route가 GO 경보를 가로채지 않는지 확인하고 병합 결과를 검사한다.
+
+   ```bash
+   amtool check-config /etc/alertmanager/alertmanager.yml
+   amtool config routes test --config.file=/etc/alertmanager/alertmanager.yml \
+     --verify.receivers=slack-go job=baton-go alertname=BatonGoReadinessFailed
+   ```
+
+수신 채널·앱 이름·아이콘은 Slack 웹훅을 만들 때 정해진다. YAML의 `channel`로 바꿀 수 없으므로
+예시에는 지정하지 않는다. 채널을 바꾸려면 해당 채널의 웹훅으로 Secret을 교체한다.
+Discord와 Slack 양쪽에 보내려면 하나의 GO receiver에 두 예시의 `discord_configs`와
+`slack_configs`를 함께 넣고 GO route가 그 receiver를 가리키게 한다.
+
+Slack 무료 플랜에서도 사용할 수 있지만 앱 설치 한도는 외부·사용자 지정 앱을 합쳐 10개다.
+기존 앱을 재사용하거나 사용하지 않는 연동을 정리해 한도 내에서 구성하며 유료 전환을 전제로 하지 않는다.
+로컬·CI 검증은 실제 웹훅에 접속하지 않는다. 활성화 후 선택한 채널에서 발생·해제 수신을 확인한다.
+
+근거: [Slack 웹훅 등록](https://docs.slack.dev/messaging/sending-messages-using-incoming-webhooks/),
+[무료 플랜 제한](https://slack.com/help/articles/115002422943-Usage-limits-for-free-workspaces),
+[Alertmanager Slack 연동](https://prometheus.io/docs/alerting/latest/configuration/#slack_config).

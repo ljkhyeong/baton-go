@@ -99,6 +99,17 @@
 
 ## 최근 검증
 
+- 운영 API 응답 정리는 미커밋 변경이 없는 `main`의 `5263948`에서 시작해 `4900388`에 저장했다.
+  중복 응답 파일 2개와 필드 변환을 제거해 운영 코드 78줄을 줄였다. Java 21에서
+  `./gradlew --no-daemon :adapter-in-web:test :adapter-in-web:apiContractDocs :bootstrap:test
+  --tests '*ArchitectureRulesTest' :bootstrap:bootJar`를 통과했다. 웹 테스트 135개에 실패·제외가 없고
+  목록·폐기 응답 본문은 변경 전후가 일치한다. 로그와 비교 자료는
+  `/private/tmp/baton-go-operations-response-simplification-20260912.log`와 같은 이름의 디렉터리에 있다.
+  계층 검사에서 실제 `application.link.port.out` 패키지가 빠진 문제는 `bda48cc`에 수정했다.
+  패키지 일치 여부를 재현한 뒤 `./gradlew --no-daemon :bootstrap:test --tests '*ArchitectureRulesTest'`를
+  다시 실행해 5개를 모두 통과했다. 로그는 `/private/tmp/baton-go-architecture-rule-fix-20260912.log`다.
+  이후 인계 문서만 변경했다. JAR은 `bootstrap/build/libs/baton-go.jar`이며 SQL·Redis 변경이 없어
+  통합 검증은 반복하지 않았다.
 - 커서 조회 정리는 미커밋 변경이 없는 `main`의 `72ff402`에서 시작해 `6b5ec8b`에 저장했다.
   `scanStoredAfter`의 첫 페이지·다음 페이지 조회 실행부를 통합해 운영 코드 7줄을 줄였다.
   Java 21에서 `./gradlew --no-daemon :bootstrap:mysqlTest

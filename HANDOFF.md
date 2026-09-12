@@ -12,17 +12,20 @@
 - `go.b4ton.com` 운영 예시와 Cloudflare DNS API 인증서 갱신·Discord·Slack 웹훅 알림의 선택 설정을
   추가했다. [외부 API 연동 절차](docs/RUNBOOK/external-api-integrations.md)를 따르며
   서버 설치, 실제 토큰 연결, DNS 변경, 인증서 발급과 메시지 전송은 실행하지 않았다.
+- Cloudflare의 무료 [인증서 발급 알림](docs/RUNBOOK/external-api-integrations.md#cloudflare-인증서-발급-알림)
+  설정·확인·해제 절차를 추가했다. 애플리케이션 코드나 주기 실행은 추가하지 않았다.
+  계정 연결이 없어 실제 활성화·수신자 등록·이메일 수신은 확인하지 않았다.
 - Dependabot의 CI 액션·Java 21 기반 이미지 업데이트 제안 설정과 GitHub 공식 Slack 앱의 CI 구독 절차를 추가했다.
   Java 이미지는 사용하지 않는 빌드 인자를 제거하고 Dockerfile의 `FROM`에 직접 고정했다.
   Java 메이저 업데이트와 MySQL 이미지는 자동 제안에서 제외한다.
-  원격 기본 브랜치 반영과 실제 채널 연결은 아직 하지 않았다.
+  원격 `main`에 반영했으며 실제 채널 연결은 남아 있다.
 - GitHub 저장소의 Dependabot alerts를 활성화하고 조회로 확인했다. 자동 수정 PR은 중지 상태다.
   기존 Trivy 결과의 Java 패키지 목록을 `main` CI 성공 후 의존성 API로 제출하는 설정을 추가했다.
-  실제 Java 목록 제출은 원격 `main` 반영 후 확인해야 한다.
+  `8ab710f`의 원격 CI에서 Java 목록 제출 단계가 성공했다.
 - `main`의 빌드·이미지·실행·DB 검증 후 같은 이미지를 GHCR에 게시하는 CI 설정을 추가했다.
   게시 다이제스트·검사 메타데이터를 별도 산출물에 기록하며 재빌드하지 않는다.
   [게시·배포 참조 절차](docs/RUNBOOK/image-security-reports.md#ghcr-자동-게시와-배포-참조)를 따르며,
-  원격 반영·실제 GHCR 인증과 게시·홈서버 이미지 수신은 아직 확인하지 않았다.
+  `8ab710f`의 원격 CI에서 GHCR 게시·다이제스트 보존 단계가 성공했다. 홈서버 이미지 수신은 미확인이다.
 - 기존 태그와 같은 커밋의 성공한 `main` CI 자료를 GitHub Release 초안에 첨부하는
   [보관 워크플로](.github/workflows/release-evidence.yml)를 추가했다. 검사·게시 자료의 일치와
   필수 파일을 확인하며 재빌드하지 않는다. 실제 태그 등록·Release 생성·발행은 하지 않았다.
@@ -67,6 +70,12 @@
 
 ## 최근 검증
 
+- 인증서 발급 알림 문서는 미커밋 변경이 없는 `main`의 `8ab710f`에서 시작했다.
+  Cloudflare 공식 CT 감시·GET/PATCH API의 경로·권한·수신자 교체 규칙과 무료 이메일 조건을 확인했다.
+  README·RUNBOOK·HANDOFF의 변경 내용, 로컬 링크·새 앵커, JSON 예시와 `git diff --check`를 확인했다.
+  애플리케이션·설정·CI가 바뀌지 않아 빌드·테스트는 반복하지 않았다. 실제 계정 설정은 미실행이다.
+  같은 리비전의 [원격 CI](https://github.com/ljkhyeong/baton-go/actions/runs/34684507913)는
+  전체 성공이며 GHCR 게시·다이제스트 보존·GitHub 의존성 API 제출 단계의 성공도 조회했다.
 - 릴리스 자료·Kubernetes 경보는 미커밋 변경이 없는 `main`의 `45bc8db`에서 시작했다.
   릴리스 워크플로는 `6715400`에 저장했다. YAML·Bash·ShellCheck·actionlint `1.7.12`와
   성공·CI 없음·자료 만료·커밋/이미지/재실행 불일치·필수 파일 누락·기존 Release 충돌의

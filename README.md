@@ -210,6 +210,8 @@ Pod 자동 발견 설정과 최소 조회 권한을 제공하며 새 서버나 �
 `b4ton.com` 기준 도메인, Cloudflare 인증서 갱신·만료 알림, Discord·Slack 장애 알림과 GitHub CI 연동은
 [추가 요금 없는 외부 API 연동](docs/RUNBOOK/external-api-integrations.md)에 정리했다.
 필요한 연동을 선택하고 기존 인증서와 알림 채널을 계속 사용할 수 있다.
+Cloudflare의 무료 [인증서 발급 알림](docs/RUNBOOK/external-api-integrations.md#cloudflare-인증서-발급-알림)은
+계정에서 한 번 설정하며 k3s 구축 전에도 사용할 수 있다.
 
 ## 검증
 

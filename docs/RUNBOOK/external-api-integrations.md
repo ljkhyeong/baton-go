@@ -10,6 +10,7 @@ GO에서 직접 구현을 줄일 수 있는 연동과 적용 설정을 정리한
 | --- | --- | --- |
 | 인증서 갱신 | cert-manager → Cloudflare DNS API + Let's Encrypt ACME | `go.b4ton.com` 발급·갱신 설정 추가. 준비된 인증서를 유지하면 적용하지 않아도 된다. |
 | 인증서 장애 알림 | cert-manager 지표 → Prometheus → Discord·Slack | 준비 실패·갱신 지연·만료 임박·지표 누락을 감지하는 선택 설정 추가. |
+| 인증서 발급 알림 | Cloudflare CT Monitoring → 이메일 | `b4ton.com`의 활성화·수신자 확인·해제 절차 추가. 실제 계정 설정은 남아 있다. |
 | 장애 알림 | Alertmanager → Discord·Slack Webhook API | 기존 GO 경보의 발생·해제 알림 설정과 CI 검증 추가. 사용할 채널을 선택한다. |
 | 컨테이너·배포 실패 알림 | Kubernetes API → kube-state-metrics → Prometheus → Discord·Slack | Pod 준비 실패·반복 재시작·가용 Pod 부족·마이그레이션 실패·지표 누락의 선택 설정 추가. |
 | 외부 접속 감시 | HetrixTools → Slack | 공개 HTTPS의 404·본문 확인용 등록 예시 추가. 실제 계정 연결은 남아 있다. |
@@ -147,6 +148,51 @@ Origin CA 인증서는 브라우저가 직접 신뢰하는 인증서가 아니�
 Origin CA 인증서와 실제 HTTPS 라우팅 상태는 이 지표로 확인할 수 없다.
 기준: [공식 지표 수집](https://cert-manager.io/docs/devops-tips/prometheus-metrics/),
 [인증서 지표 구현](https://github.com/cert-manager/cert-manager/blob/v1.21.2/internal/collectors/certificate_collector.go).
+
+## Cloudflare 인증서 발급 알림
+
+Certificate Transparency(CT) Monitoring은 `b4ton.com`과 하위 도메인의 인증서가 공개 CT 로그에
+등록되면 이메일로 알린다. Free에서도 사용할 수 있으며 k3s나 별도 감시 서버가 필요하지 않다.
+기존 만료·갱신 경보와 함께 사용한다.
+
+1. Cloudflare에서 `b4ton.com` → **SSL/TLS → Edge Certificates**를 연다.
+   **Certificate Transparency Monitoring**의 현재 활성 상태와 수신자를 먼저 확인한다.
+2. 기능을 켜고 **Add Email**로 운영 담당자의 이메일을 등록한다. 기존 수신자는 유지한다.
+   이미 켜져 있고 담당자가 등록되어 있으면 다시 설정하지 않는다.
+3. 저장 후 활성 상태와 수신자를 다시 확인한다. 다음 정상 발급·갱신 때 이메일의 도메인·발급 기관·
+   유효 기간을 대조한다. 설정 저장만으로 실제 수신까지 검증된 것은 아니다.
+
+Cloudflare가 대신 발급한 인증서는 알림에서 제외된다. cert-manager로 요청한 Let's Encrypt
+인증서의 정상 발급·갱신은 알림을 받을 수 있으므로 발급 이력과 비교한다. 요청한 적 없는
+인증서라면 Cloudflare 계정·DNS 변경 이력을 확인하고 해당 발급 기관에 조사·폐기를 요청한다.
+공개 CT 로그에 없는 Origin CA·사설 인증서와 실제 HTTPS 접속 장애는 이 기능으로 확인하지 않는다.
+
+### API로 설정 확인·변경
+
+Cloudflare API의 기준 주소는 `https://api.cloudflare.com/client/v4`다. `zone_id`는 계정에서
+확인한 `b4ton.com`의 Zone ID를 사용한다. Bearer 토큰은 이 영역에만 권한을 부여하고,
+조회에는 `SSL and Certificates Read`, 변경에는 `SSL and Certificates Write`를 사용한다.
+cert-manager의 DNS 토큰 권한을 넓히거나 이 토큰을 GO·클러스터에 상시 배포하지 않는다.
+
+| 작업 | 요청 | JSON 본문 |
+| --- | --- | --- |
+| 현재 상태·수신자 확인 | `GET /zones/{zone_id}/ct/alerting` | 없음 |
+| 기존 수신자로 활성화 | `PATCH /zones/{zone_id}/ct/alerting` | `{"enabled":true}` |
+| 알림 해제 | `PATCH /zones/{zone_id}/ct/alerting` | `{"enabled":false}` |
+
+최초 수신자는 관리 화면에서 등록한다. API의 `emails` 필드는 생략하면 기존 목록을 유지하고,
+지정하면 전체 목록을 교체한다. 변경이 필요할 때만 현재 수신자와 추가할 수신자를 합쳐 보낸다.
+변경 후 GET 응답의 `success=true`, `result.enabled`와 수신자 목록을 확인한다.
+되돌릴 때는 작업 전 활성 상태로 복원하고 이번에 추가한 수신자만 제거한다.
+구독 상태가 바뀌면 Cloudflare가 구독·해제 안내 메일을 보낼 수 있다.
+
+CT Monitoring은 현재 이메일만 지원한다. Cloudflare의 일반 웹훅 알림과는 별도 기능이며,
+Slack 전달은 추가하지 않는다. 기존 GO 장애 알림의 Slack 경로는 그대로 사용한다.
+
+기준: [CT 감시 설정](https://developers.cloudflare.com/ssl/edge-certificates/additional-options/certificate-transparency-monitoring/),
+[무료 플랜 제공](https://blog.cloudflare.com/certificate-transparency-monitoring-ga/),
+[조회 API](https://developers.cloudflare.com/api/resources/zones/subresources/ct/subresources/alerting/methods/get/),
+[변경 API](https://developers.cloudflare.com/api/resources/zones/subresources/ct/subresources/alerting/methods/edit/).
 
 ## Discord로 GO 장애 알림
 

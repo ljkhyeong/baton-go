@@ -121,8 +121,10 @@ GHCR의 컨테이너 이미지 저장·전송은 현재 무료다. CI 실행 시
 | `baton-go-release-evidence.tar.gz` | CI 실행 정보, SBOM·취약점·검사기·Java 의존성 보고서, 검사·게시 메타데이터 |
 | `image-publication.json` | 배포 이미지 다이제스트·플랫폼·소스 커밋을 바로 확인할 게시 기록 |
 
-같은 커밋의 성공한 `CI` 중 최신 실행을 선택하고 검사·게시 자료의 이미지 정보와 재실행 번호를
-대조한다. 성공한 실행이 없거나 산출물이 만료·누락됐거나 두 기록이 다르면 초안 생성 전에 실패한다.
+같은 커밋의 성공한 `CI` 중 최신 실행을 선택하고 검사·게시 자료의 커밋·CI 실행·이미지 정보를
+대조한다. 의존성 제출 등 실패한 작업만 재실행하면 이미지는 이전 시도에서 게시됐을 수 있다.
+같은 실행에서 생성한 정상 자료는 재사용하고, 초안에 최종 CI 성공 시도와 이미지 게시 시도를 각각 기록한다.
+성공한 실행이 없거나 자료가 만료·누락·불일치하거나 게시 시도가 CI의 현재 시도보다 크면 생성 전에 실패한다.
 기존 Release가 있는 태그도 중단한다. 업로드 도중 실패한 초안은 남을 수 있으므로 첨부 상태를
 확인한 뒤 이 워크플로가 만든 미완성 초안만 정리하고 재실행한다. 발행한 Release는 삭제하지 않는다.
 
@@ -132,6 +134,7 @@ Release 첨부 파일은 Actions의 14일 보관 설정을 적용받지 않는�
 
 근거: [GitHub Release 보관 한도](https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases),
 [CI 산출물 받기](https://cli.github.com/manual/gh_run_download),
+[실패한 작업만 재실행](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/re-run-workflows-and-jobs),
 [Release 초안·첨부 생성](https://cli.github.com/manual/gh_release_create).
 
 ## 릴리스 변경 방지

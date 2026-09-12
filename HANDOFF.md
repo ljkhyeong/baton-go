@@ -29,6 +29,9 @@
 - 기존 태그와 같은 커밋의 성공한 `main` CI 자료를 GitHub Release 초안에 첨부하는
   [보관 워크플로](.github/workflows/release-evidence.yml)를 추가했다. 검사·게시 자료의 일치와
   필수 파일을 확인하며 재빌드하지 않는다. 실제 태그 등록·Release 생성·발행은 하지 않았다.
+- GitHub의 [릴리스 변경 방지](docs/RUNBOOK/image-security-reports.md#릴리스-변경-방지)를
+  `ljkhyeong/baton-go`에 활성화하고 API의 `enabled: true`를 확인했다.
+  이후 발행본의 첨부 파일과 태그를 잠그며 초안 생성·검토 절차는 유지한다. 현재 Release는 없다.
 - [릴리스 취약점 재검사](.github/workflows/release-vulnerability-review.yml)는 보관한 SBOM을
   최신 Trivy DB로 대조하는 수동 워크플로다. 태그·게시 기록·SBOM의 이미지 일치를 확인하고
   재검사 보고서를 14일간 보관한다. 원본 Release·이미지·배포는 변경하지 않는다.
@@ -74,6 +77,12 @@
 
 ## 최근 검증
 
+- 릴리스 변경 방지는 미커밋 변경이 없는 `main`의 `10b2451`에서 시작했다.
+  GitHub 공식 문서에서 초안·발행 후 제한과 관리 API 권한을 확인했다.
+  `gh api --method PUT repos/ljkhyeong/baton-go/immutable-releases` 후 같은 경로의 GET으로
+  `enabled: true`, `enforced_by_owner: false`를 확인했다. Release 목록은 비어 있다.
+  문서 링크·새 앵커·명령 구문과 전체 diff를 확인했다. 코드·워크플로는 바뀌지 않아 기존 테스트를
+  반복하지 않았다. 실제 발행 후 잠금 동작은 Release가 없어 미확인이다.
 - 릴리스 재검사는 미커밋 변경이 없는 `main`의 `0f6602f`에서 시작했다.
   워크플로는 `936e2ef`에 저장했고 이후에는 문서만 변경했다.
   새 워크플로의 YAML·Bash·ShellCheck·actionlint `1.7.12`와 기존 CI의 Trivy 고정 버전 일치를 확인했다.

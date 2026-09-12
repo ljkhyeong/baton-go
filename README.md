@@ -231,6 +231,7 @@ HEAD의 응답 형식·빈 본문과 요청률 제한 `429`를 점검한다. 오
 같은 이미지의 SBOM·취약점 보고서와 검사 대상 정보를 `baton-go-image-security` 산출물로 보존한다.
 `main` push의 검증이 통과하면 같은 이미지를 GHCR에 게시하고 배포 다이제스트를 별도 산출물에 남긴다.
 릴리스 태그의 검사 자료는 [보관 워크플로](.github/workflows/release-evidence.yml)로 Release 초안에 첨부할 수 있다.
+발행하면 [릴리스 변경 방지](docs/RUNBOOK/image-security-reports.md#릴리스-변경-방지) 설정이 첨부 파일과 태그를 잠근다.
 보관한 SBOM은 [릴리스 취약점 재검사](docs/RUNBOOK/image-security-reports.md#릴리스-취약점-재검사)로
 이미지를 다시 빌드하지 않고 최신 취약점 DB와 대조할 수 있다.
 검사 실행 실패는 CI를 실패시키지만 취약점 발견만으로 배포를 차단하지는 않는다.

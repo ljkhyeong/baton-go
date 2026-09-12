@@ -134,6 +134,38 @@ Release 첨부 파일은 Actions의 14일 보관 설정을 적용받지 않는�
 [CI 산출물 받기](https://cli.github.com/manual/gh_run_download),
 [Release 초안·첨부 생성](https://cli.github.com/manual/gh_release_create).
 
+## 릴리스 변경 방지
+
+`ljkhyeong/baton-go`는 GitHub의 `Enable release immutability`를 활성화했다.
+앞으로 발행하는 Release의 첨부 파일과 태그를 GitHub가 잠근다. 별도 코드·Actions 작업이나
+유료 보안 상품은 필요하지 않다.
+
+- 초안에서는 자료를 추가·수정할 수 있다. 위 보관 워크플로로 초안을 만들고 두 첨부 파일을
+  모두 확인한 뒤 발행한다.
+- 발행 후에는 첨부 파일 추가·교체·삭제와 태그 이동·삭제가 차단된다. 수정 자료는 새 버전으로
+  발행한다. 제목·설명은 수정할 수 있다.
+- Release 자체의 삭제를 막는 기능은 아니다. Release를 삭제해도 같은 태그 이름은 재사용할 수 없다.
+  기존 보관 절차대로 발행한 Release는 삭제하지 않는다.
+- 설정을 꺼도 이미 잠긴 Release는 해제되지 않는다. 아래 재검사의 새 보고서는 원본에 덧붙이지 않고
+  별도 Actions 산출물로 보관한다.
+
+저장소 관리자는 `Settings → General → Releases`에서 설정을 확인할 수 있다.
+API로 설정을 재현하고 조회하려면 다음 명령을 사용한다. 세분화된 토큰은 해당 저장소의
+`Administration: write` 권한이 필요하며, 조회만 할 때는 `Administration: read`로 충분하다.
+이 관리 권한은 CI 토큰에 추가하지 않는다.
+
+```bash
+gh api --method PUT repos/ljkhyeong/baton-go/immutable-releases
+gh api repos/ljkhyeong/baton-go/immutable-releases
+```
+
+조회 결과의 `enabled: true`와 발행한 Release의 `Immutable` 표시를 각각 확인한다.
+설정 활성화만으로 초안이 발행되거나 기존 발행본이 잠기지는 않는다.
+
+근거: [GitHub 릴리스 변경 방지](https://docs.github.com/en/code-security/concepts/supply-chain-security/immutable-releases),
+[설정 절차](https://docs.github.com/en/code-security/how-tos/secure-your-supply-chain/establish-provenance-and-integrity/prevent-release-changes),
+[설정 API](https://docs.github.com/en/rest/repos/repos#enable-immutable-releases).
+
 ## 릴리스 취약점 재검사
 
 [재검사 워크플로](../../.github/workflows/release-vulnerability-review.yml)는 Release에 보관한

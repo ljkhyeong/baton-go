@@ -140,20 +140,13 @@ public class SmartLinkPersistenceAdapter implements SmartLinkRepository {
 
     @Override
     public List<StoredLinkSnapshot> scanStoredAfter(UUID afterLinkId, int limit) {
-        if (afterLinkId == null) {
-            return jdbcClient.sql(
-                            STORED_SNAPSHOT_SELECT + "ORDER BY stored_link.id LIMIT ?"
-                    )
-                    .param(limit)
-                    .query(this::storedSnapshot)
-                    .list();
+        var query = jdbcClient.sql(STORED_SNAPSHOT_SELECT
+                + (afterLinkId == null ? "" : "WHERE stored_link.id > UUID_TO_BIN(?) ")
+                + "ORDER BY stored_link.id LIMIT ?");
+        if (afterLinkId != null) {
+            query.param(afterLinkId.toString());
         }
-        return jdbcClient.sql(
-                        STORED_SNAPSHOT_SELECT
-                                + "WHERE stored_link.id > UUID_TO_BIN(?) "
-                                + "ORDER BY stored_link.id LIMIT ?"
-                )
-                .params(afterLinkId.toString(), limit)
+        return query.param(limit)
                 .query(this::storedSnapshot)
                 .list();
     }

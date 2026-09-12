@@ -3,6 +3,7 @@ package com.personal.batongo.adapter.in.web.operations;
 import com.personal.batongo.adapter.in.web.ManagementOperationLogger;
 import com.personal.batongo.application.link.port.in.TargetContractOperationsUseCase;
 import com.personal.batongo.application.link.port.in.TargetContractOperationsUseCase.InventoryQuery;
+import com.personal.batongo.application.link.port.in.TargetContractOperationsUseCase.InventoryResult;
 import com.personal.batongo.application.link.port.in.TargetContractOperationsUseCase.RemediationCommand;
 import com.personal.batongo.application.link.port.in.TargetContractOperationsUseCase.RemediationResult;
 import jakarta.validation.Valid;
@@ -38,17 +39,15 @@ public class TargetContractOperationsController {
     }
 
     @GetMapping("/inventory")
-    public TargetContractInventoryResponse inventory(
+    public InventoryResult inventory(
             @RequestParam(value = "afterLinkId", required = false) UUID afterLinkId,
             @RequestParam(value = "limit", defaultValue = "100") int limit
     ) {
-        return TargetContractInventoryResponse.from(
-                operationsUseCase.inventory(new InventoryQuery(afterLinkId, limit))
-        );
+        return operationsUseCase.inventory(new InventoryQuery(afterLinkId, limit));
     }
 
     @PutMapping("/links/{linkId}/revocation")
-    public TargetContractRemediationResponse remediate(
+    public RemediationResult remediate(
             @PathVariable UUID linkId,
             @Valid @RequestBody TargetContractRemediationRequest request,
             Principal principal
@@ -62,6 +61,6 @@ public class TargetContractOperationsController {
                 result.linkId(),
                 principal
         );
-        return TargetContractRemediationResponse.from(result);
+        return result;
     }
 }

@@ -1,0 +1,23 @@
+# 공용 Alertmanager에는 이 하위 route와 receiver만 병합한다.
+route:
+  receiver: unmatched
+  routes:
+    - matchers: ['job="baton-go-monitoring"', 'alertname="BatonGoMonitoringHeartbeat"']
+      receiver: healthchecks-go
+      group_by: [job, alertname]
+      group_wait: 0s
+      group_interval: 15s
+      repeat_interval: 1m
+
+receivers:
+  - name: unmatched
+  - name: healthchecks-go
+    webhook_configs:
+      - url_file: /etc/alertmanager/secrets/healthchecks-ping-url
+        send_resolved: false
+        timeout: 5s
+        # Alertmanager 0.34.0의 표준 payload 설정으로 내부 주소와 label을 제외한다.
+        payload:
+          signal: monitoring-heartbeat
+        http_config:
+          follow_redirects: false

@@ -1,0 +1,10 @@
+# Healthchecks.io를 연결할 때만 기존 rule_files에 추가한다.
+groups:
+  - name: baton-go-monitoring-heartbeat
+    interval: 30s
+    rules:
+      - alert: BatonGoMonitoringHeartbeat
+        expr: vector(1)
+        labels:
+          job: baton-go-monitoring
+          severity: none

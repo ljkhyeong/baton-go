@@ -1,0 +1,27 @@
+{
+  "Type": 1,
+  "Name": "BATON GO public HTTPS",
+  "Target": "https://go.b4ton.com/l/external-uptime-probe",
+  "Timeout": 10,
+  "Frequency": 1,
+  "FailsBeforeAlert": 3,
+  "FailedLocations": 3,
+  "ContactList": "REPLACE_WITH_CONTACT_LIST_ID",
+  "Public": false,
+  "ShowTarget": false,
+  "VerSSLCert": true,
+  "VerSSLHost": true,
+  "Locations": {
+    "nyc": true,
+    "ams": true,
+    "sgp": true,
+    "tok": true
+  },
+  "Method": "GET",
+  "Keyword": "링크를 찾을 수 없습니다",
+  "HTTPCodes": "404",
+  "MaxRedirects": "0",
+  "SSLExpiryReminder": "7",
+  "DomainExpiryReminder": "0",
+  "NSChangeAlert": "0"
+}

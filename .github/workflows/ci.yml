@@ -146,7 +146,7 @@ jobs:
             --tmpfs /tmp:rw,nosuid,nodev,size=256m \
             --volume "$PWD/deploy/prometheus:/rules:ro" --workdir /rules \
             --entrypoint /bin/promtool "$PROMTOOL_IMAGE" \
-            check rules baton-go-alerts.yml baton-go-tls-alerts.yml
+            check rules baton-go-alerts.yml baton-go-tls-alerts.yml baton-go-monitoring-heartbeat.yml
           docker run --rm --network none --read-only \
             --tmpfs /tmp:rw,nosuid,nodev,size=256m \
             --volume "$PWD/deploy/prometheus:/rules:ro" --workdir /rules \
@@ -178,6 +178,24 @@ jobs:
               config routes test --config.file="$config" \
               --verify.receivers=unmatched job=another-service
           done
+
+      - name: 감시 시스템 중단 알림 설정·라우팅 검증
+        run: |
+          set -euo pipefail
+          amtool=(docker run --rm --network none --read-only
+            --volume "$PWD/deploy/prometheus:/rules:ro"
+            --entrypoint /bin/amtool "$ALERTMANAGER_IMAGE")
+          config=/rules/alertmanager-healthchecks.example.yml
+          "${amtool[@]}" check-config "$config"
+          "${amtool[@]}" config routes test --config.file="$config" \
+            --verify.receivers=healthchecks-go \
+            job=baton-go-monitoring alertname=BatonGoMonitoringHeartbeat
+          "${amtool[@]}" config routes test --config.file="$config" \
+            --verify.receivers=unmatched job=baton-go alertname=BatonGoReadinessFailed
+          "${amtool[@]}" config routes test --config.file="$config" \
+            --verify.receivers=unmatched job=another-service alertname=BatonGoMonitoringHeartbeat
+          "${amtool[@]}" config routes test --config.file="$config" \
+            --verify.receivers=unmatched job=baton-go-monitoring alertname=AnotherAlert
 
       - name: 정적·단위·패키징 검증
         run: ./gradlew --no-daemon build
@@ -342,7 +360,10 @@ jobs:
           docker exec "$app_container" wget -q -T 2 -O /dev/null \
             http://127.0.0.1:8080/readyz
           http_address="$("${compose[@]}" port app 8080)"
-          public_url="http://$http_address/l/ci-public-error-probe"
+          monitor=deploy/uptime/hetrixtools-go.example.json
+          monitor_target="$(jq --exit-status --raw-output '.Target' "$monitor")"
+          public_url="http://$http_address/${monitor_target#https://go.b4ton.com/}"
+          monitor_keyword="$(jq --exit-status --raw-output '.Keyword' "$monitor")"
           html_headers="$RUNNER_TEMP/baton-go-public-html.headers"
           html_body="$RUNNER_TEMP/baton-go-public.html"
           response_status="$(curl --silent --show-error --max-time 5 \
@@ -352,7 +373,7 @@ jobs:
           test "$response_status" = "404"
           grep -Eiq '^content-type: text/html;[[:space:]]*charset=utf-8[[:space:]]*$' "$html_headers"
           grep -Fq '<html lang="ko">' "$html_body"
-          grep -Fq '링크를 찾을 수 없습니다' "$html_body"
+          grep -Fq "$monitor_keyword" "$html_body"
           grep -Fq '<code>ci-public-html</code>' "$html_body"
 
           json_headers="$RUNNER_TEMP/baton-go-public-json.headers"
@@ -362,10 +383,12 @@ jobs:
             --dump-header "$json_headers" --output "$json_body" \
             --write-out '%{http_code}' "$public_url")"
           test "$response_status" = "404"
+          test "$response_status" = "$(jq --raw-output '.HTTPCodes' "$monitor")"
           grep -Eiq '^content-type: application/json[[:space:]]*$' "$json_headers"
           jq --exit-status \
             '.code == "LINK_NOT_FOUND" and .requestId == "ci-public-json"' \
             "$json_body"
+          grep -Fq "$monitor_keyword" "$json_body"
 
           head_headers="$RUNNER_TEMP/baton-go-public-head.headers"
           for content_type in 'text/html;charset=UTF-8' 'application/json'; do

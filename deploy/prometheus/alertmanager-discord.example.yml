@@ -2,7 +2,7 @@
 route:
   receiver: unmatched
   routes:
-    - matchers: ['job=~"baton-go|baton-go-tls"']
+    - matchers: ['job=~"baton-go|baton-go-tls|baton-go-kubernetes"']
       receiver: discord-go
       group_by: [job, alertname]
       group_wait: 30s

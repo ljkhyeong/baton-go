@@ -1,0 +1,15 @@
+# kube-state-metrics를 연결할 때만 기존 rule_files·scrape_configs에 병합한다.
+# 내부 Service 주소는 실제 이름과 Namespace로 바꾼다.
+rule_files:
+  - baton-go-kubernetes-alerts.yml
+
+scrape_configs:
+  - job_name: baton-go-kubernetes
+    scrape_interval: 30s
+    scrape_timeout: 10s
+    static_configs:
+      - targets: [kube-state-metrics.monitoring.svc:8080]
+    metric_relabel_configs:
+      - source_labels: [__name__, namespace]
+        regex: '(kube_pod_status_ready|kube_pod_deletion_timestamp|kube_pod_container_status_restarts_total|kube_deployment_spec_replicas|kube_deployment_status_replicas_available|kube_job_failed);baton-go'
+        action: keep

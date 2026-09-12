@@ -88,7 +88,8 @@ jobs:
           for target in \
             deploy/k8s/bootstrap \
             deploy/k8s/overlays/private-server \
-            deploy/k8s/monitoring-access
+            deploy/k8s/monitoring-access \
+            deploy/k8s/integrations/kube-state-metrics-access
           do
             printf '검증 중: %s\n' "$target"
             kubectl kustomize "$target" \
@@ -146,17 +147,17 @@ jobs:
           docker run --rm --network none --read-only \
             --volume "$PWD/deploy/prometheus:/rules:ro" --workdir /rules \
             --entrypoint /bin/promtool "$PROMTOOL_IMAGE" \
-            check config --syntax-only prometheus-kubernetes.example.yml prometheus-cert-manager.example.yml
+            check config --syntax-only prometheus-kubernetes.example.yml prometheus-cert-manager.example.yml prometheus-kube-state-metrics.example.yml
           docker run --rm --network none --read-only \
             --tmpfs /tmp:rw,nosuid,nodev,size=256m \
             --volume "$PWD/deploy/prometheus:/rules:ro" --workdir /rules \
             --entrypoint /bin/promtool "$PROMTOOL_IMAGE" \
-            check rules baton-go-alerts.yml baton-go-tls-alerts.yml baton-go-monitoring-heartbeat.yml
+            check rules baton-go-alerts.yml baton-go-tls-alerts.yml baton-go-monitoring-heartbeat.yml baton-go-kubernetes-alerts.yml
           docker run --rm --network none --read-only \
             --tmpfs /tmp:rw,nosuid,nodev,size=256m \
             --volume "$PWD/deploy/prometheus:/rules:ro" --workdir /rules \
             --entrypoint /bin/promtool "$PROMTOOL_IMAGE" \
-            test rules baton-go-alerts.test.yml baton-go-availability.test.yml baton-go-tls-alerts.test.yml
+            test rules baton-go-alerts.test.yml baton-go-availability.test.yml baton-go-tls-alerts.test.yml baton-go-kubernetes-alerts.test.yml
 
       - name: Discord·Slack 알림 설정·라우팅 검증
         run: |
@@ -177,6 +178,11 @@ jobs:
               --entrypoint /bin/amtool "$ALERTMANAGER_IMAGE" \
               config routes test --config.file="$config" \
               --verify.receivers="${channel}-go" job=baton-go-tls alertname=BatonGoCertificateExpiringSoon
+            docker run --rm --network none --read-only \
+              --volume "$PWD/deploy/prometheus:/rules:ro" \
+              --entrypoint /bin/amtool "$ALERTMANAGER_IMAGE" \
+              config routes test --config.file="$config" \
+              --verify.receivers="${channel}-go" job=baton-go-kubernetes alertname=BatonGoMigrationFailed
             docker run --rm --network none --read-only \
               --volume "$PWD/deploy/prometheus:/rules:ro" \
               --entrypoint /bin/amtool "$ALERTMANAGER_IMAGE" \

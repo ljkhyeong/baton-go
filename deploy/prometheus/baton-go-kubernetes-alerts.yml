@@ -1,0 +1,65 @@
+groups:
+  - name: baton-go-kubernetes
+    interval: 30s
+    rules:
+      - alert: BatonGoPodNotReady
+        expr: |
+          max by (job, namespace, pod) (
+            kube_pod_status_ready{job="baton-go-kubernetes",namespace="baton-go",pod=~"baton-go-[a-z0-9]+-[a-z0-9]+|baton-go-mysql-[0-9]+",condition="true"}
+          ) == 0
+          unless on (job, namespace, pod)
+          kube_pod_deletion_timestamp{job="baton-go-kubernetes",namespace="baton-go"}
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: BATON GO Pod 준비 실패
+          description: 5분간 애플리케이션 또는 MySQL Pod가 준비되지 않았습니다. Pod 이벤트와 컨테이너 상태를 확인하세요.
+
+      - alert: BatonGoContainerRestarting
+        expr: |
+          max by (job, namespace, pod, container) (
+            increase(kube_pod_container_status_restarts_total{job="baton-go-kubernetes",namespace="baton-go",pod=~"baton-go-[a-z0-9]+-[a-z0-9]+|baton-go-mysql-[0-9]+"}[10m])
+          ) >= 3
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: BATON GO 컨테이너 반복 재시작
+          description: 최근 10분간 재시작이 3회 이상인 상태가 2분 지속됐습니다. 종료 원인과 메모리 부족 여부를 확인하세요.
+
+      - alert: BatonGoDeploymentUnavailable
+        expr: |
+          max by (job, namespace, deployment) (
+            kube_deployment_status_replicas_available{job="baton-go-kubernetes",namespace="baton-go",deployment="baton-go"}
+          ) < max by (job, namespace, deployment) (
+            kube_deployment_spec_replicas{job="baton-go-kubernetes",namespace="baton-go",deployment="baton-go"}
+          )
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: BATON GO 가용 Pod 부족
+          description: 10분간 가용 Pod 수가 설정한 복제본 수보다 적습니다. Deployment 상태와 Pod 배치 실패를 확인하세요.
+
+      - alert: BatonGoMigrationFailed
+        expr: |
+          max by (job, namespace, job_name) (
+            kube_job_failed{job="baton-go-kubernetes",namespace="baton-go",job_name="baton-go-database-migration",condition="true"}
+          ) == 1
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: BATON GO DB 마이그레이션 실패
+          description: 마이그레이션 Job이 실패 또는 실행 시간 초과로 종료됐습니다. Job 상태와 기존 복구 절차를 확인하고 임의로 재실행하지 마세요.
+
+      - alert: BatonGoKubernetesMetricsMissing
+        expr: |
+          absent(kube_deployment_spec_replicas{job="baton-go-kubernetes",namespace="baton-go",deployment="baton-go"})
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: BATON GO Kubernetes 지표 없음
+          description: 5분간 GO Deployment 지표가 없습니다. kube-state-metrics 수집·조회 권한과 Deployment 존재 여부를 확인하세요.

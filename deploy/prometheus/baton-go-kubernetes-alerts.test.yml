@@ -1,0 +1,195 @@
+rule_files:
+  - baton-go-kubernetes-alerts.yml
+
+evaluation_interval: 30s
+
+tests:
+  - name: 준비 실패가 5분 지속될 때 알리고 복구 후 해제하며 삭제 중인 Pod와 마이그레이션 Pod는 제외한다
+    interval: 30s
+    input_series:
+      - series: 'kube_pod_status_ready{job="baton-go-kubernetes",namespace="baton-go",pod="baton-go-7b984d9d64-fz5kq",condition="true"}'
+        values: '0x10 1'
+      - series: 'kube_pod_status_ready{job="baton-go-kubernetes",namespace="baton-go",pod="baton-go-mysql-0",condition="true"}'
+        values: '0x10 1'
+      - series: 'kube_pod_status_ready{job="baton-go-kubernetes",namespace="baton-go",pod="baton-go-7b984d9d64-old01",condition="true"}'
+        values: '0x11'
+      - series: 'kube_pod_deletion_timestamp{job="baton-go-kubernetes",namespace="baton-go",pod="baton-go-7b984d9d64-old01"}'
+        values: '1x11'
+      - series: 'kube_pod_status_ready{job="baton-go-kubernetes",namespace="baton-go",pod="baton-go-database-migration-abcde",condition="true"}'
+        values: '0x11'
+    alert_rule_test:
+      - eval_time: 4m30s
+        alertname: BatonGoPodNotReady
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: BatonGoPodNotReady
+        exp_alerts:
+          - exp_labels:
+              job: baton-go-kubernetes
+              namespace: baton-go
+              pod: baton-go-7b984d9d64-fz5kq
+              severity: warning
+            exp_annotations: &pod_annotations
+              summary: BATON GO Pod 준비 실패
+              description: 5분간 애플리케이션 또는 MySQL Pod가 준비되지 않았습니다. Pod 이벤트와 컨테이너 상태를 확인하세요.
+          - exp_labels:
+              job: baton-go-kubernetes
+              namespace: baton-go
+              pod: baton-go-mysql-0
+              severity: warning
+            exp_annotations: *pod_annotations
+      - eval_time: 5m30s
+        alertname: BatonGoPodNotReady
+        exp_alerts: []
+
+  - name: 반복 재시작은 누적 증가량으로 판단하고 카운터 초기화만으로 알리지 않으며 시간 창이 지나면 해제한다
+    interval: 30s
+    input_series:
+      - series: 'kube_pod_container_status_restarts_total{job="baton-go-kubernetes",namespace="baton-go",pod="baton-go-7b984d9d64-fz5kq",container="application"}'
+        values: '0x4 3x30'
+      - series: 'kube_pod_container_status_restarts_total{job="baton-go-kubernetes",namespace="baton-go",pod="baton-go-mysql-0",container="mysql"}'
+        values: '2x5 0x29'
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: BatonGoContainerRestarting
+        exp_alerts: []
+      - eval_time: 4m30s
+        alertname: BatonGoContainerRestarting
+        exp_alerts:
+          - exp_labels:
+              job: baton-go-kubernetes
+              namespace: baton-go
+              pod: baton-go-7b984d9d64-fz5kq
+              container: application
+              severity: warning
+            exp_annotations:
+              summary: BATON GO 컨테이너 반복 재시작
+              description: 최근 10분간 재시작이 3회 이상인 상태가 2분 지속됐습니다. 종료 원인과 메모리 부족 여부를 확인하세요.
+      - eval_time: 15m
+        alertname: BatonGoContainerRestarting
+        exp_alerts: []
+
+  - name: 가용 Pod 부족과 마이그레이션 최종 실패는 각각의 대기 시간 뒤 알리고 정상 상태에서 해제한다
+    interval: 30s
+    input_series:
+      - series: 'kube_deployment_spec_replicas{job="baton-go-kubernetes",namespace="baton-go",deployment="baton-go"}'
+        values: '1x21'
+      - series: 'kube_deployment_status_replicas_available{job="baton-go-kubernetes",namespace="baton-go",deployment="baton-go"}'
+        values: '0x20 1'
+      - series: 'kube_job_failed{job="baton-go-kubernetes",namespace="baton-go",job_name="baton-go-database-migration",condition="true"}'
+        values: '1x2 0x18'
+    alert_rule_test:
+      - eval_time: 9m30s
+        alertname: BatonGoDeploymentUnavailable
+        exp_alerts: []
+      - eval_time: 10m
+        alertname: BatonGoDeploymentUnavailable
+        exp_alerts:
+          - exp_labels:
+              job: baton-go-kubernetes
+              namespace: baton-go
+              deployment: baton-go
+              severity: critical
+            exp_annotations:
+              summary: BATON GO 가용 Pod 부족
+              description: 10분간 가용 Pod 수가 설정한 복제본 수보다 적습니다. Deployment 상태와 Pod 배치 실패를 확인하세요.
+      - eval_time: 10m30s
+        alertname: BatonGoDeploymentUnavailable
+        exp_alerts: []
+      - eval_time: 30s
+        alertname: BatonGoMigrationFailed
+        exp_alerts: []
+      - eval_time: 1m
+        alertname: BatonGoMigrationFailed
+        exp_alerts:
+          - exp_labels:
+              job: baton-go-kubernetes
+              namespace: baton-go
+              job_name: baton-go-database-migration
+              severity: critical
+            exp_annotations:
+              summary: BATON GO DB 마이그레이션 실패
+              description: 마이그레이션 Job이 실패 또는 실행 시간 초과로 종료됐습니다. Job 상태와 기존 복구 절차를 확인하고 임의로 재실행하지 마세요.
+      - eval_time: 1m30s
+        alertname: BatonGoMigrationFailed
+        exp_alerts: []
+
+  - name: 지표 수집이 끊기면 5분 뒤 알리고 수집이 복구되면 해제한다
+    interval: 30s
+    input_series:
+      - series: 'kube_deployment_spec_replicas{job="baton-go-kubernetes",namespace="baton-go",deployment="baton-go"}'
+        values: '1 1 stale _ _ _ _ _ _ _ _ _ _ 1'
+    alert_rule_test:
+      - eval_time: 5m30s
+        alertname: BatonGoKubernetesMetricsMissing
+        exp_alerts: []
+      - eval_time: 6m
+        alertname: BatonGoKubernetesMetricsMissing
+        exp_alerts:
+          - exp_labels: &missing_labels
+              job: baton-go-kubernetes
+              namespace: baton-go
+              deployment: baton-go
+              severity: warning
+            exp_annotations: &missing_annotations
+              summary: BATON GO Kubernetes 지표 없음
+              description: 5분간 GO Deployment 지표가 없습니다. kube-state-metrics 수집·조회 권한과 Deployment 존재 여부를 확인하세요.
+      - eval_time: 6m30s
+        alertname: BatonGoKubernetesMetricsMissing
+        exp_alerts: []
+
+  - name: 의도한 복제본 수가 0이거나 Job이 실패하지 않은 상태에서는 알리지 않는다
+    interval: 30s
+    input_series:
+      - series: 'kube_deployment_spec_replicas{job="baton-go-kubernetes",namespace="baton-go",deployment="baton-go"}'
+        values: '0x30'
+      - series: 'kube_deployment_status_replicas_available{job="baton-go-kubernetes",namespace="baton-go",deployment="baton-go"}'
+        values: '0x30'
+      - series: 'kube_job_failed{job="baton-go-kubernetes",namespace="baton-go",job_name="baton-go-database-migration",condition="true"}'
+        values: '0x30'
+      - series: 'kube_job_failed{job="baton-go-kubernetes",namespace="baton-go",job_name="baton-go-database-migration",condition="false"}'
+        values: '1x30'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: BatonGoDeploymentUnavailable
+        exp_alerts: []
+      - eval_time: 15m
+        alertname: BatonGoMigrationFailed
+        exp_alerts: []
+      - eval_time: 15m
+        alertname: BatonGoKubernetesMetricsMissing
+        exp_alerts: []
+
+  - name: 다른 Namespace와 수집 job과 리소스의 장애는 GO 경보를 만들거나 GO 지표 누락을 가리지 않는다
+    interval: 30s
+    input_series:
+      - series: 'kube_pod_status_ready{job="baton-go-kubernetes",namespace="cal",pod="baton-go-mysql-0",condition="true"}'
+        values: '0x30'
+      - series: 'kube_pod_status_ready{job="baton-go-kubernetes",namespace="baton-go",pod="another-service-abcde",condition="true"}'
+        values: '0x30'
+      - series: 'kube_pod_container_status_restarts_total{job="other",namespace="baton-go",pod="baton-go-mysql-0",container="mysql"}'
+        values: '0+1x30'
+      - series: 'kube_deployment_spec_replicas{job="baton-go-kubernetes",namespace="baton-go",deployment="other"}'
+        values: '1x30'
+      - series: 'kube_deployment_status_replicas_available{job="baton-go-kubernetes",namespace="baton-go",deployment="other"}'
+        values: '0x30'
+      - series: 'kube_job_failed{job="baton-go-kubernetes",namespace="baton-go",job_name="other",condition="true"}'
+        values: '1x30'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: BatonGoPodNotReady
+        exp_alerts: []
+      - eval_time: 15m
+        alertname: BatonGoContainerRestarting
+        exp_alerts: []
+      - eval_time: 15m
+        alertname: BatonGoDeploymentUnavailable
+        exp_alerts: []
+      - eval_time: 15m
+        alertname: BatonGoMigrationFailed
+        exp_alerts: []
+      - eval_time: 15m
+        alertname: BatonGoKubernetesMetricsMissing
+        exp_alerts:
+          - exp_labels: *missing_labels
+            exp_annotations: *missing_annotations

@@ -7,6 +7,9 @@
   [API 계약](docs/PRD/0002_api-contract/spec.md),
   [BATON·ROUND 연동 계약](docs/PRD/0003_cross-service-link-contract/spec.md)이다.
   GO 링크는 위치만 제공하며 접근 권한은 BATON·ROUND가 판단한다.
+- 공개 링크의 활성 전·요청 제한·일시적 서버 오류 화면에 `다시 열기` 버튼을 추가했다.
+  누를 때만 같은 주소를 다시 요청한다. 만료·폐기·없는 링크에는 표시하지 않으며,
+  기존 JSON·HEAD 응답과 요청 제한·보안 헤더를 유지한다.
 - 관리 링크 목록에 `expiresFrom`·`expiresBefore`를 추가했다. `status=ACTIVE`와 함께 지정하면
   곧 만료될 링크를 찾을 수 있다. 시작 시각은 포함하고 끝 시각과 무기한 링크는 제외한다.
   기존 생성 기간·대상·상태 필터, 조회 한도와 빈 페이지의 다음 커서는 유지한다.
@@ -83,6 +86,15 @@
 
 ## 최근 검증
 
+- 오류 화면 개선은 미커밋 변경이 없는 `main`의 `96f9986`에서 시작했고 코드·테스트는 `a5b0bd4`에 저장했다.
+  Java 21에서 `./gradlew --no-daemon :adapter-in-web:apiContractDocs`로 웹 테스트 127개와 REST Docs
+  생성을 통과했다. 문서 링크 46개도 확인했다. 테스트 로그는
+  `/private/tmp/baton-go-retry-page-tests-20260912.log`에 있다.
+  REST Docs의 실제 HTML·보안 헤더를 임시 서버에서 재현해 Playwright로 클릭·키보드 재요청과
+  302 이동, 쿼리 유지·Referer 미전송, 모바일 375×812·데스크톱 1280×800 표시를 확인했다.
+  결과와 요청 기록·스크린샷은 `/private/tmp/baton-go-retry-ui-20260912`에 있다.
+  Playwright 스크립트는 실행 비트가 없어 `bash /Users/lim/.codex/skills/playwright/scripts/playwright_cli.sh`로 실행했다.
+  검증용 브라우저·서버는 종료했다. 애플리케이션·DB·Redis 로직은 바뀌지 않아 해당 테스트와 배포는 실행하지 않았다.
 - 만료 기간 검색은 미커밋 변경이 없는 `main`의 `c486fc6`에서 시작했고 코드·테스트는 `d880b8e`에 저장했다.
   Java 21에서 `./gradlew --no-daemon :application:test :adapter-in-web:apiContractDocs`를 실행해
   애플리케이션 48개·웹 127개 테스트와 REST Docs 생성을 통과했다. 만료 경계·한쪽 기간·무기한 제외,

@@ -99,6 +99,14 @@
 
 ## 최근 검증
 
+- 관리 링크 코드 정리는 미커밋 변경이 없는 `main`의 `7159fe3`에서 시작해 `b0ec476`에 저장했다.
+  응답 변환을 통합하고 대상 확인의 임시 객체·예외 처리를 없애 운영 코드 16줄을 줄였다.
+  Java 21에서 `./gradlew --no-daemon :application:test :bootstrap:mysqlTest
+  --tests '*LinkPersistenceIntegrationTest' --tests '*TargetContractOperationsIntegrationTest' :bootstrap:bootJar`를
+  통과했다. 애플리케이션 48개·MySQL 통합 16개 테스트에 실패·제외가 없다. 첫 실행의 Gradle 캐시
+  접근 제한은 정식 권한으로 재시도했다. 로그는 `/private/tmp/baton-go-code-simplification-20260912-validation.log`,
+  JAR은 `bootstrap/build/libs/baton-go.jar`다. 이후 인계 문서만 변경했다. 의존 구조·Redis 동작이 같아
+  계층·Redis 검증은 반복하지 않았다. 이미지 빌드·운영 적용·원격 푸시는 하지 않았다.
 - 활성 전 시작 시각 안내는 미커밋 변경이 없는 `main`의 `d18c500`에서 시작해 `63d24b1`에 저장했다.
   Java 21에서 `./gradlew --no-daemon :domain:test :application:test :adapter-in-web:test
   :adapter-in-web:apiContractDocs :bootstrap:bootJar`를 통과했다. 도메인 72개·애플리케이션 48개·웹 132개,

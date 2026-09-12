@@ -1,0 +1,80 @@
+name: 릴리스 검사 자료 보관
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 자료를 보관할 기존 Git 태그 (예 v1.0.0)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-evidence-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  archive:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      actions: read
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      RELEASE_TAG: ${{ inputs.tag }}
+    steps:
+      - name: 릴리스 태그 확인
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: refs/tags/${{ inputs.tag }}
+          persist-credentials: false
+
+      - name: 같은 커밋의 CI 자료 확인과 릴리스 초안 생성
+        run: |
+          set -euo pipefail
+          source_commit="$(git rev-parse HEAD)"
+          evidence_dir="$RUNNER_TEMP/baton-go-release-evidence"
+          mkdir -p "$evidence_dir"
+          gh run list --workflow ci.yml --branch main --event push \
+            --commit "$source_commit" --status success --limit 1 \
+            --json databaseId,attempt,url \
+            --jq '.[0]' >"$evidence_dir/ci-run.json"
+          run_id="$(jq --exit-status --raw-output '.databaseId // error("성공한 main CI가 없습니다")' \
+            "$evidence_dir/ci-run.json")"
+          run_attempt="$(jq --raw-output '.attempt' "$evidence_dir/ci-run.json")"
+          run_url="$(jq --raw-output '.url' "$evidence_dir/ci-run.json")"
+          gh run download "$run_id" --name baton-go-image-security \
+            --dir "$evidence_dir/security"
+          gh run download "$run_id" --name baton-go-image-publication \
+            --dir "$evidence_dir/publication"
+
+          publication="$evidence_dir/publication/image-publication.json"
+          jq --exit-status --arg commit "$source_commit" --arg run_url "$run_url" \
+            --arg attempt "$run_attempt" \
+            --slurpfile scan "$evidence_dir/security/image-metadata.json" '
+              .source_commit == $commit and .workflow_run == $run_url and .run_attempt == $attempt
+              and (del(.image_reference, .image_tag, .workflow_run, .run_attempt)
+                == ($scan[0] | del(.image_reference)))
+            ' "$publication" >/dev/null
+          image_reference="$(jq --exit-status --raw-output '.image_reference' "$publication")"
+
+          archive="$RUNNER_TEMP/baton-go-release-evidence.tar.gz"
+          tar -czf "$archive" -C "$evidence_dir" \
+            ci-run.json security/image-metadata.json security/scanner.json \
+            security/sbom.cdx.json security/vulnerabilities.json security/vulnerabilities.txt \
+            security/dependency-graph.json publication/image-publication.json
+          notes="$RUNNER_TEMP/baton-go-release-evidence.md"
+          {
+            printf '소스 커밋: %s\n\n' "$source_commit"
+            printf '검증 실행: %s (시도 %s)\n\n' "$run_url" "$run_attempt"
+            printf '배포 이미지: %s\n\n' "$image_reference"
+            printf '첨부 자료는 해당 CI의 검사 결과입니다. 이미지 서명과 운영 배포 승인은 별도로 확인합니다.\n'
+          } >"$notes"
+          gh release create --draft --verify-tag --title "$RELEASE_TAG" --notes-file "$notes" \
+            -- "$RELEASE_TAG" "$archive" "$publication"
+          cat "$notes" >>"$GITHUB_STEP_SUMMARY"

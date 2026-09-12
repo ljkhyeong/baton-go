@@ -16,6 +16,9 @@
   Java 이미지는 사용하지 않는 빌드 인자를 제거하고 Dockerfile의 `FROM`에 직접 고정했다.
   Java 메이저 업데이트와 MySQL 이미지는 자동 제안에서 제외한다.
   원격 기본 브랜치 반영과 실제 채널 연결은 아직 하지 않았다.
+- GitHub 저장소의 Dependabot alerts를 활성화하고 조회로 확인했다. 자동 수정 PR은 중지 상태다.
+  기존 Trivy 결과의 Java 패키지 목록을 `main` CI 성공 후 의존성 API로 제출하는 설정을 추가했다.
+  실제 Java 목록 제출은 원격 `main` 반영 후 확인해야 한다.
 - cert-manager 인증서의 준비 실패·갱신 지연·만료 임박·지표 누락 경보와 Discord·Slack 전달을
   추가했다. Cloudflare 자동 갱신을 선택할 때만 수집 job과 경보 파일을 함께 연결한다.
   실제 클러스터 수집·발급·갱신과 알림 수신은 아직 확인하지 않았다.
@@ -48,6 +51,19 @@
 
 ## 최근 검증
 
+- 의존성 알림 연동은 미커밋 변경이 없는 `main`의 `2117882`에서 시작해 CI를 `9d11651`에 저장했다.
+  YAML·Bash 구문·ShellCheck, 기존 CI 단계 보존과 제출 작업의 실행 조건·권한 분리를 확인했다.
+  기존 로컬 이미지 `baton-go:dependabot-validation-20260912`를 Trivy `0.72.0`으로 검사했다.
+  라이선스 검사에서는 Java 목록이 없어 기존 CI의 `vuln` 옵션으로 변경했고,
+  256MiB 임시 공간 부족은 CI와 같은 디스크 마운트로 수정해 통과했다.
+  CI의 변환 단계를 `--network none`으로 실행해 Java 패키지 114개, 커밋·브랜치·실행 정보와
+  제출 형식을 확인했다. 빈 결과와 운영체제 패키지만 있는 결과는 거부했다.
+  검증 환경은 `/private/tmp/baton-go-integration-validation-20260912`이며
+  `dependency-convert-validation.sh`, `dependency-convert.log`, `dependency-scan-retry.log`에
+  명령·결과가 있다. GitHub 알림 활성화 전 조회는 중지 상태였고, 활성화 후 조회는 성공했다.
+  자동 수정 PR이 꺼져 있고 의존성 그래프 조회가 가능한 것도 확인했다.
+  이후 RUNBOOK·HANDOFF만 변경했다. 애플리케이션은 같아 Java·DB·Redis 테스트와 이미지 빌드는
+  반복하지 않았다. 실제 스냅샷 제출과 원격 CI 전체 실행·운영 배포는 하지 않았다.
 - Java 이미지 업데이트 연동은 미커밋 변경이 없는 `main`의 `a7f9553`에서 시작해
   Dockerfile·Dependabot 설정을 `4adedc7`에 저장했다. 기존 Python·PyYAML 환경으로 설정·시간대를
   검사하고, 이전 Dockerfile의 인자를 확장한 결과와 변경 후 이미지 참조·빌드 명령이 동일함을 확인했다.

@@ -3,8 +3,8 @@
 ## 적용 범위
 
 [CI 워크플로](../../.github/workflows/ci.yml)는 Dockerfile로 만든 운영 이미지를 Trivy로 한 번
-검사하고, 같은 JSON 결과를 CycloneDX SBOM과 읽기용 표로 변환한다. SBOM에는 취약점이
-발견되지 않은 패키지도 포함한다. 별도 패키지 분석기나 취약점 판정 코드는 두지 않는다.
+검사하고, 같은 JSON 결과를 CycloneDX SBOM·읽기용 표·GitHub 제출 형식으로 변환한다.
+SBOM에는 취약점이 발견되지 않은 패키지도 포함한다. 별도 패키지 분석기나 취약점 판정 코드는 두지 않는다.
 
 검사 대상은 해당 실행에서 빌드한 이미지다. 소스 저장소, 실행 중인 컨테이너나 운영 환경 변수는
 검사기에 전달하지 않는다. Docker 소켓 대신 읽기 전용 이미지 아카이브를 전달하며,
@@ -25,6 +25,7 @@ GitHub Actions의 해당 실행에서 `baton-go-image-security` 산출물을 내
 | `sbom.cdx.json` | 검사기가 식별한 이미지 구성 요소의 CycloneDX SBOM |
 | `vulnerabilities.json` | 패키지 목록과 취약점의 원본 검사 결과 |
 | `vulnerabilities.txt` | 검토용 취약점 표 |
+| `dependency-graph.json` | 같은 검사에서 추출한 Java 패키지 목록과 소스 커밋·CI 실행 정보. GitHub 의존성 API 제출용 |
 
 `source_commit`은 `git rev-parse HEAD` 값이다. PR 실행에서는 작성자 브랜치의 마지막 커밋이
 아니라 CI가 체크아웃한 병합용 커밋일 수 있다. 이미지 태그만 보고 다른 실행의 결과와 혼동하지 않는다.
@@ -39,7 +40,7 @@ GitHub Actions의 해당 실행에서 `baton-go-image-security` 산출물을 내
 
 - 모든 심각도와 수정 버전이 아직 없는 취약점을 보고한다. `--exit-code 0`이므로 발견 자체는
   CI 실패 사유가 아니다. 검사 실행, DB 다운로드나 보고서 변환이 실패하면 해당 단계가 실패한다.
-- 검사 단계가 실패해도 이미 생성된 보고서는 업로드를 시도한다. 다섯 파일 중 일부가 빠진 산출물이나
+- 검사 단계가 실패해도 이미 생성된 보고서는 업로드를 시도한다. 위 파일 중 일부가 빠진 산출물이나
   실패한 CI 실행을 검사 완료 기록으로 사용하지 않는다. 취소된 실행에서는 보존을 보장하지 않는다.
 - 먼저 `vulnerabilities.txt`에서 대상 패키지·설치 버전·수정 버전을 확인한다. `HIGH`·`CRITICAL`은
   우선 검토하되, 실제 사용 경로와 영향 범위, 수정 가능 여부를 보고 대응을 정한다.
@@ -52,6 +53,11 @@ GitHub Actions의 해당 실행에서 `baton-go-image-security` 산출물을 내
 
 보고서는 의존성과 이미지 구성 정보를 포함하므로 저장소·Actions 산출물의 접근 권한을 따른다.
 원본 보고서의 패키지명·CVE·도구 출력은 번역하거나 수정하지 않는다.
+
+`main`의 CI 전체가 성공하면 별도 작업이 `dependency-graph.json`을 GitHub에 제출한다.
+PR이나 검증 실패에서는 제출하지 않으며, 제출 실패 시 CI가 실패로 표시된다.
+알림 기능의 상태와 확인 방법은 [의존성 알림 연동](external-api-integrations.md#java-라이브러리-취약점-알림)을 따른다.
+제출 목록은 이미지에 포함된 Java 패키지이며 Gradle의 전체 의존 관계를 대신하지 않는다.
 
 ## 릴리스에서 별도로 확인할 사항
 

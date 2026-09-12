@@ -12,6 +12,7 @@ GO에서 직접 구현을 줄일 수 있는 연동과 적용 설정을 정리한
 | 인증서 장애 알림 | cert-manager 지표 → Prometheus → Discord·Slack | 준비 실패·갱신 지연·만료 임박·지표 누락을 감지하는 선택 설정 추가. |
 | 장애 알림 | Alertmanager → Discord·Slack Webhook API | 기존 GO 경보의 발생·해제 알림 설정과 CI 검증 추가. 사용할 채널을 선택한다. |
 | 도구·이미지 갱신 | GitHub Dependabot | GitHub Actions와 Java 21 기반 이미지의 업데이트를 주 1회 확인. 각각 한 PR로 묶는다. |
+| Java 라이브러리 취약점 알림 | Trivy → GitHub 의존성 API → Dependabot alerts | 알림 기능 활성화. `main` CI 성공 후 이미지의 Java 패키지 목록을 제출하는 설정 추가. |
 | 빌드 결과 알림 | GitHub 공식 Slack 앱 | 저장소·CI에 맞춘 구독 명령 정리. 실제 채널 구독은 아직 하지 않았다. |
 | 관리 API 인증 | Spring Security → 발급자의 JWK Set | 이미 구현됨. 발급자·JWK 주소를 설정하면 서명 키 조회와 캐시를 프레임워크가 처리한다. |
 | DNS 레코드 | 기존 Cloudflare DNS | 공인 IP가 유지되면 초기 레코드만 필요하다. 주기적 DNS API 호출은 추가하지 않는다. |
@@ -225,6 +226,29 @@ Dockerfile은 이미지 주소를 `FROM`에 직접 고정해 Dependabot이 읽�
 근거: [Dependabot 지원 범위](https://docs.github.com/en/code-security/reference/supply-chain-security/supported-ecosystems-and-repositories),
 [설정 기준](https://docs.github.com/en/code-security/reference/supply-chain-security/dependabot-options-reference),
 [무료 사용 정책](https://github.blog/changelog/2024-04-22-dependabot-updates-on-actions-for-github-enterprise-cloud-and-free-pro-and-teams-users/).
+
+## Java 라이브러리 취약점 알림
+
+`ljkhyeong/baton-go`의 Dependabot alerts를 활성화했다. 이 기능과 의존성 그래프는 비공개 저장소에서도
+추가 유료 상품 없이 사용할 수 있다. 알려진 취약점과 새로 등록되는 취약점을 GitHub가 비교한다.
+
+[CI](../../.github/workflows/ci.yml)는 기존 Trivy 검사 결과에서 이미지에 포함된 Java 패키지 목록을
+추려 표준 `github` 형식으로 변환한다. 별도 빌드·재검사나 Gradle 플러그인은 추가하지 않는다.
+검증 작업 전체가 성공한 `main` push에서만 별도 작업이 GitHub 의존성 API로 제출한다.
+PR에서는 보고서만 보존한다. 쓰기 권한은 제출 작업에만 부여하며 저장소의 임시 `GITHUB_TOKEN`을 쓴다.
+
+원격 `main`에 반영한 뒤 `Java 의존성 알림 연동` 작업의 성공, `Insights → Dependency graph`의
+Java 패키지 목록과 `Security → Dependabot`을 확인한다. 알림 기능 활성화만으로 로컬 변경의
+의존성 목록이 제출되는 것은 아니다. 개인 이메일 알림은 각 계정의 기존 알림 설정을 따른다.
+
+이 목록은 이미지에 포함된 라이브러리를 대상으로 하며 Gradle의 전체 의존 관계나 테스트 전용
+의존성을 나타내지 않는다. 운영체제 패키지는 기존 Trivy 보고서로 확인한다.
+Java 패키지가 없는 결과는 CI에서 거부해 빈 목록으로 기존 제출 내용을 지우지 않는다.
+자동 수정 PR과 병합은 켜지 않았다. 제출 작업은 기존 GitHub Actions 사용량에 포함된다.
+
+근거: [GitHub 무료 기능 범위](https://docs.github.com/en/code-security/getting-started/github-security-features#available-for-all-github-plans),
+[의존성 제출 API](https://docs.github.com/en/rest/dependency-graph/dependency-submission),
+[Trivy 표준 변환](https://github.com/aquasecurity/trivy/blob/v0.72.0/pkg/report/github/github.go).
 
 ## GitHub CI 결과를 Slack으로 받기
 

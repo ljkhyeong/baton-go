@@ -1,4 +1,4 @@
-# 이미지 SBOM·취약점 보고서 확인
+# 이미지 검사·GHCR 게시
 
 ## 적용 범위
 
@@ -61,15 +61,52 @@ PR이나 검증 실패에서는 제출하지 않으며, 제출 실패 시 CI가 
 
 ## 릴리스에서 별도로 확인할 사항
 
-이 CI는 이미지를 레지스트리에 게시하거나 서명하지 않으며, 취약점 등급별 배포 차단 정책도
-결정하지 않는다. 로컬 빌드 이미지의 보고서만으로 공개 운영을 승인하지 않는다.
+`main` push의 빌드·검사·실행·DB 검증이 통과하면 아래 절차로 이미지를 게시한다.
+이미지 서명, 취약점 등급별 배포 차단과 운영 배포는 별도로 수행한다.
+게시 성공만으로 공개 운영을 승인하지 않는다.
 
 릴리스 담당자는 실제 배포할 매니페스트 다이제스트와 플랫폼에 맞는 검사 결과를 확보하고,
 발견 사항의 처리·예외 승인, 서명·provenance 검증과 보존 위치를 기록한다. 상세 배포 점검 항목은
 [비공개 Kubernetes 배포 절차](kubernetes-private-server-deployment.md)를 따른다.
+
+## GHCR 자동 게시와 배포 참조
+
+검증 작업의 마지막 단계가 같은 로컬 이미지를 `ghcr.io/ljkhyeong/baton-go`에 게시한다.
+PR·검증 실패에서는 게시하지 않는다. 게시 전 검사 보고서의 이미지 ID·소스 커밋을 대조하며,
+재빌드하거나 이미지 아카이브를 Actions 산출물로 올리지 않는다.
+
+- 인증은 임시 `GITHUB_TOKEN`과 검증 작업의 `packages: write` 권한을 사용한다.
+  체크아웃에는 인증 정보를 남기지 않고, 게시용 Docker 인증 파일은 단계 종료 시 삭제한다.
+- 태그는 `sha-<커밋>-<실행 ID>-<재실행 번호>`다. `latest`나 배포용 고정 태그를 덮어쓰지 않는다.
+- 첫 게시의 패키지는 비공개다. `GITHUB_TOKEN`으로 게시하면 저장소와 연결된다.
+  이미 같은 이름의 패키지가 있다면 패키지의 Actions 접근 설정에서 이 저장소에 쓰기 권한을 허용한다.
+- 성공한 실행은 게시 다이제스트를 실행 요약과 `baton-go-image-publication` 산출물에 남긴다.
+  `image-publication.json`에는 검사 메타데이터와 게시 태그·다이제스트·실행 주소가 들어 있다.
+  이 파일은 서명된 provenance가 아니다.
+
+원격 `main`에 반영한 뒤 첫 게시 성공과 패키지 접근 권한을 확인한다. 같은 실행의
+`baton-go-image-security`와 `baton-go-image-publication`을 함께 검토하고 릴리스 기록으로 보관한다.
+Actions 산출물은 14일 뒤 만료되며, 게시된 패키지의 보관 기간과는 별개다.
+
+배포 오버레이의 `newName`은 `ghcr.io/ljkhyeong/baton-go`로, `digest`는
+`image-publication.json`의 `image_reference`에서 `@` 뒤 값으로 교체한다.
+현재 예시의 다이제스트 자리표시는 첫 릴리스 검토 전까지 유지한다.
+애플리케이션과 Flyway Job은 같은 참조를 쓰며 노드 플랫폼도 확인한다.
+현재 CI 이미지는 `linux/amd64`다. ARM 홈서버에는 그대로 사용하지 않는다.
+
+홈서버에서 비공개 이미지를 받을 때는 `read:packages` 권한의 PAT classic을 기존
+`baton-go-registry` imagePullSecret에 연결한다. 게시 권한이나 저장소 전체 권한은 추가하지 않는다.
+토큰·Secret 값은 저장소와 명령행에 남기지 않고
+[기존 Secret 준비 절차](kubernetes-private-server-deployment.md)를 따른다.
+
+GHCR의 컨테이너 이미지 저장·전송은 현재 무료다. CI 실행 시간과 보고서 보존은 기존 Actions 사용량에
+포함되므로 무료 할당량과 유료 사용 차단 설정을 유지한다. 유료 실행기나 추가 저장 서비스는 쓰지 않는다.
 
 ## 표준 도구 문서
 
 - [Trivy 이미지 아카이브 검사](https://trivy.dev/docs/latest/target/container_image/)
 - [Trivy 보고서 변환](https://trivy.dev/docs/latest/configuration/reporting/#converting)
 - [Trivy SBOM 생성](https://trivy.dev/docs/latest/supply-chain/sbom/)
+- [GitHub Actions 이미지 게시](https://docs.github.com/en/actions/tutorials/publish-packages/publish-docker-images)
+- [GHCR 인증·접근 권한](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry)
+- [GitHub Packages 요금](https://docs.github.com/en/billing/concepts/product-billing/github-packages)

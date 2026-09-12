@@ -22,6 +22,7 @@
    | 감시 위치 | 도쿄·싱가포르·암스테르담·뉴욕 |
    | 장애 판정 | 4개 위치 중 3개 실패, 연속 실패 3회 |
    | TLS | 인증서 신뢰·호스트 이름 검증, 만료 7일 전 알림 |
+   | 도메인 | 만료 15일 전부터 알림, 네임서버 변경 알림 켜기 |
    | 보고서 | 비공개, 대상 주소 표시 안 함 |
 
 3. Cloudflare와 Ingress가 이 요청을 GO까지 전달하는지 확인한다. `/l` 응답의 `Cache-Control: no-store`를
@@ -42,13 +43,29 @@ BATON·ROUND의 인증은 기존 내부 감시·연동 검증으로 확인한다
 Cloudflare 프록시를 쓰면 외부 TLS 검사는 Cloudflare가 제공하는 인증서를 본다.
 Origin 인증서 상태는 기존 cert-manager 경보와 구분한다.
 
+### 도메인 만료·네임서버 변경 알림
+
+등록 예시는 `DomainExpiryReminder=15`, `NSChangeAlert=1`로 같은 Contact List에 알린다.
+기존 모니터가 있으면 이 두 설정만 수정한다. 도메인 상태를 조회하는 자체 스케줄러는 필요 없다.
+
+등록 후 HetrixTools가 `go.b4ton.com`의 상위 도메인인 `b4ton.com`을 감지했는지 확인하고,
+표시된 만료일은 도메인 등록기관의 만료일과 대조한다. 초기 조회에는 최대 15분이 걸릴 수 있고
+이후에는 하루마다 갱신하므로 실시간 만료일 조회가 아니다. 만료 알림은 15일 전부터 매일 전송된다.
+일부 도메인은 만료일을 제공하지 않으므로 등록기관의 갱신 알림도 유지한다.
+
+`b4ton.com`의 만료·네임서버 감시는 GO 모니터 하나에서 담당한다. CAL 등 다른 하위 도메인에
+같은 옵션을 켜 중복 알림을 만들지 않는다. 네임서버 변경은 Cloudflare 위임 변경을 뜻하며,
+개별 A·AAAA 레코드나 공인 IP 변경을 감시하는 기능은 아니다.
+
 무료 플랜은 감시 대상 15개, 1분 주기를 제공하며 계정 유지를 위해 90일마다 대시보드에 로그인해야 한다.
+도메인 만료·네임서버 변경 감시와 Slack 연동도 무료 플랜에 포함된다.
 유료 문자·전화 알림은 사용하지 않는다. API를 사용할 때도 주기적 등록·조회 스크립트를 두지 않는다.
 등록·변경용 API 토큰이 포함된 주소는 비밀값으로 취급하고 명령행·로그에 출력하지 않는다.
 
 근거: [공식 등록 API](https://docs.hetrixtools.com/api-add-website-ping-service-smtp-uptime-monitor/),
 [정상 HTTP 코드 지정](https://docs.hetrixtools.com/website-uptime-monitoring-accepted-http-codes/),
 [Slack 연동](https://docs.hetrixtools.com/slack-integration/),
+[도메인 만료 감시](https://docs.hetrixtools.com/domain-expiration-monitoring/),
 [무료 조건](https://hetrixtools.com/pricing/uptime-monitor/).
 
 ## Healthchecks.io 감시 시스템 중단 알림

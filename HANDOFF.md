@@ -19,8 +19,13 @@
 - GitHub 저장소의 Dependabot alerts를 활성화하고 조회로 확인했다. 자동 수정 PR은 중지 상태다.
   기존 Trivy 결과의 Java 패키지 목록을 `main` CI 성공 후 의존성 API로 제출하는 설정을 추가했다.
   실제 Java 목록 제출은 원격 `main` 반영 후 확인해야 한다.
+- `main`의 빌드·이미지·실행·DB 검증 후 같은 이미지를 GHCR에 게시하는 CI 설정을 추가했다.
+  게시 다이제스트·검사 메타데이터를 별도 산출물에 기록하며 재빌드하지 않는다.
+  [게시·배포 참조 절차](docs/RUNBOOK/image-security-reports.md#ghcr-자동-게시와-배포-참조)를 따르며,
+  원격 반영·실제 GHCR 인증과 게시·홈서버 이미지 수신은 아직 확인하지 않았다.
 - HetrixTools의 공개 HTTPS 감시 등록 예시와 Healthchecks.io 주기 신호 설정을 추가했다.
   기존 공개 오류 경로의 404·본문을 확인하고, 감시 시스템은 고정 본문만 외부로 보낸다.
+  HetrixTools는 같은 Contact List로 도메인 만료 15일 전·네임서버 변경도 알리도록 설정했다.
   [외부 감시 절차](docs/RUNBOOK/external-availability-monitoring.md)에 무료 조건과 Slack 연결을 정리했다.
   실제 계정·수신 채널 연결과 홈서버 적용은 남아 있다.
 - cert-manager 인증서의 준비 실패·갱신 지연·만료 임박·지표 누락 경보와 Discord·Slack 전달을
@@ -55,6 +60,18 @@
 
 ## 최근 검증
 
+- 이미지 게시·도메인 알림은 미커밋 변경이 없는 `main`의 `d845830`에서 시작해 설정을 `6344b8a`에 저장했다.
+  YAML·JSON 파싱, Bash 구문·ShellCheck와 기존 `rhysd/actionlint:1.7.12`의 워크플로 검사를 통과했다.
+  기존 CI 단계 보존, 전체 검증 뒤 `main` push에서만 게시하는 조건, 권한과 문서 링크를 확인했다.
+  검증 환경은 `/private/tmp/baton-go-integration-validation-20260912`다.
+  `ghcr-publish.sh`는 CI에서 추출한 게시 단계이며 `ghcr-flow-validation.py`·`ghcr-flow-validation.log`에
+  응답 대체 검증이 있다. 게시 성공 시 다이제스트·메타데이터·요약 기록, 이미지·커밋 불일치 시 게시 차단,
+  전송 실패 시 완료 기록 생략과 임시 인증 파일 정리를 확인했다.
+  실제 로컬 레지스트리 전송은 Docker Desktop의 데몬→호스트 포트 연결 거부로 실패했다.
+  임시 포트의 바인딩을 바꿔도 같아 이 경로의 검증을 중단했고 컨테이너·인증 파일은 정리했다.
+  `ghcr-native-validation.py`·`ghcr-native-validation.log`에 실패 조건이 있으므로 같은 환경에서 반복하지 않는다.
+  이후 문서만 변경했다. Java·이미지·DB 설정이 같아 빌드·Trivy·단위·MySQL·Redis 검증은 반복하지 않았다.
+  실제 GHCR 인증·게시, 원격 CI 전체 실행, HetrixTools 계정·Slack 연결과 운영 배포는 하지 않았다.
 - 외부 감시 연동은 미커밋 변경이 없는 `main`의 `a1c56e6`에서 시작해 설정·CI를 `1a71dbc`에 저장했다.
   JSON·YAML·Bash·ShellCheck, Prometheus `3.13.2`의 규칙 검사와 Alertmanager `0.34.0`의
   설정·라우팅 검사(주기 신호 전달, 일반 경보·다른 job·다른 경보 이름 제외)를 통과했다.

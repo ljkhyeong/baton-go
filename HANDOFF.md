@@ -9,7 +9,7 @@
   GO 링크는 위치만 제공하며 접근 권한은 BATON·ROUND가 판단한다.
 - 외부 연동은 [코드·연동 준비](docs/RUNBOOK/external-api-integrations.md#코드연동-준비)를 따른다.
   운영 계정·홈서버·공유기·이미지 빌드·k3s 설정은 사용자가 진행한다. 애플리케이션 환경변수와
-  Slack·Discord URL 예시, 외부 통신 없는 웹훅 전달 검증 도구·CI 단계를 준비했다.
+  Slack·Discord·Healthchecks URL 예시, 외부 통신 없는 웹훅 전달 검증 도구·CI 단계를 준비했다.
   Discord 예시는 `wait=true`를 사용한다. 실제 인증 주소·비밀값·웹훅 URL 연결은 남아 있다.
 - 관리 API의 잘못된 쿼리·경로 값과 필수 쿼리 누락 오류에 문제 항목을 표시한다.
   Spring의 기존 입력 변환·검증을 사용하며 원문 값은 오류 응답에 넣지 않는다.
@@ -93,6 +93,14 @@
 
 ## 최근 검증
 
+- Healthchecks 전달 검증은 미커밋 변경이 없는 `main`의 `95fb537`에서 시작했고 도구·URL 예시는
+  `b4701a3`에 저장했다. `python3 tools/verify-webhooks.py`로 고정 본문·503 이후 재전송·반복 신호·
+  해제 신호 미전송·필터 불일치 제외와 기존 Slack·Discord 검증을 통과했다.
+  임시 설정·결과·로그는 `/private/tmp/baton-go-healthchecks-verification-20260912`에 있다.
+  Python·YAML·URL 구문과 actionlint 1.7.12도 통과했다. 검증 이미지는 기존 캐시를 사용했으며,
+  코드에서는 이미지가 없으면 수신 서버 시작 전에 내려받도록 바꿨다.
+  Java·의존성·DB·운영 설정은 바뀌지 않아 직전 빌드·통합 테스트 결과를 재사용했다.
+  실제 Healthchecks 체크 등록·신호 전송·Slack 수신·홈서버 적용·원격 CI 실행은 하지 않았다.
 - 외부 API·웹훅 준비는 미커밋 변경이 없는 `main`의 `0b74794`에서 시작했고 도구·예시는
   `6337026`에 저장했다. Java 소스·의존성은 바뀌지 않았다. Java 21에서
   `./gradlew --no-daemon build :bootstrap:mysqlTest :bootstrap:redisTest`를 통과했다.

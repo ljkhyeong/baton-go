@@ -17,6 +17,8 @@ Slack·Discord 전송은 Alertmanager의 표준 웹훅을 사용한다. 별도 J
 - [Slack URL 예시](../../deploy/prometheus/slack-webhook-url.example)와
   [Discord URL 예시](../../deploy/prometheus/discord-webhook-url.example)의 `REPLACE_ME`는 임시 표기다.
   실제 URL은 기존 Alertmanager 예시가 지정한 Secret 파일에 넣는다. GO 환경변수로 전달하지 않는다.
+  [Healthchecks Ping URL 예시](../../deploy/prometheus/healthchecks-ping-url.example)도 같은 방식으로
+  실제 체크의 성공 URL로 교체해 지정된 Secret 파일에 넣는다.
   Discord는 `wait=true`를 유지해 메시지 저장 결과를 확인한다. 공식 API는 기본 `wait=false`일 때
   저장되지 않은 메시지에 오류를 반환하지 않을 수 있다.
 - 관리 JWT는 `iss`, `aud=baton-go`, `sub`, `exp`와 작업별 scope가 필요하다.
@@ -32,9 +34,11 @@ python3 tools/verify-webhooks.py --output /tmp/baton-go-webhooks
 ```
 
 첫 명령은 `bootstrap/build/libs/baton-go.jar`와 계약 문서를 만들고 임시 JWK 서버·MySQL·Redis로
-기존 연동을 검사한다. 두 번째 명령은 원본 Slack·Discord 설정과 URL 예시를 읽고, 외부 통신·포트 공개가
+기존 연동을 검사한다. 두 번째 명령은 원본 Slack·Discord·Healthchecks 설정과 URL 예시를 읽고, 외부 통신·포트 공개가
 없는 임시 컨테이너에서 발생·해제 알림, 429 이후 전송, Discord 저장 확인 옵션, 리다이렉트 차단,
-다른 서비스와 비공개 값의 제외를 확인한다. Python 표준 라이브러리만 사용하며 검증 이미지는 고정한다.
+다른 서비스와 비공개 값의 제외를 확인한다. Healthchecks는 고정 본문·503 재전송·주기 신호와
+종료·필터 불일치 신호 미전송을 확인한다. Python 표준 라이브러리만 사용하며 검증 이미지는 고정한다.
+없는 이미지는 먼저 내려받고 임시 수신 서버를 시작하므로 다운로드 시간을 연결 대기 시간에 포함하지 않는다.
 컨테이너는 종료 시 제거하고 임시 설정·`report.json`·로그를 지정 경로에 남긴다. CI도 같은 검증을 실행한다.
 
 현재 Alertmanager 0.34.0의 Slack·Discord 연동은 429를 즉시 재시도하지 않고 다음 그룹 처리 주기에

@@ -79,6 +79,7 @@ Prometheus가 항상 활성인 경보를 만들고 Alertmanager가 약 1분 간�
    Grace Time은 `4분`으로 설정한다. 마지막 신호 후 약 5분간 다음 신호가 없으면 장애로 판단한다.
    Filtering Rules에서 `Only POST`를 선택하고 본문 키워드 판정은 끈다.
 2. 이 체크에 Slack 연동을 연결한다. Ping URL은 기본 성공 주소 `https://hc-ping.com/<uuid>`를 사용한다.
+   [URL 예시](../../deploy/prometheus/healthchecks-ping-url.example)의 임시값을 실제 체크의 URL로 교체한다.
    URL 자체가 신호를 보낼 권한이므로 Secret으로 보관하고 Alertmanager에
    `/etc/alertmanager/secrets/healthchecks-ping-url` 파일로 읽기 전용 마운트한다.
    런타임에 Healthchecks 관리 API 키는 필요하지 않다.
@@ -101,7 +102,7 @@ Prometheus가 항상 활성인 경보를 만들고 Alertmanager가 약 1분 간�
    ```
 
 6. Healthchecks 이벤트 기록에서 약 1분 간격의 수신을 확인한다. HTTP 200만으로 등록 성공을 판단하지 않는다.
-   Healthchecks는 존재하지 않는 Ping URL에도 200을 반환할 수 있다.
+   Healthchecks는 존재하지 않는 Ping URL이나 호출 제한으로 기록하지 않은 요청에도 200을 반환할 수 있다.
    시험 환경에서 이 경보만 잠시 차단해 Slack 장애 알림을 받고, 차단 해제 후 복구 알림까지 확인한다.
    다른 GO 장애 알림이나 모니터링 서버 전체를 중단할 필요는 없다.
 
@@ -109,6 +110,11 @@ Prometheus가 항상 활성인 경보를 만들고 Alertmanager가 약 1분 간�
 신호 해제 알림은 보내지 않는다. 해제된 경보를 성공 신호로 보내면 중단 감지가 늦어질 수 있다.
 Prometheus와 Alertmanager의 연결·웹훅 전송이 살아 있는지 확인하는 설정이며,
 모든 수집 대상과 개별 Slack receiver가 정상이라는 뜻은 아니다.
+
+`python3 tools/verify-webhooks.py`는 외부 통신 없는 임시 수신 서버에서 고정 본문, 503 이후 재전송,
+반복 신호, 해제 신호 미전송과 `job`·`alertname` 필터를 검증한다. 기존 Slack·Discord 검증과 함께
+CI에서도 실행한다. 검증에서는 반복 간격을 1초, 처리 주기를 200ms로 줄이며 운영 예시는 유지한다.
+Healthchecks의 실제 체크 등록·신호 기록·Slack 알림은 위 운영 연결 후 별도로 확인한다.
 
 계획된 점검 때는 Healthchecks 체크를 일시 중지하고 `Ignore the ping, stay in the paused state`를
 선택한다. 점검 후 다시 활성화하고 수신을 확인한다. 연동을 제거할 때는 체크·규칙·route·receiver를

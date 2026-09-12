@@ -9,6 +9,9 @@
   GO 링크는 위치만 제공하며 접근 권한은 BATON·ROUND가 판단한다.
 - 종료 링크 자동 삭제, Redis 분산 요청 제한, 대상 계약 점검·폐기 API는 기본 중지 상태다.
   실제 운영 환경 검증과 배포는 남아 있다.
+- `go.b4ton.com` 운영 예시와 Cloudflare DNS API 인증서 갱신·Discord 웹훅 알림의 선택 설정을
+  추가했다. [외부 API 연동 절차](docs/RUNBOOK/external-api-integrations.md)를 따르며
+  서버 설치, 실제 토큰 연결, DNS 변경, 인증서 발급과 메시지 전송은 실행하지 않았다.
 - 일반 링크 폐기 완료 이력은 최초 요청을 `LINK_REVOKE`, 이미 폐기된 링크의 반복 요청을
   `LINK_REVOKE_REPLAY`로 구분한다. HTTP 응답과 폐기 시각 보존 동작은 바뀌지 않았다.
 - 관리 JWT는 공백이 아닌 `sub`를 서비스 식별자로 요구한다. 누락·빈 문자열·공백 문자열은
@@ -38,6 +41,20 @@
 
 ## 최근 검증
 
+- 2026-09-12 기준 리비전 `400b739`의 깨끗한 `main`에서 시작했고 연동 설정은 `051c2aa`에 저장했다.
+  이어진 문서 변경은 README·RUNBOOK·HANDOFF이며 애플리케이션 코드·의존성 변경은 없다.
+  `kubectl kustomize`로 `deploy/k8s/overlays/private-server`와
+  `deploy/k8s/integrations/cloudflare-tls`를 렌더링했고, cert-manager `v1.21.2` 공식 CRD의
+  `openAPIV3Schema`로 Issuer·Certificate 2개를 검사했다.
+  `.github/workflows/ci.yml`의 Discord 단계는 YAML·Bash 구문·ShellCheck와 로컬 실행을 통과했다.
+  Alertmanager `v0.34.0`의 `amtool check-config`, `config routes test`로 GO·다른 서비스 분기를
+  확인했고 `template render`로 발생·해제 문구와 비밀 필드 제외를 확인했다. 해제 문구의 첫 도구 실행은
+  실패했으나 별도 입력 파일로 다시 검사해 성공했다. 컨테이너는 모두 `--network none`으로 실행했다.
+  검증 환경은 `/private/tmp/baton-go-integration-validation-20260912/bin/python`(PyYAML·jsonschema),
+  같은 디렉터리의 `cloudflare-tls.rendered.yaml`, `private-server.rendered.yaml`,
+  `cert-manager.crds.yaml`, `alertmanager-validation.log`에 설정과 결과가 있다.
+  Java·DB·Redis와 기존 경보 규칙은 바뀌지 않아 해당 테스트는 실행하지 않았다.
+  GitHub CI 전체 실행과 클러스터 적용·인증서 발급·갱신·웹훅 수신 검증은 남아 있다.
 - 2026-09-12 `d3addd6`에서 ArchUnit으로 도메인·애플리케이션·컨트롤러·어댑터의 의존 방향을
   자동 검사하도록 했다. 구조 규칙 5건과 `./gradlew --no-daemon test`가 성공했다.
   DB·Redis 동작은 바뀌지 않아 태그 통합 테스트는 반복하지 않았다.

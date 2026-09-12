@@ -51,6 +51,8 @@ Pod 준비 상태 지속 실패, 공개·관리 응답 지연, 전체·관리 AP
 
    기존 무료 채널만 사용하고 발송용 Java 코드를 추가하지 않는다. 수신자가 없으면 전달 준비가
    끝난 것으로 보지 않는다. 토큰·SMTP 비밀번호는 기존 비밀값 관리 경로에 둔다.
+   Discord를 사용한다면 [웹훅 연동 절차](external-api-integrations.md#discord로-go-장애-알림)의
+   검증된 receiver 예시를 병합한다.
 6. 병합한 설정을 `promtool check config`, `amtool check-config`로 확인한 뒤 기존 운영 절차로
    다시 읽는다. Pod별 `up{job="baton-go"}=1`, 경보 파일 로딩과 기존 수신자 라우팅을 확인한다.
    시험 알림은 담당자와 정한 채널에서 발생·해제 수신까지 확인한다.

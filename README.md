@@ -207,6 +207,10 @@ DB 대기 시간은 Hikari·Connector/J 설정으로 제한하며, 마이그레�
 [수집·알림 연결 절차](docs/RUNBOOK/prometheus-alerts.md#추가-서비스-요금-없는-연결)를 따른다.
 Pod 자동 발견 설정과 최소 조회 권한을 제공하며 새 서버나 유료 API를 추가하지 않는다.
 
+`b4ton.com` 기준 도메인과 Cloudflare 인증서 갱신·Discord 장애 알림은
+[추가 요금 없는 외부 API 연동](docs/RUNBOOK/external-api-integrations.md)에 정리했다.
+두 연동은 선택 설정이며 기존 인증서와 알림 채널을 계속 사용할 수 있다.
+
 ## 검증
 
 개발 중에는 [개발 검증 절차](docs/RUNBOOK/development-verification.md)에 따라 변경한 범위부터 확인한다.
@@ -298,6 +302,7 @@ curl -i http://localhost:8080/api/v1/links \
 
 - [비공개 Kubernetes 배포 절차](docs/RUNBOOK/kubernetes-private-server-deployment.md)
 - [Prometheus 경보 연결과 검증](docs/RUNBOOK/prometheus-alerts.md)
+- [추가 요금 없는 외부 API 연동](docs/RUNBOOK/external-api-integrations.md)
 - [이미지 SBOM·취약점 보고서 확인](docs/RUNBOOK/image-security-reports.md)
 - [관리 작업 이력 조회와 보존](docs/RUNBOOK/management-operation-history.md)
 - [종료 링크 보존 기간 설정](docs/RUNBOOK/link-retention.md)

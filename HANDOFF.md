@@ -7,6 +7,10 @@
   [API 계약](docs/PRD/0002_api-contract/spec.md),
   [BATON·ROUND 연동 계약](docs/PRD/0003_cross-service-link-contract/spec.md)이다.
   GO 링크는 위치만 제공하며 접근 권한은 BATON·ROUND가 판단한다.
+- 외부 연동은 [코드·연동 준비](docs/RUNBOOK/external-api-integrations.md#코드연동-준비)를 따른다.
+  운영 계정·홈서버·공유기·이미지 빌드·k3s 설정은 사용자가 진행한다. 애플리케이션 환경변수와
+  Slack·Discord URL 예시, 외부 통신 없는 웹훅 전달 검증 도구·CI 단계를 준비했다.
+  Discord 예시는 `wait=true`를 사용한다. 실제 인증 주소·비밀값·웹훅 URL 연결은 남아 있다.
 - 관리 API의 잘못된 쿼리·경로 값과 필수 쿼리 누락 오류에 문제 항목을 표시한다.
   Spring의 기존 입력 변환·검증을 사용하며 원문 값은 오류 응답에 넣지 않는다.
   HTTP 상태·오류 코드·JSON 구조와 서비스 호출 전 거부 시점은 유지한다.
@@ -23,7 +27,7 @@
   서버 설치, 실제 토큰 연결, DNS 변경, 인증서 발급과 메시지 전송은 실행하지 않았다.
 - [추가 연동 검토](docs/RUNBOOK/external-api-integrations.md#추가-검토-결과)에서 Workers KV의 링크 저장,
   Cloudflare 요청 제한 대체·Turnstile, GitHub Dependency Review는 현재 계약·비용 조건상 제외했다.
-  제외 이유와 재검토 조건을 기록했다. 새 기능보다 준비된 연동의 계정·채널 연결과 수신 확인이 우선이다.
+  제외 이유와 재검토 조건을 기록했다. 계정·채널 연결과 실제 수신 확인은 사용자가 진행한다.
 - Cloudflare의 무료 [인증서 발급 알림](docs/RUNBOOK/external-api-integrations.md#cloudflare-인증서-발급-알림)
   설정·확인·해제 절차를 추가했다. 애플리케이션 코드나 주기 실행은 추가하지 않았다.
   계정 연결이 없어 실제 활성화·수신자 등록·이메일 수신은 확인하지 않았다.
@@ -89,6 +93,19 @@
 
 ## 최근 검증
 
+- 외부 API·웹훅 준비는 미커밋 변경이 없는 `main`의 `0b74794`에서 시작했고 도구·예시는
+  `6337026`에 저장했다. Java 소스·의존성은 바뀌지 않았다. Java 21에서
+  `./gradlew --no-daemon build :bootstrap:mysqlTest :bootstrap:redisTest`를 통과했다.
+  일반 311개·MySQL 44개·Redis 3개 테스트에 실패·건너뜀은 없다. 변경 없는 Gradle 작업은
+  기존 결과를 재사용했다. JAR은 `bootstrap/build/libs/baton-go.jar`, 로그는
+  `/private/tmp/baton-go-integration-readiness-20260912.log`에 있다.
+  `python3 tools/verify-webhooks.py`로 Slack·Discord 발생·해제, 429 이후 다음 주기 전송,
+  Discord 저장 확인 옵션, 리다이렉트·다른 서비스·비공개 값 제외를 확인했다.
+  최종 임시 설정·결과·로그는 `/private/tmp/baton-go-webhooks-readiness-20260912-final`에 있다.
+  최초 임시 수신기의 Slack Content-Type 오류를 공식 응답 형식으로 고쳤으며 최종 검증은 통과했다.
+  CI YAML·actionlint 1.7.12, Python 구문과 환경변수·URL 예시를 검사했다.
+  임시 컨테이너는 제거했다. 실제 외부 채널 전송·계정 설정·애플리케이션 이미지 빌드·홈서버 적용·
+  원격 CI 실행은 하지 않았다.
 - 관리 입력 오류 개선은 미커밋 변경이 없는 `main`의 `306349e`에서 시작했고 코드·테스트는
   `f7f60cd`에 저장했다. Java 21에서 `./gradlew --no-daemon :adapter-in-web:apiContractDocs`로
   웹 테스트 128개와 REST Docs 생성을 통과했다. 날짜·UUID·숫자·열거형 변환, 필수 쿼리 누락,

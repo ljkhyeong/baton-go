@@ -4,6 +4,48 @@ GO에서 직접 구현을 줄일 수 있는 연동과 적용 설정을 정리한
 기준 환경은 `b4ton.com`, 서비스별 하위 도메인, Ubuntu 홈서버의 k3s다.
 서버 설치·DNS 변경·인증서 발급·알림 전송은 이 작업에서 실행하지 않았다.
 
+## 코드·연동 준비
+
+운영 계정·홈서버·공유기·이미지 빌드·k3s 설정은 사용자가 진행한다. 이 저장소는 API 연동 코드,
+주입값 예시와 로컬 검증을 준비한다. GO의 관리 인증은 Spring Security의 JWK 조회·캐시를,
+Slack·Discord 전송은 Alertmanager의 표준 웹훅을 사용한다. 별도 JWT 파서나 알림 전송 서버는 추가하지 않는다.
+
+- [애플리케이션 환경변수 예시](../../deploy/app.env.example)는 `go.b4ton.com`과 현재 BATON·ROUND
+  라우팅을 반영했다. 빈 issuer·JWK 주소, HMAC 비밀값, DB 주소·비밀번호는 실제 값으로 채운다.
+  HMAC 비밀값은 32자 이상이며 기존 DB를 사용하면 기존 값을 유지한다. 파일은 자동으로 읽지 않으므로
+  컨테이너 환경변수로 주입한다. k3s의 ConfigMap·Secret 구분은 기존 배포 구성을 따른다.
+- [Slack URL 예시](../../deploy/prometheus/slack-webhook-url.example)와
+  [Discord URL 예시](../../deploy/prometheus/discord-webhook-url.example)의 `REPLACE_ME`는 임시 표기다.
+  실제 URL은 기존 Alertmanager 예시가 지정한 Secret 파일에 넣는다. GO 환경변수로 전달하지 않는다.
+  Discord는 `wait=true`를 유지해 메시지 저장 결과를 확인한다. 공식 API는 기본 `wait=false`일 때
+  저장되지 않은 메시지에 오류를 반환하지 않을 수 있다.
+- 관리 JWT는 `iss`, `aud=baton-go`, `sub`, `exp`와 작업별 scope가 필요하다.
+  서명 키를 제공할 발급자가 있어야 하며 도메인만 설정해서 관리 API 인증이 준비되지는 않는다.
+
+### 로컬 검증
+
+Java 21·Python 3·로컬 Docker에서 실행한다. 실제 API 토큰이나 웹훅 URL은 필요하지 않다.
+
+```bash
+./gradlew --no-daemon build :bootstrap:mysqlTest :bootstrap:redisTest
+python3 tools/verify-webhooks.py --output /tmp/baton-go-webhooks
+```
+
+첫 명령은 `bootstrap/build/libs/baton-go.jar`와 계약 문서를 만들고 임시 JWK 서버·MySQL·Redis로
+기존 연동을 검사한다. 두 번째 명령은 원본 Slack·Discord 설정과 URL 예시를 읽고, 외부 통신·포트 공개가
+없는 임시 컨테이너에서 발생·해제 알림, 429 이후 전송, Discord 저장 확인 옵션, 리다이렉트 차단,
+다른 서비스와 비공개 값의 제외를 확인한다. Python 표준 라이브러리만 사용하며 검증 이미지는 고정한다.
+컨테이너는 종료 시 제거하고 임시 설정·`report.json`·로그를 지정 경로에 남긴다. CI도 같은 검증을 실행한다.
+
+현재 Alertmanager 0.34.0의 Slack·Discord 연동은 429를 즉시 재시도하지 않고 다음 그룹 처리 주기에
+다시 시도한다. `Retry-After` 대기 시간을 따르는 즉시 재시도를 보장하지 않는다. 운영 예시의
+`group_interval`은 5분이며 로컬 검증에서는 대기 시간을 1초로 줄인다.
+실제 HTTPS·인증 서버·채널 수신·홈서버 배포는 이 로컬 검증의 범위가 아니다.
+
+근거: [Discord 메시지 저장 확인](https://docs.discord.com/developers/resources/webhook#execute-webhook),
+[Alertmanager Slack 구현](https://github.com/prometheus/alertmanager/blob/v0.34.0/notify/slack/slack.go),
+[Discord 구현](https://github.com/prometheus/alertmanager/blob/v0.34.0/notify/discord/discord.go).
+
 ## 검토 결과
 
 | 대상 | 사용할 연동 | 반영 상태 |
@@ -63,7 +105,8 @@ GO의 폐기·접속·요청 제한 기준은 [API 계약](../PRD/0002_api-contr
 새 요구나 제공 조건이 바뀌면 해당 항목만 다시 검토한다. Cloudflare 요청 제한은 실제 공격 트래픽에
 대한 추가 차단이 필요할 때, Turnstile은 BATON에 공개 입력 폼이 생길 때 해당 서비스에서 검토한다.
 
-현재 우선순위는 위에서 준비한 연동의 계정·Slack 채널 연결과 실제 수신 확인이다.
+운영 계정·Slack 채널 연결과 실제 수신 확인은 사용자가 진행한다. 코드·환경변수 예시·로컬 검증은
+위 [코드·연동 준비](#코드연동-준비)를 따른다.
 백업 연동은 [백업·복원 절차](kubernetes-private-server-deployment.md#8-백업과-복원)에 따라
 저장 위치·보존 기간·복구 목표를 먼저 확정한다.
 

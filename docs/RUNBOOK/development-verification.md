@@ -13,6 +13,7 @@
 | 도메인 정책 | `./gradlew :domain:test` |
 | 애플리케이션 흐름 | `./gradlew :application:test` |
 | HTTP 형식·상태·인증 | `./gradlew :adapter-in-web:test` |
+| Slack·Discord 웹훅 템플릿·URL 예시 | `python3 tools/verify-webhooks.py --output /tmp/baton-go-webhooks`. 로컬 Docker가 필요하며 외부 메시지는 전송하지 않는다. |
 | Java 패키지·모듈 의존 | `./gradlew --no-daemon :bootstrap:test --tests '*ArchitectureRulesTest'` |
 | JPA·SQL·Flyway·DB 동시성 | `./gradlew --no-daemon :bootstrap:mysqlTest` |
 | Redis 요청 제한·연결 설정 | `./gradlew --no-daemon :bootstrap:redisTest` |

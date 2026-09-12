@@ -7,6 +7,9 @@
   [API 계약](docs/PRD/0002_api-contract/spec.md),
   [BATON·ROUND 연동 계약](docs/PRD/0003_cross-service-link-contract/spec.md)이다.
   GO 링크는 위치만 제공하며 접근 권한은 BATON·ROUND가 판단한다.
+- 관리 링크 목록에 `expiresFrom`·`expiresBefore`를 추가했다. `status=ACTIVE`와 함께 지정하면
+  곧 만료될 링크를 찾을 수 있다. 시작 시각은 포함하고 끝 시각과 무기한 링크는 제외한다.
+  기존 생성 기간·대상·상태 필터, 조회 한도와 빈 페이지의 다음 커서는 유지한다.
 - 종료 링크 자동 삭제, Redis 분산 요청 제한, 대상 계약 점검·폐기 API는 기본 중지 상태다.
   실제 운영 환경 검증과 배포는 남아 있다.
 - `go.b4ton.com` 운영 예시와 Cloudflare DNS API 인증서 갱신·Discord·Slack 웹훅 알림의 선택 설정을
@@ -80,6 +83,14 @@
 
 ## 최근 검증
 
+- 만료 기간 검색은 미커밋 변경이 없는 `main`의 `c486fc6`에서 시작했고 코드·테스트는 `d880b8e`에 저장했다.
+  Java 21에서 `./gradlew --no-daemon :application:test :adapter-in-web:apiContractDocs`를 실행해
+  애플리케이션 48개·웹 127개 테스트와 REST Docs 생성을 통과했다. 만료 경계·한쪽 기간·무기한 제외,
+  상태 필터 조합·빈 페이지 커서·잘못된 기간의 DB 조회 전 거부·HTTP 시각 변환을 확인했다.
+  문서 링크 46개와 생성한 검색 예시의 만료 조건·응답 일치도 확인했다.
+  로그는 `/private/tmp/baton-go-expiry-search-tests-20260912.log`, 결과 집계는
+  `/private/tmp/baton-go-expiry-search-verification-20260912.json`에 있다.
+  DB·Redis·모듈 의존·배포 설정은 변경하지 않아 통합 테스트와 배포는 실행하지 않았다.
 - 추가 연동 검토는 미커밋 변경이 없는 `main`의 `5bcdcae`에서 시작했다.
   Cloudflare의 KV 일관성·요청 집계·Turnstile 검증과 GitHub의 비공개 저장소 Dependency Review
   제공 조건을 공식 문서에서 확인하고 GO의 공개 접속·폐기·요청 제한 계약과 대조했다.

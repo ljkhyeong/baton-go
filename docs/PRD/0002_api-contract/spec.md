@@ -211,13 +211,21 @@ Idempotency-Key: 8e448211-66ae-44ab-9888-c4960648c22b
 | `targetSystem` | `BATON` 또는 `ROUND` 대상만 반환한다. |
 | `createdFrom` | 이 시각 이상에 생성된 링크만 반환한다. 시작 시각을 포함한다. |
 | `createdBefore` | 이 시각 전에 생성된 링크만 반환한다. 끝 시각은 포함하지 않는다. |
+| `expiresFrom` | 만료 시각이 이 시각 이상인 링크만 반환한다. 시작 시각을 포함한다. |
+| `expiresBefore` | 만료 시각이 이 시각 전인 링크만 반환한다. 끝 시각은 포함하지 않는다. |
 | `status` | 아래 관리 조회와 같은 `ACTIVE`, `NOT_ACTIVE`, `EXPIRED`, `REVOKED` 중 하나다. |
 
-생성 기간은 Spring의 표준 ISO 날짜·시각 변환을 사용하며 `Z` 또는 명시적 UTC 오프셋이
+생성·만료 기간은 Spring의 표준 ISO 날짜·시각 변환을 사용하며 `Z` 또는 명시적 UTC 오프셋이
 있는 절대 시각을 받는다. 예를 들어 `2026-07-29T10:00:00Z`와
 `2026-07-29T19:00:00+09:00`는 같은 시각이다. URL에서 `+`는 `%2B`로 인코딩한다.
-두 시각을 모두 지정하면 `createdBefore > createdFrom`이어야 한다. 형식이 잘못되었거나
+같은 기간의 두 시각을 모두 지정하면 `createdBefore > createdFrom`,
+`expiresBefore > expiresFrom`이어야 한다. 형식이 잘못되었거나
 조회 한도·기간 조건을 위반하면 `400 INVALID_REQUEST`다.
+
+`expiresFrom`이나 `expiresBefore`를 지정하면 만료 시각이 없는 링크는 제외한다.
+만료 기간은 `expiresAt`만 비교하므로 이미 만료·폐기된 링크도 조건에 맞으면 반환한다.
+곧 만료될 활성 링크만 찾으려면 `status=ACTIVE`를 함께 지정한다.
+예: `GET /api/v1/links?status=ACTIVE&expiresBefore=2026-09-19T00:00:00Z`.
 
 성공 시 `200 OK`와 다음 필드를 반환한다. `items`의 각 항목은 아래 단건 관리 조회와
 같은 형식이며 원문 공개 코드, 코드 해시, 멱등성 키·해시와 `shortUrl`은 없다.

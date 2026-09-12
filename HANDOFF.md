@@ -14,6 +14,9 @@
   서버 설치, 실제 토큰 연결, DNS 변경, 인증서 발급과 메시지 전송은 실행하지 않았다.
 - Dependabot의 CI 액션 업데이트 제안 설정과 GitHub 공식 Slack 앱의 CI 구독 절차를 추가했다.
   원격 기본 브랜치 반영과 실제 채널 연결은 아직 하지 않았다.
+- cert-manager 인증서의 준비 실패·갱신 지연·만료 임박·지표 누락 경보와 Discord·Slack 전달을
+  추가했다. Cloudflare 자동 갱신을 선택할 때만 수집 job과 경보 파일을 함께 연결한다.
+  실제 클러스터 수집·발급·갱신과 알림 수신은 아직 확인하지 않았다.
 - 일반 링크 폐기 완료 이력은 최초 요청을 `LINK_REVOKE`, 이미 폐기된 링크의 반복 요청을
   `LINK_REVOKE_REPLAY`로 구분한다. HTTP 응답과 폐기 시각 보존 동작은 바뀌지 않았다.
 - 관리 JWT는 공백이 아닌 `sub`를 서비스 식별자로 요구한다. 누락·빈 문자열·공백 문자열은
@@ -43,6 +46,16 @@
 
 ## 최근 검증
 
+- 인증서 감시 연동은 미커밋 변경이 없는 `main`의 `9fbcf68`에서 시작해 설정·테스트·CI를
+  `6f02e56`에 저장했다. 변경한 CI의 YAML·Bash 구문·ShellCheck와 Prometheus `v3.13.2`의
+  `promtool check config --syntax-only` 2개 설정, `check rules` 18개 규칙, 기존 경보 테스트를
+  통과했다. 인증서 테스트 5개 시나리오는 YAML 중복 키와 빈 샘플 수를 수정한 뒤 통과했다.
+  Alertmanager `v0.34.0`의 `amtool check-config`와 `config routes test`로 두 채널 각각의
+  GO·인증서 전달과 다른 서비스 제외를 확인했다. 모든 컨테이너는 `--network none`으로 실행했다.
+  명령·결과는 `/private/tmp/baton-go-integration-validation-20260912/tls-ci-validation.sh`와
+  같은 디렉터리의 `tls-validation.log`에 있다. 이후 README·RUNBOOK·HANDOFF 문서만 변경했다.
+  Java·DB·Redis·인증서 발급 설정과 알림 본문은 바뀌지 않아 해당 검증은 반복하지 않았다.
+  실제 지표 수집·인증서 갱신·알림 수신과 GitHub CI 전체 실행은 하지 않았다.
 - 추가 연동 검토는 미커밋 변경이 없는 `main`의 `4c87ba9`에서 시작했고 Dependabot 설정은
   `d7c81f8`에 저장했다. 기존 Python·PyYAML 환경으로 `.github/dependabot.yml` 구문과
   `Asia/Seoul` 시간대를 확인했다. `.github/workflows/ci.yml`의 실제 액션 5종과 `CI` 이름,

@@ -41,7 +41,7 @@ Pod 준비 상태 지속 실패, 공개·관리 응답 지연, 전체·관리 AP
    앞선 일치 경로가 알림을 가로채지 않는지도 확인한다.
 
    ```yaml
-   - matchers: ['job="baton-go"']
+   - matchers: ['job=~"baton-go|baton-go-tls"']
      receiver: REPLACE_WITH_EXISTING_RECEIVER
      group_by: [job, alertname]
      group_wait: 30s
@@ -62,6 +62,9 @@ Pod 준비 상태 지속 실패, 공개·관리 응답 지연, 전체·관리 AP
 Prometheus 자체가 중단되면 이 규칙도 평가되지 않으므로 수집기 장애 감시는 기존 플랫폼 감시에 연결한다.
 표준 기능은 [Prometheus Kubernetes 수집](https://prometheus.io/docs/prometheus/latest/configuration/configuration/#kubernetes_sd_config)과
 [Alertmanager 알림 경로](https://prometheus.io/docs/alerting/latest/configuration/#route)를 따른다.
+
+Cloudflare 자동 갱신을 선택하면 [인증서 경보 연결](external-api-integrations.md#인증서-갱신만료-알림)을
+함께 적용한다. 인증서 규칙은 별도 파일이며 기본 애플리케이션 경보에는 포함되지 않는다.
 
 ## Prometheus 수집 설정
 
@@ -209,18 +212,18 @@ promtool_image=prom/prometheus:v3.13.2@sha256:508729e0e2d18e11fd742a5a5ca70e557b
 docker run --rm --network none --read-only \
   --volume "$PWD/deploy/prometheus:/rules:ro" --workdir /rules \
   --entrypoint /bin/promtool "$promtool_image" \
-  check config --syntax-only prometheus-kubernetes.example.yml
+  check config --syntax-only prometheus-kubernetes.example.yml prometheus-cert-manager.example.yml
 
 docker run --rm --network none --read-only \
   --tmpfs /tmp:rw,nosuid,nodev,size=256m \
   --volume "$PWD/deploy/prometheus:/rules:ro" --workdir /rules \
-  --entrypoint /bin/promtool "$promtool_image" check rules baton-go-alerts.yml
+  --entrypoint /bin/promtool "$promtool_image" check rules baton-go-alerts.yml baton-go-tls-alerts.yml
 
 docker run --rm --network none --read-only \
   --tmpfs /tmp:rw,nosuid,nodev,size=256m \
   --volume "$PWD/deploy/prometheus:/rules:ro" --workdir /rules \
   --entrypoint /bin/promtool "$promtool_image" \
-  test rules baton-go-alerts.test.yml baton-go-availability.test.yml
+  test rules baton-go-alerts.test.yml baton-go-availability.test.yml baton-go-tls-alerts.test.yml
 ```
 
 [규칙 테스트](../../deploy/prometheus/baton-go-alerts.test.yml)는 무트래픽·소수 오류,
@@ -242,6 +245,10 @@ MVC 인터셉터가 차단한 429와 공개 경로의 1초·2초 지연 버킷�
 [수집 경보 테스트](../../deploy/prometheus/baton-go-availability.test.yml)는 일부 Pod 실패,
 다른 서비스 제외, 대상 누락, 지속 시간과 복구 후 해제를 확인한다. 수집 예시는 클러스터 자격
 증명 없이 문법을 검증하며, 실제 Pod 발견·접근과 운영 수신자 연결 성공을 대신하지 않는다.
+
+[인증서 경보 테스트](../../deploy/prometheus/baton-go-tls-alerts.test.yml)는 최초 발급 대기,
+만료 경계, Ready 상태에서의 갱신 지연, 지표 누락·복구와 다른 서비스 제외를 검증한다.
+CI는 두 채널에서 `baton-go-tls` 경보도 GO 수신자로 전달되는지 확인한다.
 
 운영 적용 후에는 수집 대상의 `UP` 상태, 규칙 로딩, Alertmanager 라우팅과 담당자 수신을 각각 확인한다.
 실제 저장 데이터를 훼손해 오류를 만들지 말고 격리된 환경의 합성 시계열·시험 알림을 사용한다.

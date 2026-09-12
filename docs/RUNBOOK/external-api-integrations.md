@@ -9,6 +9,7 @@ GO에서 직접 구현을 줄일 수 있는 연동과 적용 설정을 정리한
 | 대상 | 사용할 연동 | 반영 상태 |
 | --- | --- | --- |
 | 인증서 갱신 | cert-manager → Cloudflare DNS API + Let's Encrypt ACME | `go.b4ton.com` 발급·갱신 설정 추가. 준비된 인증서를 유지하면 적용하지 않아도 된다. |
+| 인증서 장애 알림 | cert-manager 지표 → Prometheus → Discord·Slack | 준비 실패·갱신 지연·만료 임박·지표 누락을 감지하는 선택 설정 추가. |
 | 장애 알림 | Alertmanager → Discord·Slack Webhook API | 기존 GO 경보의 발생·해제 알림 설정과 CI 검증 추가. 사용할 채널을 선택한다. |
 | CI 도구 갱신 | GitHub Dependabot | GitHub Actions의 새 버전을 주 1회 확인하고 한 PR로 묶는 설정 추가. |
 | 빌드 결과 알림 | GitHub 공식 Slack 앱 | 저장소·CI에 맞춘 구독 명령 정리. 실제 채널 구독은 아직 하지 않았다. |
@@ -88,6 +89,52 @@ Origin CA 인증서는 브라우저가 직접 신뢰하는 인증서가 아니�
 설정 기준: [cert-manager Cloudflare 연동](https://cert-manager.io/docs/configuration/acme/dns01/cloudflare/),
 [Cloudflare Origin CA](https://developers.cloudflare.com/ssl/origin-configuration/origin-ca/).
 
+## 인증서 갱신·만료 알림
+
+위 자동 갱신을 사용할 때만 [인증서 수집 설정](../../deploy/prometheus/prometheus-cert-manager.example.yml)과
+[경보 규칙](../../deploy/prometheus/baton-go-tls-alerts.yml)을 기존 Prometheus에 함께 연결한다.
+인증서 조회나 알림 발송용 애플리케이션 코드는 추가하지 않는다.
+
+| 경보 | 조건 |
+| --- | --- |
+| 인증서 준비 실패 | Ready가 아닌 상태가 15분 지속 |
+| 갱신 지연 | 갱신 예정 시각을 24시간 초과한 상태가 15분 지속 |
+| 만료 임박 | 남은 유효 기간이 7일 미만이거나 이미 만료된 상태가 5분 지속 |
+| 지표 없음 | GO 인증서 지표가 5분간 수집되지 않음 |
+
+1. 예시의 `rule_files`·`scrape_configs`만 기존 설정에 병합하고 경보 파일을 읽기 전용으로 마운트한다.
+   기존 `alerting`과 GO 애플리케이션 수집 설정은 유지한다. 기존 인증서를 계속 사용하거나
+   자동 갱신 연동을 제거할 때는 이 job과 규칙을 함께 제외한다.
+2. 기본 수집 주소는 `cert-manager.cert-manager.svc:9402/metrics`다. Helm의
+   `prometheus.enabled=true`, `prometheus.podmonitor.enabled=false`일 때 생성되는 내부 Service를
+   기준으로 하며 실제 Service 이름·Namespace를 맞춘다. 지표에 TLS를 설정했다면 `scheme: https`와
+   신뢰할 CA를 지정한다. 네트워크 정책은 Prometheus에서 이 내부 포트로의 접근만 허용한다.
+3. 이미 PodMonitor 등으로 수집한다면 job을 중복으로 추가하지 않는다. 규칙의 job과 인증서
+   Namespace label을 실제 지표에 맞춘다. 수집기 label과 충돌하면 인증서 Namespace가
+   `exported_namespace`로 표시될 수 있다. job을 바꾸면 Alertmanager 조건도 함께 맞춘다.
+4. Discord·Slack 예시의 GO route는 `baton-go`와 `baton-go-tls`를 모두 전달한다.
+   기존에 `job="baton-go"`만 연결했다면 `job=~"baton-go|baton-go-tls"`로 변경한다.
+   병합한 설정의 구문과 인증서 경보의 수신자를 검사한다.
+
+   ```bash
+   promtool check config /etc/prometheus/prometheus.yml
+   amtool check-config /etc/alertmanager/alertmanager.yml
+   amtool config routes test --config.file=/etc/alertmanager/alertmanager.yml \
+     --verify.receivers=slack-go job=baton-go-tls alertname=BatonGoCertificateExpiringSoon
+   ```
+
+   Discord를 선택했다면 수신자를 `discord-go`로 바꾼다.
+
+적용 후 `up{job="baton-go-tls"}=1`, `baton-go/baton-go-public`의 Ready·만료·갱신 지표와 경보 로딩을
+확인한다. 수집 예시는 GO 인증서 지표 3종만 저장하며 Secret·개인 키를 읽지 않는다.
+만료·갱신 시각이 아직 없는 최초 발급 대기는 만료나 갱신 지연으로 처리하지 않는다.
+현재 인증서가 Ready여도 갱신 예정 시각이 지나면 지연 경보를 낼 수 있다.
+
+감시 대상은 cert-manager의 GO Certificate다. Cloudflare의 공개 인증서, 별도로 준비한
+Origin CA 인증서와 실제 HTTPS 라우팅 상태는 이 지표로 확인할 수 없다.
+기준: [공식 지표 수집](https://cert-manager.io/docs/devops-tips/prometheus-metrics/),
+[인증서 지표 구현](https://github.com/cert-manager/cert-manager/blob/v1.21.2/internal/collectors/certificate_collector.go).
+
 ## Discord로 GO 장애 알림
 
 [Discord 설정 예시](../../deploy/prometheus/alertmanager-discord.example.yml)는 기존
@@ -110,7 +157,7 @@ Origin CA 인증서는 브라우저가 직접 신뢰하는 인증서가 아니�
 
 Alertmanager가 같은 경보를 묶고 반복 알림 간격과 장애 해제 알림을 처리한다.
 기존에 다른 알림 채널을 사용한다면 해당 receiver를 유지하면 된다.
-프로젝트 CI는 공식 Alertmanager `v0.34.0`으로 Discord·Slack 예시의 구문과 GO·다른 서비스의 분기를 검사하며
+프로젝트 CI는 공식 Alertmanager `v0.34.0`으로 Discord·Slack 예시의 구문과 GO·인증서·다른 서비스의 분기를 검사하며
 네트워크를 차단해 실제 메시지를 보내지 않는다. 웹훅 파일 읽기와 발생·해제 수신은
 선택한 채널을 연결한 뒤 별도로 확인한다.
 설정 기준: [Alertmanager Discord 연동](https://prometheus.io/docs/alerting/latest/configuration/#discord_config).

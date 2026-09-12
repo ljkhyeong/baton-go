@@ -1,0 +1,14 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: baton-go-public
+  namespace: baton-go
+spec:
+  secretName: baton-go-acme-tls
+  dnsNames: [go.b4ton.com]
+  issuerRef:
+    name: letsencrypt-cloudflare
+    kind: Issuer
+    group: cert-manager.io
+  privateKey:
+    rotationPolicy: Always

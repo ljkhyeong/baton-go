@@ -24,6 +24,7 @@ jobs:
       KUBECONFORM_LINUX_AMD64_SHA256: c31518ddd122663b3f3aa874cfe8178cb0988de944f29c74a0b9260920d115d3
       KUBERNETES_SCHEMA_REVISION: c8f4e61c63bc529749125ac566bccc6986e08d45
       PROMTOOL_IMAGE: prom/prometheus:v3.13.2@sha256:508729e0e2d18e11fd742a5a5ca70e557b940a93948c3c95fd0123a6fd538b69
+      ALERTMANAGER_IMAGE: prom/alertmanager:v0.34.0@sha256:690c7b525f4367aa91f73e2f91c632206d32e97c6384bdbf2fb7a861b420340d
       TRIVY_IMAGE: aquasec/trivy:0.72.0@sha256:cffe3f5161a47a6823fbd23d985795b3ed72a4c806da4c4df16266c02accdd6f
       BATON_GO_APP_IMAGE: baton-go:ci
 
@@ -151,6 +152,24 @@ jobs:
             --volume "$PWD/deploy/prometheus:/rules:ro" --workdir /rules \
             --entrypoint /bin/promtool "$PROMTOOL_IMAGE" \
             test rules baton-go-alerts.test.yml baton-go-availability.test.yml
+
+      - name: Discord 알림 설정·라우팅 검증
+        run: |
+          set -euo pipefail
+          docker run --rm --network none --read-only \
+            --volume "$PWD/deploy/prometheus:/rules:ro" \
+            --entrypoint /bin/amtool "$ALERTMANAGER_IMAGE" \
+            check-config /rules/alertmanager-discord.example.yml
+          docker run --rm --network none --read-only \
+            --volume "$PWD/deploy/prometheus:/rules:ro" \
+            --entrypoint /bin/amtool "$ALERTMANAGER_IMAGE" \
+            config routes test --config.file=/rules/alertmanager-discord.example.yml \
+            --verify.receivers=discord-go job=baton-go alertname=BatonGoReadinessFailed
+          docker run --rm --network none --read-only \
+            --volume "$PWD/deploy/prometheus:/rules:ro" \
+            --entrypoint /bin/amtool "$ALERTMANAGER_IMAGE" \
+            config routes test --config.file=/rules/alertmanager-discord.example.yml \
+            --verify.receivers=unmatched job=another-service
 
       - name: 정적·단위·패키징 검증
         run: ./gradlew --no-daemon build

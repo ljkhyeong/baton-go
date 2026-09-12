@@ -40,7 +40,7 @@ class ArchitectureRulesTest {
         noClasses()
                 .that().areAnnotatedWith(RestController.class)
                 .should().dependOnClassesThat()
-                .resideInAPackage("..application.port.out..")
+                .resideInAPackage("..application..port.out..")
                 .as("REST 컨트롤러는 출력 포트에 직접 의존하지 않는다")
                 .check(classes);
     }

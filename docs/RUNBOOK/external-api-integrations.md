@@ -11,7 +11,7 @@ GO에서 직접 구현을 줄일 수 있는 연동과 적용 설정을 정리한
 | 인증서 갱신 | cert-manager → Cloudflare DNS API + Let's Encrypt ACME | `go.b4ton.com` 발급·갱신 설정 추가. 준비된 인증서를 유지하면 적용하지 않아도 된다. |
 | 인증서 장애 알림 | cert-manager 지표 → Prometheus → Discord·Slack | 준비 실패·갱신 지연·만료 임박·지표 누락을 감지하는 선택 설정 추가. |
 | 장애 알림 | Alertmanager → Discord·Slack Webhook API | 기존 GO 경보의 발생·해제 알림 설정과 CI 검증 추가. 사용할 채널을 선택한다. |
-| CI 도구 갱신 | GitHub Dependabot | GitHub Actions의 새 버전을 주 1회 확인하고 한 PR로 묶는 설정 추가. |
+| 도구·이미지 갱신 | GitHub Dependabot | GitHub Actions와 Java 21 기반 이미지의 업데이트를 주 1회 확인. 각각 한 PR로 묶는다. |
 | 빌드 결과 알림 | GitHub 공식 Slack 앱 | 저장소·CI에 맞춘 구독 명령 정리. 실제 채널 구독은 아직 하지 않았다. |
 | 관리 API 인증 | Spring Security → 발급자의 JWK Set | 이미 구현됨. 발급자·JWK 주소를 설정하면 서명 키 조회와 캐시를 프레임워크가 처리한다. |
 | DNS 레코드 | 기존 Cloudflare DNS | 공인 IP가 유지되면 초기 레코드만 필요하다. 주기적 DNS API 호출은 추가하지 않는다. |
@@ -195,12 +195,19 @@ Slack 무료 플랜에서도 사용할 수 있지만 앱 설치 한도는 외부
 [무료 플랜 제한](https://slack.com/help/articles/115002422943-Usage-limits-for-free-workspaces),
 [Alertmanager Slack 연동](https://prometheus.io/docs/alerting/latest/configuration/#slack_config).
 
-## CI 도구 업데이트 제안
+## CI 도구·Java 이미지 업데이트 제안
 
 [Dependabot 설정](../../.github/dependabot.yml)은 매주 월요일 오전 9시(한국 시각)에
-`.github/workflows`의 GitHub Actions 업데이트를 확인한다. 커밋 SHA 고정을 유지하며
-여러 액션의 변경을 한 PR로 묶고, 열린 버전 업데이트 PR은 최대 1개로 제한한다.
-자동 병합은 설정하지 않았다. 기존 CI와 변경 내역을 확인한 뒤 반영한다.
+GitHub Actions와 Dockerfile의 Java 기반 이미지 업데이트를 확인한다.
+
+- GitHub Actions: 커밋 SHA 고정을 유지하며 여러 액션의 변경을 한 PR로 묶는다.
+- Java 기반 이미지: `eclipse-temurin` JDK·JRE의 태그·다이제스트 갱신을 한 PR로 묶는다.
+  Java 메이저 버전 업데이트는 제외해 Java 21 정책을 유지한다.
+
+열린 버전 업데이트 PR은 각 항목 최대 1개, 합계 최대 2개다. 자동 병합은 설정하지 않았다.
+기존 CI의 빌드·테스트와 이미지 취약점 보고서를 확인한 뒤 반영한다.
+Dockerfile은 이미지 주소를 `FROM`에 직접 고정해 Dependabot이 읽을 수 있도록 했다.
+사용되지 않던 이미지 교체용 빌드 인자를 제거했으며 현재 이미지 태그·다이제스트는 바꾸지 않았다.
 
 설정이 원격 기본 브랜치에 반영되면 GitHub에서 활성화 여부와 업데이트 작업 결과를 확인한다.
 별도 서버·토큰·자체 버전 조회 스크립트는 필요하지 않다. Dependabot 자체는 무료이며,
@@ -210,8 +217,8 @@ Slack 무료 플랜에서도 사용할 수 있지만 앱 설치 한도는 외부
 다음 항목은 이번 자동 제안 대상에 포함하지 않는다.
 
 - Gradle 의존성: `gradle/verification-metadata.xml`의 체크섬도 함께 갱신·검토해야 한다.
-- Dockerfile 기반 이미지: 현재 이미지가 `ARG`에 정의되어 있어 Dependabot의 `FROM` 파서가 읽지 못한다.
-- 워크플로 환경 변수·Kustomize에 고정한 이미지 digest: GitHub Actions 액션 갱신과 별도로 관리한다.
+- MySQL 이미지: Compose·Kustomize를 함께 갱신하고 DB 호환성을 확인해야 하므로 자동 제안에서 제외한다.
+- Dockerfile의 `syntax` 이미지와 워크플로 환경 변수·Kustomize에 고정한 이미지 digest: 별도로 관리한다.
 
 이 설정이 전체 의존성이나 이미지의 취약점을 검사하는 것은 아니다. 기존
 [이미지 검사 절차](image-security-reports.md)와 [의존성 검증](../../README.md#검증)을 계속 따른다.

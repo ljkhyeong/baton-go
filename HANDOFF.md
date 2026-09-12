@@ -12,7 +12,9 @@
 - `go.b4ton.com` 운영 예시와 Cloudflare DNS API 인증서 갱신·Discord·Slack 웹훅 알림의 선택 설정을
   추가했다. [외부 API 연동 절차](docs/RUNBOOK/external-api-integrations.md)를 따르며
   서버 설치, 실제 토큰 연결, DNS 변경, 인증서 발급과 메시지 전송은 실행하지 않았다.
-- Dependabot의 CI 액션 업데이트 제안 설정과 GitHub 공식 Slack 앱의 CI 구독 절차를 추가했다.
+- Dependabot의 CI 액션·Java 21 기반 이미지 업데이트 제안 설정과 GitHub 공식 Slack 앱의 CI 구독 절차를 추가했다.
+  Java 이미지는 사용하지 않는 빌드 인자를 제거하고 Dockerfile의 `FROM`에 직접 고정했다.
+  Java 메이저 업데이트와 MySQL 이미지는 자동 제안에서 제외한다.
   원격 기본 브랜치 반영과 실제 채널 연결은 아직 하지 않았다.
 - cert-manager 인증서의 준비 실패·갱신 지연·만료 임박·지표 누락 경보와 Discord·Slack 전달을
   추가했다. Cloudflare 자동 갱신을 선택할 때만 수집 job과 경보 파일을 함께 연결한다.
@@ -46,6 +48,18 @@
 
 ## 최근 검증
 
+- Java 이미지 업데이트 연동은 미커밋 변경이 없는 `main`의 `a7f9553`에서 시작해
+  Dockerfile·Dependabot 설정을 `4adedc7`에 저장했다. 기존 Python·PyYAML 환경으로 설정·시간대를
+  검사하고, 이전 Dockerfile의 인자를 확장한 결과와 변경 후 이미지 참조·빌드 명령이 동일함을 확인했다.
+  `docker build --tag baton-go:dependabot-validation-20260912 .`가 성공해 컨테이너 안의 Java 컴파일과
+  실행 JAR 생성을 확인했다. 로그는
+  `/private/tmp/baton-go-integration-validation-20260912/dependabot-image-build.log`다.
+  `docker image inspect`로 사용자 `10001:10001`과 실행 명령을 확인했고,
+  `docker run --rm --network none --read-only --tmpfs /tmp:rw,nosuid,nodev,size=32m --entrypoint java
+  baton-go:dependabot-validation-20260912 -version`으로 Java `21.0.12`를 확인했다.
+  이후 RUNBOOK·HANDOFF 문서만 변경했다. 애플리케이션·사용 이미지 버전·검사 설정은 같아
+  단위·MySQL·Redis 테스트와 Trivy 검사는 반복하지 않았다. Dependabot의 실제 PR 생성·필터 적용과
+  원격 CI 실행·이미지 게시·운영 배포는 실행하지 않았다.
 - 인증서 감시 연동은 미커밋 변경이 없는 `main`의 `9fbcf68`에서 시작해 설정·테스트·CI를
   `6f02e56`에 저장했다. 변경한 CI의 YAML·Bash 구문·ShellCheck와 Prometheus `v3.13.2`의
   `promtool check config --syntax-only` 2개 설정, `check rules` 18개 규칙, 기존 경보 테스트를
@@ -60,7 +74,7 @@
   `d7c81f8`에 저장했다. 기존 Python·PyYAML 환경으로 `.github/dependabot.yml` 구문과
   `Asia/Seoul` 시간대를 확인했다. `.github/workflows/ci.yml`의 실제 액션 5종과 `CI` 이름,
   `origin`의 `ljkhyeong/baton-go` 주소를 확인해 자동 제안 대상과 Slack 구독 명령에 반영했다.
-  GitHub 공식 설정 문서와 Docker 파일 수집·파서를 확인했으며, 현재 `ARG` 기반 이미지는 자동
+  GitHub 공식 설정 문서와 Docker 파일 수집·파서를 확인했으며, 당시 `ARG` 기반 이미지는 자동
   제안 대상에서 제외했다. 이후 README·RUNBOOK·HANDOFF 문서만 변경했다.
   애플리케이션·기존 CI·웹훅 설정이 바뀌지 않아 해당 테스트는 반복하지 않았다.
   Dependabot의 실제 PR 생성·GitHub CI 실행·Slack 앱 연결과 채널 구독은 확인하지 않았다.

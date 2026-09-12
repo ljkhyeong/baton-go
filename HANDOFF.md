@@ -99,6 +99,13 @@
 
 ## 최근 검증
 
+- 오류 처리 정리는 미커밋 변경이 없는 `main`의 `fece2b4`에서 시작해 `54f27fa`에 저장했다.
+  `GlobalExceptionHandler`의 첫 입력 오류 조회와 헤더 복사를 Spring의 `getFieldError()`와
+  `HttpHeaders.copyOf()`로 대체했다. 오류 코드·메시지·HTTP 상태와 응답 헤더는 유지한다.
+  Java 21에서 `./gradlew --no-daemon :adapter-in-web:test :adapter-in-web:apiContractDocs :bootstrap:bootJar`를
+  통과했다. 웹 테스트 135개에 실패·제외가 없고, 로그는
+  `/private/tmp/baton-go-error-api-simplification-20260912.log`, JAR은 `bootstrap/build/libs/baton-go.jar`다.
+  이후 인계 문서만 변경했다. SQL·Redis·의존 구조는 바뀌지 않아 관련 검증은 반복하지 않았다.
 - 열거형 파서 정리는 미커밋 변경이 없는 `main`의 `8dcaacf`에서 시작해 `409b026`에 저장했다.
   전용 파서를 Jackson의 `FAIL_ON_NUMBERS_FOR_ENUMS` 설정으로 대체해 운영 코드 56줄을 줄였다.
   요청 열거형의 앞뒤 공백은 허용하고 숫자·숫자 문자열·소문자·알 수 없는 값은 계속 거부한다.

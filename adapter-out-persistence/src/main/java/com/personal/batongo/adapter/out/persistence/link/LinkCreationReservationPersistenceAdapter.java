@@ -58,7 +58,7 @@ public class LinkCreationReservationPersistenceAdapter
             Instant createdAt
     ) {
         try {
-            int inserted = jdbcClient.sql("""
+            jdbcClient.sql("""
                             INSERT INTO link_creation_requests (
                                 idempotency_key_hash, link_id, public_origin, key_id, created_at
                             ) VALUES (?, UUID_TO_BIN(?), ?, ?, ?)
@@ -66,9 +66,6 @@ public class LinkCreationReservationPersistenceAdapter
                     .params(idempotencyKeyHash, proposedLinkId.toString(), publicOrigin, keyId,
                             LocalDateTime.ofInstant(createdAt, ZoneOffset.UTC))
                     .update();
-            if (inserted != 1) {
-                throw new IllegalStateException("링크 생성 예약을 저장하지 못했습니다");
-            }
             return new Reservation(proposedLinkId, publicOrigin, keyId, null, null, true);
         } catch (DuplicateKeyException exception) {
             return find(idempotencyKeyHash)

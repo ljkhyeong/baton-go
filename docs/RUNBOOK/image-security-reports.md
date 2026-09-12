@@ -87,6 +87,7 @@ PR·검증 실패에서는 게시하지 않는다. 게시 전 검사 보고서�
 원격 `main`에 반영한 뒤 첫 게시 성공과 패키지 접근 권한을 확인한다. 같은 실행의
 `baton-go-image-security`와 `baton-go-image-publication`을 함께 검토하고 릴리스 기록으로 보관한다.
 Actions 산출물은 14일 뒤 만료되며, 게시된 패키지의 보관 기간과는 별개다.
+릴리스로 남길 버전은 아래 보관 워크플로로 보고서를 Release 첨부 파일에 옮긴다.
 
 배포 오버레이의 `newName`은 `ghcr.io/ljkhyeong/baton-go`로, `digest`는
 `image-publication.json`의 `image_reference`에서 `@` 뒤 값으로 교체한다.
@@ -101,6 +102,37 @@ Actions 산출물은 14일 뒤 만료되며, 게시된 패키지의 보관 기�
 
 GHCR의 컨테이너 이미지 저장·전송은 현재 무료다. CI 실행 시간과 보고서 보존은 기존 Actions 사용량에
 포함되므로 무료 할당량과 유료 사용 차단 설정을 유지한다. 유료 실행기나 추가 저장 서비스는 쓰지 않는다.
+
+## 릴리스 검사 자료 보관
+
+[보관 워크플로](../../.github/workflows/release-evidence.yml)는 기존 Git 태그를 선택하면 같은 커밋의
+성공한 `main` CI 자료를 받아 GitHub Release 초안을 만든다. 이미지 빌드·검사는 반복하지 않는다.
+
+1. 원격 `main` CI의 전체 성공과 GHCR 게시를 확인하고 해당 커밋에 릴리스 태그를 등록한다.
+2. Actions의 `릴리스 검사 자료 보관`에서 실행 브랜치를 `main`으로 두고 기존 태그를 입력한다.
+   아직 Release가 없는 태그를 사용하며, CI 자료가 만료되기 전인 14일 안에 실행한다.
+3. 만들어진 초안에서 소스 커밋·CI 실행·배포 이미지와 첨부 자료를 검토한 뒤 Release를 발행한다.
+   비공개 저장소의 접근 권한은 유지된다. 워크플로가 운영 배포나 이미지 서명을 수행하지는 않는다.
+
+초안에는 다음 두 파일을 첨부한다.
+
+| 파일 | 내용 |
+| --- | --- |
+| `baton-go-release-evidence.tar.gz` | CI 실행 정보, SBOM·취약점·검사기·Java 의존성 보고서, 검사·게시 메타데이터 |
+| `image-publication.json` | 배포 이미지 다이제스트·플랫폼·소스 커밋을 바로 확인할 게시 기록 |
+
+같은 커밋의 성공한 `CI` 중 최신 실행을 선택하고 검사·게시 자료의 이미지 정보와 재실행 번호를
+대조한다. 성공한 실행이 없거나 산출물이 만료·누락됐거나 두 기록이 다르면 초안 생성 전에 실패한다.
+기존 Release가 있는 태그도 중단한다. 업로드 도중 실패한 초안은 남을 수 있으므로 첨부 상태를
+확인한 뒤 이 워크플로가 만든 미완성 초안만 정리하고 재실행한다. 발행한 Release는 삭제하지 않는다.
+
+Release 첨부 파일은 Actions의 14일 보관 설정을 적용받지 않는다. 파일당 2GiB 미만,
+릴리스당 1,000개 한도를 따르며 전체 릴리스 크기와 다운로드 대역폭에는 별도 제한이 없다.
+보관 워크플로의 실행 시간은 기존 Actions 사용량에 포함된다.
+
+근거: [GitHub Release 보관 한도](https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases),
+[CI 산출물 받기](https://cli.github.com/manual/gh_run_download),
+[Release 초안·첨부 생성](https://cli.github.com/manual/gh_release_create).
 
 ## 표준 도구 문서
 

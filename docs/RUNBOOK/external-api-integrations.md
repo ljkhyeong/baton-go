@@ -11,12 +11,14 @@ GO에서 직접 구현을 줄일 수 있는 연동과 적용 설정을 정리한
 | 인증서 갱신 | cert-manager → Cloudflare DNS API + Let's Encrypt ACME | `go.b4ton.com` 발급·갱신 설정 추가. 준비된 인증서를 유지하면 적용하지 않아도 된다. |
 | 인증서 장애 알림 | cert-manager 지표 → Prometheus → Discord·Slack | 준비 실패·갱신 지연·만료 임박·지표 누락을 감지하는 선택 설정 추가. |
 | 장애 알림 | Alertmanager → Discord·Slack Webhook API | 기존 GO 경보의 발생·해제 알림 설정과 CI 검증 추가. 사용할 채널을 선택한다. |
+| 컨테이너·배포 실패 알림 | Kubernetes API → kube-state-metrics → Prometheus → Discord·Slack | Pod 준비 실패·반복 재시작·가용 Pod 부족·마이그레이션 실패·지표 누락의 선택 설정 추가. |
 | 외부 접속 감시 | HetrixTools → Slack | 공개 HTTPS의 404·본문 확인용 등록 예시 추가. 실제 계정 연결은 남아 있다. |
 | 도메인 만료·네임서버 변경 | HetrixTools → Slack | 같은 모니터에서 만료 15일 전·네임서버 변경 알림을 켜는 설정 추가. |
 | 감시 시스템 중단 알림 | Prometheus·Alertmanager → Healthchecks.io → Slack | 1분 주기 신호와 전용 웹훅 설정 추가. 실제 계정 연결은 남아 있다. |
 | 도구·이미지 갱신 | GitHub Dependabot | GitHub Actions와 Java 21 기반 이미지의 업데이트를 주 1회 확인. 각각 한 PR로 묶는다. |
 | Java 라이브러리 취약점 알림 | Trivy → GitHub 의존성 API → Dependabot alerts | 알림 기능 활성화. `main` CI 성공 후 이미지의 Java 패키지 목록을 제출하는 설정 추가. |
 | 운영 이미지 보관 | GitHub Actions → GHCR | `main`의 검증을 통과한 이미지를 재빌드 없이 게시하고 배포 다이제스트를 기록하는 설정 추가. |
+| 릴리스 검사 자료 보관 | GitHub Releases API | 기존 태그와 같은 커밋의 CI 자료를 받아 Release 초안에 첨부하는 워크플로 추가. |
 | 빌드 결과 알림 | GitHub 공식 Slack 앱 | 저장소·CI에 맞춘 구독 명령 정리. 실제 채널 구독은 아직 하지 않았다. |
 | 관리 API 인증 | Spring Security → 발급자의 JWK Set | 이미 구현됨. 발급자·JWK 주소를 설정하면 서명 키 조회와 캐시를 프레임워크가 처리한다. |
 | DNS 레코드 | 기존 Cloudflare DNS | 공인 IP가 유지되면 초기 레코드만 필요하다. 주기적 DNS API 호출은 추가하지 않는다. |
@@ -33,6 +35,8 @@ API 호출 제한은 각 제공자의 정책을 따르고, Prometheus·Alertmana
 홈서버가 멈췄을 때의 외부 접속 감시와 감시 시스템 중단 알림은
 [외부 감시 연결 절차](external-availability-monitoring.md)를 따른다. 무료 계정의 유지 조건과 한도도 확인한다.
 검증한 이미지의 게시·보관과 홈서버 인증은 [GHCR 연결 절차](image-security-reports.md#ghcr-자동-게시와-배포-참조)를 따른다.
+릴리스 버전의 보고서는 [검사 자료 보관](image-security-reports.md#릴리스-검사-자료-보관),
+k3s 상태 경보는 [컨테이너·배포 실패 알림](prometheus-alerts.md#컨테이너배포-실패-알림)을 따른다.
 
 근거: [Cloudflare Free](https://www.cloudflare.com/plans/free/),
 [Let's Encrypt](https://letsencrypt.org/getting-started/),
@@ -121,7 +125,8 @@ Origin CA 인증서는 브라우저가 직접 신뢰하는 인증서가 아니�
    Namespace label을 실제 지표에 맞춘다. 수집기 label과 충돌하면 인증서 Namespace가
    `exported_namespace`로 표시될 수 있다. job을 바꾸면 Alertmanager 조건도 함께 맞춘다.
 4. Discord·Slack 예시의 GO route는 `baton-go`와 `baton-go-tls`를 모두 전달한다.
-   기존에 `job="baton-go"`만 연결했다면 `job=~"baton-go|baton-go-tls"`로 변경한다.
+   기존 경로의 job 조건에 `baton-go-tls`를 추가한다. Kubernetes 경보를 사용하면
+   `baton-go-kubernetes`도 유지한다.
    병합한 설정의 구문과 인증서 경보의 수신자를 검사한다.
 
    ```bash

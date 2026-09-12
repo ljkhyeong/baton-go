@@ -23,6 +23,13 @@
   게시 다이제스트·검사 메타데이터를 별도 산출물에 기록하며 재빌드하지 않는다.
   [게시·배포 참조 절차](docs/RUNBOOK/image-security-reports.md#ghcr-자동-게시와-배포-참조)를 따르며,
   원격 반영·실제 GHCR 인증과 게시·홈서버 이미지 수신은 아직 확인하지 않았다.
+- 기존 태그와 같은 커밋의 성공한 `main` CI 자료를 GitHub Release 초안에 첨부하는
+  [보관 워크플로](.github/workflows/release-evidence.yml)를 추가했다. 검사·게시 자료의 일치와
+  필수 파일을 확인하며 재빌드하지 않는다. 실제 태그 등록·Release 생성·발행은 하지 않았다.
+- kube-state-metrics의 GO 상태 수집·최소 조회 권한과 Pod 준비 실패·반복 재시작·가용 Pod 부족·
+  마이그레이션 실패·지표 누락 경보를 추가했다. 기존 Slack·Discord 경로로 전달한다.
+  [연결 절차](docs/RUNBOOK/prometheus-alerts.md#컨테이너배포-실패-알림)는 k3s 구축 후 적용할 설정이며
+  실제 수집기 설치·클러스터 적용·알림 전송은 하지 않았다. 외부 백업은 저장 위치 확정이 남아 있다.
 - HetrixTools의 공개 HTTPS 감시 등록 예시와 Healthchecks.io 주기 신호 설정을 추가했다.
   기존 공개 오류 경로의 404·본문을 확인하고, 감시 시스템은 고정 본문만 외부로 보낸다.
   HetrixTools는 같은 Contact List로 도메인 만료 15일 전·네임서버 변경도 알리도록 설정했다.
@@ -60,6 +67,22 @@
 
 ## 최근 검증
 
+- 릴리스 자료·Kubernetes 경보는 미커밋 변경이 없는 `main`의 `45bc8db`에서 시작했다.
+  릴리스 워크플로는 `6715400`에 저장했다. YAML·Bash·ShellCheck·actionlint `1.7.12`와
+  성공·CI 없음·자료 만료·커밋/이미지/재실행 불일치·필수 파일 누락·기존 Release 충돌의
+  응답 대체 검증 8건을 통과했다. macOS tar의 부가 파일이 섞인 초기 검증은 테스트 환경에
+  `COPYFILE_DISABLE=1`을 적용해 수정했다. CI는 Ubuntu의 tar를 사용한다.
+  Kubernetes 설정·CI는 `15408c8`에 저장했다. Prometheus `3.13.2`에서 새 수집 설정·경보 5개·
+  발생/회복/제외 조건 6개 시나리오를 통과했다.
+  Alertmanager `0.34.0`에서 두 채널의 GO·인증서·Kubernetes 전달과 다른 서비스 제외를 확인했다.
+  `kubectl kustomize`와 kubeconform `0.7.0`의 CI 고정 Kubernetes `1.36.1` 스키마로
+  GO Namespace Role·RoleBinding 2개를 검증했다. 문서 파일·새 앵커도 확인했다.
+  검증 환경은 `/private/tmp/baton-go-integration-validation-20260912`다.
+  `release-evidence.sh`·`release-evidence-validation.py`·`release-evidence-validation.log`,
+  `kubernetes-alerts-validation.sh`·`kubernetes-alerts-validation.log`, `release-actionlint.log`와
+  `kube-state-metrics-schema.log`에 명령·결과가 있다. 이후 문서만 변경했다.
+  Java·DB·이미지·GHCR 게시 코드는 같아 해당 빌드·통합 검증과 이전 로컬 레지스트리 실패는 반복하지 않았다.
+  실제 GitHub Release 생성·업로드, 원격 CI 전체 실행, Kubernetes API 수집·Slack 수신은 확인하지 않았다.
 - 이미지 게시·도메인 알림은 미커밋 변경이 없는 `main`의 `d845830`에서 시작해 설정을 `6344b8a`에 저장했다.
   YAML·JSON 파싱, Bash 구문·ShellCheck와 기존 `rhysd/actionlint:1.7.12`의 워크플로 검사를 통과했다.
   기존 CI 단계 보존, 전체 검증 뒤 `main` push에서만 게시하는 조건, 권한과 문서 링크를 확인했다.

@@ -41,7 +41,7 @@ Pod 준비 상태 지속 실패, 공개·관리 응답 지연, 전체·관리 AP
    앞선 일치 경로가 알림을 가로채지 않는지도 확인한다.
 
    ```yaml
-   - matchers: ['job=~"baton-go|baton-go-tls"']
+   - matchers: ['job=~"baton-go|baton-go-tls|baton-go-kubernetes"']
      receiver: REPLACE_WITH_EXISTING_RECEIVER
      group_by: [job, alertname]
      group_wait: 30s
@@ -67,6 +67,55 @@ Prometheus 자체가 중단되면 이 규칙도 평가되지 않으므로 수집
 
 Cloudflare 자동 갱신을 선택하면 [인증서 경보 연결](external-api-integrations.md#인증서-갱신만료-알림)을
 함께 적용한다. 인증서 규칙은 별도 파일이며 기본 애플리케이션 경보에는 포함되지 않는다.
+
+## 컨테이너·배포 실패 알림
+
+[kube-state-metrics 수집 예시](../../deploy/prometheus/prometheus-kube-state-metrics.example.yml)와
+[경보 규칙](../../deploy/prometheus/baton-go-kubernetes-alerts.yml)을 선택적으로 연결한다.
+Kubernetes API의 상태를 표준 수집기가 지표로 제공하므로 GO에 조회·알림 코드를 추가하지 않는다.
+아래는 k3s 구축 후 연결할 설정이며 수집기·클러스터를 설치하는 구성은 포함하지 않는다.
+
+| 경보 | 조건 |
+| --- | --- |
+| Pod 준비 실패 | 애플리케이션·MySQL Pod가 준비되지 않은 상태가 5분 지속 |
+| 컨테이너 반복 재시작 | 최근 10분의 재시작 증가량이 3회 이상인 상태가 2분 지속 |
+| 가용 Pod 부족 | Deployment의 가용 Pod 수가 설정한 복제본 수보다 적은 상태가 10분 지속 |
+| DB 마이그레이션 실패 | Job의 최종 Failed 조건이 1분 지속. Kubernetes 실행 시간 초과도 포함 |
+| Kubernetes 지표 없음 | GO Deployment의 복제본 설정 지표가 5분간 없음 |
+
+1. 기존 kube-state-metrics의 내부 Service 주소를 수집 예시에 입력하고 `rule_files`·`scrape_configs`를
+   기존 Prometheus에 병합한다. 같은 지표를 이미 수집한다면 기존 job을 재사용하고 규칙·알림 경로의
+   `baton-go-kubernetes`를 실제 job 이름에 맞춘다. 수집 예시는 GO Namespace의 필요한 지표만 보존한다.
+2. 기존 수집기가 `baton-go`의 Pod·Deployment·Job을 조회할 수 있는지 확인한다. GO 전용 수집기를
+   준비할 때는 표준 옵션 `--namespaces=baton-go --resources=pods,deployments,jobs`를 사용한다.
+   공유 수집기의 다른 서비스 조회 범위를 줄이지 않는다.
+3. GO 전용 수집기에 권한이 없을 때만
+   [조회 권한 예시](../../deploy/k8s/integrations/kube-state-metrics-access/reader.yaml)의 ServiceAccount를
+   실제 값으로 바꾸고 적용한다. 기존의 광범위한 권한을 이 Role이 취소해 주지는 않는다.
+   새 전용 수집기의 기본 ClusterRole 자동 생성은 끄고 Namespace Role만 연결한다.
+
+   ```bash
+   kubectl kustomize deploy/k8s/integrations/kube-state-metrics-access
+   kubectl apply -k deploy/k8s/integrations/kube-state-metrics-access
+   ```
+
+   Pod·Deployment·Job의 `list/watch`만 허용하며 Secret 조회 권한은 부여하지 않는다.
+4. Prometheus에서 내부 metrics 포트로, 수집기에서 Kubernetes API로 접근할 수 있게 기존 네트워크
+   정책을 맞춘다. metrics Service는 공개 Ingress에 연결하지 않는다.
+5. 기존 Slack·Discord 예시의 `baton-go-kubernetes` 경로를 병합하고 아래 로컬 검사를 실행한다.
+   Prometheus에서 `up{job="baton-go-kubernetes"}=1`과 GO 지표를 확인한 뒤 시험 환경에서
+   발생·해제 알림 수신까지 확인한다. 같은 장애를 알리는 플랫폼 경보가 있으면 중복 규칙은 제외한다.
+
+Pod 이름은 현재 Deployment의 `baton-go-<해시>-<접미사>`와 StatefulSet의 `baton-go-mysql-<번호>`를
+기준으로 선택한다. 리소스 이름·Namespace를 바꾸면 수집·규칙·테스트도 함께 수정한다.
+준비 실패는 삭제 중인 Pod를 제외하며 일회성 마이그레이션 Pod도 대상에 넣지 않는다.
+Job은 진행 중 실패한 개별 Pod 수가 아니라 최종 Failed 조건을 본다. 중지·대기·완료 상태는 실패가 아니다.
+가용 Pod 부족은 복제본 0을 정상으로 처리한다. 새 버전으로의 교체 진행 자체는 별도 배포 점검을 따른다.
+PVC 용량·노드 디스크·백업 경보는 이 규칙의 범위가 아니다.
+
+근거: [kube-state-metrics](https://github.com/kubernetes/kube-state-metrics),
+[Pod 지표](https://github.com/kubernetes/kube-state-metrics/blob/main/docs/metrics/workload/pod-metrics.md),
+[Job 지표](https://github.com/kubernetes/kube-state-metrics/blob/main/docs/metrics/workload/job-metrics.md).
 
 ## Prometheus 수집 설정
 
@@ -214,19 +263,19 @@ promtool_image=prom/prometheus:v3.13.2@sha256:508729e0e2d18e11fd742a5a5ca70e557b
 docker run --rm --network none --read-only \
   --volume "$PWD/deploy/prometheus:/rules:ro" --workdir /rules \
   --entrypoint /bin/promtool "$promtool_image" \
-  check config --syntax-only prometheus-kubernetes.example.yml prometheus-cert-manager.example.yml
+  check config --syntax-only prometheus-kubernetes.example.yml prometheus-cert-manager.example.yml prometheus-kube-state-metrics.example.yml
 
 docker run --rm --network none --read-only \
   --tmpfs /tmp:rw,nosuid,nodev,size=256m \
   --volume "$PWD/deploy/prometheus:/rules:ro" --workdir /rules \
   --entrypoint /bin/promtool "$promtool_image" \
-  check rules baton-go-alerts.yml baton-go-tls-alerts.yml baton-go-monitoring-heartbeat.yml
+  check rules baton-go-alerts.yml baton-go-tls-alerts.yml baton-go-monitoring-heartbeat.yml baton-go-kubernetes-alerts.yml
 
 docker run --rm --network none --read-only \
   --tmpfs /tmp:rw,nosuid,nodev,size=256m \
   --volume "$PWD/deploy/prometheus:/rules:ro" --workdir /rules \
   --entrypoint /bin/promtool "$promtool_image" \
-  test rules baton-go-alerts.test.yml baton-go-availability.test.yml baton-go-tls-alerts.test.yml
+  test rules baton-go-alerts.test.yml baton-go-availability.test.yml baton-go-tls-alerts.test.yml baton-go-kubernetes-alerts.test.yml
 ```
 
 [규칙 테스트](../../deploy/prometheus/baton-go-alerts.test.yml)는 무트래픽·소수 오류,

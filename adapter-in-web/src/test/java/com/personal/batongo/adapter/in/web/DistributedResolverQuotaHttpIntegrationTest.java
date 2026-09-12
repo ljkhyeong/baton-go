@@ -89,7 +89,8 @@ class DistributedResolverQuotaHttpIntegrationTest {
                 HttpResponse.BodyHandlers.ofString());
         assertThat(html.statusCode()).isEqualTo(503);
         assertThat(html.body())
-                .contains("지금은 링크를 열 수 없습니다.", "잠시 후 다시 열어 주세요")
+                .contains("지금은 링크를 열 수 없습니다.", "잠시 후 다시 열어 주세요",
+                        "<a class=\"retry\" href=\"\">다시 열기</a>")
                 .doesNotContain("지금은 링크 요청을 처리할 수 없습니다");
         var head = client.send(HttpRequest.newBuilder(uri).header("Accept", "text/html")
                 .method("HEAD", HttpRequest.BodyPublishers.noBody()).build(), HttpResponse.BodyHandlers.ofString());

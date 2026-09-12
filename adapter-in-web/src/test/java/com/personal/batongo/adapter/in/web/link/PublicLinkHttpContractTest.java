@@ -225,6 +225,11 @@ class PublicLinkHttpContractTest {
         assertThat(response.getContentAsString()).contains(
                         "<html lang=\"ko\">", message, guidance, "browser-error-request"
                 ).doesNotContain("private-link-code", BATON_TARGET_PATH, "<script");
+        if (reason == LinkUnavailableException.Reason.NOT_ACTIVE) {
+            assertThat(response.getContentAsString()).contains("<a class=\"retry\" href=\"\">다시 열기</a>");
+        } else {
+            assertThat(response.getContentAsString()).doesNotContain("다시 열기");
+        }
     }
 
     @Test
@@ -247,7 +252,7 @@ class PublicLinkHttpContractTest {
 
         assertThat(storedTargetPolicyViolationCount()).isEqualTo(1);
         assertThat(missingBody).contains("링크를 찾을 수 없습니다")
-                .doesNotContain("missing-code", "violating-code", LINK_ID.toString());
+                .doesNotContain("missing-code", "violating-code", LINK_ID.toString(), "다시 열기");
     }
 
     @ParameterizedTest

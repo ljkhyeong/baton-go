@@ -33,6 +33,11 @@ public class PublicLinkErrorPage {
             case "INTERNAL_ERROR", "RATE_LIMIT_UNAVAILABLE" -> "잠시 후 다시 열어 주세요. 계속 실패하면 요청 번호를 전달해 주세요.";
             default -> "주소가 올바른지 확인하거나 링크를 보낸 사람에게 새 링크를 요청해 주세요.";
         };
+        String retryAction = switch (body.code()) {
+            case "LINK_NOT_ACTIVE", "RATE_LIMIT_EXCEEDED", "INTERNAL_ERROR", "RATE_LIMIT_UNAVAILABLE" ->
+                    "<a class=\"retry\" href=\"\">다시 열기</a>";
+            default -> "";
+        };
         return ResponseEntity.status(error.getStatusCode())
                 .headers(error.getHeaders())
                 .contentType(new MediaType(MediaType.TEXT_HTML, StandardCharsets.UTF_8))
@@ -44,7 +49,8 @@ public class PublicLinkErrorPage {
                 .body(template.formatted(
                         HtmlUtils.htmlEscape(title),
                         HtmlUtils.htmlEscape(guidance),
-                        HtmlUtils.htmlEscape(Objects.toString(body.requestId(), ""))
+                        HtmlUtils.htmlEscape(Objects.toString(body.requestId(), "")),
+                        retryAction
                 ));
     }
 }

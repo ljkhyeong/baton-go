@@ -106,7 +106,8 @@ class PublicErrorResponseIntegrationTest {
                     .contains("default-src 'none'");
             assertThat(response.headers().firstValue(HttpHeaders.VARY)).contains(HttpHeaders.ACCEPT);
             assertThat(response.body()).contains(
-                    "<html lang=\"ko\">", "잠시 후 다시 열어 주세요", "<code>" + REQUEST_ID + "</code>"
+                    "<html lang=\"ko\">", "잠시 후 다시 열어 주세요", "<code>" + REQUEST_ID + "</code>",
+                    "<a class=\"retry\" href=\"\">다시 열기</a>"
             );
         } else {
             assertThat(response.headers().firstValue(HttpHeaders.CONTENT_TYPE))

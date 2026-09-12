@@ -112,6 +112,7 @@ class PublicResolverRateLimitHttpIntegrationTest {
         assertThat(html.body()).contains(
                         "<html lang=\"ko\">",
                         "15초 후에 다시 열어 주세요",
+                        "<a class=\"retry\" href=\"\">다시 열기</a>",
                         "<code>" + REQUEST_ID + "</code>"
                 )
                 .doesNotContain(LIMITED_CODE, "<script", "http-equiv=\"refresh\"");

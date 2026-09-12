@@ -99,6 +99,12 @@
 
 ## 최근 검증
 
+- 컨트롤러 정리는 미커밋 변경이 없는 `main`의 `8c5539c`에서 시작해 `6fe8da0`에 저장했다.
+  고정된 200 JSON 응답 5곳에서 `ResponseEntity`를 제거하고 응답 DTO를 직접 반환한다.
+  Java 21에서 `./gradlew --no-daemon :adapter-in-web:test :adapter-in-web:apiContractDocs :bootstrap:bootJar`를
+  통과했다. 웹 테스트 132개에 실패·제외가 없고, 로그는
+  `/private/tmp/baton-go-controller-simplification-20260912.log`, JAR은 `bootstrap/build/libs/baton-go.jar`다.
+  이후 인계 문서만 변경했다. 업무 규칙·SQL·Redis·의존 구조가 같아 관련 검증은 반복하지 않았다.
 - 관리 링크 코드 정리는 미커밋 변경이 없는 `main`의 `7159fe3`에서 시작해 `b0ec476`에 저장했다.
   응답 변환을 통합하고 대상 확인의 임시 객체·예외 처리를 없애 운영 코드 16줄을 줄였다.
   Java 21에서 `./gradlew --no-daemon :application:test :bootstrap:mysqlTest

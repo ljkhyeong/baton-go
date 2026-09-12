@@ -1,0 +1,140 @@
+rule_files:
+  - baton-go-tls-alerts.yml
+
+evaluation_interval: 30s
+
+tests:
+  - name: 최초 발급 대기는 만료로 오인하지 않고 준비 실패가 지속될 때만 알리며 발급 후 해제한다
+    interval: 30s
+    input_series:
+      - series: 'certmanager_certificate_ready_status{job="baton-go-tls",namespace="baton-go",name="baton-go-public",condition="True"}'
+        values: '0x30 1'
+      - series: 'certmanager_certificate_expiration_timestamp_seconds{job="baton-go-tls",namespace="baton-go",name="baton-go-public"}'
+        values: '0x30 7776000'
+      - series: 'certmanager_certificate_renewal_timestamp_seconds{job="baton-go-tls",namespace="baton-go",name="baton-go-public"}'
+        values: '0x30 5184000'
+    alert_rule_test:
+      - eval_time: 14m30s
+        alertname: BatonGoCertificateNotReady
+        exp_alerts: []
+      - eval_time: 15m
+        alertname: BatonGoCertificateNotReady
+        exp_alerts:
+          - exp_labels: &warning_labels
+              job: baton-go-tls
+              namespace: baton-go
+              name: baton-go-public
+              severity: warning
+            exp_annotations:
+              summary: BATON GO 인증서 준비 실패
+              description: 15분간 인증서가 Ready 상태가 아닙니다. Certificate·Issuer 상태와 DNS 인증 결과를 확인하세요.
+      - eval_time: 15m30s
+        alertname: BatonGoCertificateNotReady
+        exp_alerts: []
+      - eval_time: 15m
+        alertname: BatonGoCertificateExpiringSoon
+        exp_alerts: []
+      - eval_time: 15m
+        alertname: BatonGoCertificateRenewalOverdue
+        exp_alerts: []
+      - eval_time: 15m
+        alertname: BatonGoCertificateMetricsMissing
+        exp_alerts: []
+
+  - name: 만료까지 7일 경계를 지난 뒤 알리고 인증서가 갱신되면 해제한다
+    interval: 30s
+    input_series:
+      - series: 'certmanager_certificate_ready_status{job="baton-go-tls",namespace="baton-go",name="baton-go-public",condition="True"}'
+        values: '1x22'
+      - series: 'certmanager_certificate_expiration_timestamp_seconds{job="baton-go-tls",namespace="baton-go",name="baton-go-public"}'
+        values: '605100x21 7776000'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: BatonGoCertificateExpiringSoon
+        exp_alerts: []
+      - eval_time: 10m30s
+        alertname: BatonGoCertificateExpiringSoon
+        exp_alerts:
+          - exp_labels:
+              job: baton-go-tls
+              namespace: baton-go
+              name: baton-go-public
+              severity: critical
+            exp_annotations:
+              summary: BATON GO 인증서 만료 임박
+              description: 인증서 유효 기간이 7일 미만이거나 이미 만료됐습니다. 갱신 상태와 Ingress의 TLS Secret 연결을 확인하세요.
+      - eval_time: 11m
+        alertname: BatonGoCertificateExpiringSoon
+        exp_alerts: []
+
+  - name: Ready 상태여도 갱신이 하루 넘게 지연되면 알리고 다음 갱신 시각이 기록되면 해제한다
+    interval: 30s
+    input_series:
+      - series: 'certmanager_certificate_ready_status{job="baton-go-tls",namespace="baton-go",name="baton-go-public",condition="True"}'
+        values: '1x2913'
+      - series: 'certmanager_certificate_expiration_timestamp_seconds{job="baton-go-tls",namespace="baton-go",name="baton-go-public"}'
+        values: '2592000x2913'
+      - series: 'certmanager_certificate_renewal_timestamp_seconds{job="baton-go-tls",namespace="baton-go",name="baton-go-public"}'
+        values: '30x2912 172800'
+    alert_rule_test:
+      - eval_time: 24h15m30s
+        alertname: BatonGoCertificateRenewalOverdue
+        exp_alerts: []
+      - eval_time: 24h16m
+        alertname: BatonGoCertificateRenewalOverdue
+        exp_alerts:
+          - exp_labels: *warning_labels
+            exp_annotations:
+              summary: BATON GO 인증서 갱신 지연
+              description: 갱신 예정 시각을 24시간 넘겼습니다. Cloudflare 토큰 권한과 ACME Order·Challenge 상태를 확인하세요.
+      - eval_time: 24h16m30s
+        alertname: BatonGoCertificateRenewalOverdue
+        exp_alerts: []
+      - eval_time: 24h16m
+        alertname: BatonGoCertificateNotReady
+        exp_alerts: []
+      - eval_time: 24h16m
+        alertname: BatonGoCertificateExpiringSoon
+        exp_alerts: []
+
+  - name: 수집 중단이나 인증서 삭제로 지표가 사라지면 알리고 다시 수집하면 해제한다
+    interval: 30s
+    input_series:
+      - series: 'certmanager_certificate_ready_status{job="baton-go-tls",namespace="baton-go",name="baton-go-public",condition="True"}'
+        values: '1 1 stale _ _ _ _ _ _ _ _ _ _ 1'
+    alert_rule_test:
+      - eval_time: 5m30s
+        alertname: BatonGoCertificateMetricsMissing
+        exp_alerts: []
+      - eval_time: 6m
+        alertname: BatonGoCertificateMetricsMissing
+        exp_alerts:
+          - exp_labels: *warning_labels
+            exp_annotations: &missing_annotations
+              summary: BATON GO 인증서 지표 없음
+              description: 5분간 인증서 지표가 없습니다. cert-manager 수집 대상·네트워크 접근과 Certificate 존재 여부를 확인하세요.
+      - eval_time: 6m30s
+        alertname: BatonGoCertificateMetricsMissing
+        exp_alerts: []
+
+  - name: 다른 서비스의 인증서는 GO 경보를 발생시키거나 GO 지표 누락을 가리지 않는다
+    interval: 30s
+    input_series:
+      - series: 'certmanager_certificate_ready_status{job="baton-go-tls",namespace="cal",name="baton-go-public",condition="True"}'
+        values: '0x30'
+      - series: 'certmanager_certificate_expiration_timestamp_seconds{job="baton-go-tls",namespace="baton-go",name="other-certificate"}'
+        values: '1x30'
+      - series: 'certmanager_certificate_renewal_timestamp_seconds{job="other",namespace="baton-go",name="baton-go-public"}'
+        values: '1x30'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: BatonGoCertificateNotReady
+        exp_alerts: []
+      - eval_time: 15m
+        alertname: BatonGoCertificateExpiringSoon
+        exp_alerts: []
+      - eval_time: 15m
+        alertname: BatonGoCertificateMetricsMissing
+        exp_alerts:
+          - exp_labels: *warning_labels
+            exp_annotations: *missing_annotations

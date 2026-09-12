@@ -141,17 +141,17 @@ jobs:
           docker run --rm --network none --read-only \
             --volume "$PWD/deploy/prometheus:/rules:ro" --workdir /rules \
             --entrypoint /bin/promtool "$PROMTOOL_IMAGE" \
-            check config --syntax-only prometheus-kubernetes.example.yml
+            check config --syntax-only prometheus-kubernetes.example.yml prometheus-cert-manager.example.yml
           docker run --rm --network none --read-only \
             --tmpfs /tmp:rw,nosuid,nodev,size=256m \
             --volume "$PWD/deploy/prometheus:/rules:ro" --workdir /rules \
             --entrypoint /bin/promtool "$PROMTOOL_IMAGE" \
-            check rules baton-go-alerts.yml
+            check rules baton-go-alerts.yml baton-go-tls-alerts.yml
           docker run --rm --network none --read-only \
             --tmpfs /tmp:rw,nosuid,nodev,size=256m \
             --volume "$PWD/deploy/prometheus:/rules:ro" --workdir /rules \
             --entrypoint /bin/promtool "$PROMTOOL_IMAGE" \
-            test rules baton-go-alerts.test.yml baton-go-availability.test.yml
+            test rules baton-go-alerts.test.yml baton-go-availability.test.yml baton-go-tls-alerts.test.yml
 
       - name: Discord·Slack 알림 설정·라우팅 검증
         run: |
@@ -167,6 +167,11 @@ jobs:
               --entrypoint /bin/amtool "$ALERTMANAGER_IMAGE" \
               config routes test --config.file="$config" \
               --verify.receivers="${channel}-go" job=baton-go alertname=BatonGoReadinessFailed
+            docker run --rm --network none --read-only \
+              --volume "$PWD/deploy/prometheus:/rules:ro" \
+              --entrypoint /bin/amtool "$ALERTMANAGER_IMAGE" \
+              config routes test --config.file="$config" \
+              --verify.receivers="${channel}-go" job=baton-go-tls alertname=BatonGoCertificateExpiringSoon
             docker run --rm --network none --read-only \
               --volume "$PWD/deploy/prometheus:/rules:ro" \
               --entrypoint /bin/amtool "$ALERTMANAGER_IMAGE" \

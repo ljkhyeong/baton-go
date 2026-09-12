@@ -1,0 +1,15 @@
+# Cloudflare 인증서 자동 갱신을 사용할 때만 기존 rule_files·scrape_configs에 병합한다.
+# cert-manager Helm 기본 Service 기준이며 실제 이름·Namespace·metrics TLS 설정에 맞춘다.
+rule_files:
+  - baton-go-tls-alerts.yml
+
+scrape_configs:
+  - job_name: baton-go-tls
+    scrape_interval: 30s
+    scrape_timeout: 10s
+    static_configs:
+      - targets: [cert-manager.cert-manager.svc:9402]
+    metric_relabel_configs:
+      - source_labels: [__name__, namespace, name]
+        regex: 'certmanager_certificate_(ready_status|expiration_timestamp_seconds|renewal_timestamp_seconds);baton-go;baton-go-public'
+        action: keep

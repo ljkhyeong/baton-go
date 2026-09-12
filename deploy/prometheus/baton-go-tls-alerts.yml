@@ -1,0 +1,49 @@
+groups:
+  - name: baton-go-tls
+    interval: 30s
+    rules:
+      - alert: BatonGoCertificateNotReady
+        expr: |
+          max by (job, namespace, name) (
+            certmanager_certificate_ready_status{job="baton-go-tls",namespace="baton-go",name="baton-go-public",condition="True"}
+          ) == 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: BATON GO 인증서 준비 실패
+          description: 15분간 인증서가 Ready 상태가 아닙니다. Certificate·Issuer 상태와 DNS 인증 결과를 확인하세요.
+
+      - alert: BatonGoCertificateRenewalOverdue
+        expr: |
+          time() - min by (job, namespace, name) (
+            certmanager_certificate_renewal_timestamp_seconds{job="baton-go-tls",namespace="baton-go",name="baton-go-public"} > 0
+          ) > 24 * 60 * 60
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: BATON GO 인증서 갱신 지연
+          description: 갱신 예정 시각을 24시간 넘겼습니다. Cloudflare 토큰 권한과 ACME Order·Challenge 상태를 확인하세요.
+
+      - alert: BatonGoCertificateExpiringSoon
+        expr: |
+          min by (job, namespace, name) (
+            certmanager_certificate_expiration_timestamp_seconds{job="baton-go-tls",namespace="baton-go",name="baton-go-public"} > 0
+          ) - time() < 7 * 24 * 60 * 60
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: BATON GO 인증서 만료 임박
+          description: 인증서 유효 기간이 7일 미만이거나 이미 만료됐습니다. 갱신 상태와 Ingress의 TLS Secret 연결을 확인하세요.
+
+      - alert: BatonGoCertificateMetricsMissing
+        expr: |
+          absent(certmanager_certificate_ready_status{job="baton-go-tls",namespace="baton-go",name="baton-go-public"})
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: BATON GO 인증서 지표 없음
+          description: 5분간 인증서 지표가 없습니다. cert-manager 수집 대상·네트워크 접근과 Certificate 존재 여부를 확인하세요.

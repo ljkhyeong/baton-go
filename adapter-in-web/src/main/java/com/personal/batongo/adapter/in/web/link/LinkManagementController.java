@@ -83,10 +83,16 @@ public class LinkManagementController {
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant createdFrom,
             @RequestParam(value = "createdBefore", required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant createdBefore,
+            @RequestParam(value = "expiresFrom", required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant expiresFrom,
+            @RequestParam(value = "expiresBefore", required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant expiresBefore,
             @RequestParam(value = "status", required = false) Status status
     ) {
         return ResponseEntity.ok(LinkSearchResponse.from(smartLinkUseCase.searchLinks(
-                new LinkSearchQuery(afterLinkId, limit, targetSystem, createdFrom, createdBefore, status)
+                new LinkSearchQuery(
+                        afterLinkId, limit, targetSystem, createdFrom, createdBefore, expiresFrom, expiresBefore, status
+                )
         )));
     }
 

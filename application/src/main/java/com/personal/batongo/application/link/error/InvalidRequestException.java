@@ -19,7 +19,7 @@ public final class InvalidRequestException extends RuntimeException {
 
     public static InvalidRequestException linkSearch() {
         return new InvalidRequestException(
-                "limit은 1~500이고 createdBefore는 createdFrom보다 뒤여야 합니다"
+                "limit은 1~500이고 생성·만료 기간의 끝은 시작보다 뒤여야 합니다"
         );
     }
 

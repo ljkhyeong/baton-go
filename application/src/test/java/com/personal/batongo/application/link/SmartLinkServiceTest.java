@@ -445,7 +445,7 @@ class SmartLinkServiceTest {
         ));
 
         var result = service(linkCodePort, publicLinkOriginPort, clock).searchLinks(new LinkSearchQuery(
-                null, 100, TargetSystem.BATON, from, NOW, Status.ACTIVE
+                null, 100, TargetSystem.BATON, from, NOW, null, null, Status.ACTIVE
         ));
 
         assertThat(result.items()).extracting(LinkResult::id).containsExactly(first.id(), second.id());
@@ -469,9 +469,9 @@ class SmartLinkServiceTest {
         when(repository.scanStoredAfter(null, 3)).thenReturn(List.of(invalidPath, unknownSystem, valid));
         when(repository.scanStoredAfter(unknownSystem.id(), 3)).thenReturn(List.of(valid));
 
-        var first = service.searchLinks(new LinkSearchQuery(null, 2, null, null, null, null));
+        var first = service.searchLinks(new LinkSearchQuery(null, 2, null, null, null, null, null, null));
         var next = service.searchLinks(new LinkSearchQuery(
-                first.nextAfterLinkId(), 2, null, null, null, null
+                first.nextAfterLinkId(), 2, null, null, null, null, null, null
         ));
 
         assertThat(first.items()).isEmpty();
@@ -483,19 +483,70 @@ class SmartLinkServiceTest {
     }
 
     @Test
-    @DisplayName("관리 검색은 잘못된 조회 한도와 생성 기간을 DB 조회 전에 거부한다")
+    @DisplayName("관리 검색은 잘못된 조회 한도와 생성·만료 기간을 DB 조회 전에 거부한다")
     void rejectsInvalidSearchBeforeDatabaseRead() {
         List<LinkSearchQuery> queries = List.of(
-                new LinkSearchQuery(null, 0, null, null, null, null),
-                new LinkSearchQuery(null, 501, null, null, null, null),
-                new LinkSearchQuery(null, 100, null, NOW, NOW, null),
-                new LinkSearchQuery(null, 100, null, NOW, NOW.minusSeconds(1), null)
+                new LinkSearchQuery(null, 0, null, null, null, null, null, null),
+                new LinkSearchQuery(null, 501, null, null, null, null, null, null),
+                new LinkSearchQuery(null, 100, null, NOW, NOW, null, null, null),
+                new LinkSearchQuery(null, 100, null, NOW, NOW.minusSeconds(1), null, null, null),
+                new LinkSearchQuery(null, 100, null, null, null, NOW, NOW, null),
+                new LinkSearchQuery(null, 100, null, null, null, NOW, NOW.minusSeconds(1), null)
         );
         for (LinkSearchQuery query : queries) {
             assertThatThrownBy(() -> service.searchLinks(query))
                     .isExactlyInstanceOf(InvalidRequestException.class);
         }
         verifyNoInteractions(repository);
+    }
+
+    @Test
+    @DisplayName("만료 기간 검색은 시작을 포함하고 끝과 무기한 링크를 제외한다")
+    void searchesExpiryRangeWithOptionalBounds() {
+        Instant from = NOW.plusSeconds(10);
+        Instant before = NOW.plusSeconds(20);
+        var earlier = searchSnapshot(1, "BATON", BATON_PATH, NOW, from.minusNanos(1));
+        var atStart = searchSnapshot(2, "BATON", BATON_PATH, NOW, from);
+        var within = searchSnapshot(3, "BATON", BATON_PATH, NOW, before.minusNanos(1));
+        var atEnd = searchSnapshot(4, "BATON", BATON_PATH, NOW, before);
+        var noExpiry = searchSnapshot(5, "BATON", BATON_PATH, NOW, null);
+        when(repository.scanStoredAfter(null, 101)).thenReturn(List.of(earlier, atStart, within, atEnd, noExpiry));
+
+        var bounded = service.searchLinks(new LinkSearchQuery(null, 100, null, null, null, from, before, null));
+        var fromOnly = service.searchLinks(new LinkSearchQuery(null, 100, null, null, null, from, null, null));
+        var beforeOnly = service.searchLinks(new LinkSearchQuery(null, 100, null, null, null, null, before, null));
+
+        assertThat(bounded.items()).extracting(LinkResult::id).containsExactly(atStart.id(), within.id());
+        assertThat(fromOnly.items()).extracting(LinkResult::id).containsExactly(atStart.id(), within.id(), atEnd.id());
+        assertThat(beforeOnly.items()).extracting(LinkResult::id).containsExactly(earlier.id(), atStart.id(), within.id());
+    }
+
+    @Test
+    @DisplayName("만료 예정 검색은 빈 페이지에서도 커서를 넘기고 활성 링크만 찾는다")
+    void continuesExpirySearchAcrossEmptyPageWithStatusFilter() {
+        var expired = searchSnapshot(1, "BATON", BATON_PATH, NOW.minusSeconds(60), NOW);
+        var noExpiry = searchSnapshot(2, "BATON", BATON_PATH, NOW, null);
+        var expiring = searchSnapshot(3, "BATON", BATON_PATH, NOW, NOW.plusSeconds(30));
+        var anotherSystem = searchSnapshot(4, "ROUND", ROUND_PATH, NOW, NOW.plusSeconds(30));
+        when(repository.scanStoredAfter(null, 3)).thenReturn(List.of(expired, noExpiry, expiring));
+        when(repository.scanStoredAfter(noExpiry.id(), 3)).thenReturn(List.of(expiring, anotherSystem));
+
+        var first = service.searchLinks(new LinkSearchQuery(
+                null, 2, TargetSystem.BATON, NOW.minusSeconds(60), NOW.plusSeconds(1),
+                NOW, NOW.plusSeconds(60), Status.ACTIVE
+        ));
+        var next = service.searchLinks(new LinkSearchQuery(
+                first.nextAfterLinkId(), 2, TargetSystem.BATON, NOW.minusSeconds(60), NOW.plusSeconds(1),
+                NOW, NOW.plusSeconds(60), Status.ACTIVE
+        ));
+
+        assertThat(first.items()).isEmpty();
+        assertThat(first.hasMore()).isTrue();
+        assertThat(first.nextAfterLinkId()).isEqualTo(noExpiry.id());
+        assertThat(next.items()).extracting(LinkResult::id).containsExactly(expiring.id());
+        assertThat(next.items().getFirst().status()).isEqualTo(Status.ACTIVE);
+        assertThat(next.hasMore()).isFalse();
+        assertThat(next.nextAfterLinkId()).isNull();
     }
 
     private StoredLinkSnapshot searchSnapshot(

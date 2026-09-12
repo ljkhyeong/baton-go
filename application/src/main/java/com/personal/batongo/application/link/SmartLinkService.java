@@ -254,7 +254,9 @@ public class SmartLinkService implements SmartLinkUseCase {
     public LinkSearchResult searchLinks(LinkSearchQuery query) {
         if (query.limit() < 1 || query.limit() > 500
                 || (query.createdFrom() != null && query.createdBefore() != null
-                && !query.createdBefore().isAfter(query.createdFrom()))) {
+                && !query.createdBefore().isAfter(query.createdFrom()))
+                || (query.expiresFrom() != null && query.expiresBefore() != null
+                && !query.expiresBefore().isAfter(query.expiresFrom()))) {
             throw InvalidRequestException.linkSearch();
         }
         List<StoredLinkSnapshot> scanned = repository.scanStoredAfter(
@@ -270,6 +272,10 @@ public class SmartLinkService implements SmartLinkUseCase {
                         || !stored.createdAt().isBefore(query.createdFrom()))
                 .filter(stored -> query.createdBefore() == null
                         || stored.createdAt().isBefore(query.createdBefore()))
+                .filter(stored -> query.expiresFrom() == null
+                        || (stored.expiresAt() != null && !stored.expiresAt().isBefore(query.expiresFrom())))
+                .filter(stored -> query.expiresBefore() == null
+                        || (stored.expiresAt() != null && stored.expiresAt().isBefore(query.expiresBefore())))
                 .filter(this::isAllowedTarget)
                 .map(stored -> toResult(stored, evaluatedAt))
                 .filter(link -> query.status() == null || link.status() == query.status())

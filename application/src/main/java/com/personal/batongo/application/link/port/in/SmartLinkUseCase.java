@@ -36,6 +36,8 @@ public interface SmartLinkUseCase {
             TargetSystem targetSystem,
             Instant createdFrom,
             Instant createdBefore,
+            Instant expiresFrom,
+            Instant expiresBefore,
             LinkAvailabilityPolicy.Status status
     ) {
     }

@@ -47,6 +47,26 @@ k3s 상태 경보는 [컨테이너·배포 실패 알림](prometheus-alerts.md#�
 [Let's Encrypt](https://letsencrypt.org/getting-started/),
 [Discord 웹훅](https://support.discord.com/hc/en-us/articles/228383668-Intro-to-Webhooks).
 
+## 추가 검토 결과
+
+2026-09-12에 아래 후보를 GO 계약과 비교했다. 현재 요구와 추가 요금 없는 조건에서는 도입하지 않는다.
+
+| 후보 | 적용하지 않은 이유 |
+| --- | --- |
+| [Cloudflare Workers KV로 링크 저장·조회](https://developers.cloudflare.com/kv/concepts/how-kv-works/) | 변경 전파에 60초 이상 걸릴 수 있어 폐기 직후 이전 대상으로 연결될 수 있다. 현재 DB 조회를 대체하지 않는다. |
+| [Cloudflare Rate Limiting으로 요청 제한 대체](https://developers.cloudflare.com/waf/rate-limiting-rules/request-rate/) | 일부 같은 지역을 제외하면 데이터센터끼리 카운터를 공유하지 않는다. GO의 인스턴스·전체 Pod 요청량 제한을 대체하지 못한다. |
+| [Cloudflare Turnstile로 봇 차단](https://developers.cloudflare.com/turnstile/get-started/) | 브라우저 위젯과 서버 검증이 필요하다. GO의 공개 `GET·HEAD` 접속과 서비스 JWT 인증에 추가하면 별도 검증 흐름이 생긴다. |
+| [GitHub Dependency Review](https://docs.github.com/en/code-security/concepts/supply-chain-security/dependency-review) | 비공개 저장소 사용에는 유료 보안 기능이 필요하다. 기존 Trivy 검사와 Dependabot alerts를 유지한다. |
+
+GO의 폐기·접속·요청 제한 기준은 [API 계약](../PRD/0002_api-contract/spec.md)을 따른다.
+이 표의 제외 판단은 제공자의 제약을 현재 GO 계약에 적용한 결과다.
+새 요구나 제공 조건이 바뀌면 해당 항목만 다시 검토한다. Cloudflare 요청 제한은 실제 공격 트래픽에
+대한 추가 차단이 필요할 때, Turnstile은 BATON에 공개 입력 폼이 생길 때 해당 서비스에서 검토한다.
+
+현재 우선순위는 위에서 준비한 연동의 계정·Slack 채널 연결과 실제 수신 확인이다.
+백업 연동은 [백업·복원 절차](kubernetes-private-server-deployment.md#8-백업과-복원)에 따라
+저장 위치·보존 기간·복구 목표를 먼저 확정한다.
+
 ## 도메인 설정
 
 [운영 예시 설정](../../deploy/k8s/overlays/private-server/app-config.properties)에 다음 값을 반영했다.

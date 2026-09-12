@@ -12,6 +12,9 @@
 - `go.b4ton.com` 운영 예시와 Cloudflare DNS API 인증서 갱신·Discord·Slack 웹훅 알림의 선택 설정을
   추가했다. [외부 API 연동 절차](docs/RUNBOOK/external-api-integrations.md)를 따르며
   서버 설치, 실제 토큰 연결, DNS 변경, 인증서 발급과 메시지 전송은 실행하지 않았다.
+- [추가 연동 검토](docs/RUNBOOK/external-api-integrations.md#추가-검토-결과)에서 Workers KV의 링크 저장,
+  Cloudflare 요청 제한 대체·Turnstile, GitHub Dependency Review는 현재 계약·비용 조건상 제외했다.
+  제외 이유와 재검토 조건을 기록했다. 새 기능보다 준비된 연동의 계정·채널 연결과 수신 확인이 우선이다.
 - Cloudflare의 무료 [인증서 발급 알림](docs/RUNBOOK/external-api-integrations.md#cloudflare-인증서-발급-알림)
   설정·확인·해제 절차를 추가했다. 애플리케이션 코드나 주기 실행은 추가하지 않았다.
   계정 연결이 없어 실제 활성화·수신자 등록·이메일 수신은 확인하지 않았다.
@@ -77,6 +80,11 @@
 
 ## 최근 검증
 
+- 추가 연동 검토는 미커밋 변경이 없는 `main`의 `5bcdcae`에서 시작했다.
+  Cloudflare의 KV 일관성·요청 집계·Turnstile 검증과 GitHub의 비공개 저장소 Dependency Review
+  제공 조건을 공식 문서에서 확인하고 GO의 공개 접속·폐기·요청 제한 계약과 대조했다.
+  변경 문서의 로컬 링크·새 앵커와 전체 diff를 확인했다. 문서만 변경해 빌드·테스트는 반복하지 않았다.
+  외부 설정 변경·유료 기능 활성화·메시지 발송은 실행하지 않았다.
 - 릴리스 변경 방지는 미커밋 변경이 없는 `main`의 `10b2451`에서 시작했다.
   GitHub 공식 문서에서 초안·발행 후 제한과 관리 API 권한을 확인했다.
   `gh api --method PUT repos/ljkhyeong/baton-go/immutable-releases` 후 같은 경로의 GET으로

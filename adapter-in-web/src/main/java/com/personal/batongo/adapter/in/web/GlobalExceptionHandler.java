@@ -348,10 +348,10 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
             HttpStatusCode status,
             WebRequest request
     ) {
-        String message = exception.getBindingResult().getFieldErrors().stream()
-                .findFirst()
-                .map(fieldError -> fieldError.getField() + ": 요청 값이 올바르지 않습니다")
-                .orElse("요청 값이 올바르지 않습니다");
+        var fieldError = exception.getBindingResult().getFieldError();
+        String message = fieldError != null
+                ? fieldError.getField() + ": 요청 값이 올바르지 않습니다"
+                : "요청 값이 올바르지 않습니다";
         return handleExceptionInternal(
                 exception,
                 errorBody("INVALID_REQUEST", message, request),
@@ -375,8 +375,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         if (status.is5xxServerError()) {
             logUnexpected(exception, servletRequest(request));
         }
-        HttpHeaders responseHeaders = new HttpHeaders();
-        responseHeaders.putAll(headers);
+        HttpHeaders responseHeaders = HttpHeaders.copyOf(headers);
         responseHeaders.setContentType(MediaType.APPLICATION_JSON);
         return super.handleExceptionInternal(
                 exception,

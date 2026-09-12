@@ -10,6 +10,8 @@ GO에서 직접 구현을 줄일 수 있는 연동과 적용 설정을 정리한
 | --- | --- | --- |
 | 인증서 갱신 | cert-manager → Cloudflare DNS API + Let's Encrypt ACME | `go.b4ton.com` 발급·갱신 설정 추가. 준비된 인증서를 유지하면 적용하지 않아도 된다. |
 | 장애 알림 | Alertmanager → Discord·Slack Webhook API | 기존 GO 경보의 발생·해제 알림 설정과 CI 검증 추가. 사용할 채널을 선택한다. |
+| CI 도구 갱신 | GitHub Dependabot | GitHub Actions의 새 버전을 주 1회 확인하고 한 PR로 묶는 설정 추가. |
+| 빌드 결과 알림 | GitHub 공식 Slack 앱 | 저장소·CI에 맞춘 구독 명령 정리. 실제 채널 구독은 아직 하지 않았다. |
 | 관리 API 인증 | Spring Security → 발급자의 JWK Set | 이미 구현됨. 발급자·JWK 주소를 설정하면 서명 키 조회와 캐시를 프레임워크가 처리한다. |
 | DNS 레코드 | 기존 Cloudflare DNS | 공인 IP가 유지되면 초기 레코드만 필요하다. 주기적 DNS API 호출은 추가하지 않는다. |
 | 링크 생성·폐기 | 기존 GO API | 같은 요청의 URL 복원·활성 시간·폐기·대상 제한을 보장하므로 외부 단축 URL 서비스로 대체하지 않는다. |
@@ -145,3 +147,47 @@ Slack 무료 플랜에서도 사용할 수 있지만 앱 설치 한도는 외부
 근거: [Slack 웹훅 등록](https://docs.slack.dev/messaging/sending-messages-using-incoming-webhooks/),
 [무료 플랜 제한](https://slack.com/help/articles/115002422943-Usage-limits-for-free-workspaces),
 [Alertmanager Slack 연동](https://prometheus.io/docs/alerting/latest/configuration/#slack_config).
+
+## CI 도구 업데이트 제안
+
+[Dependabot 설정](../../.github/dependabot.yml)은 매주 월요일 오전 9시(한국 시각)에
+`.github/workflows`의 GitHub Actions 업데이트를 확인한다. 커밋 SHA 고정을 유지하며
+여러 액션의 변경을 한 PR로 묶고, 열린 버전 업데이트 PR은 최대 1개로 제한한다.
+자동 병합은 설정하지 않았다. 기존 CI와 변경 내역을 확인한 뒤 반영한다.
+
+설정이 원격 기본 브랜치에 반영되면 GitHub에서 활성화 여부와 업데이트 작업 결과를 확인한다.
+별도 서버·토큰·자체 버전 조회 스크립트는 필요하지 않다. Dependabot 자체는 무료이며,
+업데이트 PR에서 실행하는 기존 CI는 저장소의 GitHub Actions 사용량에 포함된다.
+추가 유료 플랜이나 전용 실행기는 사용하지 않는다.
+
+다음 항목은 이번 자동 제안 대상에 포함하지 않는다.
+
+- Gradle 의존성: `gradle/verification-metadata.xml`의 체크섬도 함께 갱신·검토해야 한다.
+- Dockerfile 기반 이미지: 현재 이미지가 `ARG`에 정의되어 있어 Dependabot의 `FROM` 파서가 읽지 못한다.
+- 워크플로 환경 변수·Kustomize에 고정한 이미지 digest: GitHub Actions 액션 갱신과 별도로 관리한다.
+
+이 설정이 전체 의존성이나 이미지의 취약점을 검사하는 것은 아니다. 기존
+[이미지 검사 절차](image-security-reports.md)와 [의존성 검증](../../README.md#검증)을 계속 따른다.
+근거: [Dependabot 지원 범위](https://docs.github.com/en/code-security/reference/supply-chain-security/supported-ecosystems-and-repositories),
+[설정 기준](https://docs.github.com/en/code-security/reference/supply-chain-security/dependabot-options-reference),
+[무료 사용 정책](https://github.blog/changelog/2024-04-22-dependabot-updates-on-actions-for-github-enterprise-cloud-and-free-pro-and-teams-users/).
+
+## GitHub CI 결과를 Slack으로 받기
+
+실행 중인 GO의 장애는 Alertmanager가 보내고, 빌드·테스트 결과는 GitHub 공식 Slack 앱이 보낸다.
+CI용 웹훅 토큰이나 발송용 워크플로를 별도로 만들지 않는다.
+
+1. Slack의 GitHub 공식 앱을 연결하고 `ljkhyeong/baton-go` 저장소 접근을 허용한다.
+   비공개 채널에서는 앱을 초대하고 `/github signin`으로 계정을 연결한다.
+2. 수신할 채널에서 아래 명령으로 `main`에 대한 `CI` 실행만 구독한다.
+
+   ```text
+   /github subscribe ljkhyeong/baton-go workflows:{name:"CI" event:"pull_request","push" branch:"main"}
+   /github subscribe list features
+   ```
+
+실행 시작 알림과 완료 결과가 같은 스레드에 표시된다. 실패 결과만 받는 필터는 제공하지 않는다.
+기존 저장소 구독의 이슈·커밋 등 다른 알림은 별도 설정이므로 현재 구독 목록에서 확인한다.
+구독을 해제하려면 `/github unsubscribe ljkhyeong/baton-go workflows`를 사용한다.
+앱 연결과 채널 구독은 이 작업에서 실행하지 않았다. Slack 무료 플랜의 앱 설치 한도는 위와 같다.
+근거: [GitHub 공식 Slack 연동](https://github.com/integrations/slack#actions-workflow-notifications).

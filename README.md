@@ -207,9 +207,9 @@ DB 대기 시간은 Hikari·Connector/J 설정으로 제한하며, 마이그레�
 [수집·알림 연결 절차](docs/RUNBOOK/prometheus-alerts.md#추가-서비스-요금-없는-연결)를 따른다.
 Pod 자동 발견 설정과 최소 조회 권한을 제공하며 새 서버나 유료 API를 추가하지 않는다.
 
-`b4ton.com` 기준 도메인과 Cloudflare 인증서 갱신·Discord·Slack 장애 알림은
+`b4ton.com` 기준 도메인, Cloudflare 인증서 갱신, Discord·Slack 장애 알림과 GitHub CI 연동은
 [추가 요금 없는 외부 API 연동](docs/RUNBOOK/external-api-integrations.md)에 정리했다.
-두 연동은 선택 설정이며 기존 인증서와 알림 채널을 계속 사용할 수 있다.
+필요한 연동을 선택하고 기존 인증서와 알림 채널을 계속 사용할 수 있다.
 
 ## 검증
 

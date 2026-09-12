@@ -12,6 +12,8 @@
 - `go.b4ton.com` 운영 예시와 Cloudflare DNS API 인증서 갱신·Discord·Slack 웹훅 알림의 선택 설정을
   추가했다. [외부 API 연동 절차](docs/RUNBOOK/external-api-integrations.md)를 따르며
   서버 설치, 실제 토큰 연결, DNS 변경, 인증서 발급과 메시지 전송은 실행하지 않았다.
+- Dependabot의 CI 액션 업데이트 제안 설정과 GitHub 공식 Slack 앱의 CI 구독 절차를 추가했다.
+  원격 기본 브랜치 반영과 실제 채널 연결은 아직 하지 않았다.
 - 일반 링크 폐기 완료 이력은 최초 요청을 `LINK_REVOKE`, 이미 폐기된 링크의 반복 요청을
   `LINK_REVOKE_REPLAY`로 구분한다. HTTP 응답과 폐기 시각 보존 동작은 바뀌지 않았다.
 - 관리 JWT는 공백이 아닌 `sub`를 서비스 식별자로 요구한다. 누락·빈 문자열·공백 문자열은
@@ -41,6 +43,14 @@
 
 ## 최근 검증
 
+- 추가 연동 검토는 미커밋 변경이 없는 `main`의 `4c87ba9`에서 시작했고 Dependabot 설정은
+  `d7c81f8`에 저장했다. 기존 Python·PyYAML 환경으로 `.github/dependabot.yml` 구문과
+  `Asia/Seoul` 시간대를 확인했다. `.github/workflows/ci.yml`의 실제 액션 5종과 `CI` 이름,
+  `origin`의 `ljkhyeong/baton-go` 주소를 확인해 자동 제안 대상과 Slack 구독 명령에 반영했다.
+  GitHub 공식 설정 문서와 Docker 파일 수집·파서를 확인했으며, 현재 `ARG` 기반 이미지는 자동
+  제안 대상에서 제외했다. 이후 README·RUNBOOK·HANDOFF 문서만 변경했다.
+  애플리케이션·기존 CI·웹훅 설정이 바뀌지 않아 해당 테스트는 반복하지 않았다.
+  Dependabot의 실제 PR 생성·GitHub CI 실행·Slack 앱 연결과 채널 구독은 확인하지 않았다.
 - Slack 추가는 미커밋 변경이 없는 `main`의 `6e9d39f`에서 시작해 `ec44c1d`에 설정·CI를 저장했다.
   기존 검증 환경으로 변경한 CI 단계의 YAML·Bash·ShellCheck, Alertmanager `v0.34.0`의
   `amtool check-config`와 `config routes test`를 통과했다. Discord·Slack 각각의 GO 경보 전달과

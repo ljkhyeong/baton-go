@@ -11,6 +11,8 @@ GO에서 직접 구현을 줄일 수 있는 연동과 적용 설정을 정리한
 | 인증서 갱신 | cert-manager → Cloudflare DNS API + Let's Encrypt ACME | `go.b4ton.com` 발급·갱신 설정 추가. 준비된 인증서를 유지하면 적용하지 않아도 된다. |
 | 인증서 장애 알림 | cert-manager 지표 → Prometheus → Discord·Slack | 준비 실패·갱신 지연·만료 임박·지표 누락을 감지하는 선택 설정 추가. |
 | 장애 알림 | Alertmanager → Discord·Slack Webhook API | 기존 GO 경보의 발생·해제 알림 설정과 CI 검증 추가. 사용할 채널을 선택한다. |
+| 외부 접속 감시 | HetrixTools → Slack | 공개 HTTPS의 404·본문 확인용 등록 예시 추가. 실제 계정 연결은 남아 있다. |
+| 감시 시스템 중단 알림 | Prometheus·Alertmanager → Healthchecks.io → Slack | 1분 주기 신호와 전용 웹훅 설정 추가. 실제 계정 연결은 남아 있다. |
 | 도구·이미지 갱신 | GitHub Dependabot | GitHub Actions와 Java 21 기반 이미지의 업데이트를 주 1회 확인. 각각 한 PR로 묶는다. |
 | Java 라이브러리 취약점 알림 | Trivy → GitHub 의존성 API → Dependabot alerts | 알림 기능 활성화. `main` CI 성공 후 이미지의 Java 패키지 목록을 제출하는 설정 추가. |
 | 빌드 결과 알림 | GitHub 공식 Slack 앱 | 저장소·CI에 맞춘 구독 명령 정리. 실제 채널 구독은 아직 하지 않았다. |
@@ -26,6 +28,8 @@ BATON의 카카오톡 공유·브라우저 QR 기능은
 Let's Encrypt 무료 인증서, Discord·Slack 기본 웹훅을 사용하며 별도 유료 메시지 서비스를 두지 않는다.
 API 호출 제한은 각 제공자의 정책을 따르고, Prometheus·Alertmanager·cert-manager의 실행 자원은
 기존 홈서버에서 사용한다. 아직 없는 도구는 향후 해당 연동을 선택할 때 준비해야 한다.
+홈서버가 멈췄을 때의 외부 접속 감시와 감시 시스템 중단 알림은
+[외부 감시 연결 절차](external-availability-monitoring.md)를 따른다. 무료 계정의 유지 조건과 한도도 확인한다.
 
 근거: [Cloudflare Free](https://www.cloudflare.com/plans/free/),
 [Let's Encrypt](https://letsencrypt.org/getting-started/),

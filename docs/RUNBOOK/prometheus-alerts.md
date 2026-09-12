@@ -60,6 +60,8 @@ Pod 준비 상태 지속 실패, 공개·관리 응답 지연, 전체·관리 AP
 이 설정은 한 운영 환경의 GO를 대상으로 한다. 여러 환경을 하나의 Prometheus에 수집하려면
 아래 Prometheus 수집 설정에 따라 환경별 label과 경보 집계를 먼저 구분한다.
 Prometheus 자체가 중단되면 이 규칙도 평가되지 않으므로 수집기 장애 감시는 기존 플랫폼 감시에 연결한다.
+외부 감시가 없다면 [Healthchecks.io 주기 신호](external-availability-monitoring.md#healthchecksio-감시-시스템-중단-알림)를
+선택할 수 있다. 해당 규칙과 receiver는 기본 GO 경보와 별도로 추가한다.
 표준 기능은 [Prometheus Kubernetes 수집](https://prometheus.io/docs/prometheus/latest/configuration/configuration/#kubernetes_sd_config)과
 [Alertmanager 알림 경로](https://prometheus.io/docs/alerting/latest/configuration/#route)를 따른다.
 
@@ -217,7 +219,8 @@ docker run --rm --network none --read-only \
 docker run --rm --network none --read-only \
   --tmpfs /tmp:rw,nosuid,nodev,size=256m \
   --volume "$PWD/deploy/prometheus:/rules:ro" --workdir /rules \
-  --entrypoint /bin/promtool "$promtool_image" check rules baton-go-alerts.yml baton-go-tls-alerts.yml
+  --entrypoint /bin/promtool "$promtool_image" \
+  check rules baton-go-alerts.yml baton-go-tls-alerts.yml baton-go-monitoring-heartbeat.yml
 
 docker run --rm --network none --read-only \
   --tmpfs /tmp:rw,nosuid,nodev,size=256m \

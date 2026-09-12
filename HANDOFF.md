@@ -19,6 +19,10 @@
 - GitHub 저장소의 Dependabot alerts를 활성화하고 조회로 확인했다. 자동 수정 PR은 중지 상태다.
   기존 Trivy 결과의 Java 패키지 목록을 `main` CI 성공 후 의존성 API로 제출하는 설정을 추가했다.
   실제 Java 목록 제출은 원격 `main` 반영 후 확인해야 한다.
+- HetrixTools의 공개 HTTPS 감시 등록 예시와 Healthchecks.io 주기 신호 설정을 추가했다.
+  기존 공개 오류 경로의 404·본문을 확인하고, 감시 시스템은 고정 본문만 외부로 보낸다.
+  [외부 감시 절차](docs/RUNBOOK/external-availability-monitoring.md)에 무료 조건과 Slack 연결을 정리했다.
+  실제 계정·수신 채널 연결과 홈서버 적용은 남아 있다.
 - cert-manager 인증서의 준비 실패·갱신 지연·만료 임박·지표 누락 경보와 Discord·Slack 전달을
   추가했다. Cloudflare 자동 갱신을 선택할 때만 수집 job과 경보 파일을 함께 연결한다.
   실제 클러스터 수집·발급·갱신과 알림 수신은 아직 확인하지 않았다.
@@ -51,6 +55,20 @@
 
 ## 최근 검증
 
+- 외부 감시 연동은 미커밋 변경이 없는 `main`의 `a1c56e6`에서 시작해 설정·CI를 `1a71dbc`에 저장했다.
+  JSON·YAML·Bash·ShellCheck, Prometheus `3.13.2`의 규칙 검사와 Alertmanager `0.34.0`의
+  설정·라우팅 검사(주기 신호 전달, 일반 경보·다른 job·다른 경보 이름 제외)를 통과했다.
+  변경한 CI의 이미지 기동 단계를 기존 `baton-go:dependabot-validation-20260912` 이미지로 실행해
+  감시용 경로의 HTML·JSON 404·키워드와 기존 HEAD·요청 제한 검증을 통과했다. 임시 DB·컨테이너는 정리했다.
+  검증 환경은 `/private/tmp/baton-go-integration-validation-20260912`이며
+  `heartbeat-ci-validation.sh`·`heartbeat-routes.log`, `uptime-ci-validation.sh`·`uptime-runtime.log`에
+  명령과 결과가 있다. 네트워크를 차단한 Alertmanager에서 실제 POST 본문과 반복 전송도 확인했다.
+  초기 임시 수신기의 선응답을 본문 수신 후 응답으로 고쳤으며, 재전송 판정 간격 1분에서는
+  신호가 120초 간격으로 도착해 판정 간격을 15초로 줄였다. 최종 설정은 60초 간격으로 두 번 수신했고
+  본문이 고정 JSON뿐인 것을 확인했다. 재사용할 명령은 `heartbeat-final-validation.sh`와
+  `heartbeat-final-http-handler.sh`, 결과는 `heartbeat-final-delivery.log`·`heartbeat-final-*.json`이다.
+  Java·의존성 변경이 없어 이미지 빌드·단위·MySQL·Redis 통합 테스트는 반복하지 않았다.
+  실제 계정 등록·공개 HTTPS 접속·Slack 전송·클러스터 적용·원격 CI 전체 실행은 하지 않았다.
 - 의존성 알림 연동은 미커밋 변경이 없는 `main`의 `2117882`에서 시작해 CI를 `9d11651`에 저장했다.
   YAML·Bash 구문·ShellCheck, 기존 CI 단계 보존과 제출 작업의 실행 조건·권한 분리를 확인했다.
   기존 로컬 이미지 `baton-go:dependabot-validation-20260912`를 Trivy `0.72.0`으로 검사했다.

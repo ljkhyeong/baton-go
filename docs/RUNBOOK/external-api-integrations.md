@@ -10,10 +10,22 @@ GO에서 직접 구현을 줄일 수 있는 연동과 적용 설정을 정리한
 주입값 예시와 로컬 검증을 준비한다. GO의 관리 인증은 Spring Security의 JWK 조회·캐시를,
 Slack·Discord 전송은 Alertmanager의 표준 웹훅을 사용한다. 별도 JWT 파서나 알림 전송 서버는 추가하지 않는다.
 
+예시는 수정하지 않고 아래 로컬 파일에 값을 입력한다. `cp -n`은 기존 파일을 덮어쓰지 않는다.
+이 복사본은 Git과 Docker 빌드 전송 대상에서 제외한다.
+
+```bash
+umask 077
+cp -n deploy/app.env.example deploy/app.env
+cp -n deploy/prometheus/slack-webhook-url.example deploy/prometheus/slack-webhook-url
+cp -n deploy/prometheus/discord-webhook-url.example deploy/prometheus/discord-webhook-url
+cp -n deploy/prometheus/healthchecks-ping-url.example deploy/prometheus/healthchecks-ping-url
+```
+
 - [애플리케이션 환경변수 예시](../../deploy/app.env.example)는 `go.b4ton.com`과 현재 BATON·ROUND
   라우팅을 반영했다. 빈 issuer·JWK 주소, HMAC 비밀값, DB 주소·비밀번호는 실제 값으로 채운다.
   HMAC 비밀값은 32자 이상이며 기존 DB를 사용하면 기존 값을 유지한다. 파일은 자동으로 읽지 않으므로
-  컨테이너 환경변수로 주입한다. k3s의 ConfigMap·Secret 구분은 기존 배포 구성을 따른다.
+  컨테이너 환경변수로 주입한다. `app.env`를 셸에서 `source`하지 않는다.
+  k3s의 ConfigMap·Secret 구분은 기존 배포 구성을 따른다.
 - [Slack URL 예시](../../deploy/prometheus/slack-webhook-url.example)와
   [Discord URL 예시](../../deploy/prometheus/discord-webhook-url.example)의 `REPLACE_ME`는 임시 표기다.
   실제 URL은 기존 Alertmanager 예시가 지정한 Secret 파일에 넣는다. GO 환경변수로 전달하지 않는다.

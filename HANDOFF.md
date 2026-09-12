@@ -99,6 +99,16 @@
 
 ## 최근 검증
 
+- 열거형 파서 정리는 미커밋 변경이 없는 `main`의 `8dcaacf`에서 시작해 `409b026`에 저장했다.
+  전용 파서를 Jackson의 `FAIL_ON_NUMBERS_FOR_ENUMS` 설정으로 대체해 운영 코드 56줄을 줄였다.
+  요청 열거형의 앞뒤 공백은 허용하고 숫자·숫자 문자열·소문자·알 수 없는 값은 계속 거부한다.
+  Java 21에서 `./gradlew --no-daemon :adapter-in-web:test :adapter-in-web:apiContractDocs
+  :bootstrap:mysqlTest --tests '*LinkPersistenceIntegrationTest' :bootstrap:bootJar`를 통과했다.
+  웹 135개·MySQL 통합 11개 테스트에 실패·제외가 없다. 실제 Spring 설정의 숫자 거부와
+  공백 차이가 있는 생성·재시도의 동일 응답을 확인했다. 로그는
+  `/private/tmp/baton-go-enum-simplification-20260912.log`, JAR은 `bootstrap/build/libs/baton-go.jar`다.
+  이후 API 계약·인계 문서만 변경했다. 시각 규칙·DB 저장값 검사·Redis·의존 구조는 바뀌지 않아
+  별도 검증을 확대하지 않았다.
 - 생성 예약 정리는 미커밋 변경이 없는 `main`의 `58288b4`에서 시작해 `c98ee63`에 저장했다.
   단일 행 `INSERT`의 성공 건수 재검사를 제거했다. 중복 키 조회와 나머지 DB 오류 전달은 유지한다.
   Java 21에서 `./gradlew --no-daemon :bootstrap:mysqlTest --tests '*LinkPersistenceIntegrationTest'

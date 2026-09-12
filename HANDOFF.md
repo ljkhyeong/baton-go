@@ -29,6 +29,10 @@
 - 기존 태그와 같은 커밋의 성공한 `main` CI 자료를 GitHub Release 초안에 첨부하는
   [보관 워크플로](.github/workflows/release-evidence.yml)를 추가했다. 검사·게시 자료의 일치와
   필수 파일을 확인하며 재빌드하지 않는다. 실제 태그 등록·Release 생성·발행은 하지 않았다.
+- [릴리스 취약점 재검사](.github/workflows/release-vulnerability-review.yml)는 보관한 SBOM을
+  최신 Trivy DB로 대조하는 수동 워크플로다. 태그·게시 기록·SBOM의 이미지 일치를 확인하고
+  재검사 보고서를 14일간 보관한다. 원본 Release·이미지·배포는 변경하지 않는다.
+  실제 CI 자료로 로컬 재검사를 확인했으며 원격 워크플로 실행은 남아 있다.
 - kube-state-metrics의 GO 상태 수집·최소 조회 권한과 Pod 준비 실패·반복 재시작·가용 Pod 부족·
   마이그레이션 실패·지표 누락 경보를 추가했다. 기존 Slack·Discord 경로로 전달한다.
   [연결 절차](docs/RUNBOOK/prometheus-alerts.md#컨테이너배포-실패-알림)는 k3s 구축 후 적용할 설정이며
@@ -70,6 +74,18 @@
 
 ## 최근 검증
 
+- 릴리스 재검사는 미커밋 변경이 없는 `main`의 `0f6602f`에서 시작했다.
+  워크플로는 `936e2ef`에 저장했고 이후에는 문서만 변경했다.
+  새 워크플로의 YAML·Bash·ShellCheck·actionlint `1.7.12`와 기존 CI의 Trivy 고정 버전 일치를 확인했다.
+  임시 ShellCheck 실행의 셸 미지정 오류는 `--shell=bash`로 수정해 통과했다.
+  GitHub 다운로드 응답을 대체해 정상·릴리스 없음·SBOM 누락·커밋/이미지 불일치·빈/손상 SBOM
+  7개 시나리오를 확인했다. 원격 `8ab710f` CI의 실제 산출물을 내려받아 Trivy `0.72.0`으로
+  최신 DB 다운로드·재검사·표 변환을 실행했다. 원본과 운영체제 73개·Java 114개 패키지가 일치하고,
+  보고서 5개·SBOM 체크섬·검사 DB 시각을 확인했다. 워크플로는 검사기·DB 외에 이미지를 받지 않는다.
+  검증 파일은 `/private/tmp/baton-go-integration-validation-20260912/release-rescan-validation`의
+  `step-1.sh`·`step-2.sh`·`validate-inputs.py`·`native-scan.log`·`actionlint.log`에 있다.
+  새 문서 링크·앵커와 전체 diff를 확인했다. Java·DB·기존 CI는 바뀌지 않아 빌드·통합 테스트를
+  반복하지 않았다. 실제 Release 다운로드·Actions 실행·산출물 업로드는 미실행이다.
 - 인증서 발급 알림 문서는 미커밋 변경이 없는 `main`의 `8ab710f`에서 시작했다.
   Cloudflare 공식 CT 감시·GET/PATCH API의 경로·권한·수신자 교체 규칙과 무료 이메일 조건을 확인했다.
   README·RUNBOOK·HANDOFF의 변경 내용, 로컬 링크·새 앵커, JSON 예시와 `git diff --check`를 확인했다.

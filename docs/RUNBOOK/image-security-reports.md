@@ -134,6 +134,44 @@ Release 첨부 파일은 Actions의 14일 보관 설정을 적용받지 않는�
 [CI 산출물 받기](https://cli.github.com/manual/gh_run_download),
 [Release 초안·첨부 생성](https://cli.github.com/manual/gh_release_create).
 
+## 릴리스 취약점 재검사
+
+[재검사 워크플로](../../.github/workflows/release-vulnerability-review.yml)는 Release에 보관한
+Trivy SBOM을 최신 취약점 DB로 다시 검사한다. 코드 변경 없이 새로 공개된 운영체제·Java
+라이브러리 취약점을 확인할 때 사용한다. 이미지 빌드·수신과 홈서버 접속은 필요하지 않다.
+
+1. 위 보관 워크플로로 대상 태그의 검사 자료를 Release에 첨부한다. 초안도 지정할 수 있다.
+2. Actions의 `릴리스 취약점 재검사`에서 실행 브랜치를 `main`으로 두고 대상 태그를 입력한다.
+3. 성공한 실행의 `baton-go-release-vulnerabilities` 산출물을 받는다. `vulnerabilities.txt`의
+   대상 패키지·설치 버전·수정 버전을 검토하고 실제 배포 이미지 다이제스트와 대조한다.
+
+Actions 화면의 실행 커밋은 워크플로를 읽은 `main`이다. 검사 대상은 입력한 태그이며,
+`rescan-metadata.json`의 `source_commit`과 `image_reference`로 확인한다.
+
+태그의 커밋과 게시 기록, SBOM의 이미지 구성 다이제스트를 대조한다. 자료가 누락됐거나
+서로 다른 이미지를 가리키거나 SBOM이 비어 있으면 검사 전에 실패한다.
+등록된 패키지의 취약점 판정은 Trivy가 처리하며, 이미지나 저장소 내용을 외부 분석 API로 보내지 않는다.
+사용 통계와 의존성 식별용 외부 호출은 끄지만, 검사기 이미지·취약점 DB 다운로드에는 네트워크가 필요하다.
+CI와 재검사 워크플로의 `TRIVY_IMAGE`는 함께 갱신한다.
+
+| 파일 | 내용 |
+| --- | --- |
+| `rescan-metadata.json` | 릴리스 태그·소스 커밋·배포 이미지·원본 SBOM 체크섬·검사기·완료 시각·이번 실행 정보 |
+| `image-publication.json` | 원래 CI의 게시 기록 |
+| `scanner.json` | 이번 검사에 사용한 Trivy·취약점 DB 정보 |
+| `vulnerabilities.json`·`vulnerabilities.txt` | 이번 검사의 전체 패키지·취약점 결과와 읽기용 표 |
+
+기존 정책처럼 취약점 발견 자체는 실행 실패로 처리하지 않는다. DB 다운로드나 검사·변환이
+실패한 실행은 완료 기록으로 사용하지 않는다. 원본 SBOM에 빠진 패키지는 재검사로 보완할 수 없으며,
+실제 이미지가 바뀌었다면 새 CI 검사 자료가 필요하다.
+
+수동 실행만 제공하고 기존 Actions 사용량·14일 산출물 보관 한도를 적용한다. 별도 유료 API·계정은
+필요하지 않다. 원본 Release와 게시 이미지는 변경하지 않으며, 재검사 결과를 장기 보관하려면
+산출물이 만료되기 전에 담당자가 보관한다. 기존 `CI` 전용 Slack 구독에는 이 실행이 포함되지 않는다.
+
+근거: [Trivy SBOM 검사](https://trivy.dev/docs/latest/target/sbom/),
+[Release 자료 다운로드](https://cli.github.com/manual/gh_release_download).
+
 ## 표준 도구 문서
 
 - [Trivy 이미지 아카이브 검사](https://trivy.dev/docs/latest/target/container_image/)

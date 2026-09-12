@@ -20,6 +20,7 @@ GO에서 직접 구현을 줄일 수 있는 연동과 적용 설정을 정리한
 | Java 라이브러리 취약점 알림 | Trivy → GitHub 의존성 API → Dependabot alerts | 알림 기능 활성화. `main` CI 성공 후 이미지의 Java 패키지 목록을 제출하는 설정 추가. |
 | 운영 이미지 보관 | GitHub Actions → GHCR | `main`의 검증을 통과한 이미지를 재빌드 없이 게시하고 배포 다이제스트를 기록하는 설정 추가. |
 | 릴리스 검사 자료 보관 | GitHub Releases API | 기존 태그와 같은 커밋의 CI 자료를 받아 Release 초안에 첨부하는 워크플로 추가. |
+| 릴리스 취약점 재검사 | GitHub Releases API → Trivy 취약점 DB | 보관한 SBOM을 최신 DB로 재검사하는 수동 워크플로 추가. 이미지 빌드·홈서버 접속 불필요. |
 | 빌드 결과 알림 | GitHub 공식 Slack 앱 | 저장소·CI에 맞춘 구독 명령 정리. 실제 채널 구독은 아직 하지 않았다. |
 | 관리 API 인증 | Spring Security → 발급자의 JWK Set | 이미 구현됨. 발급자·JWK 주소를 설정하면 서명 키 조회와 캐시를 프레임워크가 처리한다. |
 | DNS 레코드 | 기존 Cloudflare DNS | 공인 IP가 유지되면 초기 레코드만 필요하다. 주기적 DNS API 호출은 추가하지 않는다. |
@@ -38,6 +39,7 @@ API 호출 제한은 각 제공자의 정책을 따르고, Prometheus·Alertmana
 검증한 이미지의 게시·보관과 홈서버 인증은 [GHCR 연결 절차](image-security-reports.md#ghcr-자동-게시와-배포-참조)를 따른다.
 릴리스 버전의 보고서는 [검사 자료 보관](image-security-reports.md#릴리스-검사-자료-보관),
 k3s 상태 경보는 [컨테이너·배포 실패 알림](prometheus-alerts.md#컨테이너배포-실패-알림)을 따른다.
+코드 변경 없이 새 취약점을 확인하려면 [릴리스 재검사](image-security-reports.md#릴리스-취약점-재검사)를 실행한다.
 
 근거: [Cloudflare Free](https://www.cloudflare.com/plans/free/),
 [Let's Encrypt](https://letsencrypt.org/getting-started/),

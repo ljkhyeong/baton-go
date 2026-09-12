@@ -99,6 +99,14 @@
 
 ## 최근 검증
 
+- 저장소 공개·소개 한글화는 변경 없는 `b9a8a70`에서 시작했다. GitHub 저장소를 `PUBLIC`으로 전환하고
+  소개를 한국어로 변경했다. README는 원격 메인도 한국어였으며, `build.gradle` 소개 변경 `a4f8ebb`만
+  원격 메인에 푸시하고 로컬에는 `ac7682a`로 병합했다. Java 21의
+  `./gradlew --no-daemon -q :bootstrap:properties --property description`으로 소개 값을 확인했다.
+  로그는 `/private/tmp/baton-go-repository-korean-description-20260912.log`다. 첫 공개 승인이 거부된 뒤
+  Gitleaks 8.30.1로 원격 참조 9개·커밋 308개·Actions 21건의 로그 44개를 검사했다.
+  Git 검출 12건은 테스트용 UUID였고 로그 검출은 0건이었다. 재승인 후 공개 상태를 확인했다.
+  검사 자료는 `/private/tmp/baton-go-publication-audit-20260912`에 있다. 소개·문서만 변경해 빌드·테스트는 반복하지 않았다.
 - 운영 API 응답 정리는 미커밋 변경이 없는 `main`의 `5263948`에서 시작해 `4900388`에 저장했다.
   중복 응답 파일 2개와 필드 변환을 제거해 운영 코드 78줄을 줄였다. Java 21에서
   `./gradlew --no-daemon :adapter-in-web:test :adapter-in-web:apiContractDocs :bootstrap:test

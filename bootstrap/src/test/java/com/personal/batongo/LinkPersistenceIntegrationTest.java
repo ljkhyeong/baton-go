@@ -323,7 +323,7 @@ class LinkPersistenceIntegrationTest {
         );
         String linkId = "466d487c-e690-4bf7-b116-f99f380f1b82";
         String targetPath = "/room/efgh-jkmn-pqrs";
-        insertStoredLink(linkId, linkCodePort.issue(normalizedIdempotencyKey).codeHash(),
+        insertStoredLink(linkId, linkCodePort.issue(normalizedIdempotencyKey, "legacy").codeHash(),
                 "ROUND", targetPath, "MEETING_ENTRY");
         insertReservation(normalizedIdempotencyKey, linkId, "https://go.example");
 
@@ -352,7 +352,7 @@ class LinkPersistenceIntegrationTest {
         String idempotencyKey = "cc9d17dd-d02d-4c14-842c-afbb03887fc6";
         String linkId = "93d4229a-0edf-4d85-a769-0efb7e58c179";
         String targetPath = "/room/qrst-6789-uvwx";
-        insertStoredLink(linkId, linkCodePort.issue(idempotencyKey).codeHash(),
+        insertStoredLink(linkId, linkCodePort.issue(idempotencyKey, "legacy").codeHash(),
                 "ROUND", targetPath, "MEETING_ENTRY");
         insertReservation(idempotencyKey, linkId, null);
 
@@ -522,7 +522,7 @@ class LinkPersistenceIntegrationTest {
             String rawTargetPath,
             String rawPurpose
     ) throws Exception {
-        String codeHash = linkCodePort.issue(idempotencyKey).codeHash();
+        String codeHash = linkCodePort.issue(idempotencyKey, "legacy").codeHash();
         insertStoredLink(linkId, codeHash, rawTargetSystem, rawTargetPath, rawPurpose);
         insertReservation(idempotencyKey, linkId, null);
 

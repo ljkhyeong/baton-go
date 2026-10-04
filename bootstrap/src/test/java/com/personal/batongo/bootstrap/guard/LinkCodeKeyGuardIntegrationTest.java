@@ -94,7 +94,7 @@ class LinkCodeKeyGuardIntegrationTest {
     @BeforeEach
     void resetDatabase() {
         clearLinkData();
-        bind(linkCodePort.derivationIdentity());
+        bind(linkCodePort.keyRingIdentity().activeIdentity());
     }
 
     @Test
@@ -104,7 +104,7 @@ class LinkCodeKeyGuardIntegrationTest {
 
         startupValidator.run(new DefaultApplicationArguments(new String[0]));
 
-        assertThat(storedIdentity()).isEqualTo(linkCodePort.derivationIdentity());
+        assertThat(storedIdentity()).isEqualTo(linkCodePort.keyRingIdentity().activeIdentity());
     }
 
     @Test
@@ -125,7 +125,7 @@ class LinkCodeKeyGuardIntegrationTest {
     @Test
     @DisplayName("저장된 HMAC 키 정보가 다르면 시작과 생성을 거부한다")
     void rejectsMismatchedIdentityAtStartupAndCreation() {
-        LinkCodeDerivationIdentity current = linkCodePort.derivationIdentity();
+        LinkCodeDerivationIdentity current = linkCodePort.keyRingIdentity().activeIdentity();
         LinkCodeDerivationIdentity different = new LinkCodeDerivationIdentity(
                 current.version(),
                 "f".repeat(64)
@@ -209,7 +209,7 @@ class LinkCodeKeyGuardIntegrationTest {
     @DisplayName("서로 다른 HMAC 키 정보를 동시에 처음 등록하면 하나만 성공한다")
     void serializesConcurrentInitialBinding() throws Exception {
         unbind();
-        LinkCodeDerivationIdentity first = linkCodePort.derivationIdentity();
+        LinkCodeDerivationIdentity first = linkCodePort.keyRingIdentity().activeIdentity();
         LinkCodeDerivationIdentity second = new LinkCodeDerivationIdentity(
                 first.version(),
                 "e".repeat(64)
@@ -257,7 +257,7 @@ class LinkCodeKeyGuardIntegrationTest {
         BindingResult result = bindExistingDatabase(canaryIdempotencyKey);
 
         assertThat(result).isEqualTo(BindingResult.BOUND);
-        assertThat(storedIdentity()).isEqualTo(linkCodePort.derivationIdentity());
+        assertThat(storedIdentity()).isEqualTo(linkCodePort.keyRingIdentity().activeIdentity());
         assertThat(linkCount()).isEqualTo(1L);
         assertThat(reservationCount()).isEqualTo(1L);
     }
@@ -274,7 +274,7 @@ class LinkCodeKeyGuardIntegrationTest {
         );
 
         assertThat(result).isEqualTo(BindingResult.BOUND);
-        assertThat(storedIdentity()).isEqualTo(linkCodePort.derivationIdentity());
+        assertThat(storedIdentity()).isEqualTo(linkCodePort.keyRingIdentity().activeIdentity());
         assertThat(linkCount()).isEqualTo(1L);
         assertThat(reservationCount()).isEqualTo(1L);
     }
@@ -291,7 +291,7 @@ class LinkCodeKeyGuardIntegrationTest {
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageNotContaining(storedCanary)
                 .hasMessageNotContaining(wrongCanary)
-                .hasMessageNotContaining(linkCodePort.derivationIdentity().hmacFingerprint());
+                .hasMessageNotContaining(linkCodePort.keyRingIdentity().activeIdentity().hmacFingerprint());
         assertThat(storedIdentity()).isNull();
     }
 
@@ -304,7 +304,7 @@ class LinkCodeKeyGuardIntegrationTest {
         BindingResult result = bindExistingDatabase(canaryIdempotencyKey);
 
         assertThat(result).isEqualTo(BindingResult.ALREADY_BOUND);
-        assertThat(storedIdentity()).isEqualTo(linkCodePort.derivationIdentity());
+        assertThat(storedIdentity()).isEqualTo(linkCodePort.keyRingIdentity().activeIdentity());
     }
 
     private LinkCodeDerivationIdentity bindAndHoldTransaction(
@@ -376,7 +376,7 @@ class LinkCodeKeyGuardIntegrationTest {
                         )
                         """,
                 linkId,
-                linkCodePort.issue(canonicalCanary).codeHash(),
+                linkCodePort.issue(canonicalCanary, "legacy").codeHash(),
                 CANONICAL_BATON_TARGET
         );
         jdbcTemplate.update(

@@ -47,7 +47,7 @@ class LinkCodeKeyGuardBindingCliTlsIntegrationTest {
                                 'MEETING_ENTRY', UTC_TIMESTAMP(6)
                             )
                             """)
-                    .params(linkId, linkCodePort.issue(canary).codeHash())
+                    .params(linkId, linkCodePort.issue(canary, "legacy").codeHash())
                     .update();
             jdbcClient.sql("""
                             INSERT INTO link_creation_requests (idempotency_key_hash, link_id, created_at)
@@ -84,7 +84,7 @@ class LinkCodeKeyGuardBindingCliTlsIntegrationTest {
                 process.destroyForcibly();
             }
 
-            var identity = linkCodePort.derivationIdentity();
+            var identity = linkCodePort.keyRingIdentity().activeIdentity();
             assertThat(jdbcClient.sql("""
                             SELECT COUNT(*) FROM link_code_key_guard
                             WHERE guard_id = 1 AND derivation_version = ? AND key_fingerprint = ?

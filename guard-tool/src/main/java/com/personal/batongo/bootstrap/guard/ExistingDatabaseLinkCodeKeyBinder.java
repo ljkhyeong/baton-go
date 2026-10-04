@@ -26,12 +26,14 @@ final class ExistingDatabaseLinkCodeKeyBinder {
         try {
             JdbcClient jdbcClient = JdbcClient.create(dataSource);
             return new TransactionTemplate(new JdbcTransactionManager(dataSource)).execute(status -> {
-                LinkCodeDerivationIdentity identity = linkCodePort.derivationIdentity();
+                LinkCodeDerivationIdentity identity = linkCodePort.keyRingIdentity().activeIdentity();
                 GuardState guardState = lockGuard(jdbcClient);
                 verifyCanary(jdbcClient, linkCodePort, canaryIdempotencyKey);
 
                 if (guardState.isBound()) {
-                    requireMatchingIdentity(guardState, identity);
+                    if (!identity.matches(guardState.version(), guardState.fingerprint())) {
+                        throw unsafeState();
+                    }
                     return BindingResult.ALREADY_BOUND;
                 }
                 if (!guardState.isUnbound()) {
@@ -66,7 +68,7 @@ final class ExistingDatabaseLinkCodeKeyBinder {
     ) {
         String idempotencyKey = canaryIdempotencyKey.value();
         String idempotencyKeyHash = linkCodePort.hashIdempotencyKey(idempotencyKey);
-        IssuedLinkCode issuedLinkCode = linkCodePort.issue(idempotencyKey);
+        IssuedLinkCode issuedLinkCode = linkCodePort.issue(idempotencyKey, linkCodePort.keyRingIdentity().activeKeyId());
 
         String storedCodeHash = jdbcClient.sql("""
                         SELECT smart_links.code_hash
@@ -83,16 +85,6 @@ final class ExistingDatabaseLinkCodeKeyBinder {
                 issuedLinkCode.codeHash().getBytes(StandardCharsets.US_ASCII),
                 storedCodeHash.getBytes(StandardCharsets.US_ASCII)
         )) {
-            throw unsafeState();
-        }
-    }
-
-    private void requireMatchingIdentity(
-            GuardState guardState,
-            LinkCodeDerivationIdentity identity
-    ) {
-        if (!identity.version().equals(guardState.version())
-                || !identity.hmacFingerprint().equals(guardState.fingerprint())) {
             throw unsafeState();
         }
     }

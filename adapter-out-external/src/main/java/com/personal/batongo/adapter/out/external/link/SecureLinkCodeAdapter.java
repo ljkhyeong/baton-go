@@ -54,18 +54,8 @@ public class SecureLinkCodeAdapter implements LinkCodePort {
     }
 
     @Override
-    public LinkCodeDerivationIdentity derivationIdentity() {
-        return keyRingIdentity.keys().get(keyRingIdentity.activeKeyId());
-    }
-
-    @Override
     public LinkCodeKeyRingIdentity keyRingIdentity() {
         return keyRingIdentity;
-    }
-
-    @Override
-    public IssuedLinkCode issue(String idempotencyKey) {
-        return issue(idempotencyKey, keyRingIdentity.activeKeyId());
     }
 
     @Override

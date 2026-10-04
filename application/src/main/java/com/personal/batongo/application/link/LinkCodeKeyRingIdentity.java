@@ -13,6 +13,10 @@ public record LinkCodeKeyRingIdentity(
         }
     }
 
+    public LinkCodeDerivationIdentity activeIdentity() {
+        return keys.get(activeKeyId);
+    }
+
     @Override
     public String toString() {
         return "LinkCodeKeyRingIdentity[activeKeyId=" + activeKeyId + ", keys=redacted]";

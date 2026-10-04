@@ -23,8 +23,8 @@ class SecureLinkCodeAdapterTest {
         var rotated = new SecureLinkCodeAdapter(new LinkCodeProperties(
                 SECRET, "k202609", Map.of("k202609", "new-test-key-that-is-at-least-thirty-two-characters")
         ));
-        assertThat(rotated.issue(IDEMPOTENCY_KEY, "legacy")).isEqualTo(adapter.issue(IDEMPOTENCY_KEY));
-        assertThat(rotated.issue(IDEMPOTENCY_KEY)).isNotEqualTo(adapter.issue(IDEMPOTENCY_KEY));
+        assertThat(rotated.issue(IDEMPOTENCY_KEY, "legacy")).isEqualTo(adapter.issue(IDEMPOTENCY_KEY, "legacy"));
+        assertThat(rotated.issue(IDEMPOTENCY_KEY, "k202609")).isNotEqualTo(adapter.issue(IDEMPOTENCY_KEY, "legacy"));
         assertThatThrownBy(() -> rotated.issue(IDEMPOTENCY_KEY, "missing"))
                 .isInstanceOf(LinkCodeReplayMismatchException.class);
     }
@@ -32,7 +32,7 @@ class SecureLinkCodeAdapterTest {
     @Test
     @DisplayName("HMAC SHA-256 v1 파생 규약은 고정 벡터와 일치한다")
     void matchesVersionOneFixedVector() {
-        var issued = adapter.issue(IDEMPOTENCY_KEY);
+        var issued = adapter.issue(IDEMPOTENCY_KEY, "legacy");
 
         assertThat(issued.rawCode()).isEqualTo("WgRX_ulMUrIGxM0IYBOpqA");
         assertThat(issued.codeHash())
@@ -43,7 +43,7 @@ class SecureLinkCodeAdapterTest {
     @Test
     @DisplayName("HMAC 키 정보는 파생 버전과 전용 구분 문자열로 만든 고정 지문을 사용한다")
     void createsStableDerivationIdentity() {
-        var identity = adapter.derivationIdentity();
+        var identity = adapter.keyRingIdentity().activeIdentity();
 
         assertThat(identity.version()).isEqualTo("hmac-sha256-link-code-v1");
         assertThat(identity.hmacFingerprint())
@@ -60,8 +60,8 @@ class SecureLinkCodeAdapterTest {
         var composedAdapter = new SecureLinkCodeAdapter(new LinkCodeProperties(composed));
         var decomposedAdapter = new SecureLinkCodeAdapter(new LinkCodeProperties(decomposed));
 
-        assertThat(composedAdapter.derivationIdentity())
-                .isNotEqualTo(decomposedAdapter.derivationIdentity());
+        assertThat(composedAdapter.keyRingIdentity().activeIdentity())
+                .isNotEqualTo(decomposedAdapter.keyRingIdentity().activeIdentity());
     }
 
     @Test

@@ -32,7 +32,7 @@ public class LinkCodeKeyGuardPersistenceAdapter implements LinkCodeKeyGuardPort 
             if (!stored.isEmpty() || hasStoredLinkData()) {
                 throw new LinkCodeKeyBindingException();
             }
-            LinkCodeDerivationIdentity active = ring.keys().get(ring.activeKeyId());
+            LinkCodeDerivationIdentity active = ring.activeIdentity();
             jdbcClient.sql("""
                         UPDATE link_code_key_guard
                         SET derivation_version = ?, key_fingerprint = ?
@@ -142,9 +142,7 @@ public class LinkCodeKeyGuardPersistenceAdapter implements LinkCodeKeyGuardPort 
         }
 
         private boolean matches(LinkCodeDerivationIdentity identity) {
-            return identity != null
-                    && identity.version().equals(derivationVersion)
-                    && identity.hmacFingerprint().equals(keyFingerprint);
+            return identity != null && identity.matches(derivationVersion, keyFingerprint);
         }
 
         @Override

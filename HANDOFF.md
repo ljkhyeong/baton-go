@@ -99,6 +99,19 @@
 
 ## 최근 검증
 
+- 코드 축소는 미커밋 변경이 없는 `main`의 `b45f09c`에서 시작해 `c1fd16d`·`240f339`·`6846610`에 저장했다.
+  IPv4 루프백 직접 파싱을 같은 규칙의 정규식으로 바꾸고, 공개 조회의 저장 대상 확인은 허용 여부 확인 뒤
+  `Optional`로 반환해 예외 이중 변환과 NPE 포착을 없앴다. 오류 처리기는 입력 오류 응답 생성을 헬퍼로 모았다.
+  테스트는 공개 조회 HTTP 구성과 동시 생성·영속성 검증의 반복을 헬퍼로 모았다.
+  운영 코드 135줄, 테스트 코드 63줄을 줄였고 오류 코드·HTTP 상태·로그 문구는 같다.
+  루프백 판정은 기존 구현과 79,784개 입력에서 결과가 같음을 비교했다. Java 21에서
+  `./gradlew --no-daemon :domain:test :application:test :adapter-in-web:test :adapter-in-web:apiContractDocs
+  :adapter-out-external:test :guard-tool:test :bootstrap:test`와 `:bootstrap:mysqlTest
+  --tests '*LinkPersistenceIntegrationTest' --tests '*LinkCreationConcurrencyIntegrationTest'`를 통과했다.
+  도메인 72·애플리케이션 48·웹 135·외부 26·guard-tool 4·bootstrap 33·MySQL 14개 테스트에 실패·제외가 없다.
+  로그는 `/private/tmp/claude-501/-Users-lim-devProject-personal-short-url/8d70c773-814d-44e7-ad80-867f4790ed4f/scratchpad`의
+  `baton-go-code-reduction-*-20261004.log`다. 공개 오류의 JSON·HTML 핸들러 쌍은 같은 advice 안에서
+  `Accept` 우선순위를 협상하므로 유지했다. SQL·Redis·모듈 의존은 바뀌지 않아 Redis 통합 검증은 실행하지 않았다.
 - Claude Code 프로젝트 스킬 추가는 미커밋 변경이 없는 `main`의 `bf93dc3`에서 시작해 `fd89fe9`에 저장했다.
   Codex 전용 `baton-go-flows`를 `.claude/skills`로 옮기며 기본 체크아웃 절대 경로를 저장소 상대 경로로 바꿨다.
   검증 선택·작업 마무리·CI 실패 분석·의존성 업데이트·보안 불변식 검토 스킬을 추가했다.

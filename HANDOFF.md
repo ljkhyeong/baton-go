@@ -99,6 +99,20 @@
 
 ## 최근 검증
 
+- 2차 코드 축소는 미커밋 변경이 없는 `main`의 `863c676`에서 시작해 `1b2f24d`부터 `bf0ff92`까지 6개 커밋에 저장했다.
+  운영 Java 코드는 직전 축소 뒤 남은 복사 코드가 없어 바꾸지 않았다. CI의 `promtool`·`amtool` 실행 인자를
+  기존 배열 방식으로 모으고 같은 명령을 적은 RUNBOOK도 맞췄다. 테스트는 반복 요청·픽스처·건수 조회·스텁을
+  헬퍼로 모으고, GET·HEAD 404 쌍을 매개변수화했다. bootstrap의 요청 제한 테스트는 고유 확인만 실제 HTTP 서버
+  테스트로 옮긴 뒤 지웠다. 테스트 381줄, CI 18줄, 문서 7줄을 줄였고 REST Docs 목록에 누락된 일괄 조회 오류
+  예시 2개를 추가했다. CI 두 단계는 기존·변경 스크립트를 같은 고정 이미지로 실행해 출력이 같고 ShellCheck를
+  통과했다. REST Docs 조각 96개는 무작위 요청 ID를 빼고 변경 전과 같다. Java 21에서 `./gradlew --no-daemon
+  :domain:test :application:test :adapter-in-web:test :adapter-in-web:apiContractDocs :bootstrap:test`와
+  `:bootstrap:mysqlTest --tests '*LinkPersistenceIntegrationTest' --tests '*LinkCreationConcurrencyIntegrationTest'
+  --tests '*TargetContractOperationsIntegrationTest' --tests '*LinkCodeKeyGuardIntegrationTest'`를 통과했다.
+  도메인 72·애플리케이션 48·웹 135·bootstrap 32·MySQL 31개 테스트에 실패·제외가 없다. bootstrap 수가 1개 준 것은
+  옮긴 테스트 때문이다. 로그는 직전 항목과 같은 스크래치패드의 `baton-go-code-reduction-pass2-*-20261005.log`다.
+  키 교체·정리 테스트 병합, MySQL 공통 애너테이션, 정책 직접 테스트 삭제는 응집도·설정 누락 검증 때문에 하지 않았다.
+  Redis·외부 연동·운영 코드가 바뀌지 않아 Redis 통합 검증과 원격 CI는 실행하지 않았다.
 - 코드 축소는 미커밋 변경이 없는 `main`의 `b45f09c`에서 시작해 `c1fd16d`·`240f339`·`6846610`에 저장했다.
   IPv4 루프백 직접 파싱을 같은 규칙의 정규식으로 바꾸고, 공개 조회의 저장 대상 확인은 허용 여부 확인 뒤
   `Optional`로 반환해 예외 이중 변환과 NPE 포착을 없앴다. 오류 처리기는 입력 오류 응답 생성을 헬퍼로 모았다.

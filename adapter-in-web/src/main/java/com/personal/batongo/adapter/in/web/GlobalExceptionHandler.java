@@ -76,49 +76,27 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(StoredTargetPolicyViolationException.class)
     public ResponseEntity<ErrorResponse> handleStoredTargetPolicyViolation(
-            StoredTargetPolicyViolationException exception,
-            HttpServletRequest request
+            StoredTargetPolicyViolationException exception, HttpServletRequest request
     ) {
-        recordStoredTargetPolicyViolation(exception, request);
+        targetPolicyViolationCounter.increment();
+        LOG.error("저장된 링크 대상 계약 위반 linkId={} requestId={}",
+                exception.linkId(), RequestIdFilter.requestId(request));
         return handleNotFound(request);
     }
 
     @ExceptionHandler(LinkNotFoundException.class)
-    public ResponseEntity<ErrorResponse> handleNotFound(
-            HttpServletRequest request
-    ) {
-        return error(
-                HttpStatus.NOT_FOUND,
-                "LINK_NOT_FOUND",
-                "링크를 찾을 수 없습니다",
-                request
-        );
+    public ResponseEntity<ErrorResponse> handleNotFound(HttpServletRequest request) {
+        return error(HttpStatus.NOT_FOUND, "LINK_NOT_FOUND", "링크를 찾을 수 없습니다", request);
     }
 
     @ExceptionHandler(LinkUnavailableException.class)
     public ResponseEntity<ErrorResponse> handleUnavailable(
-            LinkUnavailableException exception,
-            HttpServletRequest request
+            LinkUnavailableException exception, HttpServletRequest request
     ) {
         return switch (exception.reason()) {
-            case NOT_ACTIVE -> error(
-                    HttpStatus.NOT_FOUND,
-                    "LINK_NOT_ACTIVE",
-                    exception.getMessage(),
-                    request
-            );
-            case EXPIRED -> error(
-                    HttpStatus.GONE,
-                    "LINK_EXPIRED",
-                    exception.getMessage(),
-                    request
-            );
-            case REVOKED -> error(
-                    HttpStatus.GONE,
-                    "LINK_REVOKED",
-                    exception.getMessage(),
-                    request
-            );
+            case NOT_ACTIVE -> error(HttpStatus.NOT_FOUND, "LINK_NOT_ACTIVE", exception.getMessage(), request);
+            case EXPIRED -> error(HttpStatus.GONE, "LINK_EXPIRED", exception.getMessage(), request);
+            case REVOKED -> error(HttpStatus.GONE, "LINK_REVOKED", exception.getMessage(), request);
         };
     }
 
@@ -163,54 +141,30 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(TargetContractRemediationNotApplicableException.class)
     public ResponseEntity<ErrorResponse> handleTargetContractRemediationNotApplicable(
-            TargetContractRemediationNotApplicableException exception,
-            HttpServletRequest request
+            TargetContractRemediationNotApplicableException exception, HttpServletRequest request
     ) {
-        return error(
-                HttpStatus.CONFLICT,
-                "REMEDIATION_NOT_APPLICABLE",
-                exception.getMessage(),
-                request
-        );
+        return error(HttpStatus.CONFLICT, "REMEDIATION_NOT_APPLICABLE", exception.getMessage(), request);
     }
 
     @ExceptionHandler(TargetContractRemediationStaleException.class)
     public ResponseEntity<ErrorResponse> handleTargetContractRemediationStale(
-            TargetContractRemediationStaleException exception,
-            HttpServletRequest request
+            TargetContractRemediationStaleException exception, HttpServletRequest request
     ) {
-        return error(
-                HttpStatus.CONFLICT,
-                "REMEDIATION_STALE",
-                exception.getMessage(),
-                request
-        );
+        return error(HttpStatus.CONFLICT, "REMEDIATION_STALE", exception.getMessage(), request);
     }
 
     @ExceptionHandler(InvalidIdempotencyKeyException.class)
     public ResponseEntity<ErrorResponse> handleInvalidIdempotencyKey(
-            InvalidIdempotencyKeyException exception,
-            HttpServletRequest request
+            InvalidIdempotencyKeyException exception, HttpServletRequest request
     ) {
-        return error(
-                HttpStatus.BAD_REQUEST,
-                "INVALID_IDEMPOTENCY_KEY",
-                exception.getMessage(),
-                request
-        );
+        return error(HttpStatus.BAD_REQUEST, "INVALID_IDEMPOTENCY_KEY", exception.getMessage(), request);
     }
 
     @ExceptionHandler(IdempotencyKeyConflictException.class)
     public ResponseEntity<ErrorResponse> handleIdempotencyConflict(
-            IdempotencyKeyConflictException exception,
-            HttpServletRequest request
+            IdempotencyKeyConflictException exception, HttpServletRequest request
     ) {
-        return error(
-                HttpStatus.CONFLICT,
-                "IDEMPOTENCY_KEY_REUSED",
-                exception.getMessage(),
-                request
-        );
+        return error(HttpStatus.CONFLICT, "IDEMPOTENCY_KEY_REUSED", exception.getMessage(), request);
     }
 
     @ExceptionHandler(LinkPurgedException.class)
@@ -220,58 +174,35 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(LinkCreationReplayUnavailableException.class)
     public ResponseEntity<ErrorResponse> handleLinkCreationReplayUnavailable(
-            LinkCreationReplayUnavailableException exception,
-            HttpServletRequest request
+            LinkCreationReplayUnavailableException exception, HttpServletRequest request
     ) {
-        LOG.error(
-                "기존 링크 생성 결과 누락 linkId={} requestId={}",
-                exception.linkId(),
-                RequestIdFilter.requestId(request)
-        );
-        return linkRecoveryFailure(
-                "LINK_CREATION_REPLAY_UNAVAILABLE",
-                exception.getMessage(),
-                request
-        );
+        LOG.error("기존 링크 생성 결과 누락 linkId={} requestId={}",
+                exception.linkId(), RequestIdFilter.requestId(request));
+        return linkRecoveryFailure("LINK_CREATION_REPLAY_UNAVAILABLE", exception.getMessage(), request);
     }
 
     @ExceptionHandler(LinkCodeReplayMismatchException.class)
     public ResponseEntity<ErrorResponse> handleLinkCodeReplayMismatch(
-            LinkCodeReplayMismatchException exception,
-            HttpServletRequest request
+            LinkCodeReplayMismatchException exception, HttpServletRequest request
     ) {
         logUnexpected(exception, request);
-        return linkRecoveryFailure(
-                "LINK_CODE_REPLAY_UNAVAILABLE",
-                exception.getMessage(),
-                request
-        );
+        return linkRecoveryFailure("LINK_CODE_REPLAY_UNAVAILABLE", exception.getMessage(), request);
     }
 
     @ExceptionHandler(LinkCodeKeyBindingException.class)
     public ResponseEntity<ErrorResponse> handleLinkCodeKeyBinding(
-            LinkCodeKeyBindingException exception,
-            HttpServletRequest request
+            LinkCodeKeyBindingException exception, HttpServletRequest request
     ) {
         logUnexpected(exception, request);
-        return linkRecoveryFailure(
-                "LINK_CODE_CONFIGURATION_MISMATCH",
-                exception.getMessage(),
-                request
-        );
+        return linkRecoveryFailure("LINK_CODE_CONFIGURATION_MISMATCH", exception.getMessage(), request);
     }
 
     @ExceptionHandler(PublicLinkOriginReplayUnavailableException.class)
     public ResponseEntity<ErrorResponse> handlePublicLinkOriginReplayUnavailable(
-            PublicLinkOriginReplayUnavailableException exception,
-            HttpServletRequest request
+            PublicLinkOriginReplayUnavailableException exception, HttpServletRequest request
     ) {
         logUnexpected(exception, request);
-        return linkRecoveryFailure(
-                "PUBLIC_LINK_ORIGIN_REPLAY_UNAVAILABLE",
-                exception.getMessage(),
-                request
-        );
+        return linkRecoveryFailure("PUBLIC_LINK_ORIGIN_REPLAY_UNAVAILABLE", exception.getMessage(), request);
     }
 
     private ResponseEntity<ErrorResponse> linkRecoveryFailure(
@@ -289,13 +220,8 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
             WebRequest request
     ) {
         if (exception instanceof MethodArgumentTypeMismatchException argumentException) {
-            return handleExceptionInternal(
-                    exception,
-                    errorBody("INVALID_REQUEST", argumentException.getName() + ": 요청 값이 올바르지 않습니다", request),
-                    headers,
-                    status,
-                    request
-            );
+            return invalidRequest(exception, argumentException.getName() + ": 요청 값이 올바르지 않습니다",
+                    headers, status, request);
         }
         return super.handleTypeMismatch(exception, headers, status, request);
     }
@@ -307,13 +233,8 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
             HttpStatusCode status,
             WebRequest request
     ) {
-        return handleExceptionInternal(
-                exception,
-                errorBody("INVALID_REQUEST", exception.getParameterName() + ": 필수 요청 값이 없습니다", request),
-                headers,
-                status,
-                request
-        );
+        return invalidRequest(exception, exception.getParameterName() + ": 필수 요청 값이 없습니다",
+                headers, status, request);
     }
 
     @Override
@@ -331,11 +252,8 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                     .filter(Objects::nonNull)
                     .findFirst().orElse(null);
             if (field != null) {
-                return handleExceptionInternal(
-                        exception,
-                        errorBody("INVALID_REQUEST", field + ": 요청 값이 올바르지 않습니다", request),
-                        headers, status, request
-                );
+                return invalidRequest(exception, field + ": 요청 값이 올바르지 않습니다",
+                        headers, status, request);
             }
         }
         return super.handleHttpMessageNotReadable(exception, headers, status, request);
@@ -352,13 +270,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         String message = fieldError != null
                 ? fieldError.getField() + ": 요청 값이 올바르지 않습니다"
                 : "요청 값이 올바르지 않습니다";
-        return handleExceptionInternal(
-                exception,
-                errorBody("INVALID_REQUEST", message, request),
-                headers,
-                status,
-                request
-        );
+        return invalidRequest(exception, message, headers, status, request);
     }
 
     @Override
@@ -387,17 +299,10 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     }
 
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<ErrorResponse> handleUnexpected(
-            Exception exception,
-            HttpServletRequest request
-    ) {
+    public ResponseEntity<ErrorResponse> handleUnexpected(Exception exception, HttpServletRequest request) {
         logUnexpected(exception, request);
-        return error(
-                HttpStatus.INTERNAL_SERVER_ERROR,
-                "INTERNAL_ERROR",
-                "서버에서 요청을 처리하지 못했습니다",
-                request
-        );
+        return error(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR",
+                "서버에서 요청을 처리하지 못했습니다", request);
     }
 
     private ResponseEntity<ErrorResponse> error(
@@ -411,6 +316,18 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                 message,
                 RequestIdFilter.requestId(request)
         ));
+    }
+
+    private ResponseEntity<Object> invalidRequest(
+            Exception exception,
+            String message,
+            HttpHeaders headers,
+            HttpStatusCode status,
+            WebRequest request
+    ) {
+        return handleExceptionInternal(
+                exception, errorBody("INVALID_REQUEST", message, request), headers, status, request
+        );
     }
 
     private ErrorResponse frameworkError(HttpStatusCode status, WebRequest request) {
@@ -430,11 +347,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     }
 
     private ErrorResponse errorBody(String code, String message, WebRequest request) {
-        return new ErrorResponse(
-                code,
-                message,
-                RequestIdFilter.requestId(servletRequest(request))
-        );
+        return new ErrorResponse(code, message, RequestIdFilter.requestId(servletRequest(request)));
     }
 
     private HttpServletRequest servletRequest(WebRequest request) {
@@ -474,17 +387,5 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                 .limit(MAX_LOGGED_STACK_FRAMES)
                 .map(StackTraceElement::toString)
                 .toList();
-    }
-
-    private void recordStoredTargetPolicyViolation(
-            StoredTargetPolicyViolationException exception,
-            HttpServletRequest request
-    ) {
-        targetPolicyViolationCounter.increment();
-        LOG.error(
-                "저장된 링크 대상 계약 위반 linkId={} requestId={}",
-                exception.linkId(),
-                RequestIdFilter.requestId(request)
-        );
     }
 }

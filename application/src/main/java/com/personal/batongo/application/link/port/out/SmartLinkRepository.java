@@ -1,6 +1,7 @@
 package com.personal.batongo.application.link.port.out;
 
 import com.personal.batongo.domain.link.SmartLink;
+import com.personal.batongo.domain.link.TrustedTargetPolicy;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -68,6 +69,10 @@ public interface SmartLinkRepository {
             long version,
             boolean creationRequestPresent
     ) {
+        public boolean hasAllowedTarget() {
+            return TrustedTargetPolicy.isAllowed(targetSystem, purpose, targetPath);
+        }
+
         @Override
         public String toString() {
             return "StoredLinkSnapshot[id=" + id + "]";

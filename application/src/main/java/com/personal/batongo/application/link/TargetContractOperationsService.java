@@ -8,7 +8,6 @@ import com.personal.batongo.application.link.port.in.TargetContractOperationsUse
 import com.personal.batongo.application.link.port.out.SmartLinkRepository;
 import com.personal.batongo.application.link.port.out.SmartLinkRepository.StoredLinkSnapshot;
 import com.personal.batongo.domain.link.LinkRevocationPolicy;
-import com.personal.batongo.domain.link.TrustedTargetPolicy;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
@@ -69,7 +68,7 @@ public class TargetContractOperationsService implements TargetContractOperations
         }
         StoredLinkSnapshot storedLink = repository.findStoredByIdForUpdate(command.linkId())
                 .orElseThrow(LinkNotFoundException::new);
-        if (isCompliant(storedLink)) {
+        if (storedLink.hasAllowedTarget()) {
             throw new TargetContractRemediationNotApplicableException();
         }
         if (storedLink.revokedAt() != null) {
@@ -104,7 +103,7 @@ public class TargetContractOperationsService implements TargetContractOperations
     }
 
     private InventoryItem toInventoryItem(StoredLinkSnapshot storedLink) {
-        Compliance compliance = isCompliant(storedLink)
+        Compliance compliance = storedLink.hasAllowedTarget()
                 ? Compliance.COMPLIANT
                 : Compliance.NON_COMPLIANT;
         RemediationState remediationState = switch (compliance) {
@@ -125,14 +124,6 @@ public class TargetContractOperationsService implements TargetContractOperations
                 storedLink.expiresAt(),
                 storedLink.revokedAt(),
                 storedLink.version()
-        );
-    }
-
-    private boolean isCompliant(StoredLinkSnapshot storedLink) {
-        return TrustedTargetPolicy.isAllowed(
-                storedLink.targetSystem(),
-                storedLink.purpose(),
-                storedLink.targetPath()
         );
     }
 

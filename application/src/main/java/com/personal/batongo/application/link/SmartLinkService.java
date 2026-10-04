@@ -238,7 +238,7 @@ public class SmartLinkService implements SmartLinkUseCase {
         List<StoredLinkSnapshot> stored = repository.findStoredByIds(uniqueIds);
         Instant evaluatedAt = clock.instant();
         Map<UUID, StoredLinkSnapshot> allowed = stored.stream()
-                .filter(this::isAllowedTarget)
+                .filter(StoredLinkSnapshot::hasAllowedTarget)
                 .collect(Collectors.toMap(StoredLinkSnapshot::id, Function.identity()));
         return new LinkBatchResult(
                 uniqueIds.stream().map(allowed::get).filter(Objects::nonNull)
@@ -275,7 +275,7 @@ public class SmartLinkService implements SmartLinkUseCase {
                         || (stored.expiresAt() != null && !stored.expiresAt().isBefore(query.expiresFrom())))
                 .filter(stored -> query.expiresBefore() == null
                         || (stored.expiresAt() != null && stored.expiresAt().isBefore(query.expiresBefore())))
-                .filter(this::isAllowedTarget)
+                .filter(StoredLinkSnapshot::hasAllowedTarget)
                 .map(stored -> toResult(stored, evaluatedAt))
                 .filter(link -> query.status() == null || link.status() == query.status())
                 .toList();
@@ -364,15 +364,9 @@ public class SmartLinkService implements SmartLinkUseCase {
     }
 
     private void requireManagedTrustedTarget(StoredLinkSnapshot storedLink) {
-        if (!isAllowedTarget(storedLink)) {
+        if (!storedLink.hasAllowedTarget()) {
             throw new LinkNotFoundException();
         }
-    }
-
-    private boolean isAllowedTarget(StoredLinkSnapshot storedLink) {
-        return TrustedTargetPolicy.isAllowed(
-                storedLink.targetSystem(), storedLink.purpose(), storedLink.targetPath()
-        );
     }
 
     private LinkResult toResult(StoredLinkSnapshot storedLink, Instant evaluatedAt) {

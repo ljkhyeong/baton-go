@@ -28,7 +28,7 @@ public class ManagementOperationLogger {
         event.put("operation", operation);
         event.put("serviceId", principal.getName());
         event.put("linkId", linkId);
-        event.put("requestId", MDC.get("requestId"));
+        event.put("requestId", MDC.get(RequestIdFilter.MDC_KEY));
         LOG.info("관리 작업 완료 {}", writer.writeValueAsString(event));
     }
 }

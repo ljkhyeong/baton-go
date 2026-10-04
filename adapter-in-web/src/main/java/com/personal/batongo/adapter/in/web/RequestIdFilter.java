@@ -19,6 +19,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 public class RequestIdFilter extends OncePerRequestFilter {
 
     static final int ORDER = Ordered.HIGHEST_PRECEDENCE;
+    static final String MDC_KEY = "requestId";
     private static final String HEADER_NAME = "X-Request-Id";
     private static final String REQUEST_ATTRIBUTE =
             RequestIdFilter.class.getName() + ".requestId";
@@ -40,7 +41,7 @@ public class RequestIdFilter extends OncePerRequestFilter {
         response.setHeader(HttpHeaders.CACHE_CONTROL, "no-store");
         response.setHeader("Referrer-Policy", "no-referrer");
 
-        try (MDC.MDCCloseable ignored = MDC.putCloseable("requestId", requestId)) {
+        try (MDC.MDCCloseable ignored = MDC.putCloseable(MDC_KEY, requestId)) {
             filterChain.doFilter(request, response);
         }
     }

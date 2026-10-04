@@ -5,29 +5,18 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.personal.batongo.adapter.in.web.link.LinkResolverController;
-import com.personal.batongo.adapter.in.web.link.PublicLinkExceptionHandler;
 import com.personal.batongo.application.link.error.LinkNotFoundException;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase;
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.time.Clock;
 import java.time.Duration;
-import java.time.Instant;
-import java.time.ZoneOffset;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
-import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.annotation.DirtiesContext;
@@ -35,7 +24,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import tools.jackson.databind.json.JsonMapper;
 
 @SpringBootTest(
-        classes = PublicResolverRateLimitHttpIntegrationTest.WebConfiguration.class,
+        classes = PublicResolverHttpTestConfiguration.class,
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = {
                 "baton-go.public-resolver-rate-limit.capacity=1",
@@ -51,31 +40,6 @@ class PublicResolverRateLimitHttpIntegrationTest {
     private static final String FIRST_CODE = "first-link-code";
     private static final String LIMITED_CODE = "VOvLShvx93kQpj8x7w2HYQ";
     private static final String REQUEST_ID = "public-rate-limit-integration";
-
-    @Configuration(proxyBeanMethods = false)
-    @EnableAutoConfiguration
-    @EnableConfigurationProperties(PublicResolverRateLimitProperties.class)
-    @Import({
-            ManagementApiSecurityConfiguration.class,
-            FilterErrorResponseWriter.class,
-            LinkResolverController.class,
-            GlobalExceptionHandler.class,
-            PublicLinkExceptionHandler.class,
-            RequestIdFilter.class,
-            WebMvcConfiguration.class,
-            PublicResolverWebMvcConfiguration.class,
-            PublicResolverRateLimitInterceptor.class,
-            PublicResolverRateLimiter.class,
-            PublicLinkErrorPage.class,
-            SimpleMeterRegistry.class
-    })
-    static class WebConfiguration {
-
-        @Bean
-        Clock clock() {
-            return Clock.fixed(Instant.parse("2026-09-01T00:00:00Z"), ZoneOffset.UTC);
-        }
-    }
 
     @MockitoBean
     private SmartLinkUseCase useCase;

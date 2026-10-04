@@ -121,31 +121,8 @@ class LinkCreationConcurrencyIntegrationTest {
                 results.add(future.get(20, TimeUnit.SECONDS));
             }
 
-            CreatedLinkResult first = results.getFirst();
-            assertThat(results)
-                    .extracting(result -> result.link().id())
-                    .containsOnly(first.link().id());
-            assertThat(results)
-                    .extracting(CreatedLinkResult::shortUrl)
-                    .containsOnly(first.shortUrl());
-            assertThat(results)
-                    .filteredOn(result -> !result.replayed())
-                    .hasSize(1);
-            assertThat(jdbcTemplate.queryForObject(
-                    "SELECT COUNT(*) FROM smart_links WHERE target_path = ?",
-                    Long.class,
-                    command.targetPath()
-            )).isEqualTo(1L);
-            assertThat(jdbcTemplate.queryForObject(
-                    """
-                            SELECT COUNT(*)
-                            FROM link_creation_requests request
-                            JOIN smart_links link ON link.id = request.link_id
-                            WHERE link.target_path = ?
-                            """,
-                    Long.class,
-                    command.targetPath()
-            )).isEqualTo(1L);
+            assertSingleWinner(results);
+            assertSingleStoredLink(command.targetPath());
             assertThat(jdbcTemplate.queryForObject(
                     "SELECT code_hash FROM smart_links WHERE target_path = ?",
                     String.class,
@@ -289,42 +266,52 @@ class LinkCreationConcurrencyIntegrationTest {
             assertThat(results).isNotEmpty();
             assertThat(results.size() + rollbackFailures + retryableFailures)
                     .isEqualTo(CONCURRENCY);
-            CreatedLinkResult first = results.getFirst();
-            assertThat(results)
-                    .extracting(result -> result.link().id())
-                    .containsOnly(first.link().id());
-            assertThat(results)
-                    .extracting(CreatedLinkResult::shortUrl)
-                    .containsOnly(first.shortUrl());
-            assertThat(results)
-                    .filteredOn(result -> !result.replayed())
-                    .hasSize(1);
+            CreatedLinkResult first = assertSingleWinner(results);
 
             CreatedLinkResult replay = smartLinkUseCase.createLink(command);
             assertThat(replay.replayed()).isTrue();
             assertThat(replay.link().id()).isEqualTo(first.link().id());
             assertThat(replay.shortUrl()).isEqualTo(first.shortUrl());
-            assertThat(jdbcTemplate.queryForObject(
-                    "SELECT COUNT(*) FROM smart_links WHERE target_path = ?",
-                    Long.class,
-                    command.targetPath()
-            )).isEqualTo(1L);
-            assertThat(jdbcTemplate.queryForObject(
-                    """
-                            SELECT COUNT(*)
-                            FROM link_creation_requests request
-                            JOIN smart_links link ON link.id = request.link_id
-                            WHERE link.target_path = ?
-                            """,
-                    Long.class,
-                    command.targetPath()
-            )).isEqualTo(1L);
+            assertSingleStoredLink(command.targetPath());
         } finally {
             controllableReservationPort.releaseFirstOwner();
             controllableReservationPort.reset();
             executor.shutdownNow();
         }
     }
+
+    private CreatedLinkResult assertSingleWinner(List<CreatedLinkResult> results) {
+        CreatedLinkResult first = results.getFirst();
+        assertThat(results)
+                .extracting(result -> result.link().id())
+                .containsOnly(first.link().id());
+        assertThat(results)
+                .extracting(CreatedLinkResult::shortUrl)
+                .containsOnly(first.shortUrl());
+        assertThat(results)
+                .filteredOn(result -> !result.replayed())
+                .hasSize(1);
+        return first;
+    }
+
+    private void assertSingleStoredLink(String targetPath) {
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM smart_links WHERE target_path = ?",
+                Long.class,
+                targetPath
+        )).isEqualTo(1L);
+        assertThat(jdbcTemplate.queryForObject(
+                """
+                        SELECT COUNT(*)
+                        FROM link_creation_requests request
+                        JOIN smart_links link ON link.id = request.link_id
+                        WHERE link.target_path = ?
+                        """,
+                Long.class,
+                targetPath
+        )).isEqualTo(1L);
+    }
+
     private List<Future<CreatedLinkResult>> submitConcurrentCreations(
             ExecutorService executor,
             CreateLinkCommand command

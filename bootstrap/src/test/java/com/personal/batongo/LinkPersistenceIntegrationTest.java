@@ -191,7 +191,7 @@ class LinkPersistenceIntegrationTest {
         smartLinkUseCase.revokeLink(revoked.id());
         UUID missingId = UUID.randomUUID();
         UUID hiddenId = UUID.randomUUID();
-        insertStoredLink(hiddenId.toString(), UUID.randomUUID().toString().substring(0, 22),
+        insertStoredLink(hiddenId.toString(), linkCodePort.hash(UUID.randomUUID().toString().substring(0, 22)),
                 "UNKNOWN", "/private-target", "UNKNOWN");
 
         mockMvc.perform(get("/api/v1/links/batch")
@@ -506,7 +506,7 @@ class LinkPersistenceIntegrationTest {
         String invalidTargetCode = "A".repeat(22);
         insertStoredLink(
                 "ae1e4899-d73f-42f6-82cf-43cc1723939f",
-                invalidTargetCode,
+                linkCodePort.hash(invalidTargetCode),
                 "BATON",
                 "/teams/legacy-target",
                 "NAVIGATION"
@@ -521,7 +521,7 @@ class LinkPersistenceIntegrationTest {
         String unknownEnumCode = "B".repeat(22);
         insertStoredLink(
                 "70f147f2-b02a-4a63-bc27-bf60e44db591",
-                unknownEnumCode,
+                linkCodePort.hash(unknownEnumCode),
                 "LEGACY",
                 CANONICAL_BATON_TARGET,
                 "NAVIGATION"
@@ -535,7 +535,7 @@ class LinkPersistenceIntegrationTest {
     }
     private void insertStoredLink(
             String linkId,
-            String rawCode,
+            String codeHash,
             String targetSystem,
             String targetPath,
             String purpose
@@ -553,7 +553,7 @@ class LinkPersistenceIntegrationTest {
                         ) VALUES (UUID_TO_BIN(?), ?, ?, ?, ?, UTC_TIMESTAMP(6), 0)
                         """,
                 linkId,
-                linkCodePort.hash(rawCode),
+                codeHash,
                 targetSystem,
                 targetPath,
                 purpose
@@ -568,24 +568,7 @@ class LinkPersistenceIntegrationTest {
             String rawPurpose
     ) throws Exception {
         String codeHash = linkCodePort.issue(idempotencyKey).codeHash();
-        jdbcTemplate.update(
-                """
-                        INSERT INTO smart_links (
-                            id,
-                            code_hash,
-                            target_system,
-                            target_path,
-                            purpose,
-                            created_at,
-                            version
-                        ) VALUES (UUID_TO_BIN(?), ?, ?, ?, ?, UTC_TIMESTAMP(6), 0)
-                        """,
-                linkId,
-                codeHash,
-                rawTargetSystem,
-                rawTargetPath,
-                rawPurpose
-        );
+        insertStoredLink(linkId, codeHash, rawTargetSystem, rawTargetPath, rawPurpose);
         jdbcTemplate.update(
                 """
                         INSERT INTO link_creation_requests (

@@ -128,47 +128,19 @@ class TrustedTargetPolicyTest {
 
     private static Stream<Arguments> allowedV1Targets() {
         return Stream.of(
-                Arguments.of(
-                        "BATON 이동",
-                        TargetSystem.BATON,
-                        LinkPurpose.NAVIGATION,
-                        BATON_PATH
-                ),
-                Arguments.of(
-                        "ROUND 회의 입장",
-                        TargetSystem.ROUND,
-                        LinkPurpose.MEETING_ENTRY,
-                        ROUND_PATH
-                )
+                Arguments.of("BATON 이동", TargetSystem.BATON, LinkPurpose.NAVIGATION, BATON_PATH),
+                Arguments.of("ROUND 회의 입장", TargetSystem.ROUND, LinkPurpose.MEETING_ENTRY, ROUND_PATH)
         );
     }
 
     private static Stream<Arguments> invalidBatonUuidPaths() {
         return Stream.of(
-                Arguments.of(
-                        "버전 0",
-                        batonPath("8e448211-66ae-04ab-9888-c4960648c22b", SEASON_ID)
-                ),
-                Arguments.of(
-                        "버전 6",
-                        batonPath(TEAM_ID, "713d9cb7-2842-6f9f-b3cc-e31d98c6238a")
-                ),
-                Arguments.of(
-                        "변형 7",
-                        batonPath("8e448211-66ae-44ab-7888-c4960648c22b", SEASON_ID)
-                ),
-                Arguments.of(
-                        "변형 c",
-                        batonPath(TEAM_ID, "713d9cb7-2842-4f9f-c3cc-e31d98c6238a")
-                ),
-                Arguments.of(
-                        "대문자 팀 UUID",
-                        batonPath("8E448211-66ae-44ab-9888-c4960648c22b", SEASON_ID)
-                ),
-                Arguments.of(
-                        "대문자 회차 UUID",
-                        batonPath(TEAM_ID, "713d9cb7-2842-4f9f-B3cc-e31d98c6238a")
-                )
+                Arguments.of("버전 0", batonPath("8e448211-66ae-04ab-9888-c4960648c22b", SEASON_ID)),
+                Arguments.of("버전 6", batonPath(TEAM_ID, "713d9cb7-2842-6f9f-b3cc-e31d98c6238a")),
+                Arguments.of("변형 7", batonPath("8e448211-66ae-44ab-7888-c4960648c22b", SEASON_ID)),
+                Arguments.of("변형 c", batonPath(TEAM_ID, "713d9cb7-2842-4f9f-c3cc-e31d98c6238a")),
+                Arguments.of("대문자 팀 UUID", batonPath("8E448211-66ae-44ab-9888-c4960648c22b", SEASON_ID)),
+                Arguments.of("대문자 회차 UUID", batonPath(TEAM_ID, "713d9cb7-2842-4f9f-B3cc-e31d98c6238a"))
         );
     }
 
@@ -189,101 +161,31 @@ class TrustedTargetPolicyTest {
 
     private static Stream<Arguments> nonCanonicalPathShapes() {
         return Stream.of(
-                Arguments.of(
-                        "BATON null",
-                        TargetSystem.BATON,
-                        LinkPurpose.NAVIGATION,
-                        null
-                ),
-                Arguments.of(
-                        "BATON 빈 문자열",
-                        TargetSystem.BATON,
-                        LinkPurpose.NAVIGATION,
-                        ""
-                ),
-                Arguments.of(
-                        "BATON 공백만 있는 경로",
-                        TargetSystem.BATON,
-                        LinkPurpose.NAVIGATION,
-                        "   "
-                ),
-                Arguments.of(
-                        "BATON 앞 공백",
-                        TargetSystem.BATON,
-                        LinkPurpose.NAVIGATION,
-                        " " + BATON_PATH
-                ),
-                Arguments.of(
-                        "BATON 뒤 공백",
-                        TargetSystem.BATON,
-                        LinkPurpose.NAVIGATION,
-                        BATON_PATH + " "
-                ),
-                Arguments.of(
-                        "BATON 끝 슬래시",
-                        TargetSystem.BATON,
-                        LinkPurpose.NAVIGATION,
-                        BATON_PATH + "/"
-                ),
+                Arguments.of("BATON null", TargetSystem.BATON, LinkPurpose.NAVIGATION, null),
+                Arguments.of("BATON 빈 문자열", TargetSystem.BATON, LinkPurpose.NAVIGATION, ""),
+                Arguments.of("BATON 공백만 있는 경로", TargetSystem.BATON, LinkPurpose.NAVIGATION, "   "),
+                Arguments.of("BATON 앞 공백", TargetSystem.BATON, LinkPurpose.NAVIGATION, " " + BATON_PATH),
+                Arguments.of("BATON 뒤 공백", TargetSystem.BATON, LinkPurpose.NAVIGATION, BATON_PATH + " "),
+                Arguments.of("BATON 끝 슬래시", TargetSystem.BATON, LinkPurpose.NAVIGATION, BATON_PATH + "/"),
                 Arguments.of(
                         "BATON 추가 경로 구간",
                         TargetSystem.BATON,
                         LinkPurpose.NAVIGATION,
                         BATON_PATH + "/resources/123"
                 ),
-                Arguments.of(
-                        "ROUND 앞 공백",
-                        TargetSystem.ROUND,
-                        LinkPurpose.MEETING_ENTRY,
-                        " " + ROUND_PATH
-                ),
-                Arguments.of(
-                        "ROUND 뒤 공백",
-                        TargetSystem.ROUND,
-                        LinkPurpose.MEETING_ENTRY,
-                        ROUND_PATH + " "
-                ),
-                Arguments.of(
-                        "ROUND 끝 슬래시",
-                        TargetSystem.ROUND,
-                        LinkPurpose.MEETING_ENTRY,
-                        ROUND_PATH + "/"
-                ),
-                Arguments.of(
-                        "ROUND 추가 경로 구간",
-                        TargetSystem.ROUND,
-                        LinkPurpose.MEETING_ENTRY,
-                        ROUND_PATH + "/join"
-                )
+                Arguments.of("ROUND 앞 공백", TargetSystem.ROUND, LinkPurpose.MEETING_ENTRY, " " + ROUND_PATH),
+                Arguments.of("ROUND 뒤 공백", TargetSystem.ROUND, LinkPurpose.MEETING_ENTRY, ROUND_PATH + " "),
+                Arguments.of("ROUND 끝 슬래시", TargetSystem.ROUND, LinkPurpose.MEETING_ENTRY, ROUND_PATH + "/"),
+                Arguments.of("ROUND 추가 경로 구간", TargetSystem.ROUND, LinkPurpose.MEETING_ENTRY, ROUND_PATH + "/join")
         );
     }
 
     private static Stream<Arguments> crossedTargetCombinations() {
         return Stream.of(
-                Arguments.of(
-                        "BATON과 MEETING_ENTRY",
-                        TargetSystem.BATON,
-                        LinkPurpose.MEETING_ENTRY,
-                        BATON_PATH
-                ),
-                Arguments.of(
-                        "ROUND와 NAVIGATION",
-                        TargetSystem.ROUND,
-                        LinkPurpose.NAVIGATION,
-                        ROUND_PATH
-                ),
-                Arguments.of(
-                        "BATON과 ROUND 경로",
-                        TargetSystem.BATON,
-                        LinkPurpose.NAVIGATION,
-                        ROUND_PATH
-                ),
-                Arguments.of(
-                        "ROUND와 BATON 경로",
-                        TargetSystem.ROUND,
-                        LinkPurpose.MEETING_ENTRY,
-                        BATON_PATH
-                )
+                Arguments.of("BATON과 MEETING_ENTRY", TargetSystem.BATON, LinkPurpose.MEETING_ENTRY, BATON_PATH),
+                Arguments.of("ROUND와 NAVIGATION", TargetSystem.ROUND, LinkPurpose.NAVIGATION, ROUND_PATH),
+                Arguments.of("BATON과 ROUND 경로", TargetSystem.BATON, LinkPurpose.NAVIGATION, ROUND_PATH),
+                Arguments.of("ROUND와 BATON 경로", TargetSystem.ROUND, LinkPurpose.MEETING_ENTRY, BATON_PATH)
         );
     }
 

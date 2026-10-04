@@ -84,11 +84,7 @@ class SmartLinkServiceTest {
     private final LinkCodeKeyGuardPort keyGuardPort = mock(LinkCodeKeyGuardPort.class);
     private final PublicLinkOriginPort publicLinkOriginPort = mock(PublicLinkOriginPort.class);
     private final TargetUrlPort targetUrlPort = mock(TargetUrlPort.class);
-    private final SmartLinkService service = service(
-            linkCodePort,
-            publicLinkOriginPort,
-            Clock.fixed(NOW, ZoneOffset.UTC)
-    );
+    private final SmartLinkService service = service(linkCodePort, Clock.fixed(NOW, ZoneOffset.UTC));
 
     @BeforeEach
     void setUp() {
@@ -163,15 +159,12 @@ class SmartLinkServiceTest {
     @DisplayName("현재 키로 만든 코드 해시가 저장값과 다르면 기존 결과를 반환하지 않는다")
     void rejectsReplayWhenCodeDerivationChanges() {
         Instant expiresAt = NOW.plusSeconds(300);
-        configureReplay(PUBLIC_ORIGIN.serialized(), expiresAt);
+        configureReplay(expiresAt);
         LinkCodePort changedLinkCodePort = mock(LinkCodePort.class);
         stubLinkCodePort(changedLinkCodePort, "differentRawCodeValue1", "d".repeat(64));
 
-        assertThatThrownBy(() -> service(
-                changedLinkCodePort,
-                publicLinkOriginPort,
-                Clock.fixed(NOW, ZoneOffset.UTC)
-        ).createLink(command(expiresAt)))
+        assertThatThrownBy(() -> service(changedLinkCodePort, Clock.fixed(NOW, ZoneOffset.UTC))
+                .createLink(command(expiresAt)))
                 .isExactlyInstanceOf(LinkCodeReplayMismatchException.class);
     }
 
@@ -179,18 +172,7 @@ class SmartLinkServiceTest {
     @DisplayName("멱등 예약의 링크가 없으면 LINK_CREATION_REPLAY_UNAVAILABLE 오류를 반환한다")
     void reportsMissingReservedLinkAsReplayFailure() {
         Instant expiresAt = NOW.plusSeconds(300);
-        when(reservationPort.reserve(
-                eq(IDEMPOTENCY_HASH),
-                any(UUID.class),
-                anyString(),
-                anyString(),
-                any(Instant.class)
-        )).thenReturn(new LinkCreationReservationPort.Reservation(
-                LINK_ID,
-                PUBLIC_ORIGIN.serialized(),
-                "legacy", null, null,
-                false
-        ));
+        configureReplay(expiresAt);
         when(repository.findReplayById(LINK_ID)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.createLink(command(expiresAt)))
@@ -204,7 +186,7 @@ class SmartLinkServiceTest {
     @DisplayName("재시도는 알 수 없는 저장 대상도 요청 내용 불일치로 거부한다")
     void rejectsReplayWithUnknownStoredTarget() {
         Instant expiresAt = NOW.plusSeconds(60);
-        configureReplay(PUBLIC_ORIGIN.serialized(), expiresAt);
+        configureReplay(expiresAt);
         when(repository.findReplayById(LINK_ID)).thenReturn(Optional.of(new StoredLinkReplay(
                 LINK_ID, "UNKNOWN", BATON_PATH, LinkPurpose.NAVIGATION.name(), CODE_HASH,
                 null, expiresAt, null, NOW
@@ -218,13 +200,10 @@ class SmartLinkServiceTest {
     @DisplayName("링크가 만료된 뒤 생성 요청을 재시도해도 기존 응답을 반환한다")
     void replaysCreationAfterExpiry() {
         Instant expiresAt = NOW.plusSeconds(60);
-        configureReplay(PUBLIC_ORIGIN.serialized(), expiresAt);
+        configureReplay(expiresAt);
 
-        var replay = service(
-                linkCodePort,
-                publicLinkOriginPort,
-                Clock.fixed(NOW.plusSeconds(120), ZoneOffset.UTC)
-        ).createLink(command(expiresAt));
+        var replay = service(linkCodePort, Clock.fixed(NOW.plusSeconds(120), ZoneOffset.UTC))
+                .createLink(command(expiresAt));
 
         assertThat(replay.replayed()).isTrue();
         assertThat(replay.link().id()).isEqualTo(LINK_ID);
@@ -351,7 +330,7 @@ class SmartLinkServiceTest {
             return Optional.of(snapshot);
         });
 
-        var result = service(linkCodePort, publicLinkOriginPort, clock).getLink(LINK_ID);
+        var result = service(linkCodePort, clock).getLink(LINK_ID);
 
         assertThat(result.status()).isEqualTo(Status.EXPIRED);
         assertThat(result.evaluatedAt()).isEqualTo(snapshot.expiresAt());
@@ -388,7 +367,7 @@ class SmartLinkServiceTest {
         Clock clock = mock(Clock.class);
         when(clock.instant()).thenReturn(NOW, NOW.plusSeconds(1));
 
-        var result = service(linkCodePort, publicLinkOriginPort, clock).getLinks(
+        var result = service(linkCodePort, clock).getLinks(
                 List.of(expired.id(), missingId, active.id(), expired.id(), hidden.id())
         );
 
@@ -444,7 +423,7 @@ class SmartLinkServiceTest {
                 searchSnapshot(6, "BATON", BATON_PATH, from, NOW)
         ));
 
-        var result = service(linkCodePort, publicLinkOriginPort, clock).searchLinks(new LinkSearchQuery(
+        var result = service(linkCodePort, clock).searchLinks(new LinkSearchQuery(
                 null, 100, TargetSystem.BATON, from, NOW, null, null, Status.ACTIVE
         ));
 
@@ -566,7 +545,7 @@ class SmartLinkServiceTest {
         );
     }
 
-    private void configureReplay(String publicOrigin, Instant expiresAt) {
+    private void configureReplay(Instant expiresAt) {
         when(reservationPort.reserve(
                 eq(IDEMPOTENCY_HASH),
                 any(UUID.class),
@@ -575,7 +554,7 @@ class SmartLinkServiceTest {
                 any(Instant.class)
         )).thenReturn(new LinkCreationReservationPort.Reservation(
                 LINK_ID,
-                publicOrigin,
+                PUBLIC_ORIGIN.serialized(),
                 "legacy", null, null,
                 false
         ));
@@ -620,17 +599,13 @@ class SmartLinkServiceTest {
         );
     }
 
-    private SmartLinkService service(
-            LinkCodePort configuredLinkCodePort,
-            PublicLinkOriginPort configuredPublicOriginPort,
-            Clock clock
-    ) {
+    private SmartLinkService service(LinkCodePort configuredLinkCodePort, Clock clock) {
         return new SmartLinkService(
                 repository,
                 reservationPort,
                 configuredLinkCodePort,
                 new LinkCodeKeyGuard(configuredLinkCodePort, keyGuardPort),
-                configuredPublicOriginPort,
+                publicLinkOriginPort,
                 targetUrlPort,
                 clock
         );

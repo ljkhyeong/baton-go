@@ -9,8 +9,6 @@ import jakarta.persistence.EntityManager;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
-import java.time.LocalDateTime;
-import java.time.ZoneOffset;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
@@ -77,10 +75,10 @@ public class SmartLinkPersistenceAdapter implements SmartLinkRepository {
                         resultSet.getString("target_path"),
                         resultSet.getString("purpose"),
                         resultSet.getString("code_hash"),
-                        instant(resultSet, "not_before"),
-                        instant(resultSet, "expires_at"),
-                        instant(resultSet, "revoked_at"),
-                        instant(resultSet, "created_at")
+                        UtcDateTimes.read(resultSet, "not_before"),
+                        UtcDateTimes.read(resultSet, "expires_at"),
+                        UtcDateTimes.read(resultSet, "revoked_at"),
+                        UtcDateTimes.read(resultSet, "created_at")
                 ))
                 .optional();
     }
@@ -105,9 +103,9 @@ public class SmartLinkPersistenceAdapter implements SmartLinkRepository {
                         resultSet.getString("target_system"),
                         resultSet.getString("target_path"),
                         resultSet.getString("purpose"),
-                        instant(resultSet, "not_before"),
-                        instant(resultSet, "expires_at"),
-                        instant(resultSet, "revoked_at")
+                        UtcDateTimes.read(resultSet, "not_before"),
+                        UtcDateTimes.read(resultSet, "expires_at"),
+                        UtcDateTimes.read(resultSet, "revoked_at")
                 ))
                 .optional();
     }
@@ -164,7 +162,7 @@ public class SmartLinkPersistenceAdapter implements SmartLinkRepository {
                         WHERE id = UUID_TO_BIN(?)
                         """)
                 .params(
-                        LocalDateTime.ofInstant(revokedAt, ZoneOffset.UTC),
+                        UtcDateTimes.write(revokedAt),
                         nextVersion,
                         id.toString()
                 )
@@ -190,17 +188,12 @@ public class SmartLinkPersistenceAdapter implements SmartLinkRepository {
                 resultSet.getString("target_system"),
                 resultSet.getString("target_path"),
                 resultSet.getString("purpose"),
-                instant(resultSet, "not_before"),
-                instant(resultSet, "expires_at"),
-                instant(resultSet, "revoked_at"),
-                instant(resultSet, "created_at"),
+                UtcDateTimes.read(resultSet, "not_before"),
+                UtcDateTimes.read(resultSet, "expires_at"),
+                UtcDateTimes.read(resultSet, "revoked_at"),
+                UtcDateTimes.read(resultSet, "created_at"),
                 resultSet.getLong("version"),
                 resultSet.getBoolean("creation_request_present")
         );
-    }
-
-    private Instant instant(ResultSet resultSet, String columnName) throws SQLException {
-        LocalDateTime value = resultSet.getObject(columnName, LocalDateTime.class);
-        return value == null ? null : value.toInstant(ZoneOffset.UTC);
     }
 }

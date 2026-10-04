@@ -2,8 +2,6 @@ package com.personal.batongo.adapter.out.persistence.link;
 
 import com.personal.batongo.application.link.port.out.LinkCreationReservationPort;
 import java.time.Instant;
-import java.time.LocalDateTime;
-import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.dao.DuplicateKeyException;
@@ -34,17 +32,14 @@ public class LinkCreationReservationPersistenceAdapter
                         WHERE idempotency_key_hash = ? FOR SHARE
                         """)
                 .param(idempotencyKeyHash)
-                .query((row, index) -> {
-                    LocalDateTime purgedAt = row.getObject("purged_at", LocalDateTime.class);
-                    return new Reservation(
-                            UUID.fromString(row.getString("link_id")),
-                            row.getString("public_origin"),
-                            row.getString("key_id"),
-                            purgedAt == null ? null : purgedAt.toInstant(ZoneOffset.UTC),
-                            row.getString("request_hash"),
-                            false
-                    );
-                })
+                .query((row, index) -> new Reservation(
+                        UUID.fromString(row.getString("link_id")),
+                        row.getString("public_origin"),
+                        row.getString("key_id"),
+                        UtcDateTimes.read(row, "purged_at"),
+                        row.getString("request_hash"),
+                        false
+                ))
                 .optional();
     }
 
@@ -64,7 +59,7 @@ public class LinkCreationReservationPersistenceAdapter
                             ) VALUES (?, UUID_TO_BIN(?), ?, ?, ?)
                             """)
                     .params(idempotencyKeyHash, proposedLinkId.toString(), publicOrigin, keyId,
-                            LocalDateTime.ofInstant(createdAt, ZoneOffset.UTC))
+                            UtcDateTimes.write(createdAt))
                     .update();
             return new Reservation(proposedLinkId, publicOrigin, keyId, null, null, true);
         } catch (DuplicateKeyException exception) {

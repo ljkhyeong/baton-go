@@ -42,7 +42,9 @@ public class LinkCodeKeyGuardPersistenceAdapter implements LinkCodeKeyGuardPort 
                     .update();
         } else if (stored.isEmpty()) {
             // V6 적용 뒤 guard-tool로 처음 등록한 DB의 기존 키를 확인한다.
-            requireMatchingIdentity(guard, ring.keys().get("legacy"));
+            if (!guard.matches(ring.keys().get("legacy"))) {
+                throw new LinkCodeKeyBindingException();
+            }
         } else {
             requireAnchoredGuard(guard, stored);
             boolean matched = false;
@@ -97,9 +99,7 @@ public class LinkCodeKeyGuardPersistenceAdapter implements LinkCodeKeyGuardPort 
     }
 
     private void requireAnchoredGuard(GuardRow guard, Map<String, LinkCodeDerivationIdentity> stored) {
-        if (!guard.isBound() || stored.values().stream().noneMatch(identity ->
-                identity.version().equals(guard.derivationVersion())
-                        && identity.hmacFingerprint().equals(guard.keyFingerprint()))) {
+        if (!guard.isBound() || stored.values().stream().noneMatch(guard::matches)) {
             throw new LinkCodeKeyBindingException();
         }
     }
@@ -128,16 +128,6 @@ public class LinkCodeKeyGuardPersistenceAdapter implements LinkCodeKeyGuardPort 
                 .single();
     }
 
-    private void requireMatchingIdentity(
-            GuardRow guard,
-            LinkCodeDerivationIdentity currentIdentity
-    ) {
-        if (currentIdentity == null || !currentIdentity.version().equals(guard.derivationVersion())
-                || !currentIdentity.hmacFingerprint().equals(guard.keyFingerprint())) {
-            throw new LinkCodeKeyBindingException();
-        }
-    }
-
     private record GuardRow(
             String derivationVersion,
             String keyFingerprint
@@ -149,6 +139,12 @@ public class LinkCodeKeyGuardPersistenceAdapter implements LinkCodeKeyGuardPort 
 
         private boolean isUnbound() {
             return derivationVersion == null && keyFingerprint == null;
+        }
+
+        private boolean matches(LinkCodeDerivationIdentity identity) {
+            return identity != null
+                    && identity.version().equals(derivationVersion)
+                    && identity.hmacFingerprint().equals(keyFingerprint);
         }
 
         @Override

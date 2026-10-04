@@ -2,11 +2,8 @@ package com.personal.batongo.adapter.out.persistence.link;
 
 import com.personal.batongo.application.link.LinkCreationFingerprint;
 import com.personal.batongo.application.link.port.out.LinkRetentionPort;
-import java.sql.ResultSet;
-import java.sql.SQLException;
 import java.time.Instant;
 import java.time.LocalDateTime;
-import java.time.ZoneOffset;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
@@ -34,12 +31,12 @@ public class LinkRetentionPersistenceAdapter implements LinkRetentionPort {
                         ORDER BY s.retired_at, s.id
                         LIMIT ? FOR UPDATE SKIP LOCKED
                         """)
-                .params(LocalDateTime.ofInstant(cutoff, ZoneOffset.UTC), batchSize)
+                .params(UtcDateTimes.write(cutoff), batchSize)
                 .query((row, index) -> new Candidate(row.getString("id"), LinkCreationFingerprint.of(
                         row.getString("target_system"), row.getString("purpose"), row.getString("target_path"),
-                        instant(row, "not_before"), instant(row, "expires_at"))))
+                        UtcDateTimes.read(row, "not_before"), UtcDateTimes.read(row, "expires_at"))))
                 .list();
-        LocalDateTime storedPurgedAt = LocalDateTime.ofInstant(purgedAt, ZoneOffset.UTC);
+        LocalDateTime storedPurgedAt = UtcDateTimes.write(purgedAt);
         jdbcTemplate.batchUpdate("""
                 UPDATE link_creation_requests
                 SET purged_at = ?, request_hash = ?, public_origin = NULL
@@ -52,11 +49,6 @@ public class LinkRetentionPersistenceAdapter implements LinkRetentionPort {
         jdbcTemplate.batchUpdate("DELETE FROM smart_links WHERE id = UUID_TO_BIN(?)",
                 candidates, batchSize, (statement, candidate) -> statement.setString(1, candidate.id()));
         return candidates.size();
-    }
-
-    private Instant instant(ResultSet row, String column) throws SQLException {
-        LocalDateTime value = row.getObject(column, LocalDateTime.class);
-        return value == null ? null : value.toInstant(ZoneOffset.UTC);
     }
 
     private record Candidate(String id, String requestHash) {

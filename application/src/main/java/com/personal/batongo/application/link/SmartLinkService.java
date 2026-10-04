@@ -21,7 +21,6 @@ import com.personal.batongo.application.link.port.out.TargetUrlPort;
 import com.personal.batongo.domain.link.LinkAvailabilityPolicy;
 import com.personal.batongo.domain.link.LinkPurpose;
 import com.personal.batongo.domain.link.LinkRevocationPolicy;
-import com.personal.batongo.domain.link.LinkValidationException;
 import com.personal.batongo.domain.link.SmartLink;
 import com.personal.batongo.domain.link.TargetSystem;
 import com.personal.batongo.domain.link.TrustedTarget;
@@ -291,16 +290,11 @@ public class SmartLinkService implements SmartLinkUseCase {
         String codeHash = linkCodePort.hash(rawCode);
         StoredLinkResolution storedLink = repository.findResolutionByCodeHash(codeHash)
                 .orElseThrow(LinkNotFoundException::new);
-        TrustedTarget trustedTarget;
-        try {
-            trustedTarget = TrustedTargetPolicy.requireAllowed(
-                    storedLink.targetSystem(),
-                    storedLink.purpose(),
-                    storedLink.targetPath()
-            );
-        } catch (LinkValidationException exception) {
-            throw new StoredTargetPolicyViolationException(storedLink.id());
-        }
+        TrustedTarget trustedTarget = TrustedTargetPolicy.findAllowed(
+                storedLink.targetSystem(),
+                storedLink.purpose(),
+                storedLink.targetPath()
+        ).orElseThrow(() -> new StoredTargetPolicyViolationException(storedLink.id()));
         LinkAvailabilityPolicy.requireResolvableAt(
                 storedLink.revokedAt(),
                 storedLink.notBefore(),

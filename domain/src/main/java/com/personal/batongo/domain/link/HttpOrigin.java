@@ -7,9 +7,14 @@ import java.net.URISyntaxException;
 import java.net.UnknownHostException;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.regex.Pattern;
 
 /** HTTP(S) 출처를 표준화하고 브라우저의 동일 출처 여부를 판단합니다. */
 public final class HttpOrigin {
+
+    // 앞자리 0이 없는 십진수 127.x.x.x만 허용해 DNS 조회와 모호한 표기를 피한다.
+    private static final Pattern IPV4_LOOPBACK =
+            Pattern.compile("127(\\.(25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])){3}");
 
     private final URI value;
 
@@ -50,7 +55,7 @@ public final class HttpOrigin {
         }
         String literal = stripIpv6Brackets(host);
         if (literal.indexOf(':') < 0) {
-            return isIpv4LoopbackLiteral(literal);
+            return IPV4_LOOPBACK.matcher(literal).matches();
         }
         try {
             InetAddress address = InetAddress.getByName(literal);
@@ -110,39 +115,6 @@ public final class HttpOrigin {
             return host.substring(1, host.length() - 1);
         }
         return host;
-    }
-
-    private static boolean isIpv4LoopbackLiteral(String host) {
-        String[] octets = host.split("\\.", -1);
-        if (octets.length != 4) {
-            return false;
-        }
-        int firstOctet = -1;
-        for (int index = 0; index < octets.length; index++) {
-            int parsed = parseCanonicalDecimalOctet(octets[index]);
-            if (parsed < 0) {
-                return false;
-            }
-            if (index == 0) {
-                firstOctet = parsed;
-            }
-        }
-        return firstOctet == 127;
-    }
-
-    private static int parseCanonicalDecimalOctet(String value) {
-        if (value.isEmpty()
-                || value.length() > 3) {
-            return -1;
-        }
-        try {
-            int parsed = Integer.parseInt(value);
-            return parsed <= 255 && Integer.toString(parsed).equals(value)
-                    ? parsed
-                    : -1;
-        } catch (NumberFormatException exception) {
-            return -1;
-        }
     }
 
 }

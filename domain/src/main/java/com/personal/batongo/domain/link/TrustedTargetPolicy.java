@@ -1,5 +1,6 @@
 package com.personal.batongo.domain.link;
 
+import java.util.Optional;
 import java.util.regex.Pattern;
 
 public final class TrustedTargetPolicy {
@@ -44,22 +45,19 @@ public final class TrustedTargetPolicy {
         return new TrustedTarget(targetSystem, purpose, targetPath);
     }
 
-    public static TrustedTarget requireAllowed(
+    public static Optional<TrustedTarget> findAllowed(
             String targetSystem,
             String purpose,
             String targetPath
     ) {
-        try {
-            return requireAllowed(
-                    TargetSystem.valueOf(targetSystem),
-                    LinkPurpose.valueOf(purpose),
-                    targetPath
-            );
-        } catch (IllegalArgumentException | NullPointerException exception) {
-            throw new LinkValidationException(
-                    "저장된 대상 시스템 또는 목적은 v1에서 허용하지 않습니다"
-            );
-        }
+        // 허용 조합은 정의된 열거형 이름만 포함하므로 확인 뒤 변환은 실패하지 않는다.
+        return isAllowed(targetSystem, purpose, targetPath)
+                ? Optional.of(new TrustedTarget(
+                        TargetSystem.valueOf(targetSystem),
+                        LinkPurpose.valueOf(purpose),
+                        targetPath
+                ))
+                : Optional.empty();
     }
 
     public static boolean isAllowed(

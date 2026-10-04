@@ -258,24 +258,15 @@ Prometheus의 `http_server_requests_seconds_bucket`에는 초 단위 `le="1.0"`,
 Prometheus 3.13.2 이미지 다이제스트를 고정하여 같은 명령을 실행한다.
 
 ```bash
-promtool_image=prom/prometheus:v3.13.2@sha256:508729e0e2d18e11fd742a5a5ca70e557b940a93948c3c95fd0123a6fd538b69
+promtool=(docker run --rm --network none --read-only
+  --tmpfs '/tmp:rw,nosuid,nodev,size=256m'
+  --volume "$PWD/deploy/prometheus:/rules:ro" --workdir /rules
+  --entrypoint /bin/promtool
+  prom/prometheus:v3.13.2@sha256:508729e0e2d18e11fd742a5a5ca70e557b940a93948c3c95fd0123a6fd538b69)
 
-docker run --rm --network none --read-only \
-  --volume "$PWD/deploy/prometheus:/rules:ro" --workdir /rules \
-  --entrypoint /bin/promtool "$promtool_image" \
-  check config --syntax-only prometheus-kubernetes.example.yml prometheus-cert-manager.example.yml prometheus-kube-state-metrics.example.yml
-
-docker run --rm --network none --read-only \
-  --tmpfs /tmp:rw,nosuid,nodev,size=256m \
-  --volume "$PWD/deploy/prometheus:/rules:ro" --workdir /rules \
-  --entrypoint /bin/promtool "$promtool_image" \
-  check rules baton-go-alerts.yml baton-go-tls-alerts.yml baton-go-monitoring-heartbeat.yml baton-go-kubernetes-alerts.yml
-
-docker run --rm --network none --read-only \
-  --tmpfs /tmp:rw,nosuid,nodev,size=256m \
-  --volume "$PWD/deploy/prometheus:/rules:ro" --workdir /rules \
-  --entrypoint /bin/promtool "$promtool_image" \
-  test rules baton-go-alerts.test.yml baton-go-availability.test.yml baton-go-tls-alerts.test.yml baton-go-kubernetes-alerts.test.yml
+"${promtool[@]}" check config --syntax-only prometheus-kubernetes.example.yml prometheus-cert-manager.example.yml prometheus-kube-state-metrics.example.yml
+"${promtool[@]}" check rules baton-go-alerts.yml baton-go-tls-alerts.yml baton-go-monitoring-heartbeat.yml baton-go-kubernetes-alerts.yml
+"${promtool[@]}" test rules baton-go-alerts.test.yml baton-go-availability.test.yml baton-go-tls-alerts.test.yml baton-go-kubernetes-alerts.test.yml
 ```
 
 [규칙 테스트](../../deploy/prometheus/baton-go-alerts.test.yml)는 무트래픽·소수 오류,

@@ -144,49 +144,31 @@ jobs:
 
       - name: Prometheus 수집 설정·경보 규칙 검증
         run: |
-          docker run --rm --network none --read-only \
-            --volume "$PWD/deploy/prometheus:/rules:ro" --workdir /rules \
-            --entrypoint /bin/promtool "$PROMTOOL_IMAGE" \
-            check config --syntax-only prometheus-kubernetes.example.yml prometheus-cert-manager.example.yml prometheus-kube-state-metrics.example.yml
-          docker run --rm --network none --read-only \
-            --tmpfs /tmp:rw,nosuid,nodev,size=256m \
-            --volume "$PWD/deploy/prometheus:/rules:ro" --workdir /rules \
-            --entrypoint /bin/promtool "$PROMTOOL_IMAGE" \
-            check rules baton-go-alerts.yml baton-go-tls-alerts.yml baton-go-monitoring-heartbeat.yml baton-go-kubernetes-alerts.yml
-          docker run --rm --network none --read-only \
-            --tmpfs /tmp:rw,nosuid,nodev,size=256m \
-            --volume "$PWD/deploy/prometheus:/rules:ro" --workdir /rules \
-            --entrypoint /bin/promtool "$PROMTOOL_IMAGE" \
-            test rules baton-go-alerts.test.yml baton-go-availability.test.yml baton-go-tls-alerts.test.yml baton-go-kubernetes-alerts.test.yml
+          set -euo pipefail
+          promtool=(docker run --rm --network none --read-only
+            --tmpfs '/tmp:rw,nosuid,nodev,size=256m'
+            --volume "$PWD/deploy/prometheus:/rules:ro" --workdir /rules
+            --entrypoint /bin/promtool "$PROMTOOL_IMAGE")
+          "${promtool[@]}" check config --syntax-only prometheus-kubernetes.example.yml prometheus-cert-manager.example.yml prometheus-kube-state-metrics.example.yml
+          "${promtool[@]}" check rules baton-go-alerts.yml baton-go-tls-alerts.yml baton-go-monitoring-heartbeat.yml baton-go-kubernetes-alerts.yml
+          "${promtool[@]}" test rules baton-go-alerts.test.yml baton-go-availability.test.yml baton-go-tls-alerts.test.yml baton-go-kubernetes-alerts.test.yml
 
       - name: Discord·Slack 알림 설정·라우팅 검증
         run: |
           set -euo pipefail
+          amtool=(docker run --rm --network none --read-only
+            --volume "$PWD/deploy/prometheus:/rules:ro"
+            --entrypoint /bin/amtool "$ALERTMANAGER_IMAGE")
           for channel in discord slack; do
             config="/rules/alertmanager-${channel}.example.yml"
-            docker run --rm --network none --read-only \
-              --volume "$PWD/deploy/prometheus:/rules:ro" \
-              --entrypoint /bin/amtool "$ALERTMANAGER_IMAGE" \
-              check-config "$config"
-            docker run --rm --network none --read-only \
-              --volume "$PWD/deploy/prometheus:/rules:ro" \
-              --entrypoint /bin/amtool "$ALERTMANAGER_IMAGE" \
-              config routes test --config.file="$config" \
+            "${amtool[@]}" check-config "$config"
+            "${amtool[@]}" config routes test --config.file="$config" \
               --verify.receivers="${channel}-go" job=baton-go alertname=BatonGoReadinessFailed
-            docker run --rm --network none --read-only \
-              --volume "$PWD/deploy/prometheus:/rules:ro" \
-              --entrypoint /bin/amtool "$ALERTMANAGER_IMAGE" \
-              config routes test --config.file="$config" \
+            "${amtool[@]}" config routes test --config.file="$config" \
               --verify.receivers="${channel}-go" job=baton-go-tls alertname=BatonGoCertificateExpiringSoon
-            docker run --rm --network none --read-only \
-              --volume "$PWD/deploy/prometheus:/rules:ro" \
-              --entrypoint /bin/amtool "$ALERTMANAGER_IMAGE" \
-              config routes test --config.file="$config" \
+            "${amtool[@]}" config routes test --config.file="$config" \
               --verify.receivers="${channel}-go" job=baton-go-kubernetes alertname=BatonGoMigrationFailed
-            docker run --rm --network none --read-only \
-              --volume "$PWD/deploy/prometheus:/rules:ro" \
-              --entrypoint /bin/amtool "$ALERTMANAGER_IMAGE" \
-              config routes test --config.file="$config" \
+            "${amtool[@]}" config routes test --config.file="$config" \
               --verify.receivers=unmatched job=another-service
           done
 

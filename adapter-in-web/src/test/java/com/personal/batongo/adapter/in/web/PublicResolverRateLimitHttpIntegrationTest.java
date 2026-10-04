@@ -51,16 +51,21 @@ class PublicResolverRateLimitHttpIntegrationTest {
     private JsonMapper jsonMapper;
 
     @Test
-    @DisplayName("실제 HTTP 서버는 요청 제한 응답 형식을 선택하고 HEAD 본문을 보내지 않는다")
+    @DisplayName("실제 HTTP 서버는 공개 링크 GET만 제한하고 요청 제한 응답 형식을 선택하며 HEAD 본문을 보내지 않는다")
     void rendersRateLimitResponsesThroughSpringMvc() throws Exception {
         when(useCase.resolveLink(FIRST_CODE)).thenThrow(new LinkNotFoundException());
 
-        HttpResponse<String> first = request(FIRST_CODE, MediaType.APPLICATION_JSON_VALUE, "GET");
+        // 허용량이 1이므로 아래 요청이 허용량을 쓰면 첫 GET이 404 대신 429가 된다.
+        assertThat(request("/l/" + FIRST_CODE, MediaType.TEXT_HTML_VALUE, "POST").statusCode()).isEqualTo(405);
+        assertThat(request("/l/extra/segment", MediaType.APPLICATION_JSON_VALUE, "GET").statusCode()).isEqualTo(404);
+        assertThat(request("/unknown", MediaType.APPLICATION_JSON_VALUE, "GET").statusCode()).isEqualTo(404);
+
+        HttpResponse<String> first = request("/l/" + FIRST_CODE, MediaType.APPLICATION_JSON_VALUE, "GET");
 
         assertThat(first.statusCode()).isEqualTo(404);
 
         HttpResponse<String> html = request(
-                LIMITED_CODE,
+                "/l/" + LIMITED_CODE,
                 "application/json;q=0.3,text/html;q=0.9",
                 "GET"
         );
@@ -88,7 +93,7 @@ class PublicResolverRateLimitHttpIntegrationTest {
                 MediaType.APPLICATION_XML_VALUE,
                 "invalid"
         }) {
-            HttpResponse<String> json = request(LIMITED_CODE, accept, "GET");
+            HttpResponse<String> json = request("/l/" + LIMITED_CODE, accept, "GET");
             assertCommonRateLimitHeaders(json, MediaType.APPLICATION_JSON_VALUE, accept);
             assertThat(jsonMapper.readValue(json.body(), ErrorResponse.class)).isEqualTo(
                     new ErrorResponse(
@@ -103,7 +108,7 @@ class PublicResolverRateLimitHttpIntegrationTest {
                 MediaType.TEXT_HTML_VALUE,
                 MediaType.APPLICATION_JSON_VALUE
         }) {
-            HttpResponse<String> head = request(LIMITED_CODE, accept, "HEAD");
+            HttpResponse<String> head = request("/l/" + LIMITED_CODE, accept, "HEAD");
             assertCommonRateLimitHeaders(head, accept, accept);
             assertThat(head.body()).isEmpty();
         }
@@ -129,13 +134,13 @@ class PublicResolverRateLimitHttpIntegrationTest {
         assertThat(response.headers().firstValue("Referrer-Policy")).contains("no-referrer");
     }
 
-    private HttpResponse<String> request(String code, String accept, String method) throws Exception {
+    private HttpResponse<String> request(String path, String accept, String method) throws Exception {
         try (var client = HttpClient.newHttpClient()) {
             HttpRequest request = HttpRequest.newBuilder(
-                            URI.create("http://127.0.0.1:" + port + "/l/" + code)
+                            URI.create("http://127.0.0.1:" + port + path)
                     )
                     .header(HttpHeaders.ACCEPT, accept)
-                    .header("X-Forwarded-For", code.equals(FIRST_CODE)
+                    .header("X-Forwarded-For", path.endsWith(FIRST_CODE)
                             ? "198.51.100.1" : "198.51.100.2")
                     .header("X-Request-Id", REQUEST_ID)
                     .timeout(Duration.ofSeconds(5))

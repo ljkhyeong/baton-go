@@ -38,6 +38,7 @@ import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -126,7 +127,7 @@ class TargetContractOperationsIntegrationTest {
         mockMvc.perform(get(
                         "/api/v1/operations/link-target-contract-v1/inventory"
                 )
-                        .with(targetContractOperateJwt())
+                        .with(scopeJwt("baton-go.target-contract.operate"))
                         .param("limit", "2"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.contractVersion").value("v1"))
@@ -148,7 +149,7 @@ class TargetContractOperationsIntegrationTest {
         mockMvc.perform(get(
                         "/api/v1/operations/link-target-contract-v1/inventory"
                 )
-                        .with(targetContractOperateJwt())
+                        .with(scopeJwt("baton-go.target-contract.operate"))
                         .param("afterLinkId", INVALID_LINK_ID.toString())
                         .param("limit", "2"))
                 .andExpect(status().isOk())
@@ -162,12 +163,12 @@ class TargetContractOperationsIntegrationTest {
                 .andExpect(content().string(not(containsString("LEGACY"))));
 
         mockMvc.perform(get("/api/v1/links/{linkId}", INVALID_LINK_ID)
-                        .with(linkReadJwt()))
+                        .with(scopeJwt("baton-go.links.read")))
                 .andExpect(status().isNotFound())
                 .andExpect(content().string(not(containsString(INVALID_TARGET_PATH))))
                 .andExpect(jsonPath("$.code").value("LINK_NOT_FOUND"));
         mockMvc.perform(put("/api/v1/links/{linkId}/revocation", INVALID_LINK_ID)
-                        .with(linkRevokeJwt()))
+                        .with(scopeJwt("baton-go.links.revoke")))
                 .andExpect(status().isNotFound())
                 .andExpect(content().string(not(containsString(INVALID_TARGET_PATH))))
                 .andExpect(jsonPath("$.code").value("LINK_NOT_FOUND"));
@@ -186,25 +187,13 @@ class TargetContractOperationsIntegrationTest {
                 true
         );
 
-        mockMvc.perform(put(
-                        "/api/v1/operations/link-target-contract-v1/links/{linkId}/revocation",
-                        UNKNOWN_ENUM_LINK_ID
-                )
-                        .with(targetContractOperateJwt())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"expectedVersion\":4}"))
+        remediate(UNKNOWN_ENUM_LINK_ID, "{\"expectedVersion\":4}")
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("REMEDIATION_STALE"));
         assertThat(storedRevokedAt(UNKNOWN_ENUM_LINK_ID)).isNull();
         assertThat(storedVersion(UNKNOWN_ENUM_LINK_ID)).isEqualTo(5L);
 
-        mockMvc.perform(put(
-                        "/api/v1/operations/link-target-contract-v1/links/{linkId}/revocation",
-                        UNKNOWN_ENUM_LINK_ID
-                )
-                        .with(targetContractOperateJwt())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"expectedVersion\":5}"))
+        remediate(UNKNOWN_ENUM_LINK_ID, "{\"expectedVersion\":5}")
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.alreadyRevoked").value(false));
 
@@ -212,13 +201,7 @@ class TargetContractOperationsIntegrationTest {
         assertThat(storedVersion(UNKNOWN_ENUM_LINK_ID)).isEqualTo(6L);
         assertThat(storedCreationRequestCount(UNKNOWN_ENUM_LINK_ID)).isOne();
 
-        mockMvc.perform(put(
-                        "/api/v1/operations/link-target-contract-v1/links/{linkId}/revocation",
-                        UNKNOWN_ENUM_LINK_ID
-                )
-                        .with(targetContractOperateJwt())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"expectedVersion\":5}"))
+        remediate(UNKNOWN_ENUM_LINK_ID, "{\"expectedVersion\":5}")
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.revokedAt").value(firstRevokedAt.toString()))
                 .andExpect(jsonPath("$.alreadyRevoked").value(true));
@@ -291,13 +274,7 @@ class TargetContractOperationsIntegrationTest {
                 true
         );
 
-        mockMvc.perform(put(
-                        "/api/v1/operations/link-target-contract-v1/links/{linkId}/revocation",
-                        INVALID_LINK_ID
-                )
-                        .with(targetContractOperateJwt())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(body))
+        remediate(INVALID_LINK_ID, body)
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
 
@@ -367,22 +344,15 @@ class TargetContractOperationsIntegrationTest {
         }
     }
 
-    private RequestPostProcessor targetContractOperateJwt() {
-        return jwt().authorities(new SimpleGrantedAuthority(
-                "SCOPE_baton-go.target-contract.operate"
-        ));
+    private ResultActions remediate(UUID linkId, String body) throws Exception {
+        return mockMvc.perform(put("/api/v1/operations/link-target-contract-v1/links/{linkId}/revocation", linkId)
+                .with(scopeJwt("baton-go.target-contract.operate"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body));
     }
 
-    private RequestPostProcessor linkReadJwt() {
-        return jwt().authorities(new SimpleGrantedAuthority(
-                "SCOPE_baton-go.links.read"
-        ));
-    }
-
-    private RequestPostProcessor linkRevokeJwt() {
-        return jwt().authorities(new SimpleGrantedAuthority(
-                "SCOPE_baton-go.links.revoke"
-        ));
+    private RequestPostProcessor scopeJwt(String scope) {
+        return jwt().authorities(new SimpleGrantedAuthority("SCOPE_" + scope));
     }
 
     private Instant storedRevokedAt(UUID linkId) {

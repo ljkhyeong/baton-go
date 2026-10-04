@@ -93,14 +93,7 @@ class LinkCreationConcurrencyIntegrationTest {
     @Test
     @DisplayName("동시에 같은 생성 요청을 보내도 MySQL에는 링크와 예약이 한 건만 남는다")
     void serializesConcurrentCreation() throws Exception {
-        CreateLinkCommand command = new CreateLinkCommand(
-                CreationIdempotencyKey.parseRequest(IDEMPOTENCY_KEY),
-                TargetSystem.ROUND,
-                "/room/abcd-efgh-jkmn",
-                LinkPurpose.MEETING_ENTRY,
-                null,
-                null
-        );
+        CreateLinkCommand command = roundCommand(IDEMPOTENCY_KEY, "/room/abcd-efgh-jkmn");
         ExecutorService executor = Executors.newFixedThreadPool(CONCURRENCY);
         controllableReservationPort.arm(CONCURRENCY, false);
 
@@ -140,14 +133,7 @@ class LinkCreationConcurrencyIntegrationTest {
                     command.targetPath()
             ))
                     .matches("^[0-9a-f]{64}$");
-            assertThatThrownBy(() -> smartLinkUseCase.createLink(new CreateLinkCommand(
-                    CreationIdempotencyKey.parseRequest(IDEMPOTENCY_KEY),
-                    TargetSystem.ROUND,
-                    "/room/qrst-uvwx-yz23",
-                    LinkPurpose.MEETING_ENTRY,
-                    null,
-                    null
-            )))
+            assertThatThrownBy(() -> smartLinkUseCase.createLink(roundCommand(IDEMPOTENCY_KEY, "/room/qrst-uvwx-yz23")))
                     .isInstanceOf(IdempotencyKeyConflictException.class);
         } finally {
             controllableReservationPort.releaseFirstOwner();
@@ -160,14 +146,7 @@ class LinkCreationConcurrencyIntegrationTest {
     @DisplayName("공개 출처가 다른 서버에서 동시에 생성해도 먼저 저장된 URL을 반환한다")
     void convergesOnStoredPublicOriginAcrossConcurrentReplicas() throws Exception {
         String idempotencyKey = "f14af1a6-9d56-4a41-8f47-c05f7c8898a1";
-        CreateLinkCommand command = new CreateLinkCommand(
-                CreationIdempotencyKey.parseRequest(idempotencyKey),
-                TargetSystem.ROUND,
-                "/room/wxyz-2345-6789",
-                LinkPurpose.MEETING_ENTRY,
-                null,
-                null
-        );
+        CreateLinkCommand command = roundCommand(idempotencyKey, "/room/wxyz-2345-6789");
         ExecutorService executor = Executors.newFixedThreadPool(2);
         controllableReservationPort.arm(2, false);
 
@@ -221,14 +200,7 @@ class LinkCreationConcurrencyIntegrationTest {
     @Test
     @DisplayName("첫 생성 트랜잭션이 롤백되면 대기 요청 하나가 이어서 처리하고 나머지는 재시도할 수 있다")
     void transfersOwnershipAfterWinnerRollback() throws Exception {
-        CreateLinkCommand command = new CreateLinkCommand(
-                CreationIdempotencyKey.parseRequest(ROLLBACK_IDEMPOTENCY_KEY),
-                TargetSystem.ROUND,
-                "/room/mnpq-rstu-vwxy",
-                LinkPurpose.MEETING_ENTRY,
-                null,
-                null
-        );
+        CreateLinkCommand command = roundCommand(ROLLBACK_IDEMPOTENCY_KEY, "/room/mnpq-rstu-vwxy");
         ExecutorService executor = Executors.newFixedThreadPool(CONCURRENCY);
         controllableReservationPort.arm(CONCURRENCY, true);
 
@@ -310,6 +282,17 @@ class LinkCreationConcurrencyIntegrationTest {
                 Long.class,
                 targetPath
         )).isEqualTo(1L);
+    }
+
+    private static CreateLinkCommand roundCommand(String idempotencyKey, String targetPath) {
+        return new CreateLinkCommand(
+                CreationIdempotencyKey.parseRequest(idempotencyKey),
+                TargetSystem.ROUND,
+                targetPath,
+                LinkPurpose.MEETING_ENTRY,
+                null,
+                null
+        );
     }
 
     private List<Future<CreatedLinkResult>> submitConcurrentCreations(

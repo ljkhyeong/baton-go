@@ -127,11 +127,7 @@ class LinkPersistenceIntegrationTest {
                         FAR_FUTURE_NOW
                 )))
                 .isInstanceOf(DataIntegrityViolationException.class);
-        assertThat(jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM link_creation_requests WHERE idempotency_key_hash = ?",
-                Long.class,
-                idempotencyKeyHash
-        )).isZero();
+        assertThat(reservationCount(idempotencyKeyHash)).isZero();
     }
 
     @Test
@@ -150,11 +146,7 @@ class LinkPersistenceIntegrationTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
                 .andExpect(jsonPath("$.message").value("targetSystem: 요청 값이 올바르지 않습니다"));
-        assertThat(jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM link_creation_requests WHERE idempotency_key_hash = ?",
-                Long.class,
-                linkCodePort.hashIdempotencyKey(idempotencyKey)
-        )).isZero();
+        assertThat(reservationCount(linkCodePort.hashIdempotencyKey(idempotencyKey))).isZero();
 
         String createdBody = mockMvc.perform(post("/api/v1/links")
                         .with(linkCreateJwt())
@@ -331,36 +323,9 @@ class LinkPersistenceIntegrationTest {
         );
         String linkId = "466d487c-e690-4bf7-b116-f99f380f1b82";
         String targetPath = "/room/efgh-jkmn-pqrs";
-        jdbcTemplate.update(
-                """
-                        INSERT INTO smart_links (
-                            id,
-                            code_hash,
-                            target_system,
-                            target_path,
-                            purpose,
-                            created_at,
-                            version
-                        ) VALUES (UUID_TO_BIN(?), ?, 'ROUND', ?, 'MEETING_ENTRY', ?, 0)
-                        """,
-                linkId,
-                linkCodePort.issue(normalizedIdempotencyKey).codeHash(),
-                targetPath,
-                FAR_FUTURE_NOW
-        );
-        jdbcTemplate.update(
-                """
-                        INSERT INTO link_creation_requests (
-                            idempotency_key_hash,
-                            link_id,
-                            public_origin,
-                            created_at
-                        ) VALUES (?, UUID_TO_BIN(?), 'https://go.example', ?)
-                        """,
-                linkCodePort.hashIdempotencyKey(normalizedIdempotencyKey),
-                linkId,
-                FAR_FUTURE_NOW
-        );
+        insertStoredLink(linkId, linkCodePort.issue(normalizedIdempotencyKey).codeHash(),
+                "ROUND", targetPath, "MEETING_ENTRY");
+        insertReservation(normalizedIdempotencyKey, linkId, "https://go.example");
 
         mockMvc.perform(post("/api/v1/links")
                         .with(linkCreateJwt())
@@ -377,16 +342,8 @@ class LinkPersistenceIntegrationTest {
                 .andExpect(header().string("Idempotency-Replayed", "true"))
                 .andExpect(jsonPath("$.id").value(linkId));
 
-        assertThat(jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM smart_links WHERE target_path = ?",
-                Long.class,
-                targetPath
-        )).isOne();
-        assertThat(jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM link_creation_requests WHERE idempotency_key_hash = ?",
-                Long.class,
-                linkCodePort.hashIdempotencyKey(normalizedIdempotencyKey)
-        )).isOne();
+        assertThat(storedLinkCount(targetPath)).isOne();
+        assertThat(reservationCount(linkCodePort.hashIdempotencyKey(normalizedIdempotencyKey))).isOne();
     }
 
     @Test
@@ -395,35 +352,9 @@ class LinkPersistenceIntegrationTest {
         String idempotencyKey = "cc9d17dd-d02d-4c14-842c-afbb03887fc6";
         String linkId = "93d4229a-0edf-4d85-a769-0efb7e58c179";
         String targetPath = "/room/qrst-6789-uvwx";
-        jdbcTemplate.update(
-                """
-                        INSERT INTO smart_links (
-                            id,
-                            code_hash,
-                            target_system,
-                            target_path,
-                            purpose,
-                            created_at,
-                            version
-                        ) VALUES (UUID_TO_BIN(?), ?, 'ROUND', ?, 'MEETING_ENTRY', ?, 0)
-                        """,
-                linkId,
-                linkCodePort.issue(idempotencyKey).codeHash(),
-                targetPath,
-                FAR_FUTURE_NOW
-        );
-        jdbcTemplate.update(
-                """
-                        INSERT INTO link_creation_requests (
-                            idempotency_key_hash,
-                            link_id,
-                            created_at
-                        ) VALUES (?, UUID_TO_BIN(?), ?)
-                        """,
-                linkCodePort.hashIdempotencyKey(idempotencyKey),
-                linkId,
-                FAR_FUTURE_NOW
-        );
+        insertStoredLink(linkId, linkCodePort.issue(idempotencyKey).codeHash(),
+                "ROUND", targetPath, "MEETING_ENTRY");
+        insertReservation(idempotencyKey, linkId, null);
 
         assertThatThrownBy(() -> smartLinkUseCase.createLink(new CreateLinkCommand(
                 CreationIdempotencyKey.parseRequest(idempotencyKey),
@@ -469,16 +400,8 @@ class LinkPersistenceIntegrationTest {
                 .andExpect(jsonPath("$.id").value(created.link().id().toString()))
                 .andExpect(jsonPath("$.expiresAt").value(storedExpiresAt.toString()));
 
-        assertThat(jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM smart_links WHERE target_path = ?",
-                Long.class,
-                targetPath
-        )).isOne();
-        assertThat(jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM link_creation_requests WHERE idempotency_key_hash = ?",
-                Long.class,
-                linkCodePort.hashIdempotencyKey(idempotencyKey)
-        )).isOne();
+        assertThat(storedLinkCount(targetPath)).isOne();
+        assertThat(reservationCount(linkCodePort.hashIdempotencyKey(idempotencyKey))).isOne();
     }
 
     @Test
@@ -560,6 +483,38 @@ class LinkPersistenceIntegrationTest {
         );
     }
 
+    private void insertReservation(String idempotencyKey, String linkId, String publicOrigin) {
+        jdbcTemplate.update(
+                """
+                        INSERT INTO link_creation_requests (
+                            idempotency_key_hash,
+                            link_id,
+                            public_origin,
+                            created_at
+                        ) VALUES (?, UUID_TO_BIN(?), ?, UTC_TIMESTAMP(6))
+                        """,
+                linkCodePort.hashIdempotencyKey(idempotencyKey),
+                linkId,
+                publicOrigin
+        );
+    }
+
+    private long reservationCount(String idempotencyKeyHash) {
+        return jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM link_creation_requests WHERE idempotency_key_hash = ?",
+                Long.class,
+                idempotencyKeyHash
+        );
+    }
+
+    private long storedLinkCount(String targetPath) {
+        return jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM smart_links WHERE target_path = ?",
+                Long.class,
+                targetPath
+        );
+    }
+
     private void assertUnsafeStoredReplayIsRejected(
             String linkId,
             String idempotencyKey,
@@ -569,17 +524,7 @@ class LinkPersistenceIntegrationTest {
     ) throws Exception {
         String codeHash = linkCodePort.issue(idempotencyKey).codeHash();
         insertStoredLink(linkId, codeHash, rawTargetSystem, rawTargetPath, rawPurpose);
-        jdbcTemplate.update(
-                """
-                        INSERT INTO link_creation_requests (
-                            idempotency_key_hash,
-                            link_id,
-                            created_at
-                        ) VALUES (?, UUID_TO_BIN(?), UTC_TIMESTAMP(6))
-                        """,
-                linkCodePort.hashIdempotencyKey(idempotencyKey),
-                linkId
-        );
+        insertReservation(idempotencyKey, linkId, null);
 
         String responseBody = mockMvc.perform(post("/api/v1/links")
                         .with(linkCreateJwt())

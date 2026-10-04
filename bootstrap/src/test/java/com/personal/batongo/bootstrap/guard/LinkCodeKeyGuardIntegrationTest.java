@@ -26,7 +26,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import javax.sql.DataSource;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
@@ -94,12 +93,6 @@ class LinkCodeKeyGuardIntegrationTest {
 
     @BeforeEach
     void resetDatabase() {
-        clearLinkData();
-        bind(linkCodePort.derivationIdentity());
-    }
-
-    @AfterEach
-    void restoreDatabase() {
         clearLinkData();
         bind(linkCodePort.derivationIdentity());
     }

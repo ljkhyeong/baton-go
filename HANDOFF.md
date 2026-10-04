@@ -99,6 +99,16 @@
 
 ## 최근 검증
 
+- 계층 책임 리팩터링은 미커밋 변경이 없는 `main`의 `762e0ee`에서 시작해 `fed747b`·`3e05901`·`33edd2f`·`7dd0d3c`에 저장했다.
+  domain의 `SmartLink`를 생성 규칙만 가진 record로 바꾸고 JPA 매핑은 `SmartLinkEntity`로 옮겨 domain 모듈의
+  `jakarta.persistence` 의존을 없앴다. 출력 포트를 구현하는 `PublicLinkProperties`는 웹 어댑터에서
+  `adapter-out-external`로 옮겼다. 직접 작성한 SQL의 UTC 시각 변환은 `UtcDateTimes`, 키 정보 비교는 `GuardRow`,
+  저장 대상 허용 판정은 `StoredLinkSnapshot`에 모았다. 설정 이름·SQL·오류 코드·응답은 바뀌지 않았다.
+  Java 21에서 `./gradlew --no-daemon build :bootstrap:mysqlTest`를 통과했다. 도메인 72·애플리케이션 48·웹 135·
+  외부 26·guard-tool 4·bootstrap 32·MySQL 45개 테스트에 실패·제외가 없고 계층 규칙 5개도 통과했다.
+  MySQL 전체 테스트가 새 엔티티로 `ddl-auto: validate`와 링크 저장을 확인했다. 파일을 나눠 만든 `fed747b`는
+  별도 작업 트리에서 컴파일을 확인했다. 로그는 같은 스크래치패드의 `baton-go-refactor-20261005.log`다.
+  Redis 연결 구성은 바뀌지 않아 Redis 통합 검증은 실행하지 않았고, 실행 클래스패스가 같아 이미지 빌드도 생략했다.
 - 2차 코드 축소는 미커밋 변경이 없는 `main`의 `863c676`에서 시작해 `1b2f24d`부터 `bf0ff92`까지 6개 커밋에 저장했다.
   운영 Java 코드는 직전 축소 뒤 남은 복사 코드가 없어 바꾸지 않았다. CI의 `promtool`·`amtool` 실행 인자를
   기존 배열 방식으로 모으고 같은 명령을 적은 RUNBOOK도 맞췄다. 테스트는 반복 요청·픽스처·건수 조회·스텁을

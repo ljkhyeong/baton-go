@@ -3,7 +3,7 @@ package com.personal.batongo.bootstrap;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.personal.batongo.adapter.in.web.PublicLinkProperties;
+import com.personal.batongo.adapter.out.external.link.PublicLinkProperties;
 import com.personal.batongo.adapter.out.external.link.TrustedTargetProperties;
 import java.net.URI;
 import org.junit.jupiter.api.DisplayName;

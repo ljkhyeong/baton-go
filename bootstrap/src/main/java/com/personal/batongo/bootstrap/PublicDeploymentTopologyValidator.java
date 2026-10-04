@@ -1,6 +1,6 @@
 package com.personal.batongo.bootstrap;
 
-import com.personal.batongo.adapter.in.web.PublicLinkProperties;
+import com.personal.batongo.adapter.out.external.link.PublicLinkProperties;
 import com.personal.batongo.adapter.out.external.link.TrustedTargetProperties;
 import com.personal.batongo.domain.link.HttpOrigin;
 import org.springframework.stereotype.Component;

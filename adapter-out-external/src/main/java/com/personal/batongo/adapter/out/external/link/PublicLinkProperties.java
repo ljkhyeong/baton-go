@@ -1,4 +1,4 @@
-package com.personal.batongo.adapter.in.web;
+package com.personal.batongo.adapter.out.external.link;
 
 import com.personal.batongo.application.link.PublicLinkOrigin;
 import com.personal.batongo.application.link.port.out.PublicLinkOriginPort;

@@ -440,13 +440,7 @@ class ManagementAuthenticationHttpContractTest {
         mockMvc.perform(post(URI.create("/api/v1/links;x"))
                         .header("Idempotency-Key", IDEMPOTENCY_KEY)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {
-                                  "targetSystem": "BATON",
-                                  "targetPath": "%s",
-                                  "purpose": "NAVIGATION"
-                                }
-                                """.formatted(BATON_TARGET_PATH)))
+                        .content(createRequest()))
                 .andExpect(status().isBadRequest());
 
         verifyNoInteractions(useCase);

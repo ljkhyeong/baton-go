@@ -9,6 +9,7 @@ import static org.springframework.restdocs.mockmvc.MockMvcRestDocumentation.docu
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.head;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.request;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -39,6 +40,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.http.converter.StringHttpMessageConverter;
 import org.springframework.http.converter.json.JacksonJsonHttpMessageConverter;
@@ -161,13 +163,14 @@ class PublicLinkHttpContractTest {
                 .andExpect(jsonPath("$.requestId").isNotEmpty());
     }
 
-    @Test
-    @DisplayName("없는 링크와 대상 규칙 위반 링크는 같은 404를 반환하고 위반만 기록한다")
-    void hidesStoredTargetPolicyViolationLikeMissingLinkForGet() throws Exception {
+    @ParameterizedTest
+    @ValueSource(strings = {"GET", "HEAD"})
+    @DisplayName("없는 링크와 대상 규칙 위반 링크는 GET·HEAD에서 같은 JSON 404를 반환하고 위반만 기록한다")
+    void hidesStoredTargetPolicyViolationLikeMissingLink(String method) throws Exception {
         String missingCode = "missing-link-code";
         when(useCase.resolveLink(missingCode)).thenThrow(new LinkNotFoundException());
 
-        String missingBody = performPublicNotFoundGet(missingCode);
+        String missingBody = performPublicNotFound(HttpMethod.valueOf(method), missingCode);
 
         assertThat(storedTargetPolicyViolationCount()).isZero();
 
@@ -175,28 +178,9 @@ class PublicLinkHttpContractTest {
         when(useCase.resolveLink(violatingCode))
                 .thenThrow(new StoredTargetPolicyViolationException(LINK_ID));
 
-        String violationBody = performPublicNotFoundGet(violatingCode);
+        String violationBody = performPublicNotFound(HttpMethod.valueOf(method), violatingCode);
 
         assertThat(violationBody).isEqualTo(missingBody);
-        assertThat(storedTargetPolicyViolationCount()).isEqualTo(1.0d);
-    }
-
-    @Test
-    @DisplayName("없는 링크와 대상 규칙 위반 링크의 HEAD는 같은 JSON 404를 반환하고 위반만 기록한다")
-    void hidesStoredTargetPolicyViolationLikeMissingLinkForHead() throws Exception {
-        String missingCode = "missing-link-code";
-        when(useCase.resolveLink(missingCode)).thenThrow(new LinkNotFoundException());
-
-        performPublicNotFoundHead(missingCode);
-
-        assertThat(storedTargetPolicyViolationCount()).isZero();
-
-        String violatingCode = "stored-policy-violation";
-        when(useCase.resolveLink(violatingCode))
-                .thenThrow(new StoredTargetPolicyViolationException(LINK_ID));
-
-        performPublicNotFoundHead(violatingCode);
-
         assertThat(storedTargetPolicyViolationCount()).isEqualTo(1.0d);
     }
 
@@ -304,34 +288,20 @@ class PublicLinkHttpContractTest {
                 .andExpect(content().contentTypeCompatibleWith(MediaType.TEXT_HTML))
                 .andExpect(header().doesNotExist(HttpHeaders.LOCATION));
     }
-    private String performPublicNotFoundGet(String rawCode) throws Exception {
-        return mockMvc.perform(get("/l/{code}", rawCode)
-                        .header("X-Request-Id", PUBLIC_NOT_FOUND_REQUEST_ID))
-                .andExpect(status().isNotFound())
-                .andExpect(header().doesNotExist(HttpHeaders.LOCATION))
-                .andExpect(header().string(
-                        "X-Request-Id",
-                        PUBLIC_NOT_FOUND_REQUEST_ID
-                ))
-                .andExpect(jsonPath("$.code").value("LINK_NOT_FOUND"))
-                .andExpect(jsonPath("$.message").isNotEmpty())
-                .andExpect(jsonPath("$.requestId").value(PUBLIC_NOT_FOUND_REQUEST_ID))
-                .andReturn()
-                .getResponse()
-                .getContentAsString();
-    }
-
     // HEAD 본문 전송 제외는 MockMvc가 아닌 실제 HTTP 서버 통합 테스트와 실행 이미지 CI에서 확인한다.
-    private void performPublicNotFoundHead(String rawCode) throws Exception {
-        mockMvc.perform(head("/l/{code}", rawCode)
+    private String performPublicNotFound(HttpMethod method, String rawCode) throws Exception {
+        var result = mockMvc.perform(request(method, "/l/{code}", rawCode)
                         .header("X-Request-Id", PUBLIC_NOT_FOUND_REQUEST_ID))
                 .andExpect(status().isNotFound())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
                 .andExpect(header().doesNotExist(HttpHeaders.LOCATION))
-                .andExpect(header().string(
-                        "X-Request-Id",
-                        PUBLIC_NOT_FOUND_REQUEST_ID
-                ));
+                .andExpect(header().string("X-Request-Id", PUBLIC_NOT_FOUND_REQUEST_ID));
+        if (HttpMethod.GET.equals(method)) {
+            result.andExpect(jsonPath("$.code").value("LINK_NOT_FOUND"))
+                    .andExpect(jsonPath("$.message").isNotEmpty())
+                    .andExpect(jsonPath("$.requestId").value(PUBLIC_NOT_FOUND_REQUEST_ID));
+        }
+        return result.andReturn().getResponse().getContentAsString();
     }
 
     private double storedTargetPolicyViolationCount() {

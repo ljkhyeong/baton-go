@@ -184,11 +184,9 @@ class TargetContractOperationsHttpContractTest {
                         false
                 ));
 
-        mockMvc.perform(authorized(put(BASE_PATH + "/links/{linkId}/revocation", LINK_ID)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"expectedVersion":7}
-                                """)))
+        mockMvc.perform(remediationRequest("""
+                        {"expectedVersion":7}
+                        """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.linkId").value(LINK_ID.toString()))
                 .andExpect(jsonPath("$.contractVersion").value("v1"))

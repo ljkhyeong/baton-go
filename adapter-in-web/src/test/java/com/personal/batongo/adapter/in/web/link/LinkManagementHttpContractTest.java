@@ -40,7 +40,6 @@ import com.personal.batongo.domain.link.LinkPurpose;
 import com.personal.batongo.domain.link.LinkValidationException;
 import com.personal.batongo.domain.link.TargetSystem;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-import java.io.IOException;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
@@ -65,6 +64,7 @@ import org.springframework.restdocs.RestDocumentationContextProvider;
 import org.springframework.restdocs.RestDocumentationExtension;
 import org.springframework.restdocs.mockmvc.RestDocumentationResultHandler;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.servlet.config.annotation.DelegatingWebMvcConfiguration;
 import tools.jackson.databind.DeserializationFeature;
@@ -85,7 +85,7 @@ class LinkManagementHttpContractTest {
     private MockMvc mockMvc;
 
     @BeforeEach
-    void setUp(RestDocumentationContextProvider restDocumentation) throws IOException {
+    void setUp(RestDocumentationContextProvider restDocumentation) {
         useCase = mock(SmartLinkUseCase.class);
         var jsonMapper = JsonMapper.builder()
                 .findAndAddModules()
@@ -296,17 +296,7 @@ class LinkManagementHttpContractTest {
                 true
         ));
 
-        mockMvc.perform(post("/api/v1/links")
-                        .header("Idempotency-Key", IDEMPOTENCY_KEY)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {
-                                  "targetSystem": "BATON",
-                                  "targetPath": "%s",
-                                  "purpose": "NAVIGATION",
-                                  "expiresAt": "2026-07-30T10:00:00Z"
-                                }
-                                """.formatted(BATON_TARGET_PATH)))
+        mockMvc.perform(createLinkRequest("2026-07-30T10:00:00Z"))
                 .andExpect(status().isOk())
                 .andExpect(header().string("Location", "/api/v1/links/" + LINK_ID))
                 .andExpect(header().string(
@@ -330,16 +320,7 @@ class LinkManagementHttpContractTest {
     ) throws Exception {
         when(useCase.createLink(any())).thenThrow(exception);
 
-        mockMvc.perform(post("/api/v1/links")
-                        .header("Idempotency-Key", IDEMPOTENCY_KEY)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {
-                                  "targetSystem": "BATON",
-                                  "targetPath": "%s",
-                                  "purpose": "NAVIGATION"
-                                }
-                                """.formatted(BATON_TARGET_PATH)))
+        mockMvc.perform(createLinkRequest(null))
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.code").value(code))
                 .andExpect(jsonPath("$.requestId").isNotEmpty());
@@ -497,17 +478,7 @@ class LinkManagementHttpContractTest {
     void mapsUnstorableCreationTimeToInvalidRequest() throws Exception {
         when(useCase.createLink(any())).thenThrow(InvalidRequestException.creationTime());
 
-        mockMvc.perform(post("/api/v1/links")
-                        .header("Idempotency-Key", IDEMPOTENCY_KEY)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {
-                                  "targetSystem": "BATON",
-                                  "targetPath": "%s",
-                                  "purpose": "NAVIGATION",
-                                  "expiresAt": "2026-07-30T10:00:00.123456001Z"
-                                }
-                                """.formatted(BATON_TARGET_PATH)))
+        mockMvc.perform(createLinkRequest("2026-07-30T10:00:00.123456001Z"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
                 .andExpect(jsonPath("$.requestId").isNotEmpty());
@@ -599,17 +570,7 @@ class LinkManagementHttpContractTest {
             );
         });
 
-        mockMvc.perform(post("/api/v1/links")
-                        .header("Idempotency-Key", IDEMPOTENCY_KEY)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {
-                                  "targetSystem": "BATON",
-                                  "targetPath": "%s",
-                                  "purpose": "NAVIGATION",
-                                  "expiresAt": "%s"
-                                }
-                                """.formatted(BATON_TARGET_PATH, rawTime)))
+        mockMvc.perform(createLinkRequest(rawTime))
                 .andExpect(status().isOk())
                 .andExpect(header().string(
                         "Idempotency-Replayed",
@@ -678,6 +639,20 @@ class LinkManagementHttpContractTest {
                 .andExpect(jsonPath("$.code").value("INVALID_LINK"))
                 .andExpect(jsonPath("$.requestId").isNotEmpty());
     }
+    private static MockHttpServletRequestBuilder createLinkRequest(String expiresAt) {
+        String expiresAtField = expiresAt == null ? "" : ",\n  \"expiresAt\": \"" + expiresAt + "\"";
+        return post("/api/v1/links")
+                .header("Idempotency-Key", IDEMPOTENCY_KEY)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {
+                          "targetSystem": "BATON",
+                          "targetPath": "%s",
+                          "purpose": "NAVIGATION"%s
+                        }
+                        """.formatted(BATON_TARGET_PATH, expiresAtField));
+    }
+
     private static RestDocumentationResultHandler documentManagementEndpoint(
             String identifier
     ) {

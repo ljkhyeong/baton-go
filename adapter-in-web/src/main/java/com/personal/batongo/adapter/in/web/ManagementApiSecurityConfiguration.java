@@ -8,6 +8,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.boot.security.oauth2.server.resource.autoconfigure.JwkSetUriJwtDecoderBuilderCustomizer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
@@ -36,6 +37,7 @@ import org.springframework.web.client.RestTemplate;
 public class ManagementApiSecurityConfiguration {
 
     private static final Logger LOG = LoggerFactory.getLogger(ManagementApiSecurityConfiguration.class);
+    private static final String MANAGEMENT_BEARER_CHALLENGE = "Bearer realm=\"baton-go-management\"";
 
     static final String LINK_CREATE_AUTHORITY = "SCOPE_baton-go.links.create";
     static final String LINK_READ_AUTHORITY = "SCOPE_baton-go.links.read";
@@ -90,6 +92,7 @@ public class ManagementApiSecurityConfiguration {
                 );
                 return;
             }
+            response.setHeader(HttpHeaders.WWW_AUTHENTICATE, MANAGEMENT_BEARER_CHALLENGE);
             errorResponseWriter.write(
                     request,
                     response,

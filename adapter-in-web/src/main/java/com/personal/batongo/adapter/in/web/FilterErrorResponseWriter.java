@@ -3,7 +3,6 @@ package com.personal.batongo.adapter.in.web;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
@@ -11,9 +10,6 @@ import tools.jackson.databind.ObjectMapper;
 
 @Component
 public class FilterErrorResponseWriter {
-
-    private static final String MANAGEMENT_BEARER_CHALLENGE =
-            "Bearer realm=\"baton-go-management\"";
 
     private final ObjectMapper objectMapper;
 
@@ -31,9 +27,6 @@ public class FilterErrorResponseWriter {
         response.setStatus(status);
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         response.setCharacterEncoding("UTF-8");
-        if (status == HttpServletResponse.SC_UNAUTHORIZED) {
-            response.setHeader(HttpHeaders.WWW_AUTHENTICATE, MANAGEMENT_BEARER_CHALLENGE);
-        }
         if (!HttpMethod.HEAD.matches(request.getMethod())) {
             objectMapper.writeValue(
                     response.getOutputStream(),

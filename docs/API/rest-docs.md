@@ -26,6 +26,8 @@ CI가 실패하므로 계약 테스트와 압축 작업이 실행되지 않은 �
 - `links-create-replay`
 - `links-get`
 - `links-batch-get`
+- `links-batch-missing-ids`
+- `links-batch-invalid-ids`
 - `links-search`
 - `links-revoke`
 - `links-resolve`

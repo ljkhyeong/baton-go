@@ -52,7 +52,7 @@ public class SmartLinkPersistenceAdapter implements SmartLinkRepository {
 
     @Override
     public void save(SmartLink smartLink) {
-        entityManager.persist(smartLink);
+        entityManager.persist(new SmartLinkEntity(smartLink));
     }
 
     @Override

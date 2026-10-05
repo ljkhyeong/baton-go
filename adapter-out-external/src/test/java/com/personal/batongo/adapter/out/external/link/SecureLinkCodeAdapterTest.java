@@ -23,8 +23,8 @@ class SecureLinkCodeAdapterTest {
         var rotated = new SecureLinkCodeAdapter(new LinkCodeProperties(
                 SECRET, "k202609", Map.of("k202609", "new-test-key-that-is-at-least-thirty-two-characters")
         ));
-        assertThat(rotated.issue(IDEMPOTENCY_KEY, "legacy")).isEqualTo(adapter.issue(IDEMPOTENCY_KEY, "legacy"));
-        assertThat(rotated.issue(IDEMPOTENCY_KEY, "k202609")).isNotEqualTo(adapter.issue(IDEMPOTENCY_KEY, "legacy"));
+        assertThat(rotated.issue(IDEMPOTENCY_KEY, "default")).isEqualTo(adapter.issue(IDEMPOTENCY_KEY, "default"));
+        assertThat(rotated.issue(IDEMPOTENCY_KEY, "k202609")).isNotEqualTo(adapter.issue(IDEMPOTENCY_KEY, "default"));
         assertThatThrownBy(() -> rotated.issue(IDEMPOTENCY_KEY, "missing"))
                 .isInstanceOf(LinkCodeReplayMismatchException.class);
     }
@@ -32,7 +32,7 @@ class SecureLinkCodeAdapterTest {
     @Test
     @DisplayName("HMAC SHA-256 v1 파생 규약은 고정 벡터와 일치한다")
     void matchesVersionOneFixedVector() {
-        var issued = adapter.issue(IDEMPOTENCY_KEY, "legacy");
+        var issued = adapter.issue(IDEMPOTENCY_KEY, "default");
 
         assertThat(issued.rawCode()).isEqualTo("WgRX_ulMUrIGxM0IYBOpqA");
         assertThat(issued.codeHash())

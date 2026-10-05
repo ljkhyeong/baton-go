@@ -31,12 +31,12 @@ class LinkCodePropertiesTest {
     }
 
     @Test
-    @DisplayName("현재 발급 키가 없거나 기존 키를 두 곳에 설정하면 거부한다")
-    void rejectsMissingActiveKeyAndDuplicateLegacyConfiguration() {
+    @DisplayName("현재 발급 키가 없거나 기본 키를 두 곳에 설정하면 거부한다")
+    void rejectsMissingActiveKeyAndDuplicateDefaultConfiguration() {
         String secret = "test-secret-that-is-at-least-thirty-two-characters";
         assertThatThrownBy(() -> new LinkCodeProperties(secret, "missing", Map.of()))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> new LinkCodeProperties(secret, "legacy", Map.of("legacy", secret)))
+        assertThatThrownBy(() -> new LinkCodeProperties(secret, "default", Map.of("default", secret)))
                 .isInstanceOf(IllegalArgumentException.class);
         assertThat(new LinkCodeProperties(null, "current", Map.of("current", secret)).toString())
                 .doesNotContain(secret);
@@ -61,10 +61,10 @@ class LinkCodePropertiesTest {
     }
 
     @Test
-    @DisplayName("기존 데이터베이스 복구를 위해 파생 키의 공백과 줄바꿈을 유지한다")
-    void preservesLegacySecretSyntax() {
-        String legacySecret = " ".repeat(31) + "\n";
+    @DisplayName("백업 복구 때 같은 비밀값을 쓰도록 파생 키의 공백과 줄바꿈을 유지한다")
+    void preservesSecretSyntax() {
+        String secret = " ".repeat(31) + "\n";
 
-        assertThat(new LinkCodeProperties(legacySecret).secret()).isEqualTo(legacySecret);
+        assertThat(new LinkCodeProperties(secret).secret()).isEqualTo(secret);
     }
 }

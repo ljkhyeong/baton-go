@@ -52,7 +52,7 @@ import org.testcontainers.mysql.MySQLContainer;
         "spring.security.oauth2.resourceserver.jwt.issuer-uri=https://identity.example",
         "spring.security.oauth2.resourceserver.jwt.jwk-set-uri=https://identity.example/jwks",
         "spring.security.oauth2.resourceserver.jwt.audiences=baton-go",
-        "baton-go.link-code.secret=test-legacy-key-with-at-least-thirty-two-characters",
+        "baton-go.link-code.secret=test-default-key-with-at-least-thirty-two-characters",
         "baton-go.link-code.keys.k202609=test-current-key-with-at-least-thirty-two-characters",
         "baton-go.public-base-url=https://go.example",
         "baton-go.targets.baton-base-url=https://baton.example",
@@ -60,7 +60,7 @@ import org.testcontainers.mysql.MySQLContainer;
 })
 class LinkRetentionIntegrationTest {
 
-    private static final String LEGACY = "test-legacy-key-with-at-least-thirty-two-characters";
+    private static final String DEFAULT_KEY = "test-default-key-with-at-least-thirty-two-characters";
     private static final String CURRENT = "test-current-key-with-at-least-thirty-two-characters";
 
     @Container
@@ -151,7 +151,7 @@ class LinkRetentionIntegrationTest {
         var release = new CountDownLatch(1);
         try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
             var replay = executor.submit(() -> new TransactionTemplate(transactionManager).execute(status -> {
-                var codes = new SecureLinkCodeAdapter(new LinkCodeProperties(LEGACY));
+                var codes = new SecureLinkCodeAdapter(new LinkCodeProperties(DEFAULT_KEY));
                 jdbc.queryForObject("""
                         SELECT BIN_TO_UUID(link_id) FROM link_creation_requests
                         WHERE idempotency_key_hash = ? FOR SHARE
@@ -192,7 +192,7 @@ class LinkRetentionIntegrationTest {
     }
 
     private SmartLinkUseCase.CreatedLinkResult create(CreateLinkCommand command) {
-        var codes = new SecureLinkCodeAdapter(new LinkCodeProperties(LEGACY));
+        var codes = new SecureLinkCodeAdapter(new LinkCodeProperties(DEFAULT_KEY));
         var service = new SmartLinkService(repository, reservations, codes, new LinkCodeKeyGuard(codes, guardPort),
                 publicOrigin, Clock.fixed(CREATED, ZoneOffset.UTC));
         return new TransactionTemplate(transactionManager).execute(status -> service.createLink(command));

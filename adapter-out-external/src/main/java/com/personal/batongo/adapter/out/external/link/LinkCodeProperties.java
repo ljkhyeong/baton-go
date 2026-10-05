@@ -16,16 +16,16 @@ public record LinkCodeProperties(
     private static final Pattern KEY_ID = Pattern.compile("[a-z][a-z0-9]{0,31}");
 
     public LinkCodeProperties(String secret) {
-        this(secret, "legacy", Map.of());
+        this(secret, "default", Map.of());
     }
 
     @ConstructorBinding
     public LinkCodeProperties {
-        activeKeyId = activeKeyId == null ? "legacy" : activeKeyId;
+        activeKeyId = activeKeyId == null ? "default" : activeKeyId;
         Map<String, String> configured = new LinkedHashMap<>(keys == null ? Map.of() : keys);
         if (secret != null && !secret.isEmpty()) {
-            if (configured.putIfAbsent("legacy", secret) != null) {
-                throw new IllegalArgumentException("기존 키는 secret 또는 keys.legacy 중 한 곳에서 설정해야 합니다");
+            if (configured.putIfAbsent("default", secret) != null) {
+                throw new IllegalArgumentException("기본 키는 secret 또는 keys.default 중 한 곳에서 설정해야 합니다");
             }
         }
         if (!configured.containsKey(activeKeyId)) {

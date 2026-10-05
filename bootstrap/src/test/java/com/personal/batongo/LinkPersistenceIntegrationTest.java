@@ -123,7 +123,7 @@ class LinkPersistenceIntegrationTest {
                         idempotencyKeyHash,
                         UUID.fromString("7f9b3635-cbd1-4936-8384-7fc42d4264e5"),
                         tooLongPublicOrigin,
-                        "legacy",
+                        "default",
                         FAR_FUTURE_NOW
                 )))
                 .isInstanceOf(DataIntegrityViolationException.class);
@@ -320,7 +320,7 @@ class LinkPersistenceIntegrationTest {
         String idempotencyKey = "cc9d17dd-d02d-4c14-842c-afbb03887fc6";
         String linkId = "93d4229a-0edf-4d85-a769-0efb7e58c179";
         String targetPath = "/room/qrst-6789-uvwx";
-        insertStoredLink(linkId, linkCodePort.issue(idempotencyKey, "legacy").codeHash(),
+        insertStoredLink(linkId, linkCodePort.issue(idempotencyKey, "default").codeHash(),
                 "ROUND", targetPath, "MEETING_ENTRY");
         insertReservation(idempotencyKey, linkId, "HTTPS://GO.EXAMPLE");
 
@@ -422,7 +422,7 @@ class LinkPersistenceIntegrationTest {
                             public_origin,
                             key_id,
                             created_at
-                        ) VALUES (?, UUID_TO_BIN(?), ?, 'legacy', UTC_TIMESTAMP(6))
+                        ) VALUES (?, UUID_TO_BIN(?), ?, 'default', UTC_TIMESTAMP(6))
                         """,
                 linkCodePort.hashIdempotencyKey(idempotencyKey),
                 linkId,
@@ -445,7 +445,7 @@ class LinkPersistenceIntegrationTest {
             String rawTargetPath,
             String rawPurpose
     ) throws Exception {
-        String codeHash = linkCodePort.issue(idempotencyKey, "legacy").codeHash();
+        String codeHash = linkCodePort.issue(idempotencyKey, "default").codeHash();
         insertStoredLink(linkId, codeHash, rawTargetSystem, rawTargetPath, rawPurpose);
         insertReservation(idempotencyKey, linkId, "https://go.example");
 

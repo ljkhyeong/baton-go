@@ -41,7 +41,7 @@ import org.testcontainers.mysql.MySQLContainer;
         "spring.security.oauth2.resourceserver.jwt.issuer-uri=https://identity.example",
         "spring.security.oauth2.resourceserver.jwt.jwk-set-uri=https://identity.example/jwks",
         "spring.security.oauth2.resourceserver.jwt.audiences=baton-go",
-        "baton-go.link-code.secret=test-legacy-key-with-at-least-thirty-two-characters",
+        "baton-go.link-code.secret=test-default-key-with-at-least-thirty-two-characters",
         "baton-go.link-code.keys.k202609=test-current-key-with-at-least-thirty-two-characters",
         "baton-go.public-base-url=https://go.example",
         "baton-go.targets.baton-base-url=https://baton.example",
@@ -49,7 +49,7 @@ import org.testcontainers.mysql.MySQLContainer;
 })
 class LinkCodeKeyRingIntegrationTest {
 
-    private static final String LEGACY = "test-legacy-key-with-at-least-thirty-two-characters";
+    private static final String DEFAULT_KEY = "test-default-key-with-at-least-thirty-two-characters";
     private static final String CURRENT = "test-current-key-with-at-least-thirty-two-characters";
 
     @Container
@@ -78,7 +78,7 @@ class LinkCodeKeyRingIntegrationTest {
         var oldCommand = command();
         var oldLink = links.createLink(oldCommand);
         var currentCommand = command();
-        var properties = new LinkCodeProperties(LEGACY, "k202609", Map.of("k202609", CURRENT));
+        var properties = new LinkCodeProperties(DEFAULT_KEY, "k202609", Map.of("k202609", CURRENT));
 
         var oldReplay = withKeys(properties, service -> service.createLink(oldCommand));
         var currentLink = withKeys(properties, service -> service.createLink(currentCommand));
@@ -88,7 +88,7 @@ class LinkCodeKeyRingIntegrationTest {
         assertThat(currentReplay.shortUrl()).isEqualTo(currentLink.shortUrl());
         assertThat(currentReplay.replayed()).isTrue();
         assertThat(jdbc.queryForObject("SELECT key_id FROM link_creation_requests WHERE link_id = UUID_TO_BIN(?)",
-                String.class, oldLink.link().id().toString())).isEqualTo("legacy");
+                String.class, oldLink.link().id().toString())).isEqualTo("default");
         assertThat(jdbc.queryForObject("SELECT key_id FROM link_creation_requests WHERE link_id = UUID_TO_BIN(?)",
                 String.class, currentLink.link().id().toString())).isEqualTo("k202609");
     }
@@ -96,13 +96,13 @@ class LinkCodeKeyRingIntegrationTest {
     @Test
     @DisplayName("키 ID의 비밀값 변경과 기존 결과 반환에 필요한 키 제거는 키 등록 검사에서 거부한다")
     void rejectsChangedOrMissingRequiredKey() {
-        withKeys(new LinkCodeProperties(LEGACY, "k202609", Map.of("k202609", CURRENT)),
+        withKeys(new LinkCodeProperties(DEFAULT_KEY, "k202609", Map.of("k202609", CURRENT)),
                 service -> service.createLink(command()));
 
-        assertThatThrownBy(() -> withKeys(new LinkCodeProperties(LEGACY), service -> null))
+        assertThatThrownBy(() -> withKeys(new LinkCodeProperties(DEFAULT_KEY), service -> null))
                 .isInstanceOf(LinkCodeKeyBindingException.class);
         assertThatThrownBy(() -> withKeys(new LinkCodeProperties(
-                LEGACY, "k202609", Map.of("k202609", "different-key-with-at-least-thirty-two-characters")
+                DEFAULT_KEY, "k202609", Map.of("k202609", "different-key-with-at-least-thirty-two-characters")
         ), service -> null)).isInstanceOf(LinkCodeKeyBindingException.class);
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM smart_links", Integer.class)).isEqualTo(1);
     }

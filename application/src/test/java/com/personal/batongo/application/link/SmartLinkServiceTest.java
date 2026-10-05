@@ -466,7 +466,7 @@ class SmartLinkServiceTest {
         )).thenReturn(new LinkCreationReservationPort.Reservation(
                 LINK_ID,
                 PUBLIC_ORIGIN.serialized(),
-                "legacy", null, null,
+                "default", null, null,
                 false
         ));
         when(repository.findById(LINK_ID)).thenReturn(Optional.of(
@@ -526,7 +526,7 @@ class SmartLinkServiceTest {
             String codeHash
     ) {
         when(configuredLinkCodePort.keyRingIdentity()).thenReturn(
-                new LinkCodeKeyRingIdentity("legacy", Map.of("legacy", DERIVATION_IDENTITY))
+                new LinkCodeKeyRingIdentity("default", Map.of("default", DERIVATION_IDENTITY))
         );
         when(configuredLinkCodePort.issue(anyString(), anyString()))
                 .thenReturn(new IssuedLinkCode(rawCode, codeHash));

@@ -167,7 +167,7 @@ class LinkCodeKeyGuardIntegrationTest {
                             public_origin,
                             key_id,
                             created_at
-                        ) VALUES (?, UUID_TO_BIN(?), 'https://go.example', 'legacy', UTC_TIMESTAMP(6))
+                        ) VALUES (?, UUID_TO_BIN(?), 'https://go.example', 'default', UTC_TIMESTAMP(6))
                         """,
                 "d".repeat(64),
                 "9752e1df-8f49-480c-87b4-e871b28ee0c4"
@@ -231,7 +231,7 @@ class LinkCodeKeyGuardIntegrationTest {
     ) {
         new TransactionTemplate(transactionManager).executeWithoutResult(
                 status -> {
-                    linkCodeKeyGuardPort.verifyOrBind(new LinkCodeKeyRingIdentity("legacy", Map.of("legacy", identity)));
+                    linkCodeKeyGuardPort.verifyOrBind(new LinkCodeKeyRingIdentity("default", Map.of("default", identity)));
                     bound.countDown();
                     try {
                         if (!release.await(10, TimeUnit.SECONDS)) {
@@ -258,7 +258,7 @@ class LinkCodeKeyGuardIntegrationTest {
         new TransactionTemplate(transactionManager).executeWithoutResult(
                 status -> {
                     started.countDown();
-                    linkCodeKeyGuardPort.verifyOrBind(new LinkCodeKeyRingIdentity("legacy", Map.of("legacy", identity)));
+                    linkCodeKeyGuardPort.verifyOrBind(new LinkCodeKeyRingIdentity("default", Map.of("default", identity)));
                 }
         );
         return identity;
@@ -284,7 +284,7 @@ class LinkCodeKeyGuardIntegrationTest {
     private void bind(LinkCodeDerivationIdentity identity) {
         jdbcTemplate.update("DELETE FROM link_code_keys");
         jdbcTemplate.update(
-                "INSERT INTO link_code_keys (key_id, derivation_version, key_fingerprint) VALUES ('legacy', ?, ?)",
+                "INSERT INTO link_code_keys (key_id, derivation_version, key_fingerprint) VALUES ('default', ?, ?)",
                 identity.version(), identity.hmacFingerprint()
         );
     }
@@ -295,7 +295,7 @@ class LinkCodeKeyGuardIntegrationTest {
 
     private LinkCodeDerivationIdentity storedIdentity() {
         return jdbcTemplate.query(
-                "SELECT derivation_version, key_fingerprint FROM link_code_keys WHERE key_id = 'legacy'",
+                "SELECT derivation_version, key_fingerprint FROM link_code_keys WHERE key_id = 'default'",
                 resultSet -> resultSet.next()
                         ? new LinkCodeDerivationIdentity(
                                 resultSet.getString("derivation_version"),

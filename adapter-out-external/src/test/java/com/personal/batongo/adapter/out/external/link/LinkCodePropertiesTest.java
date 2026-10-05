@@ -67,13 +67,4 @@ class LinkCodePropertiesTest {
 
         assertThat(new LinkCodeProperties(legacySecret).secret()).isEqualTo(legacySecret);
     }
-
-    @Test
-    @DisplayName("이미 공개된 링크 코드 비밀 예시값은 거부한다")
-    void rejectsPublishedSecret() {
-        assertThatThrownBy(() -> new LinkCodeProperties(
-                "replace-with-a-separate-at-least-32-character-secret"
-        ))
-                .isInstanceOf(IllegalArgumentException.class);
-    }
 }

@@ -100,11 +100,7 @@ class DistributedResolverQuotaIntegrationTest {
                 "redis://" + REDIS.getHost() + ":" + REDIS.getMappedPort(6379)
         );
         try (var connection = client.connect()) {
-            var properties = new DistributedResolverQuotaProperties(true, "redis://localhost", 10,
-                    Duration.ofSeconds(30), Duration.ofMillis(500));
-            var health = new DistributedResolverQuotaHealthIndicator(
-                    properties, Optional.of(connection)
-            );
+            var health = new DistributedResolverQuotaHealthIndicator(Optional.of(connection));
 
             assertThat(health.health().getStatus()).isEqualTo(Status.UP);
             connection.close();

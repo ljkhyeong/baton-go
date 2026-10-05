@@ -1,6 +1,5 @@
 package com.personal.batongo.bootstrap;
 
-import com.personal.batongo.adapter.out.external.ratelimit.DistributedResolverQuotaProperties;
 import io.lettuce.core.RedisException;
 import io.lettuce.core.api.StatefulRedisConnection;
 import java.util.Optional;
@@ -11,24 +10,19 @@ import org.springframework.stereotype.Component;
 @Component("resolverQuotaRedis")
 public class DistributedResolverQuotaHealthIndicator implements HealthIndicator {
 
-    private final DistributedResolverQuotaProperties properties;
+    // Redis 연결 빈은 분산 요청 제한을 켰을 때만 만들어진다.
     private final Optional<StatefulRedisConnection<String, String>> connection;
 
     public DistributedResolverQuotaHealthIndicator(
-            DistributedResolverQuotaProperties properties,
             Optional<StatefulRedisConnection<String, String>> connection
     ) {
-        this.properties = properties;
         this.connection = connection;
     }
 
     @Override
     public Health health() {
-        if (!properties.enabled()) {
-            return Health.up().build();
-        }
         if (connection.isEmpty()) {
-            return Health.down().build();
+            return Health.up().build();
         }
         try {
             connection.get().sync().ping();

@@ -42,8 +42,6 @@ public class ManagementApiSecurityConfiguration {
     static final String LINK_CREATE_AUTHORITY = "SCOPE_baton-go.links.create";
     static final String LINK_READ_AUTHORITY = "SCOPE_baton-go.links.read";
     static final String LINK_REVOKE_AUTHORITY = "SCOPE_baton-go.links.revoke";
-    static final String TARGET_CONTRACT_OPERATE_AUTHORITY =
-            "SCOPE_baton-go.target-contract.operate";
 
     @Bean
     JwkSetUriJwtDecoderBuilderCustomizer managementJwkHttpClient(ManagementJwkProperties properties) {
@@ -123,8 +121,6 @@ public class ManagementApiSecurityConfiguration {
                         .hasAuthority(LINK_READ_AUTHORITY)
                         .requestMatchers(HttpMethod.PUT, "/api/v1/links/*/revocation")
                         .hasAuthority(LINK_REVOKE_AUTHORITY)
-                        .requestMatchers("/api/v1/operations/**")
-                        .hasAuthority(TARGET_CONTRACT_OPERATE_AUTHORITY)
                         .anyRequest().authenticated()
                 )
                 .oauth2ResourceServer(oauth2 -> oauth2

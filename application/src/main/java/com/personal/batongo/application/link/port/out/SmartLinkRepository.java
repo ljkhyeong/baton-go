@@ -67,8 +67,7 @@ public interface SmartLinkRepository {
             Instant expiresAt,
             Instant revokedAt,
             Instant createdAt,
-            long version,
-            boolean creationRequestPresent
+            long version
     ) {
         /** v1 계약에 맞는 저장 대상만 신뢰 대상으로 바꾼다. */
         public Optional<TrustedTarget> trustedTarget() {

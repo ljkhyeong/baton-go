@@ -32,7 +32,6 @@ import com.personal.batongo.application.link.port.in.SmartLinkUseCase.CreatedLin
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.LinkResult;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.LinkBatchResult;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.LinkSearchResult;
-import com.personal.batongo.application.link.port.in.TargetContractOperationsUseCase;
 import com.personal.batongo.domain.link.LinkPurpose;
 import com.personal.batongo.domain.link.TargetSystem;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -85,9 +84,7 @@ import org.springframework.web.util.UriTemplate;
 @WebMvcTest(
         properties = {
                 "spring.security.oauth2.resourceserver.jwt.issuer-uri=https://identity.example",
-                "spring.security.oauth2.resourceserver.jwt.audiences=baton-go",
-                "baton-go.target-contract-operations.enabled=true",
-                "baton-go.target-contract-operations.private-ingress-confirmed=true"
+                "spring.security.oauth2.resourceserver.jwt.audiences=baton-go"
         }
 )
 @ContextConfiguration(classes = ManagementAuthenticationHttpContractTest.WebControllerScan.class)
@@ -126,9 +123,6 @@ class ManagementAuthenticationHttpContractTest {
 
     @MockitoBean
     private SmartLinkUseCase useCase;
-
-    @MockitoBean
-    private TargetContractOperationsUseCase operationsUseCase;
 
     // 함께 스캔되는 공개 링크 컨트롤러 생성에만 필요하다.
     @MockitoBean
@@ -197,7 +191,7 @@ class ManagementAuthenticationHttpContractTest {
                 .andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
                 .andExpect(jsonPath("$.requestId").value("management-response-format"));
 
-        verifyNoInteractions(useCase, operationsUseCase);
+        verifyNoInteractions(useCase);
         assertThat(output).doesNotContain("관리 작업 완료");
     }
 
@@ -218,14 +212,6 @@ class ManagementAuthenticationHttpContractTest {
                         put("/api/v1/links/{linkId}/revocation", linkId)
                                 .accept(MediaType.TEXT_HTML),
                         "baton-go.links.revoke"
-                ),
-                Arguments.of(
-                        "계약 위반 링크 폐기의 XML 응답 요청",
-                        put("/api/v1/operations/link-target-contract-v1/links/{linkId}/revocation", linkId)
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content("{\"expectedVersion\":7}")
-                                .accept(MediaType.APPLICATION_XML),
-                        "baton-go.target-contract.operate"
                 )
         );
     }
@@ -287,7 +273,7 @@ class ManagementAuthenticationHttpContractTest {
                 .andExpect(jsonPath("$.code")
                         .value("MANAGEMENT_AUTHORIZATION_REQUIRED"));
 
-        verifyNoInteractions(useCase, operationsUseCase);
+        verifyNoInteractions(useCase);
     }
 
     private static Stream<Arguments> managementRequestsWithWrongScope() {
@@ -306,11 +292,6 @@ class ManagementAuthenticationHttpContractTest {
                 Arguments.of(
                         "조회 권한으로 링크 폐기를 요청한다",
                         put("/api/v1/links/{linkId}/revocation", linkId),
-                        "baton-go.links.read"
-                ),
-                Arguments.of(
-                        "조회 권한으로 대상 계약 운영을 요청한다",
-                        get("/api/v1/operations/link-target-contract-v1/inventory"),
                         "baton-go.links.read"
                 )
         );
@@ -333,7 +314,7 @@ class ManagementAuthenticationHttpContractTest {
                 .andExpect(header().doesNotExist(HttpHeaders.WWW_AUTHENTICATE))
                 .andExpect(content().string(""));
 
-        verifyNoInteractions(useCase, operationsUseCase);
+        verifyNoInteractions(useCase);
     }
 
     @Test
@@ -353,7 +334,6 @@ class ManagementAuthenticationHttpContractTest {
                 .andExpect(status().isOk());
 
         verify(useCase).getLink(linkId);
-        verifyNoInteractions(operationsUseCase);
     }
 
     @ParameterizedTest
@@ -429,7 +409,7 @@ class ManagementAuthenticationHttpContractTest {
                     .andExpect(status().isForbidden());
         }
 
-        verifyNoInteractions(useCase, operationsUseCase);
+        verifyNoInteractions(useCase);
     }
 
     private static Stream<HttpMethod> withImplicitHead(RequestMethod method) {

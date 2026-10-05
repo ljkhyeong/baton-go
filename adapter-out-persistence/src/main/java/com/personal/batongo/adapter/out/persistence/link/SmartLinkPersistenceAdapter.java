@@ -28,12 +28,7 @@ public class SmartLinkPersistenceAdapter implements SmartLinkRepository {
                    stored_link.expires_at,
                    stored_link.revoked_at,
                    stored_link.created_at,
-                   stored_link.version,
-                   EXISTS(
-                       SELECT 1
-                       FROM link_creation_requests creation_request
-                       WHERE creation_request.link_id = stored_link.id
-                   ) AS creation_request_present
+                   stored_link.version
             FROM smart_links stored_link
             """;
 
@@ -192,8 +187,7 @@ public class SmartLinkPersistenceAdapter implements SmartLinkRepository {
                 UtcDateTimes.read(resultSet, "expires_at"),
                 UtcDateTimes.read(resultSet, "revoked_at"),
                 UtcDateTimes.read(resultSet, "created_at"),
-                resultSet.getLong("version"),
-                resultSet.getBoolean("creation_request_present")
+                resultSet.getLong("version")
         );
     }
 }

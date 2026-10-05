@@ -80,13 +80,16 @@ class ManagementJwtBootstrapIntegrationTest {
         JWT_SERVER.stop(0);
     }
 
+    private static final String MISSING_LINK_PATH =
+            "/api/v1/links/00000000-0000-4000-8000-000000000001";
+
     @Autowired
     private MockMvc mockMvc;
 
     @Test
     @DisplayName("Spring 통합 구성은 서명·발급자·대상을 검증한 관리 JWT만 허용한다")
     void assemblesManagementJwtAuthentication() throws Exception {
-        mockMvc.perform(get("/api/v1/operations/link-target-contract-v1/inventory"))
+        mockMvc.perform(get(MISSING_LINK_PATH))
                 .andExpect(status().isUnauthorized())
                 .andExpect(header().string(
                         HttpHeaders.WWW_AUTHENTICATE,
@@ -97,15 +100,15 @@ class ManagementJwtBootstrapIntegrationTest {
                         .value("MANAGEMENT_AUTHENTICATION_REQUIRED"))
                 .andExpect(jsonPath("$.requestId").isNotEmpty());
 
-        mockMvc.perform(get("/api/v1/operations/link-target-contract-v1/inventory")
+        mockMvc.perform(get(MISSING_LINK_PATH)
                         .header(
                                 HttpHeaders.AUTHORIZATION,
                                 "Bearer " + managementJwt(JWT_ISSUER, "baton-go")
                         ))
                 .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.code").value("RESOURCE_NOT_FOUND"));
+                .andExpect(jsonPath("$.code").value("LINK_NOT_FOUND"));
 
-        mockMvc.perform(get("/api/v1/operations/link-target-contract-v1/inventory")
+        mockMvc.perform(get(MISSING_LINK_PATH)
                         .header(
                                 HttpHeaders.AUTHORIZATION,
                                 "Bearer " + managementJwt(JWT_ISSUER, "another-service")
@@ -114,7 +117,7 @@ class ManagementJwtBootstrapIntegrationTest {
                 .andExpect(jsonPath("$.code")
                         .value("MANAGEMENT_AUTHENTICATION_REQUIRED"));
 
-        mockMvc.perform(get("/api/v1/operations/link-target-contract-v1/inventory")
+        mockMvc.perform(get(MISSING_LINK_PATH)
                         .header(
                                 HttpHeaders.AUTHORIZATION,
                                 "Bearer " + managementJwt(
@@ -135,7 +138,7 @@ class ManagementJwtBootstrapIntegrationTest {
                 .audience(List.of(audience))
                 .issuedAt(now.minusSeconds(5))
                 .expiresAt(now.plusSeconds(60))
-                .claim("scope", "baton-go.target-contract.operate")
+                .claim("scope", "baton-go.links.read")
                 .build();
         JwtEncoder encoder = NimbusJwtEncoder.withKeyPair(
                         (RSAPublicKey) JWT_KEY_PAIR.getPublic(),

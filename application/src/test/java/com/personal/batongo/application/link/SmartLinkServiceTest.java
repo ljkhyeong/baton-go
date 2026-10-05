@@ -220,8 +220,7 @@ class SmartLinkServiceTest {
                 NOW.plusSeconds(300),
                 firstRevokedAt,
                 NOW.minusSeconds(60),
-                3L,
-                true
+                3L
         );
         when(repository.findStoredByIdForUpdate(LINK_ID)).thenReturn(Optional.of(snapshot));
 
@@ -455,8 +454,7 @@ class SmartLinkServiceTest {
                 expiresAt,
                 null,
                 createdAt,
-                0,
-                true
+                0
         );
     }
 
@@ -509,8 +507,7 @@ class SmartLinkServiceTest {
                 NOW.plusSeconds(300),
                 null,
                 NOW.minusSeconds(60),
-                3L,
-                true
+                3L
         );
     }
 

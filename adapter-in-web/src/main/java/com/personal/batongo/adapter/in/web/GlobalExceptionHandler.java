@@ -11,8 +11,6 @@ import com.personal.batongo.application.link.error.LinkPurgedException;
 import com.personal.batongo.application.link.error.PublicResolverQuotaUnavailableException;
 import com.personal.batongo.application.link.error.PublicLinkOriginReplayUnavailableException;
 import com.personal.batongo.application.link.error.StoredTargetPolicyViolationException;
-import com.personal.batongo.application.link.error.TargetContractRemediationNotApplicableException;
-import com.personal.batongo.application.link.error.TargetContractRemediationStaleException;
 import com.personal.batongo.domain.link.LinkUnavailableException;
 import com.personal.batongo.domain.link.LinkValidationException;
 import io.micrometer.core.instrument.Counter;
@@ -137,20 +135,6 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
             HttpServletRequest request
     ) {
         return error(HttpStatus.BAD_REQUEST, "INVALID_REQUEST", exception.getMessage(), request);
-    }
-
-    @ExceptionHandler(TargetContractRemediationNotApplicableException.class)
-    public ResponseEntity<ErrorResponse> handleTargetContractRemediationNotApplicable(
-            TargetContractRemediationNotApplicableException exception, HttpServletRequest request
-    ) {
-        return error(HttpStatus.CONFLICT, "REMEDIATION_NOT_APPLICABLE", exception.getMessage(), request);
-    }
-
-    @ExceptionHandler(TargetContractRemediationStaleException.class)
-    public ResponseEntity<ErrorResponse> handleTargetContractRemediationStale(
-            TargetContractRemediationStaleException exception, HttpServletRequest request
-    ) {
-        return error(HttpStatus.CONFLICT, "REMEDIATION_STALE", exception.getMessage(), request);
     }
 
     @ExceptionHandler(InvalidIdempotencyKeyException.class)

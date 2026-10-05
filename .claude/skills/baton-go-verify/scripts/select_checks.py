@@ -20,7 +20,6 @@ RULES = [
     (r"^adapter-in-web/", [":adapter-in-web:test", ":adapter-in-web:apiContractDocs"], []),
     (r"^adapter-out-external/", [":adapter-out-external:test"], []),
     (r"^adapter-out-persistence/", [":adapter-out-persistence:compileJava", ":bootstrap:mysqlTest"], []),
-    (r"^guard-tool/", [":guard-tool:test", ":bootstrap:mysqlTest"], []),
     (r"^bootstrap/src/main/resources/db/migration/", [":bootstrap:mysqlTest"],
      ["마이그레이션: .claude/skills/baton-go-flows/references/db-migration.md 점검"]),
     (r"^bootstrap/src/(main|test)/(?!resources/db/migration/)", [":bootstrap:test"], []),
@@ -53,7 +52,7 @@ RULES = [
 
 MODULE_TASKS = {
     ":domain:test", ":application:test", ":adapter-in-web:test", ":adapter-out-external:test",
-    ":guard-tool:test", ":bootstrap:test",
+    ":bootstrap:test",
 }
 
 

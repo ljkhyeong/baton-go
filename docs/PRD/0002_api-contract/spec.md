@@ -13,7 +13,7 @@
 `requestId`는 응답 헤더와 같은 값이다. 공개 링크의 HTML 안내 화면에는 같은 값을
 문의용 요청 번호로 표시한다.
 
-관리 링크 API와 대상 계약 운영 API의 성공 응답은 `application/json`이다. `Accept`가 없거나
+관리 링크 API의 성공 응답은 `application/json`이다. `Accept`가 없거나
 `*/*`이면 기존처럼 JSON을 반환한다. HTML·XML 등 JSON과 호환되지 않는 형식만 요청하면
 인증·권한 검사 뒤 Spring의 요청 매핑 단계에서 `406 INVALID_REQUEST`로 거부한다.
 이때 생성·폐기 서비스는 호출하지 않고 관리 작업 완료 이력도 남기지 않는다.
@@ -68,9 +68,6 @@ HTTP 상태와 `code`를 기준으로 처리한다.
 - 단축 링크 요청 한도 초과: `429 RATE_LIMIT_EXCEEDED`
 - Redis 분산 요청 제한 장애: `503 RATE_LIMIT_UNAVAILABLE`
 - 허용되지 않은 대상 시스템·목적·위치 식별자 조합: `400 INVALID_LINK`
-- 대상 계약 운영 기능의 점검 요청 값 오류: `400 INVALID_REQUEST`
-- 계약 위반 링크 폐기 API로 규칙을 충족하는 링크의 폐기를 요청함: `409 REMEDIATION_NOT_APPLICABLE`
-- 계약 위반 링크 폐기 API로 점검 뒤 변경된 링크의 폐기를 요청함: `409 REMEDIATION_STALE`
 - 예상하지 못한 오류: `500 INTERNAL_ERROR`
 
 관리 인증 `401` 응답에는
@@ -127,11 +124,6 @@ Idempotency-Key: 8e448211-66ae-44ab-9888-c4960648c22b
   만들지 않고 `500 LINK_CREATION_REPLAY_UNAVAILABLE`로 실패한다. 이 오류는 저장 일관성 복구가
   끝날 때까지 자동 재시도하지 않는다.
 - 키 누락·형식 오류는 `400 INVALID_IDEMPOTENCY_KEY`로 거부한다.
-- 과거 배포가 이미 저장한 링크 생성 요청에 한해서는 당시 파서가 허용했던 대문자, nil,
-  버전 `0`·`6..f`, RFC 비준수 변형의 정규 UUID를 소문자로 정규화해 조회한다.
-  동일한 멱등성 키 해시의 기존 예약과 동일 요청 내용이 모두 확인될 때만 기존 결과를 `200`으로 반환하며,
-  예약이 없으면 `400 INVALID_IDEMPOTENCY_KEY`로 거부하고 새 예약이나 링크를 만들지 않는다.
-  이 예외는 기존 요청의 재시도에만 적용하며 신규 생성 문법을 바꾸지 않는다.
 - 요청 본문에 정의되지 않은 필드가 있으면 저장하지 않고
   `400 INVALID_REQUEST`로 거부한다.
 - `targetSystem`과 `purpose`는 계약에 정의된 대문자 열거형 이름의 JSON 문자열만 허용한다.
@@ -166,10 +158,6 @@ Idempotency-Key: 8e448211-66ae-44ab-9888-c4960648c22b
   `9999-12-31T23:59:59.999999Z` 이하여야 한다. 범위 밖이거나 소수 초 7번째부터 9번째
   자리 중 하나라도 0이 아니면 서버가 반올림하거나 절삭하지 않고 링크 생성 예약 전에
   `400 INVALID_REQUEST`로 거부한다.
-- 과거 배포가 범위 안의 나노초 입력을 마이크로초로 절삭해 이미 저장한 요청은 예외다.
-  동일한 멱등성 키 해시의 기존 예약이 있고, 같은 마이크로초 절삭 결과가 저장 요청 내용과
-  일치할 때만 기존 결과를 `200`으로 반환한다. 예약이 없으면 `400 INVALID_REQUEST`로 거부하며 새 행을
-  만들지 않는다. MySQL `DATETIME(6)` 범위를 벗어난 시각은 기존 예약 여부와 관계없이 항상 거부한다.
 - 호출자는 재시도할 때 두 시각을 포함해 최초 요청과 같은 값을 사용한다.
 
 최초 생성 응답 `201`, 동일 요청 재시도 응답 `200`:
@@ -206,7 +194,7 @@ Idempotency-Key: 8e448211-66ae-44ab-9888-c4960648c22b
 
 `baton-go.links.read` scope가 있는 관리 JWT가 필요하다. 일반 운영 중 링크 ID를 찾거나
 여러 링크 상태를 확인하는 읽기 전용 목록이다. `HEAD`도 같은 읽기 권한과 조회 조건을
-사용하며 본문 없이 응답한다. 기존 대상 계약 운영 API의 활성화 설정은 필요하지 않다.
+사용하며 본문 없이 응답한다.
 
 쿼리 매개변수는 모두 선택 사항이며 지정한 조건을 함께 적용한다.
 
@@ -246,7 +234,7 @@ Idempotency-Key: 8e448211-66ae-44ab-9888-c4960648c22b
 ```
 
 - 저장 대상은 기존 v1 정책으로 검사하며 허용되지 않은 조합·경로·알 수 없는 열거형 행은 목록에서
-  제외한다. 해당 행의 점검·폐기는 기존 대상 계약 운영 API를 사용한다.
+  제외한다. 해당 행은 계약 위반 경보와 내부 로그로 원인을 조사한다.
 - 한 요청은 다음 행 존재 확인용 한 건을 포함해 최대 `limit + 1`건만 읽는다. 필터를
   통과한 항목만 반환하므로 `items`가 `limit`보다 적거나 비어 있어도 `hasMore=true`일 수 있다.
   `hasMore`는 아직 검사하지 않은 저장 행의 존재이며 조건에 맞는 결과가 남았다는 보장은 아니다.
@@ -332,99 +320,11 @@ Idempotency-Key: 8e448211-66ae-44ab-9888-c4960648c22b
 
 `status`는 `REVOKED`이며 `evaluatedAt`은 각 요청의 처리 시각이다. 반복 폐기의 판정 시각은
 달라질 수 있지만 최초 `revokedAt`과 저장 데이터는 바꾸지 않는다.
+최초 폐기를 처리한 서버의 시계가 생성 시각보다 늦으면 오류로 거부하지 않고 `revokedAt`을 `createdAt`과
+같게 저장한다. 생성 직후 다른 Pod에서 폐기해도 시계 차이 때문에 실패하지 않는다.
 
 저장 대상이 현재 v1 계약을 위반하면 일반 관리 조회와 폐기도 원문 대상을 응답하지 않고
-`404 LINK_NOT_FOUND`로 숨긴다. 계약 전 링크의 점검과 폐기는 아래 운영 기능만 사용한다.
-
-## 대상 계약 v1 운영 기능
-
-이 API는 계약 전 저장 데이터의 일회성 점검과 승인된 개별 폐기를 위한 관리 기능이다.
-기본값은 비활성화이며 유지보수 시간대에 공개 링크 경로가 차단됐는지 확인한 뒤
-`BATON_GO_TARGET_CONTRACT_OPERATIONS_ENABLED=true`와
-`BATON_GO_TARGET_CONTRACT_OPERATIONS_PRIVATE_INGRESS_CONFIRMED=true`를 모두 설정해야 등록한다.
-확인 값은 네트워크 차단을 대신하지 않으며,
-`baton-go.target-contract.operate` 권한(scope)이 있는 관리 JWT와 비공개 Ingress를
-모두 요구한다.
-
-관리 인증은 운영 컨트롤러의 등록 여부보다 먼저 적용한다.
-따라서 비활성 상태에서 관리 인증이 없거나 올바르지 않은 요청은
-`401 MANAGEMENT_AUTHENTICATION_REQUIRED`다. 유효한 관리 인증을 통과한 요청은 일반
-등록되지 않은 경로와 같은 `404 RESOURCE_NOT_FOUND`다.
-
-### GET `/api/v1/operations/link-target-contract-v1/inventory`
-
-쿼리 매개변수:
-
-- `afterLinkId`: 선택적 UUID 커서. 해당 ID 다음 행부터 읽는다.
-- `limit`: 기본 `100`, 최소 `1`, 최대 `500`이다.
-
-링크 ID 기준 커서로 모든 링크를 나눠 조회한다. DB에 저장된 원문 문자열을 읽어
-도메인의 v1 허용 대상 규칙으로 분류한다. 성공 예시는 다음과 같다.
-
-```json
-{
-  "contractVersion": "v1",
-  "items": [
-    {
-      "linkId": "00000000-0000-0000-0000-000000000000",
-      "compliance": "NON_COMPLIANT",
-      "remediationState": "UNREVOKED",
-      "creationRequestState": "PRESENT",
-      "createdAt": "2026-07-29T11:00:00Z",
-      "expiresAt": null,
-      "revokedAt": null,
-      "version": 0
-    }
-  ],
-  "nextAfterLinkId": "00000000-0000-0000-0000-000000000000",
-  "hasMore": true
-}
-```
-
-- `compliance`: `COMPLIANT`, `NON_COMPLIANT`
-- `remediationState`: `NOT_REQUIRED`, `UNREVOKED`, `REVOKED`
-- `creationRequestState`: `PRESENT`, `MISSING`
-- `hasMore=true`일 때만 `nextAfterLinkId`를 다음 커서로 사용한다.
-- 응답에는 대상 경로, 원문 대상 시스템·목적, 코드 해시, 단축 URL, 멱등성 해시와
-  그 요약값을 포함하지 않는다.
-- SQL에 대상 정규식을 복제하지 않고 애플리케이션의 `TrustedTargetPolicy`로 판정한다.
-
-### PUT `/api/v1/operations/link-target-contract-v1/links/{linkId}/revocation`
-
-승인한 점검 항목 한 건만 폐기한다. 자동 일괄 폐기는 제공하지 않는다.
-
-```json
-{
-  "expectedVersion": 0
-}
-```
-
-`expectedVersion`은 `0..9223372036854775806` 범위의 JSON 정수 토큰만 허용한다. 문자열,
-소수와 지수 표기처럼 Jackson이 정수로 강제 변환할 수 있는 다른 표현과 다음 버전으로
-증가할 수 없는 `9223372036854775807`은 행을 잠그거나 폐기하지 않고
-`400 INVALID_REQUEST`로 거부한다.
-
-서버는 DB 행을 잠근 뒤 `TrustedTargetPolicy`와 버전을 다시 확인한다.
-
-- 준수 행: `409 REMEDIATION_NOT_APPLICABLE`, 변경 없음
-- 점검 뒤 변경됐으며 아직 폐기되지 않은 비준수 행: `409 REMEDIATION_STALE`, 변경 없음
-- 존재하지 않는 행: `404 LINK_NOT_FOUND`
-- 비준수 행: 최초 `revokedAt`을 보존하는 멱등 폐기와 `200 OK`
-
-```json
-{
-  "linkId": "00000000-0000-0000-0000-000000000000",
-  "contractVersion": "v1",
-  "remediationState": "REVOKED",
-  "revokedAt": "2026-08-03T00:00:00Z",
-  "alreadyRevoked": false
-}
-```
-
-이미 폐기한 비준수 행의 반복 요청은 같은 `revokedAt`과
-`alreadyRevoked=true`를 반환한다. 대상과 생성 예약 행은 수정·삭제하지 않는다.
-원본을 관리하는 BATON·ROUND 서비스가 대상 경로를 확인한 뒤 새 요청 UUID로
-링크 생성 API를 호출해 재발급한다.
+`404 LINK_NOT_FOUND`로 숨긴다.
 
 ## GET·HEAD `/l/{code}`
 

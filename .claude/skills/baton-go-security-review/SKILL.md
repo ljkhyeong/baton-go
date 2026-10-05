@@ -55,7 +55,6 @@ ROUND 참여 허가, 세션 ID, DB 비밀번호, 웹훅 URL.
 - 새 `/api/v1` 엔드포인트가 `ManagementApiSecurityConfiguration`에서 작업별 scope(`baton-go.links.create`·`read`·`revoke` 등)를
   요구하는가. 기본 허용(`permitAll`)이나 넓은 경로 패턴으로 다른 엔드포인트가 열리지 않는가.
 - `iss`·`aud`·`exp`·공백 아닌 `sub` 검증이 유지되는가. 발급자·JWK 주소의 HTTP 허용이 루프백 개발 환경으로 한정되는가.
-- 운영 API(대상 계약 점검·폐기 등)는 기본 비활성 상태가 유지되는가.
 
 ### 6. 배포·공급망
 

@@ -52,10 +52,8 @@ BATON의 `#accessKey`나 ROUND 참여 허가를 GO의 URL, DB 또는 로그에 �
 허용되지 않은 저장 대상은 원문을 노출하지 않은 채 `404 LINK_NOT_FOUND`로
 숨긴다. 이 구현만으로 BATON·ROUND 권한과 실제 연동 검증이 끝나는 것은 아니다.
 
-v1 규칙 적용 전에 저장된 데이터는 기본 비활성화된 비공개 운영 API로 점검한다.
-BATON·ROUND가 대상을 확인한 링크만 폐기·재발급한다. 활성화 조건, 숨길 필드와
-완료 조건은 [대상 계약 v1 점검·폐기 절차](docs/RUNBOOK/target-contract-v1-remediation.md)를
-따른다. 로컬 기본 출처는 개발용이며 운영 출처·라우팅·쿠키 계약은 교차 서비스 계약의
+v1 규칙 이전에 저장된 GO DB는 없으므로 별도 점검·폐기 운영 API를 두지 않는다.
+로컬 기본 출처는 개발용이며 운영 출처·라우팅·쿠키 계약은 교차 서비스 계약의
 전체 연동 검증을 통과해야 한다.
 
 ## 기술 스택
@@ -104,9 +102,8 @@ JWK 조회에는 별도의 연결·읽기 제한을 적용한다. 기본값과 �
 허용하지만, 사용자에게 반환하는 운영 단축 URL 출처는 HTTPS여야 한다. 값은 경로, 쿼리,
 프래그먼트나 사용자 정보가 없는 출처여야 한다. 스킴·호스트 대소문자, 기본 포트와 루트 슬래시는
 정규화해 생성 예약에 저장한다. 같은 요청을 재시도할 때는 현재 설정이
-아니라 최초 예약의 출처를 사용하므로 공개 도메인을 바꾼 뒤에도 같은 단축 URL을 반환한다. V5 이전
-예약처럼 최초 발급 시 사용한 공개 출처를 확인할 수 없으면 현재 설정으로 대체하지 않고
-오류를 반환한다.
+아니라 최초 예약의 출처를 사용하므로 공개 도메인을 바꾼 뒤에도 같은 단축 URL을 반환한다.
+저장된 공개 출처를 확인할 수 없으면 현재 설정으로 대체하지 않고 오류를 반환한다.
 
 운영 공개 기본 URL을 사용하면서 BATON·ROUND 대상 환경 변수를 생략해 localhost 기본값이
 남은 설정은 시작 단계에서 거부한다. 로컬 기본값은 루프백 공개 출처를 사용하는 개발에만
@@ -121,11 +118,6 @@ HMAC 키가 등록되지 않은 DB에서는 서버 시작을 거부한다. DB �
 키 ID의 비밀값을 덮어쓰거나 기존 URL 복원에 필요한 키를 제거하면 시작을 거부한다. 정책 기준은
 [ADR-0011](docs/ADR/0011_link-code-key-ring/adr.md), 설정·교체 순서는
 [키 교체 절차](docs/RUNBOOK/link-code-key-rotation.md)다.
-
-기존 DB의 HMAC 키 정보는 모든 쓰기를 중지하고 전용 `guard-tool`로 기존 생성 요청을
-검증한 뒤에만 등록한다. 직접 SQL이나 임의 비밀값 등록 대신
-[기존 DB의 HMAC 키 정보 최초 등록 절차](docs/RUNBOOK/link-code-key-guard-binding.md)를
-따른다.
 
 `.env`는 Docker Compose의 dotenv 문법으로 해석하는 데이터 파일이며 셸 스크립트가 아니다.
 겉보기에는 `KEY=VALUE` 형식이어도 `source ./.env`로 읽으면 셸이 명령 치환, 변수 확장과
@@ -253,8 +245,8 @@ Gradle은 `gradle/verification-metadata.xml`의 SHA-256으로 내려받은 의�
 
 Flyway/JPA와 동시 생성 동작을 포함한 MySQL 통합 검증은 Docker가 실행 중인 환경에서
 별도로 수행한다. 이 테스트 묶음은 Kubernetes 배포용 MySQL 초기화 스크립트, TLS
-`VERIFY_IDENTITY`, 실행 계정의 DML 전용 권한, 마이그레이션 전용 실행기,
-기존 DB에 HMAC 키 정보를 등록하는 CLI JAR과 Testcontainers·Compose 이미지 일치도를 함께 검증한다.
+`VERIFY_IDENTITY`, 실행 계정의 DML 전용 권한, 마이그레이션 전용 실행기와
+Testcontainers·Compose 이미지 일치도를 함께 검증한다.
 CI는 Compose가 해석한 MySQL 이미지 digest와 Kubernetes 오버레이의 최종 렌더 digest도 비교한다.
 TLS 호스트 이름 검증용 테스트 별칭을 루프백에 고정하므로 로컬 Docker 소켓 또는 일반
 GitHub 실행기를 기준으로 하며, 원격 `DOCKER_HOST`는 현재 지원하지 않는다.
@@ -303,7 +295,7 @@ curl -i http://localhost:8080/api/v1/links \
 - [멱등한 링크 생성](docs/ADR/0003_idempotent-link-creation/adr.md)
 - [링크 코드 HMAC 키 정보 등록](docs/ADR/0004_link-code-key-binding/adr.md)
 - [링크 대상을 정해진 서비스 경로로 제한](docs/ADR/0005_trusted-target-locator/adr.md)
-- [계약 전 대상 정리](docs/ADR/0006_target-contract-remediation/adr.md)
+- [계약 전 대상 정리(폐기)](docs/ADR/0006_target-contract-remediation/adr.md)
 - [MySQL 절대 시각 저장 형식](docs/ADR/0007_mysql-instant-storage/adr.md)
 - [비공개 Kubernetes DB 구성](docs/ADR/0008_private-kubernetes-database-topology/adr.md)
 - [멱등 생성의 공개 출처 보존](docs/ADR/0009_idempotent-public-origin-replay/adr.md)
@@ -321,5 +313,3 @@ curl -i http://localhost:8080/api/v1/links \
 - [관리 작업 이력 조회와 보존](docs/RUNBOOK/management-operation-history.md)
 - [종료 링크 보존 기간 설정](docs/RUNBOOK/link-retention.md)
 - [HMAC 키 교체](docs/RUNBOOK/link-code-key-rotation.md)
-- [기존 DB의 HMAC 키 정보 최초 등록 절차](docs/RUNBOOK/link-code-key-guard-binding.md)
-- [대상 계약 v1 점검·폐기 절차](docs/RUNBOOK/target-contract-v1-remediation.md)

@@ -21,7 +21,7 @@
 | `ConfigMap/baton-go-mysql-runtime-user-init-*` | DML 전용 런타임 사용자 초기화 스크립트 | MySQL 초기화 디렉터리에 마운트 |
 
 이 배포만으로 공개 운영 배포가 승인되지는 않는다. PRD-0003의 BATON 세션,
-참여 허가, 회의실 매핑, 외부 프록시 라우팅과 기존 데이터 점검은 별도로 수행해야 한다.
+참여 허가, 회의실 매핑과 외부 프록시 라우팅은 별도로 수행해야 한다.
 
 ## 1. 배포 전 결정
 
@@ -258,7 +258,7 @@ baton-go-mysql-client-tls
 - `truststore.p12`에는 공개 서버 CA 인증서만 넣고 개인 키, 클라이언트 인증서나 다른
   자격 증명을 넣지 않는다. PKCS12 저장소 비밀번호는 자격 증명이 아니라 공개 CA 컨테이너의
   호환값인 고정 문자열 `baton-go-public-ca-v1`을 사용한다. 애플리케이션과 마이그레이션 Job은
-  이 값을 Hikari 드라이버 속성으로, 별도 guard CLI는 JDBC `Properties`로 제공한다.
+  이 값을 Hikari 드라이버 속성으로 제공한다.
   Hikari DEBUG가 임의 드라이버 속성을 출력할 수 있으므로
   이 값을 비밀값으로 바꾸거나 다른 자격 증명을 같은 속성에 넣지 않는다. 신뢰 저장소 객체의
   변경 무결성과 접근 제한은 Secret 저장 시 암호화와 RBAC로 보장한다.
@@ -302,14 +302,10 @@ jdbc:mysql://baton-go-mysql:3306/baton_go?sslMode=VERIFY_IDENTITY&trustCertifica
 
 공유 `BATON_GO_DB_URL`에 `connectTimeout`·`socketTimeout`을 중복 지정하지 않는다.
 특히 URL에 짧은 `socketTimeout`을 넣어 런타임과 마이그레이션의 분리를 무효화하지 않는다.
-별도 JDBC CLI인 guard 도구는 Spring 설정을 읽지 않고 JDBC `Properties`에
-`connectTimeout=3000`·`socketTimeout=5000`을 직접 지정한다. CLI 전체 실행 시간의 상한은 아니다.
 
 통신 시간 초과만으로 쓰기 실패나 DDL 롤백을 단정하지 않는다. 링크 생성 재시도는 같은
 `Idempotency-Key`를 사용하고, 마이그레이션 실패는 [실패 복구 절차](#마이그레이션-job-실패-복구)에
 따라 실제 스키마와 Flyway 이력을 먼저 확인한다.
-guard CLI의 결과가 불명확하면 [최초 등록 절차](link-code-key-guard-binding.md#도구-빌드와-실행)에
-따라 같은 비밀값 버전과 검증용 키로 다시 실행한다.
 설정 의미는 [HikariCP 설정](https://github.com/brettwooldridge/HikariCP#configuration-knobs-baby)과
 [Connector/J 네트워크 설정](https://dev.mysql.com/doc/connector-j/en/connector-j-connp-props-networking.html)을 따른다.
 
@@ -384,12 +380,6 @@ kubectl -n baton-go describe secret baton-go-mysql-client-tls
 외부 Secret controller를 쓸 때도 키 이름과 파일 형식은 같아야 한다. 서버 TLS Secret은
 MySQL Pod에만, 클라이언트 신뢰 저장소는 애플리케이션과 마이그레이션 Job에만 마운트된다. 실제 Secret
 값을 렌더 검증을 위해 임시 매니페스트에 넣지 않는다.
-
-기존 `baton-go-runtime-credentials` 또는 `baton-go-management-credentials`를 사용하는 환경은
-새 JWT 발급자와 호출자 scope 검증을 먼저 완료한다. `baton-go-link-code-secret`은 기존 DB에
-등록한 HMAC 키 버전으로 별도 생성하고 `kubectl get secret -o yaml`로 값을 출력하지 않는다.
-새 Pod가 JWT 설정과 분리된 HMAC Secret으로 Ready가 되고 모든 호출자가 JWT로 전환된 뒤 다른
-워크로드가 이전 Secret을 참조하지 않는지 확인한 후 기존 관리 토큰 Secret을 폐기한다.
 
 ## 4. 최초 배포
 
@@ -913,35 +903,6 @@ Job이 `Failed`이거나 결과가 불명확하면 다음 순서를 지킨다.
    재시도·단축 링크 접속 처리·폐기를 순서대로 확인한 뒤에만 호출자 쓰기와 공개 링크 접속을
    다시 연다.
 
-단, V5의 `public_origin` 추가는 스키마 변경만 하위 호환되며, 이전 버전의 링크 저장
-프로세스와 함께 운영할 수는 없다. V5 적용 뒤 구 Pod가 생성한 예약은 `public_origin`이 `NULL`인 채
-최초 요청을 성공시킬 수 있지만, 새 Pod에서 같은 요청을 재시도하면 기존 단축 URL을 반환할 수 없다. 이
-비공개 서버의 신규 빈 DB 첫 배포에는 구 Pod가 없으므로 해당 경합이 없지만, 이미 애플리케이션이
-실행 중인 환경에 V5를 도입할 때는 다음 유지 보수 순서를 사용한다.
-
-1. 외부에서 비공개 관리 API로 들어오는 경로와 모든 BATON 호출자의 링크 생성 경로를 차단하고 처리 중
-   요청과 아웃박스 전송을 비운다. 단축 링크 접속 처리는 비우는 동안과 구 Pod가 남아 있는
-   동안에만 계속 운영할 수 있다.
-2. `Deployment/baton-go`를 복제본 0으로 축소하고 구 Pod가 0개이며 생성 쓰기 경로가 남지 않았음을
-   확인한다. 복제본 0 확인 시점부터 5단계에서 새 Deployment 준비 상태가 회복될 때까지
-   단축 링크 접속 처리도 계획 중단 상태다.
-3. V5 이전 예약의 최초 출처 목록을 조사한다. 증명할 수 있는 행만 정규 출처로
-   유지 보수 중 채우고, 확인 자료가 없는 행을 현재 설정으로 일괄 추정하지 않는다.
-4. 완료된 이전 마이그레이션 Job을 위 절차로 삭제한 뒤 Kustomize를 적용한다. 새 애플리케이션이 먼저
-   시작하더라도 외부 프록시의 쓰기 경로 차단은 유지한다.
-5. 마이그레이션 Job `Complete`, 새 Deployment 준비 상태, 새 링크 생성과 같은 요청의 재시도 시 기존 URL 반환을
-   순서대로 확인한 뒤 쓰기 경로를 다시 연다.
-
-```bash
-kubectl -n baton-go scale deployment/baton-go --replicas=0
-kubectl -n baton-go wait --for=delete \
-  pod -l app.kubernetes.io/name=baton-go,app.kubernetes.io/component=application \
-  --timeout=10m
-```
-
-이 예외 절차를 일반 Flyway 변경의 쓰기 경로 중지 근거로 확대하지 않는다. 이후 마이그레이션은 다시
-확장/축소 호환 규칙을 따른다.
-
 Secret을 환경 변수로 주입한 실행 중 Pod는 Secret 객체가 바뀌어도 값을 자동으로
 다시 읽지 않는다. JWT signing key와 Secret 회전은 다음 수명주기별 절차를 따른다.
 
@@ -1063,14 +1024,9 @@ StatefulSet 삭제는 기본적으로 PVC를 보존하지만 Namespace 삭제는
 배포하지 않는다. 현재 10Gi를 무제한 보존 승인으로 해석하지 않고, 정책 확정 전에는
 용량 경보와 승인된 PVC 증설로 대응한다.
 
-## 10. 운영 기능 유지 보수와 운영 시작 조건
+## 10. 운영 시작 조건
 
-대상 계약 점검이 필요한 유지 보수 시간에만 관리 API 외부 접근 차단 기록과 쓰기 경로
-중지를 먼저 확인한 뒤 운영 기능 두 설정값을 함께 활성화한다. 설정값은 네트워크 접근을 제한하지
-않으며 작업 직후 다시 `false`로 배포한다. 상세 절차는
-[대상 계약 v1 점검·폐기 절차](target-contract-v1-remediation.md)를 따른다.
-
-이 운영 절차의 완료만으로 공개 운영을 승인하지 않는다. 장기 완료 조건은
+이 배포 절차의 완료만으로 공개 운영을 승인하지 않는다. 장기 완료 조건은
 [교차 서비스 링크 계약의 운영 시작 조건](../PRD/0003_cross-service-link-contract/spec.md#9-운영-시작-조건),
 현재 남은 작업은 [인수인계](../../HANDOFF.md#다음-작업)를 따른다.
 

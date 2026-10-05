@@ -36,7 +36,6 @@ CI `필수 검증` 작업의 단계 이름으로 로컬 재현 범위를 고른�
 | Prometheus 수집 설정·경보 규칙 검증, 알림 설정·라우팅 검증, 감시 시스템 중단 알림 | 같은 `promtool`·`amtool` 이미지로 `docs/RUNBOOK/prometheus-alerts.md#로컬ci-검증` |
 | Discord·Slack·Healthchecks 웹훅 전달 검증 | `python3 tools/verify-webhooks.py --output <임시 디렉터리>` |
 | 정적·단위·패키징 검증 | `./gradlew --no-daemon build` 또는 실패 모듈의 `test --tests` |
-| Guard 결합 도구 fail-closed 실행 검증 | `./gradlew --no-daemon :guard-tool:bootJar` 후 해당 `run` 블록 |
 | 운영 이미지 빌드 검증, 이미지 SBOM·취약점 보고서 생성 | `docker build --tag baton-go:ci .` 후 Trivy 단계. 취약점 발견 자체는 실패 원인이 아니며 실행 오류만 실패시킨다 |
 | 운영 이미지 기동·상태·공개 오류 응답 검증 | 이미지 빌드 후 해당 `run` 블록 (Compose 기동, `/readyz`, 공개 오류 HTML·JSON, `429`) |
 | MySQL 통합 검증 | `./gradlew --no-daemon :bootstrap:mysqlTest :bootstrap:redisTest` (Docker 필요) |

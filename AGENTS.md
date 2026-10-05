@@ -18,11 +18,10 @@
   권한과 ROUND의 방 입장 권한은 각 서비스가 판단한다.
 - BATON의 저장 트랜잭션이나 작업 공간 조회 안에서 원격 링크를 생성하지 않는다.
   생성·폐기 요청과 멱등성 키를 원본 상태와 함께 저장하고, 커밋 후 같은 키로 재시도한다.
-- 의존 방향은 `bootstrap → adapters → application → domain`과
-  `guard-tool → adapter-out-external/application → domain`이다.
+- 의존 방향은 `bootstrap → adapters → application → domain`이다.
   `domain`은 상태·시간 규칙, `application`은 사용 사례와 포트, `adapter-in-web`은 HTTP,
   `adapter-out-persistence`는 JPA·SQL, `adapter-out-external`은 코드 발급·대상 URL 조립,
-  `guard-tool`은 기존 DB의 HMAC 키 최초 등록, `bootstrap`은 설정·Flyway를 담당한다.
+  `bootstrap`은 설정·Flyway를 담당한다.
   컨트롤러에 업무 규칙을 두거나 application에서 adapter를 참조하지 않는다.
 
 ## 구현 규칙

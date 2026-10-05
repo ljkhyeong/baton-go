@@ -3,7 +3,7 @@ package com.personal.batongo.bootstrap;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
-import com.personal.batongo.adapter.in.web.FilterErrorResponseWriter;
+import com.personal.batongo.adapter.in.web.GlobalExceptionHandler;
 import com.personal.batongo.adapter.in.web.ManagementApiSecurityConfiguration;
 import com.personal.batongo.adapter.in.web.RequestIdFilter;
 import java.net.URI;
@@ -37,7 +37,7 @@ class HealthGroupConfigurationTest {
 
     @Configuration(proxyBeanMethods = false)
     @EnableAutoConfiguration(exclude = DataSourceAutoConfiguration.class)
-    @Import({ManagementApiSecurityConfiguration.class, FilterErrorResponseWriter.class, RequestIdFilter.class})
+    @Import({ManagementApiSecurityConfiguration.class, GlobalExceptionHandler.class, RequestIdFilter.class})
     static class WebConfiguration {
     }
 

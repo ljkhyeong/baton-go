@@ -7,7 +7,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.personal.batongo.adapter.in.web.FilterErrorResponseWriter;
+import com.personal.batongo.adapter.in.web.GlobalExceptionHandler;
 import com.personal.batongo.adapter.in.web.ManagementApiSecurityConfiguration;
 import com.personal.batongo.adapter.in.web.RequestIdFilter;
 import com.sun.net.httpserver.HttpServer;
@@ -51,7 +51,7 @@ import org.springframework.test.web.servlet.MockMvc;
         "baton-go.management-jwk.read-timeout=200ms"
 })
 @ContextConfiguration(classes = ManagementApiSecurityConfiguration.class)
-@Import({FilterErrorResponseWriter.class, RequestIdFilter.class, SimpleMeterRegistry.class})
+@Import({GlobalExceptionHandler.class, RequestIdFilter.class, SimpleMeterRegistry.class})
 @ExtendWith(OutputCaptureExtension.class)
 class ManagementJwtServiceFailureHttpTest {
 

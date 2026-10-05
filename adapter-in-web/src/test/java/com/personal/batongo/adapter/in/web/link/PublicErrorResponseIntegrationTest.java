@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
 import com.personal.batongo.adapter.in.web.ErrorResponse;
-import com.personal.batongo.adapter.in.web.FilterErrorResponseWriter;
 import com.personal.batongo.adapter.in.web.GlobalExceptionHandler;
 import com.personal.batongo.adapter.in.web.PublicLinkErrorPage;
 import com.personal.batongo.adapter.in.web.ManagementApiSecurityConfiguration;
@@ -60,7 +59,7 @@ class PublicErrorResponseIntegrationTest {
 
     @Configuration(proxyBeanMethods = false)
     @EnableAutoConfiguration
-    @Import({ManagementApiSecurityConfiguration.class, FilterErrorResponseWriter.class,
+    @Import({ManagementApiSecurityConfiguration.class,
             LinkResolverController.class, GlobalExceptionHandler.class, PublicLinkExceptionHandler.class,
             RequestIdFilter.class, WebMvcConfiguration.class, SimpleMeterRegistry.class,
             PublicLinkErrorPage.class})
@@ -139,6 +138,21 @@ class PublicErrorResponseIntegrationTest {
         assertThat(response.body()).isEmpty();
     }
 
+    @Test
+    @DisplayName("실제 HTTP 서버의 관리 인증 오류 HEAD는 JSON 형식과 인증 안내를 유지하고 본문을 보내지 않는다")
+    void returnsHeaderOnlyManagementAuthenticationError() throws Exception {
+        HttpResponse<String> response = send(
+                "/api/v1/links/83a430c4-5c5d-4eb4-a815-7a5ba1fd4aae", MediaType.APPLICATION_JSON_VALUE, "HEAD"
+        );
+
+        assertThat(response.statusCode()).isEqualTo(401);
+        assertThat(response.headers().firstValue(HttpHeaders.WWW_AUTHENTICATE))
+                .contains("Bearer realm=\"baton-go-management\"");
+        assertThat(response.headers().firstValue(HttpHeaders.CONTENT_TYPE))
+                .contains(MediaType.APPLICATION_JSON_VALUE);
+        assertThat(response.body()).isEmpty();
+    }
+
     private static Stream<Arguments> headErrors() {
         return Stream.of(
                 Arguments.of(new LinkUnavailableException(LinkUnavailableException.Reason.NOT_ACTIVE,
@@ -156,8 +170,12 @@ class PublicErrorResponseIntegrationTest {
     }
 
     private HttpResponse<String> requestError(String accept, String method) throws Exception {
+        return send("/l/" + PUBLIC_CODE, accept, method);
+    }
+
+    private HttpResponse<String> send(String path, String accept, String method) throws Exception {
         try (var client = HttpClient.newHttpClient()) {
-            var request = HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/l/" + PUBLIC_CODE))
+            var request = HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + path))
                     .header(HttpHeaders.ACCEPT, accept).header("X-Request-Id", REQUEST_ID)
                     .timeout(Duration.ofSeconds(5)).method(method, HttpRequest.BodyPublishers.noBody()).build();
             HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());

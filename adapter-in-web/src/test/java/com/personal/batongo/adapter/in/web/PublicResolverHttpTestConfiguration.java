@@ -18,7 +18,6 @@ import org.springframework.context.annotation.Import;
 @EnableConfigurationProperties(PublicResolverRateLimitProperties.class)
 @Import({
         ManagementApiSecurityConfiguration.class,
-        FilterErrorResponseWriter.class,
         LinkResolverController.class,
         GlobalExceptionHandler.class,
         PublicLinkExceptionHandler.class,

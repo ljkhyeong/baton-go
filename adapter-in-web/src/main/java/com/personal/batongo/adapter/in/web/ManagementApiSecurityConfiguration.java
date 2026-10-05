@@ -1,18 +1,12 @@
 package com.personal.batongo.adapter.in.web;
 
-import io.micrometer.core.instrument.Counter;
-import io.micrometer.core.instrument.MeterRegistry;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.security.oauth2.server.resource.autoconfigure.JwkSetUriJwtDecoderBuilderCustomizer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
-import org.springframework.security.authentication.AuthenticationServiceException;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.ObjectPostProcessor;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -30,14 +24,12 @@ import org.springframework.security.web.access.AccessDeniedHandler;
 import org.springframework.security.web.authentication.AuthenticationEntryPointFailureHandler;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.servlet.HandlerExceptionResolver;
 
 @Configuration(proxyBeanMethods = false)
 @EnableWebSecurity
 @EnableConfigurationProperties(ManagementJwkProperties.class)
 public class ManagementApiSecurityConfiguration {
-
-    private static final Logger LOG = LoggerFactory.getLogger(ManagementApiSecurityConfiguration.class);
-    private static final String MANAGEMENT_BEARER_CHALLENGE = "Bearer realm=\"baton-go-management\"";
 
     static final String LINK_CREATE_AUTHORITY = "SCOPE_baton-go.links.create";
     static final String LINK_READ_AUTHORITY = "SCOPE_baton-go.links.read";
@@ -67,49 +59,16 @@ public class ManagementApiSecurityConfiguration {
     @Bean
     SecurityFilterChain managementApiSecurityFilterChain(
             HttpSecurity http,
-            FilterErrorResponseWriter errorResponseWriter,
-            MeterRegistry meterRegistry
+            @Qualifier("handlerExceptionResolver") HandlerExceptionResolver exceptionResolver
     ) throws Exception {
-        Counter serviceFailures = meterRegistry.counter(
-                "baton.go.management.authentication.service.failures"
-        );
-        AuthenticationEntryPoint authenticationEntryPoint = (request, response, exception) -> {
-            if (exception instanceof AuthenticationServiceException) {
-                serviceFailures.increment();
-                LOG.error(
-                        "관리 JWT 검증 서비스 오류 requestId={} exceptionType={}",
-                        RequestIdFilter.requestId(request),
-                        exception.getClass().getName()
-                );
-                errorResponseWriter.write(
-                        request,
-                        response,
-                        HttpStatus.INTERNAL_SERVER_ERROR.value(),
-                        "INTERNAL_ERROR",
-                        "서버에서 요청을 처리하지 못했습니다"
-                );
-                return;
-            }
-            response.setHeader(HttpHeaders.WWW_AUTHENTICATE, MANAGEMENT_BEARER_CHALLENGE);
-            errorResponseWriter.write(
-                    request,
-                    response,
-                    HttpStatus.UNAUTHORIZED.value(),
-                    "MANAGEMENT_AUTHENTICATION_REQUIRED",
-                    "유효한 관리 JWT가 필요합니다"
-            );
-        };
+        // 인증·권한 오류도 MVC 예외 처리기(GlobalExceptionHandler)의 공통 오류 형식으로 응답한다.
+        AuthenticationEntryPoint authenticationEntryPoint = (request, response, exception) ->
+                exceptionResolver.resolveException(request, response, null, exception);
+        AccessDeniedHandler accessDeniedHandler = (request, response, exception) ->
+                exceptionResolver.resolveException(request, response, null, exception);
         AuthenticationEntryPointFailureHandler failureHandler =
                 new AuthenticationEntryPointFailureHandler(authenticationEntryPoint);
         failureHandler.setRethrowAuthenticationServiceException(false);
-        AccessDeniedHandler accessDeniedHandler = (request, response, exception) ->
-                errorResponseWriter.write(
-                        request,
-                        response,
-                        HttpStatus.FORBIDDEN.value(),
-                        "MANAGEMENT_AUTHORIZATION_REQUIRED",
-                        "요청한 관리 작업 권한이 필요합니다"
-                );
 
         http.securityMatcher("/api/v1/**")
                 .authorizeHttpRequests(authorize -> authorize

@@ -34,6 +34,9 @@ import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authentication.AuthenticationServiceException;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -53,13 +56,18 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
             "baton.go.public.resolver.target.contract.violations";
     private static final int MAX_LOGGED_CAUSE_TYPES = 8;
     private static final int MAX_LOGGED_STACK_FRAMES = 12;
+    private static final String MANAGEMENT_BEARER_CHALLENGE = "Bearer realm=\"baton-go-management\"";
 
     private final Counter targetPolicyViolationCounter;
     private final Counter quotaFailureCounter;
+    private final Counter authenticationServiceFailureCounter;
     private final Map<String, Counter> linkRecoveryFailureCounters;
 
     public GlobalExceptionHandler(MeterRegistry meterRegistry) {
         this.quotaFailureCounter = meterRegistry.counter("baton.go.public.resolver.quota.failures");
+        this.authenticationServiceFailureCounter = meterRegistry.counter(
+                "baton.go.management.authentication.service.failures"
+        );
         this.targetPolicyViolationCounter = meterRegistry.counter(TARGET_POLICY_VIOLATION_METRIC);
         this.linkRecoveryFailureCounters = Stream.of(
                 "LINK_CREATION_REPLAY_UNAVAILABLE",
@@ -70,6 +78,34 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                 code -> code,
                 code -> meterRegistry.counter("baton.go.management.link.recovery.failures", "code", code)
         ));
+    }
+
+    // 관리 보안 필터의 인증 진입점과 권한 거부 처리기가 HandlerExceptionResolver로 넘긴 예외다.
+    @ExceptionHandler(AuthenticationServiceException.class)
+    public ResponseEntity<ErrorResponse> handleAuthenticationServiceFailure(
+            AuthenticationServiceException exception, HttpServletRequest request
+    ) {
+        authenticationServiceFailureCounter.increment();
+        LOG.error("관리 JWT 검증 서비스 오류 requestId={} exceptionType={}",
+                RequestIdFilter.requestId(request), exception.getClass().getName());
+        return error(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", "서버에서 요청을 처리하지 못했습니다", request);
+    }
+
+    @ExceptionHandler(AuthenticationException.class)
+    public ResponseEntity<ErrorResponse> handleManagementAuthenticationRequired(HttpServletRequest request) {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .header(HttpHeaders.WWW_AUTHENTICATE, MANAGEMENT_BEARER_CHALLENGE)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(new ErrorResponse(
+                        "MANAGEMENT_AUTHENTICATION_REQUIRED",
+                        "유효한 관리 JWT가 필요합니다",
+                        RequestIdFilter.requestId(request)
+                ));
+    }
+
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ErrorResponse> handleManagementAuthorizationRequired(HttpServletRequest request) {
+        return error(HttpStatus.FORBIDDEN, "MANAGEMENT_AUTHORIZATION_REQUIRED", "요청한 관리 작업 권한이 필요합니다", request);
     }
 
     @ExceptionHandler(StoredTargetPolicyViolationException.class)

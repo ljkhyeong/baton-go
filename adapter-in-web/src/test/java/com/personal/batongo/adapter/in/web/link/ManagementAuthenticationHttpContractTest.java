@@ -20,7 +20,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.personal.batongo.adapter.in.web.FilterErrorResponseWriter;
 import com.personal.batongo.adapter.in.web.GlobalExceptionHandler;
 import com.personal.batongo.adapter.in.web.ManagementApiSecurityConfiguration;
 import com.personal.batongo.adapter.in.web.ManagementOperationLogger;
@@ -91,7 +90,6 @@ import org.springframework.web.util.UriTemplate;
 @Import({
         ManagementApiSecurityConfiguration.class,
         ManagementOperationLogger.class,
-        FilterErrorResponseWriter.class,
         GlobalExceptionHandler.class,
         WebMvcConfiguration.class,
         SimpleMeterRegistry.class
@@ -311,8 +309,8 @@ class ManagementAuthenticationHttpContractTest {
                         "Bearer " + MANAGEMENT_JWT
                 ))
                 .andExpect(status().isForbidden())
-                .andExpect(header().doesNotExist(HttpHeaders.WWW_AUTHENTICATE))
-                .andExpect(content().string(""));
+                .andExpect(header().doesNotExist(HttpHeaders.WWW_AUTHENTICATE));
+        // HEAD 본문은 서블릿 컨테이너가 버리며 실제 HTTP 서버를 쓰는 PublicErrorResponseIntegrationTest에서 확인한다.
 
         verifyNoInteractions(useCase);
     }

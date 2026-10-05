@@ -11,7 +11,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.nimbusds.jose.jwk.JWKSet;
 import com.nimbusds.jose.jwk.RSAKey;
-import com.personal.batongo.adapter.in.web.FilterErrorResponseWriter;
+import com.personal.batongo.adapter.in.web.GlobalExceptionHandler;
 import com.personal.batongo.adapter.in.web.ManagementApiSecurityConfiguration;
 import com.personal.batongo.adapter.in.web.ManagementOperationLogger;
 import com.personal.batongo.adapter.in.web.RequestIdFilter;
@@ -60,7 +60,7 @@ import org.springframework.test.web.servlet.MockMvc;
         ManagementApiSecurityConfiguration.class, LinkManagementController.class
 })
 @Import({
-        FilterErrorResponseWriter.class, RequestIdFilter.class,
+        GlobalExceptionHandler.class, RequestIdFilter.class,
         ManagementOperationLogger.class, SimpleMeterRegistry.class
 })
 class ManagementJwtExpiryHttpTest {

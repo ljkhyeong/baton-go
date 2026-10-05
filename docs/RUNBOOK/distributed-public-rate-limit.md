@@ -6,28 +6,32 @@
 | 환경 변수 | 의미 |
 | --- | --- |
 | `BATON_GO_DISTRIBUTED_RESOLVER_QUOTA_ENABLED` | 기본 `false`, 분산 제한 활성화 |
-| `BATON_GO_REDIS_URI` | 활성화 시 필수, Spring Boot `spring.data.redis.url`로 쓰는 Redis URL. 운영은 `rediss://` TLS 사용 |
+| `SPRING_DATA_REDIS_HOST`·`SPRING_DATA_REDIS_PORT` | 활성화 시 필수, Redis 주소. 기본 `localhost:6379` |
+| `SPRING_DATA_REDIS_SSL_ENABLED` | 운영은 `true`로 TLS 사용 |
+| `SPRING_DATA_REDIS_DATABASE` | GO 전용 Redis DB 번호, 기본 `0` |
+| `SPRING_DATA_REDIS_USERNAME`·`SPRING_DATA_REDIS_PASSWORD` | Redis ACL 사용자와 비밀번호. Secret으로만 주입 |
 | `BATON_GO_DISTRIBUTED_RESOLVER_QUOTA_CAPACITY` | 시간 구간당 전체 허용량, 기본 `300`, `1..1000000000` |
 | `BATON_GO_DISTRIBUTED_RESOLVER_QUOTA_WINDOW` | 요청 수를 집계하는 시간 구간, 기본 `1m`, `1ms..1d` |
 | `BATON_GO_DISTRIBUTED_RESOLVER_QUOTA_TIMEOUT` | `spring.data.redis`의 연결·명령 대기, 기본 `500ms` |
 
 Redis는 GO 환경 전용 DB와 자격 증명을 사용한다. ACL은 상태 확인의 `INFO`, 연결 초기화에 필요한
 `CLIENT SETINFO`, `SELECT`, 스크립트 실행의 `EVALSHA`·`EVAL`, `GET`, `PTTL`, `INCR`, `PEXPIRE`와
-해당 키 접근을 운영 제품의 인증·프로토콜 초기화에 맞게 제한한다. `FLUSHDB`나 관리 명령은 애플리케이션에
-부여하지 않는다. 실제 ACL·TLS 검증과 `noeviction`, 메모리·연결·고가용성 경보를 함께 준비한다.
+해당 키 접근을 운영 제품의 인증·프로토콜 초기화에 맞게 제한한다. `FLUSHDB`나 관리 명령은
+애플리케이션에 부여하지 않는다. 실제 ACL·TLS 검증과 `noeviction`, 메모리·연결·고가용성 경보를 함께 준비한다.
 
-URI에 자격 증명이 들어가므로 Secret이나 비밀값 관리자로 주입하고 로그·명령 인자·Git에
-출력하지 않는다. Kubernetes 기본 구성은 선택적 `baton-go-redis-credentials` Secret의
-`BATON_GO_REDIS_URI`를 읽는다. URI 이외의 값은 app-config에 설정한다. Compose는 별도
-환경 파일의 같은 변수를 app 컨테이너에 전달하며, 값이 비어 있으면 형식만 맞는 기본 주소를 넘긴다.
-Spring Boot는 빈 Redis URL을 시작 단계에서 거부한다. 비활성화 시 Redis 서버에 연결하지 않는다.
+자격 증명은 Secret이나 비밀값 관리자로 주입하고 로그·명령 인자·Git에 출력하지 않는다.
+`spring.data.redis.url`은 쓰지 않는다. Spring Boot는 URL을 쓰면 자격 증명을 URL에서만 읽고, 형식 오류 때
+URL 전체를 시작 실패 메시지에 출력한다. Kubernetes 기본 구성은 선택적 `baton-go-redis-credentials`
+Secret의 `SPRING_DATA_REDIS_USERNAME`·`SPRING_DATA_REDIS_PASSWORD`를 읽는다. 주소·TLS·DB 번호와
+대기 시간은 app-config에 설정한다. Compose는 별도 환경 파일의 같은 변수를 app 컨테이너에 전달한다.
+비활성화 시 Redis 서버에 연결하지 않는다.
 
 모든 Pod의 대상 Redis DB·허용량·시간 구간을 일치시킨다. Redis 연결은 첫 사용 때 맺는다. Redis
 실패는 공개 링크에 `503 RATE_LIMIT_UNAVAILABLE`를 반환하며 이때 DB 링크 조회는 진행하지 않는다.
 `/readyz`는 Spring Boot Redis 상태 확인(`INFO`) 실패를 `503`으로 반환하므로 연결하지 못한 Pod는
 시작 탐침을 통과하지 못한다. `/livez`는 정상 상태를 유지한다. `BatonGoReadinessFailed`와
-`BatonGoDistributedResolverQuotaFailure` 경보로 연결·TLS·ACL·Redis 상태를 확인한다. 복구 후 준비 상태와 카운터 허용량 안에서 공개 조회가
-다시 진행되는지 검사한다.
+`BatonGoDistributedResolverQuotaFailure` 경보로 연결·TLS·ACL·Redis 상태를 확인한다. 복구 후
+준비 상태와 카운터 허용량 안에서 공개 조회가 다시 진행되는지 검사한다.
 
 배포 검증에서는 서로 다른 두 Pod로 보낸 요청의 합계가 분산 한도를 넘지 않는지 확인하고,
 초과 요청의 `429`·`Retry-After`, Redis 차단 시 `503`, 관리 폐기 계속 사용을 확인한다.

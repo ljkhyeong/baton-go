@@ -19,12 +19,13 @@ Redis Lua 한 번으로 카운터 읽기·허용·증가·TTL 설정을 원자�
 거절한 요청은 카운터와 만료를 연장하지 않는다. 재시도 대기 시간은 Redis의 남은 TTL을
 초 단위로 올림하여 기존 `429`의 `Retry-After`에 넣는다. 서버별 시계 차이는 구간 계산에 쓰지 않는다.
 
-Spring Boot Redis 자동 구성(Spring Data Redis·Lettuce)의 공유 연결과 표준 URL·TLS·재연결을 사용한다.
+Spring Boot Redis 자동 구성(Spring Data Redis·Lettuce)의 공유 연결과 TLS·재연결을 사용한다.
+자격 증명은 URL에 넣지 않고 별도 속성으로 주입해 설정 오류 메시지에 출력되지 않게 한다.
 연결과 명령 대기 시간을 제한하고 끊긴 연결의 명령을 대기열에 누적하지 않는다. Redis 실패,
-잘못된 카운터나 TTL 없는 카운터는 `503 RATE_LIMIT_UNAVAILABLE`로 닫는다. HTML과 JSON을 기존 공개 오류 형식으로 표시하며
-장애 횟수만 집계한다. Redis 연결은 첫 사용 때 맺고, 연결 실패는 Spring Boot Redis 상태 확인으로
-준비 상태를 실패시켜 시작 탐침을 통과하지 못하게 한다. 실행 중 Redis 장애는
-공개 요청을 막지만 관리 폐기와 상태 확인은 계속 사용할 수 있다.
+잘못된 카운터나 TTL 없는 카운터는 `503 RATE_LIMIT_UNAVAILABLE`로 닫는다. HTML과 JSON을
+기존 공개 오류 형식으로 표시하며 장애 횟수만 집계한다. Redis 연결은 첫 사용 때 맺고, 연결 실패는
+Spring Boot Redis 상태 확인으로 준비 상태를 실패시켜 시작 탐침을 통과하지 못하게 한다. 실행 중 Redis
+장애는 공개 요청을 막지만 관리 폐기와 상태 확인은 계속 사용할 수 있다.
 
 기능은 기본 중지한다. 운영 Redis의 TLS·ACL·고가용성·메모리 정책을 준비한 뒤 모든 Pod를
 같은 Redis DB·용량·시간 구간 설정으로 활성화한다. Redis DB는 환경별로 분리한다.

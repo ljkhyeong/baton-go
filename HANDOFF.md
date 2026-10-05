@@ -114,6 +114,16 @@
 
 ## 최근 검증
 
+- Redis 설정 보안 보완은 미커밋 변경이 없는 `main`의 `6a4ad30`에서 시작해 `67117a6`과 문서 커밋에 저장했다.
+  4차 정리의 `spring.data.redis.url`은 Spring Boot가 형식 오류 때 URL 전체를 시작 실패 메시지에 출력하고 자격 증명도
+  URL에서만 읽는 것을 Boot 4.1.1 클래스에서 확인했다. 그래서 URL과 `BATON_GO_REDIS_URI`를 없애고 주소·TLS·DB 번호는
+  `SPRING_DATA_REDIS_HOST`·`PORT`·`SSL_ENABLED`·`DATABASE`, 자격 증명은 Kubernetes Secret의
+  `SPRING_DATA_REDIS_USERNAME`·`PASSWORD`로 주입한다. Compose의 기본 주소 우회도 함께 없앴고, 쓰지 않는 Spring Data
+  Redis 저장소 스캔을 껐다. Java 21에서 `./gradlew --no-daemon :bootstrap:test :bootstrap:redisTest :bootstrap:mysqlTest`를
+  통과했다. bootstrap 29·Redis 3·MySQL 29개에 실패·제외가 없고 시작 로그의 저장소 스캔이 사라졌다. `kubectl kustomize`로
+  운영 오버레이의 Secret 참조를, `docker compose config`로 빈 값의 기본값 적용을 확인했다. `docker build`와 CI 운영
+  이미지 기동 단계를 같은 스크립트로 로컬 실행해 통과했다. kubeconform은 로컬에 없어 원격 CI에서 확인한다.
+  원격 반영은 하지 않았다.
 - 4차 정리는 미커밋 변경이 없는 `main`의 `ee5fb6e`에서 시작해 `3b42af5`·`cab0abd`와 문서 커밋에 저장했다.
   분산 요청 제한이 직접 만들던 Lettuce 클라이언트·연결 빈과 `PING` 상태 확인을 지우고 Spring Boot
   `spring.data.redis` 자동 구성, `StringRedisTemplate`·`RedisScript`, 기본 `redis` 상태 확인으로 바꿨다. 끊긴 연결의

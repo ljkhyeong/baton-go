@@ -35,6 +35,19 @@ subprojects {
 		}
 	}
 
+	// Spring Boot 4.1.1이 관리하는 버전의 보안 수정본을 쓴다. 이 버전을 포함한 Boot 패치로 올리면 지운다.
+	configurations.configureEach {
+		resolutionStrategy.eachDependency { details ->
+			if (details.requested.group == 'org.apache.tomcat.embed') {
+				details.useVersion '11.0.26'
+				details.because 'tomcat-embed-core 11.0.25 미만 보안 취약점 수정'
+			} else if (details.requested.group.startsWith('tools.jackson')) {
+				details.useVersion '3.1.7'
+				details.because 'jackson-core·jackson-databind 3.1.7 미만 보안 취약점 수정'
+			}
+		}
+	}
+
 	dependencies {
 		implementation enforcedPlatform(SpringBootPlugin.BOM_COORDINATES)
 		annotationProcessor enforcedPlatform(SpringBootPlugin.BOM_COORDINATES)

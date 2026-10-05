@@ -8,13 +8,13 @@ import java.util.HexFormat;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-public final class LinkCreationFingerprint {
+final class LinkCreationFingerprint {
 
     private LinkCreationFingerprint() {
     }
 
-    public static String of(String targetSystem, String purpose, String targetPath,
-                            Instant notBefore, Instant expiresAt) {
+    static String of(String targetSystem, String purpose, String targetPath,
+                     Instant notBefore, Instant expiresAt) {
         String canonical = Stream.of("v1", targetSystem, purpose, targetPath,
                         notBefore == null ? null : notBefore.toString(),
                         expiresAt == null ? null : expiresAt.toString())

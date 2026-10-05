@@ -7,7 +7,6 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.personal.batongo.application.link.LinkRetentionService;
-import com.personal.batongo.application.link.port.out.LinkRetentionPort;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
 import java.time.Duration;
@@ -23,18 +22,16 @@ class LinkRetentionSchedulerTest {
         Clock clock = mock();
         when(clock.instant()).thenReturn(
                 Instant.parse("2026-09-12T00:00:00Z"),
-                Instant.parse("2026-09-12T00:01:00Z"),
                 Instant.parse("2026-09-12T00:01:01Z"),
-                Instant.parse("2026-09-12T00:02:00Z"),
                 Instant.parse("2026-09-12T00:02:01Z")
         );
-        LinkRetentionPort retention = mock();
-        when(retention.purgeRetiredLinks(any(), any(), anyInt()))
+        LinkRetentionService retention = mock();
+        when(retention.purge(any(), anyInt()))
                 .thenReturn(3)
                 .thenThrow(new IllegalStateException("test failure"));
         var meters = new SimpleMeterRegistry();
         var scheduler = new LinkRetentionScheduler(
-                new LinkRetentionService(retention, clock),
+                retention,
                 new LinkRetentionProperties(
                         true,
                         Duration.ofDays(30),

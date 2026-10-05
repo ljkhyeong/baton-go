@@ -7,12 +7,14 @@ import com.personal.batongo.adapter.out.external.link.LinkCodeProperties;
 import com.personal.batongo.adapter.out.external.link.SecureLinkCodeAdapter;
 import com.personal.batongo.application.link.CreationIdempotencyKey;
 import com.personal.batongo.application.link.LinkCodeKeyGuard;
+import com.personal.batongo.application.link.LinkRetentionService;
 import com.personal.batongo.application.link.SmartLinkService;
 import com.personal.batongo.application.link.port.in.ResolveLinkUseCase;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.CreateLinkCommand;
 import com.personal.batongo.application.link.port.out.LinkCodeKeyGuardPort;
 import com.personal.batongo.application.link.port.out.LinkCreationReservationPort;
+import com.personal.batongo.application.link.port.out.LinkRetentionPort;
 import com.personal.batongo.application.link.port.out.PublicLinkOriginPort;
 import com.personal.batongo.application.link.port.out.SmartLinkRepository;
 import com.personal.batongo.domain.link.LinkPurpose;
@@ -68,7 +70,7 @@ class LinkRetentionIntegrationTest {
 
     @Autowired private SmartLinkUseCase links;
     @Autowired private ResolveLinkUseCase resolver;
-    @Autowired private com.personal.batongo.application.link.port.out.LinkRetentionPort retention;
+    @Autowired private LinkRetentionPort retention;
     @Autowired private SmartLinkRepository repository;
     @Autowired private LinkCreationReservationPort reservations;
     @Autowired private LinkCodeKeyGuardPort guardPort;
@@ -194,8 +196,9 @@ class LinkRetentionIntegrationTest {
     }
 
     private int purge(Instant cutoff, int batchSize) {
-        return new TransactionTemplate(transactionManager).execute(status ->
-                retention.purgeRetiredLinks(cutoff, cutoff.plus(Duration.ofDays(30)), batchSize));
+        Duration period = Duration.ofDays(30);
+        var service = new LinkRetentionService(retention, Clock.fixed(cutoff.plus(period), ZoneOffset.UTC));
+        return new TransactionTemplate(transactionManager).execute(status -> service.purge(period, batchSize));
     }
 
     private CreateLinkCommand command(Instant expiresAt) {

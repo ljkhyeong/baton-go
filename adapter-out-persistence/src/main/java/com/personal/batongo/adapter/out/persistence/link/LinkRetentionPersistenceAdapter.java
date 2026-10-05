@@ -1,9 +1,10 @@
 package com.personal.batongo.adapter.out.persistence.link;
 
-import com.personal.batongo.application.link.LinkCreationFingerprint;
 import com.personal.batongo.application.link.port.out.LinkRetentionPort;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.util.List;
+import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
@@ -22,8 +23,8 @@ public class LinkRetentionPersistenceAdapter implements LinkRetentionPort {
 
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
-    public int purgeRetiredLinks(Instant cutoff, Instant purgedAt, int batchSize) {
-        var candidates = jdbc.sql("""
+    public List<RetiredLink> lockRetiredLinks(Instant cutoff, int batchSize) {
+        return jdbc.sql("""
                         SELECT BIN_TO_UUID(s.id) AS id, s.target_system, s.purpose, s.target_path,
                                s.not_before, s.expires_at
                         FROM smart_links s JOIN link_creation_requests r ON r.link_id = s.id
@@ -32,26 +33,29 @@ public class LinkRetentionPersistenceAdapter implements LinkRetentionPort {
                         LIMIT ? FOR UPDATE SKIP LOCKED
                         """)
                 .params(UtcDateTimes.write(cutoff), batchSize)
-                .query((row, index) -> new Candidate(row.getString("id"), LinkCreationFingerprint.of(
+                .query((row, index) -> new RetiredLink(UUID.fromString(row.getString("id")),
                         row.getString("target_system"), row.getString("purpose"), row.getString("target_path"),
-                        UtcDateTimes.read(row, "not_before"), UtcDateTimes.read(row, "expires_at"))))
+                        UtcDateTimes.read(row, "not_before"), UtcDateTimes.read(row, "expires_at")))
                 .list();
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void purge(List<PurgedLink> links, Instant purgedAt) {
+        if (links.isEmpty()) {
+            return;
+        }
         LocalDateTime storedPurgedAt = UtcDateTimes.write(purgedAt);
         jdbcTemplate.batchUpdate("""
                 UPDATE link_creation_requests
                 SET purged_at = ?, request_hash = ?, public_origin = NULL
                 WHERE link_id = UUID_TO_BIN(?)
-                """, candidates, batchSize, (statement, candidate) -> {
+                """, links, links.size(), (statement, link) -> {
             statement.setObject(1, storedPurgedAt);
-            statement.setString(2, candidate.requestHash());
-            statement.setString(3, candidate.id());
+            statement.setString(2, link.requestHash());
+            statement.setString(3, link.id().toString());
         });
         jdbcTemplate.batchUpdate("DELETE FROM smart_links WHERE id = UUID_TO_BIN(?)",
-                candidates, batchSize, (statement, candidate) -> statement.setString(1, candidate.id()));
-        return candidates.size();
-    }
-
-    private record Candidate(String id, String requestHash) {
-        @Override public String toString() { return "Candidate[id=" + id + "]"; }
+                links, links.size(), (statement, link) -> statement.setString(1, link.id().toString()));
     }
 }

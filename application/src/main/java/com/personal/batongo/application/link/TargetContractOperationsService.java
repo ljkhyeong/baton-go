@@ -10,8 +10,6 @@ import com.personal.batongo.application.link.port.out.SmartLinkRepository.Stored
 import com.personal.batongo.domain.link.LinkRevocationPolicy;
 import java.time.Clock;
 import java.time.Instant;
-import java.util.List;
-import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,7 +18,6 @@ import org.springframework.transaction.annotation.Transactional;
 public class TargetContractOperationsService implements TargetContractOperationsUseCase {
 
     private static final String CONTRACT_VERSION = "v1";
-    private static final int MAX_INVENTORY_LIMIT = 500;
     private static final long MAX_REVOCABLE_VERSION = Long.MAX_VALUE - 1;
 
     private final SmartLinkRepository repository;
@@ -37,26 +34,15 @@ public class TargetContractOperationsService implements TargetContractOperations
     @Override
     @Transactional(readOnly = true)
     public InventoryResult inventory(InventoryQuery query) {
-        if (query.limit() < 1 || query.limit() > MAX_INVENTORY_LIMIT) {
+        if (!StoredLinkScan.isValidLimit(query.limit())) {
             throw InvalidRequestException.targetContractInventory();
         }
-        List<StoredLinkSnapshot> scanned = repository.scanStoredAfter(
-                query.afterLinkId(),
-                query.limit() + 1
-        );
-        boolean hasMore = scanned.size() > query.limit();
-        List<InventoryItem> items = scanned.stream()
-                .limit(query.limit())
-                .map(this::toInventoryItem)
-                .toList();
-        UUID nextAfterLinkId = hasMore
-                ? items.getLast().linkId()
-                : null;
+        StoredLinkScan scan = StoredLinkScan.read(repository, query.afterLinkId(), query.limit());
         return new InventoryResult(
                 CONTRACT_VERSION,
-                items,
-                nextAfterLinkId,
-                hasMore
+                scan.rows().stream().map(this::toInventoryItem).toList(),
+                scan.nextAfterLinkId(),
+                scan.hasMore()
         );
     }
 

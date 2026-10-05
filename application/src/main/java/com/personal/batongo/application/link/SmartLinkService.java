@@ -242,20 +242,16 @@ public class SmartLinkService implements SmartLinkUseCase {
     @Override
     @Transactional(readOnly = true)
     public LinkSearchResult searchLinks(LinkSearchQuery query) {
-        if (query.limit() < 1 || query.limit() > 500
+        if (!StoredLinkScan.isValidLimit(query.limit())
                 || (query.createdFrom() != null && query.createdBefore() != null
                 && !query.createdBefore().isAfter(query.createdFrom()))
                 || (query.expiresFrom() != null && query.expiresBefore() != null
                 && !query.expiresBefore().isAfter(query.expiresFrom()))) {
             throw InvalidRequestException.linkSearch();
         }
-        List<StoredLinkSnapshot> scanned = repository.scanStoredAfter(
-                query.afterLinkId(), query.limit() + 1
-        );
+        StoredLinkScan scan = StoredLinkScan.read(repository, query.afterLinkId(), query.limit());
         Instant evaluatedAt = clock.instant();
-        boolean hasMore = scanned.size() > query.limit();
-        List<LinkResult> items = scanned.stream()
-                .limit(query.limit())
+        List<LinkResult> items = scan.rows().stream()
                 .filter(stored -> query.targetSystem() == null
                         || query.targetSystem().name().equals(stored.targetSystem()))
                 .filter(stored -> query.createdFrom() == null
@@ -270,9 +266,7 @@ public class SmartLinkService implements SmartLinkUseCase {
                         .map(target -> toResult(stored, target, stored.revokedAt(), evaluatedAt)).stream())
                 .filter(link -> query.status() == null || link.status() == query.status())
                 .toList();
-        // 반환할 링크가 없어도 마지막으로 읽은 행 다음부터 조회한다.
-        UUID nextAfterLinkId = hasMore ? scanned.get(query.limit() - 1).id() : null;
-        return new LinkSearchResult(items, nextAfterLinkId, hasMore, evaluatedAt);
+        return new LinkSearchResult(items, scan.nextAfterLinkId(), scan.hasMore(), evaluatedAt);
     }
 
     @Override

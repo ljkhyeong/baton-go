@@ -25,6 +25,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.ApplicationRunner;
@@ -57,9 +59,7 @@ class LinkCodeKeyGuardIntegrationTest {
 
     @Container
     @ServiceConnection(name = "mysql")
-    static final MySQLContainer MYSQL = new MySQLContainer(MySqlTestImage.NAME)
-            .withUrlParam("connectTimeout", "3000")
-            .withUrlParam("socketTimeout", "30000");
+    static final MySQLContainer MYSQL = MySqlTestImage.container();
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
@@ -138,45 +138,28 @@ class LinkCodeKeyGuardIntegrationTest {
         assertThat(reservationCount()).isZero();
     }
 
-    @Test
-    @DisplayName("링크가 있는데 키 정보가 없는 데이터베이스는 키를 자동 등록하지 않는다")
-    void rejectsUnboundDatabaseWithExistingLink() {
-        smartLinkUseCase.createLink(command(
-                "0508cdd2-3b3d-4728-820a-36c135531574"
-        ));
+    @ParameterizedTest
+    @ValueSource(strings = {
+            """
+            INSERT INTO smart_links (id, code_hash, target_system, target_path, purpose, created_at)
+            VALUES (UUID_TO_BIN('0508cdd2-3b3d-4728-820a-36c135531574'), REPEAT('d', 64),
+                    'ROUND', '/room/abcd-efgh-jkmn', 'MEETING_ENTRY', UTC_TIMESTAMP(6))
+            """,
+            """
+            INSERT INTO link_creation_requests (idempotency_key_hash, link_id, public_origin, key_id, created_at)
+            VALUES (REPEAT('d', 64), UUID_TO_BIN('9752e1df-8f49-480c-87b4-e871b28ee0c4'),
+                    'https://go.example', 'default', UTC_TIMESTAMP(6))
+            """
+    })
+    @DisplayName("링크나 생성 예약 중 하나만 있어도 키 정보가 없으면 키를 자동 등록하지 않는다")
+    void rejectsUnboundDatabaseWithStoredLinkData(String insertStoredData) {
+        jdbcTemplate.update(insertStoredData);
         unbind();
 
         assertThatThrownBy(() -> linkCodeKeyGuard.verifyOrBind())
                 .isInstanceOf(LinkCodeKeyBindingException.class);
 
-        assertThat(linkCount()).isEqualTo(1L);
-        assertThat(reservationCount()).isEqualTo(1L);
-        assertThat(storedIdentity()).isNull();
-    }
-
-    @Test
-    @DisplayName("생성 예약만 있어도 키 정보가 없으면 키를 자동 등록하지 않는다")
-    void rejectsUnboundDatabaseWithExistingReservation() {
-        jdbcTemplate.update(
-                """
-                        INSERT INTO link_creation_requests (
-                            idempotency_key_hash,
-                            link_id,
-                            public_origin,
-                            key_id,
-                            created_at
-                        ) VALUES (?, UUID_TO_BIN(?), 'https://go.example', 'default', UTC_TIMESTAMP(6))
-                        """,
-                "d".repeat(64),
-                "9752e1df-8f49-480c-87b4-e871b28ee0c4"
-        );
-        unbind();
-
-        assertThatThrownBy(() -> linkCodeKeyGuard.verifyOrBind())
-                .isInstanceOf(LinkCodeKeyBindingException.class);
-
-        assertThat(linkCount()).isZero();
-        assertThat(reservationCount()).isEqualTo(1L);
+        assertThat(linkCount() + reservationCount()).isEqualTo(1L);
         assertThat(storedIdentity()).isNull();
     }
 
@@ -276,7 +259,6 @@ class LinkCodeKeyGuardIntegrationTest {
     private void clearLinkData() {
         jdbcTemplate.update("DELETE FROM link_creation_requests");
         jdbcTemplate.update("DELETE FROM smart_links");
-        jdbcTemplate.update("DELETE FROM link_code_keys");
     }
 
     private void bind(LinkCodeDerivationIdentity identity) {

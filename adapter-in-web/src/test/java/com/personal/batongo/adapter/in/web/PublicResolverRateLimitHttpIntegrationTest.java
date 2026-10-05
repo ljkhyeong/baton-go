@@ -140,6 +140,7 @@ class PublicResolverRateLimitHttpIntegrationTest {
                             URI.create("http://127.0.0.1:" + port + path)
                     )
                     .header(HttpHeaders.ACCEPT, accept)
+                    // 전달 주소를 바꿔도 전역 허용량을 우회하지 못하는지 함께 확인한다.
                     .header("X-Forwarded-For", path.endsWith(FIRST_CODE)
                             ? "198.51.100.1" : "198.51.100.2")
                     .header("X-Request-Id", REQUEST_ID)

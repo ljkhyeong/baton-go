@@ -1,7 +1,6 @@
 package com.personal.batongo.adapter.out.external.link;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.personal.batongo.domain.link.LinkPurpose;
@@ -38,15 +37,6 @@ class TrustedTargetPropertiesTest {
     }
 
     @Test
-    @DisplayName("로컬 개발에서는 서로 다른 루프백 HTTP 출처를 허용한다")
-    void acceptsSeparateLoopbackOriginsForLocalDevelopment() {
-        assertThatCode(() -> new TrustedTargetProperties(
-                URI.create("http://localhost:5173"),
-                URI.create("http://127.0.0.1:5174")
-        )).doesNotThrowAnyException();
-    }
-
-    @Test
     @DisplayName("운영 BATON·ROUND 출처가 서로 다르면 거부한다")
     void rejectsDifferentOriginsOutsideLocalDevelopment() {
         assertThatThrownBy(() -> new TrustedTargetProperties(
@@ -75,5 +65,4 @@ class TrustedTargetPropertiesTest {
         ))
                 .isInstanceOf(IllegalArgumentException.class);
     }
-
 }

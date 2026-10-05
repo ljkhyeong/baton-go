@@ -158,6 +158,8 @@ class PublicErrorResponseIntegrationTest {
                 Arguments.of(new LinkUnavailableException(LinkUnavailableException.Reason.NOT_ACTIVE,
                         "아직 사용할 수 없는 링크입니다", Instant.parse("2026-07-29T15:30:00Z")),
                         MediaType.TEXT_HTML_VALUE, 404),
+                Arguments.of(new LinkUnavailableException(LinkUnavailableException.Reason.EXPIRED, "만료된 링크입니다"),
+                        MediaType.TEXT_HTML_VALUE, 410),
                 Arguments.of(new IllegalStateException("서버 오류"), MediaType.TEXT_HTML_VALUE, 500),
                 Arguments.of(new StoredTargetPolicyViolationException(UUID.fromString(
                         "70f147f2-b02a-4a63-bc27-bf60e44db591"

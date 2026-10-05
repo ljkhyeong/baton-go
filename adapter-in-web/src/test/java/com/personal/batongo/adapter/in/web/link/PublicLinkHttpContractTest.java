@@ -276,19 +276,6 @@ class PublicLinkHttpContractTest {
                 .andExpect(jsonPath("$.code").value("LINK_NOT_FOUND"));
     }
 
-    @Test
-    @DisplayName("HTML을 요청한 HEAD도 같은 링크 오류 상태와 응답 형식을 유지한다")
-    void returnsHtmlHeadersForHead() throws Exception {
-        when(useCase.resolveLink("expired-code")).thenThrow(new LinkUnavailableException(
-                LinkUnavailableException.Reason.EXPIRED, "만료된 링크입니다"
-        ));
-
-        mockMvc.perform(head("/l/expired-code").accept(MediaType.TEXT_HTML))
-                .andExpect(status().isGone())
-                .andExpect(content().contentTypeCompatibleWith(MediaType.TEXT_HTML))
-                .andExpect(header().doesNotExist(HttpHeaders.LOCATION));
-    }
-    // HEAD 본문 전송 제외는 MockMvc가 아닌 실제 HTTP 서버 통합 테스트와 실행 이미지 CI에서 확인한다.
     private String performPublicNotFound(HttpMethod method, String rawCode) throws Exception {
         var result = mockMvc.perform(request(method, "/l/{code}", rawCode)
                         .header("X-Request-Id", PUBLIC_NOT_FOUND_REQUEST_ID))

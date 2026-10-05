@@ -59,9 +59,7 @@ class ManagementJwtBootstrapIntegrationTest {
 
     @Container
     @ServiceConnection(name = "mysql")
-    static final MySQLContainer MYSQL = new MySQLContainer(MySqlTestImage.NAME)
-            .withUrlParam("connectTimeout", "3000")
-            .withUrlParam("socketTimeout", "30000");
+    static final MySQLContainer MYSQL = MySqlTestImage.container();
 
     @DynamicPropertySource
     static void managementJwtProperties(DynamicPropertyRegistry registry) {

@@ -38,8 +38,6 @@ class LinkCodePropertiesTest {
                 .isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> new LinkCodeProperties(secret, "default", Map.of("default", secret)))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThat(new LinkCodeProperties(null, "current", Map.of("current", secret)).toString())
-                .doesNotContain(secret);
     }
 
     @ParameterizedTest

@@ -27,6 +27,7 @@ import com.personal.batongo.application.link.error.LinkCodeKeyBindingException;
 import com.personal.batongo.application.link.error.LinkCodeReplayMismatchException;
 import com.personal.batongo.application.link.error.LinkCreationReplayUnavailableException;
 import com.personal.batongo.application.link.error.LinkNotFoundException;
+import com.personal.batongo.application.link.error.LinkPurgedException;
 import com.personal.batongo.application.link.error.PublicLinkOriginReplayUnavailableException;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.CreateLinkCommand;
@@ -81,6 +82,7 @@ class LinkManagementHttpContractTest {
             "/teams/8e448211-66ae-44ab-9888-c4960648c22b"
                     + "/seasons/713d9cb7-2842-4f9f-b3cc-e31d98c6238a";
 
+    private final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
     private SmartLinkUseCase useCase;
     private MockMvc mockMvc;
 
@@ -95,7 +97,7 @@ class LinkManagementHttpContractTest {
         LinkManagementController controller = new LinkManagementController(
                 useCase, new ManagementOperationLogger(jsonMapper)
         );
-        var errors = new GlobalExceptionHandler(new SimpleMeterRegistry());
+        var errors = new GlobalExceptionHandler(meterRegistry);
         var mvcConfiguration = new DelegatingWebMvcConfiguration();
         mvcConfiguration.setConfigurers(List.of(new WebMvcConfiguration()));
         mockMvc = MockMvcBuilders.standaloneSetup(controller)
@@ -241,25 +243,9 @@ class LinkManagementHttpContractTest {
     @Test
     @DisplayName("링크 생성 응답은 공개 코드가 포함된 단축 URL과 정해진 필드를 반환한다")
     void createsLinkContract(CapturedOutput output) throws Exception {
-        LinkResult link = linkResult();
-        when(useCase.createLink(any())).thenReturn(new CreatedLinkResult(
-                link,
-                URI.create("https://go.example/l/VOvLShvx93kQpj8x7w2HYQ"),
-                false
-        ));
+        when(useCase.createLink(any())).thenReturn(createdLink(false));
 
-        mockMvc.perform(post("/api/v1/links")
-                        .header("X-Request-Id", "link-create-history")
-                        .header("Idempotency-Key", IDEMPOTENCY_KEY)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {
-                                  "targetSystem": "BATON",
-                                  "targetPath": "%s",
-                                  "purpose": "NAVIGATION",
-                                  "expiresAt": "2026-07-30T10:00:00Z"
-                                }
-                                """.formatted(BATON_TARGET_PATH)))
+        mockMvc.perform(createLinkRequest("2026-07-30T10:00:00Z").header("X-Request-Id", "link-create-history"))
                 .andExpect(status().isCreated())
                 .andExpect(header().string("Location", "/api/v1/links/" + LINK_ID))
                 .andExpect(header().string(
@@ -290,11 +276,7 @@ class LinkManagementHttpContractTest {
     @Test
     @DisplayName("같은 링크 생성 요청의 재시도는 동일한 단축 URL과 200으로 응답한다")
     void replaysLinkCreationContract(CapturedOutput output) throws Exception {
-        when(useCase.createLink(any())).thenReturn(new CreatedLinkResult(
-                linkResult(),
-                URI.create("https://go.example/l/VOvLShvx93kQpj8x7w2HYQ"),
-                true
-        ));
+        when(useCase.createLink(any())).thenReturn(createdLink(true));
 
         mockMvc.perform(createLinkRequest("2026-07-30T10:00:00Z"))
                 .andExpect(status().isOk())
@@ -310,46 +292,42 @@ class LinkManagementHttpContractTest {
         assertThat(output).contains("\"operation\":\"LINK_CREATE_REPLAY\"");
     }
 
-    @ParameterizedTest(name = "{1}")
-    @MethodSource("operationalReplayErrors")
-    @DisplayName("링크 생성·재시도 실패는 원인별 오류를 반환하고 완료 이력을 남기지 않는다")
-    void returnsOperationalReplayError(
+    @ParameterizedTest(name = "{2}")
+    @MethodSource("creationFailures")
+    @DisplayName("링크 생성 실패는 원인별 오류를 반환하고 복구 실패만 오류 코드별로 집계하며 완료 이력을 남기지 않는다")
+    void mapsCreationFailure(
             RuntimeException exception,
+            int status,
             String code,
             CapturedOutput output
     ) throws Exception {
         when(useCase.createLink(any())).thenThrow(exception);
 
         mockMvc.perform(createLinkRequest(null))
-                .andExpect(status().isInternalServerError())
+                .andExpect(status().is(status))
                 .andExpect(jsonPath("$.code").value(code))
                 .andExpect(jsonPath("$.requestId").isNotEmpty());
 
+        assertThat(meterRegistry.find("baton.go.management.link.recovery.failures").counters())
+                .hasSize(4)
+                .allSatisfy(counter -> assertThat(counter.count())
+                        .isEqualTo(code.equals(counter.getId().getTag("code")) ? 1.0 : 0.0));
         assertThat(output).doesNotContain("관리 작업 완료");
     }
 
-    private static Stream<Arguments> operationalReplayErrors() {
+    private static Stream<Arguments> creationFailures() {
         return Stream.of(
-                Arguments.of(
-                        new IllegalStateException("service-failed"),
-                        "INTERNAL_ERROR"
-                ),
-                Arguments.of(
-                        new LinkCreationReplayUnavailableException(LINK_ID),
-                        "LINK_CREATION_REPLAY_UNAVAILABLE"
-                ),
-                Arguments.of(
-                        new LinkCodeReplayMismatchException(),
-                        "LINK_CODE_REPLAY_UNAVAILABLE"
-                ),
-                Arguments.of(
-                        new PublicLinkOriginReplayUnavailableException(),
-                        "PUBLIC_LINK_ORIGIN_REPLAY_UNAVAILABLE"
-                ),
-                Arguments.of(
-                        new LinkCodeKeyBindingException(),
-                        "LINK_CODE_CONFIGURATION_MISMATCH"
-                )
+                Arguments.of(new IllegalStateException("service-failed"), 500, "INTERNAL_ERROR"),
+                Arguments.of(new LinkCreationReplayUnavailableException(LINK_ID), 500,
+                        "LINK_CREATION_REPLAY_UNAVAILABLE"),
+                Arguments.of(new LinkCodeReplayMismatchException(), 500, "LINK_CODE_REPLAY_UNAVAILABLE"),
+                Arguments.of(new PublicLinkOriginReplayUnavailableException(), 500,
+                        "PUBLIC_LINK_ORIGIN_REPLAY_UNAVAILABLE"),
+                Arguments.of(new LinkCodeKeyBindingException(), 500, "LINK_CODE_CONFIGURATION_MISMATCH"),
+                Arguments.of(InvalidRequestException.creationTime(), 400, "INVALID_REQUEST"),
+                Arguments.of(new LinkValidationException("검증 실패"), 400, "INVALID_LINK"),
+                Arguments.of(new IdempotencyKeyConflictException(), 409, "IDEMPOTENCY_KEY_REUSED"),
+                Arguments.of(new LinkPurgedException(), 410, "LINK_PURGED")
         );
     }
 
@@ -473,19 +451,6 @@ class LinkManagementHttpContractTest {
         verifyNoInteractions(useCase);
     }
 
-    @Test
-    @DisplayName("저장할 수 없는 생성 시각은 정해진 400 오류로 응답한다")
-    void mapsUnstorableCreationTimeToInvalidRequest() throws Exception {
-        when(useCase.createLink(any())).thenThrow(InvalidRequestException.creationTime());
-
-        mockMvc.perform(createLinkRequest("2026-07-30T10:00:00.123456001Z"))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
-                .andExpect(jsonPath("$.requestId").isNotEmpty());
-
-        verify(useCase).createLink(any());
-    }
-
     @ParameterizedTest(name = "{index}: {0}")
     @ValueSource(strings = {
             "expiresAt=\"2026-07-30T23:59:60Z\"",
@@ -563,41 +528,12 @@ class LinkManagementHttpContractTest {
         when(useCase.createLink(any())).thenAnswer(invocation -> {
             CreateLinkCommand command = invocation.getArgument(0);
             assertThat(command.expiresAt()).isEqualTo(Instant.parse(rawTime));
-            return new CreatedLinkResult(
-                    linkResult(),
-                    URI.create("https://go.example/l/VOvLShvx93kQpj8x7w2HYQ"),
-                    true
-            );
+            return createdLink(true);
         });
 
-        mockMvc.perform(createLinkRequest(rawTime))
-                .andExpect(status().isOk())
-                .andExpect(header().string(
-                        "Idempotency-Replayed",
-                        "true"
-                ));
+        mockMvc.perform(createLinkRequest(rawTime)).andExpect(status().isOk());
 
         verify(useCase).createLink(any());
-    }
-
-    @Test
-    @DisplayName("같은 멱등성 키의 다른 생성 요청은 정해진 409 오류로 응답한다")
-    void rejectsIdempotencyKeyReuse() throws Exception {
-        when(useCase.createLink(any())).thenThrow(new IdempotencyKeyConflictException());
-
-        mockMvc.perform(post("/api/v1/links")
-                        .header("Idempotency-Key", IDEMPOTENCY_KEY)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {
-                                  "targetSystem": "ROUND",
-                                  "targetPath": "/room/abcd-efgh-jkmn",
-                                  "purpose": "MEETING_ENTRY"
-                                }
-                                """))
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.code").value("IDEMPOTENCY_KEY_REUSED"))
-                .andExpect(jsonPath("$.requestId").isNotEmpty());
     }
 
     @Test
@@ -620,25 +556,7 @@ class LinkManagementHttpContractTest {
                 .andExpect(jsonPath("$.code").value("RESOURCE_NOT_FOUND"))
                 .andExpect(jsonPath("$.requestId").isNotEmpty());
     }
-    @Test
-    @DisplayName("빈 대상 경로는 400 INVALID_LINK로 응답한다")
-    void rejectsBlankTargetPathAsInvalidLink() throws Exception {
-        when(useCase.createLink(any())).thenThrow(new LinkValidationException("검증 실패"));
 
-        mockMvc.perform(post("/api/v1/links")
-                        .header("Idempotency-Key", IDEMPOTENCY_KEY)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {
-                                  "targetSystem": "BATON",
-                                  "targetPath": "",
-                                  "purpose": "NAVIGATION"
-                                }
-                                """))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("INVALID_LINK"))
-                .andExpect(jsonPath("$.requestId").isNotEmpty());
-    }
     private static MockHttpServletRequestBuilder createLinkRequest(String expiresAt) {
         String expiresAtField = expiresAt == null ? "" : ",\n  \"expiresAt\": \"" + expiresAt + "\"";
         return post("/api/v1/links")
@@ -651,6 +569,10 @@ class LinkManagementHttpContractTest {
                           "purpose": "NAVIGATION"%s
                         }
                         """.formatted(BATON_TARGET_PATH, expiresAtField));
+    }
+
+    private CreatedLinkResult createdLink(boolean replayed) {
+        return new CreatedLinkResult(linkResult(), URI.create("https://go.example/l/VOvLShvx93kQpj8x7w2HYQ"), replayed);
     }
 
     private static RestDocumentationResultHandler documentManagementEndpoint(

@@ -90,9 +90,7 @@ class LinkPersistenceIntegrationTest {
 
     @Container
     @ServiceConnection(name = "mysql")
-    static final MySQLContainer MYSQL = new MySQLContainer(MySqlTestImage.NAME)
-            .withUrlParam("connectTimeout", "3000")
-            .withUrlParam("socketTimeout", "30000");
+    static final MySQLContainer MYSQL = MySqlTestImage.container();
 
     @Autowired
     private SmartLinkUseCase smartLinkUseCase;
@@ -256,7 +254,7 @@ class LinkPersistenceIntegrationTest {
 
     @Test
     @DisplayName("API가 지원하는 최소·최대 시각은 생성 응답과 MySQL 원문 날짜에 그대로 보존된다")
-    void preservesSupportedTimeBoundariesInMysqlRawValuesAndReplay() throws Exception {
+    void preservesSupportedTimeBoundariesInMysqlRawValues() throws Exception {
         String idempotencyKey = "5b2355cf-8647-464e-a633-0f8c50ec169c";
         String targetPath = "/room/wxyz-abcd-2345";
         String requestBody = """

@@ -50,8 +50,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
-import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.boot.test.system.CapturedOutput;
@@ -291,78 +291,43 @@ class ManagementAuthenticationHttpContractTest {
                         "조회 권한으로 링크 폐기를 요청한다",
                         put("/api/v1/links/{linkId}/revocation", linkId),
                         "baton-go.links.read"
+                ),
+                Arguments.of(
+                        "생성 권한으로 링크 HEAD 조회를 요청한다",
+                        head("/api/v1/links/{linkId}", linkId),
+                        "baton-go.links.create"
+                ),
+                Arguments.of(
+                        "폐기 권한으로 링크 HEAD 조회를 요청한다",
+                        head("/api/v1/links/{linkId}", linkId),
+                        "baton-go.links.revoke"
                 )
         );
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"baton-go.links.create", "baton-go.links.revoke"})
-    @DisplayName("링크 HEAD 조회는 조회 권한이 없으면 403으로 거부한다")
-    void rejectsHeadRequestWithoutLinkReadScope(String grantedScope) throws Exception {
-        when(jwtDecoder.decode(MANAGEMENT_JWT)).thenReturn(jwt(grantedScope));
-
-        mockMvc.perform(head(
-                        "/api/v1/links/{linkId}",
-                        "83a430c4-5c5d-4eb4-a815-7a5ba1fd4aae"
-                ).header(
-                        HttpHeaders.AUTHORIZATION,
-                        "Bearer " + MANAGEMENT_JWT
-                ))
-                .andExpect(status().isForbidden())
-                .andExpect(header().doesNotExist(HttpHeaders.WWW_AUTHENTICATE));
-        // HEAD 본문은 서블릿 컨테이너가 버리며 실제 HTTP 서버를 쓰는 PublicErrorResponseIntegrationTest에서 확인한다.
-
-        verifyNoInteractions(useCase);
-    }
-
-    @Test
-    @DisplayName("링크 HEAD 조회는 조회 권한으로 현재 상태를 확인한다")
-    void acceptsHeadRequestWithLinkReadScope() throws Exception {
-        UUID linkId = UUID.fromString("83a430c4-5c5d-4eb4-a815-7a5ba1fd4aae");
-        when(jwtDecoder.decode(MANAGEMENT_JWT)).thenReturn(jwt(
-                "baton-go.links.read"
-        ));
-        when(useCase.getLink(linkId)).thenReturn(link());
-
-        mockMvc.perform(head("/api/v1/links/{linkId}", linkId)
-                        .header(
-                                HttpHeaders.AUTHORIZATION,
-                                "Bearer " + MANAGEMENT_JWT
-                        ))
-                .andExpect(status().isOk());
-
-        verify(useCase).getLink(linkId);
-    }
-
-    @ParameterizedTest
-    @ValueSource(strings = {"GET", "HEAD"})
-    @DisplayName("관리 목록의 GET과 HEAD는 조회 권한으로 접근할 수 있다")
-    void acceptsReadScopeForLinkSearch(String method) throws Exception {
+    @ParameterizedTest(name = "{0} {1}")
+    @CsvSource({
+            "GET, /api/v1/links/83a430c4-5c5d-4eb4-a815-7a5ba1fd4aae",
+            "HEAD, /api/v1/links/83a430c4-5c5d-4eb4-a815-7a5ba1fd4aae",
+            "GET, /api/v1/links",
+            "HEAD, /api/v1/links",
+            "GET, /api/v1/links/batch?linkIds=83a430c4-5c5d-4eb4-a815-7a5ba1fd4aae",
+            "HEAD, /api/v1/links/batch?linkIds=83a430c4-5c5d-4eb4-a815-7a5ba1fd4aae"
+    })
+    @DisplayName("관리 조회의 GET과 HEAD는 조회 권한으로 접근할 수 있다")
+    void acceptsReadScopeForLinkQueries(String method, String path) throws Exception {
         when(jwtDecoder.decode(MANAGEMENT_JWT)).thenReturn(jwt("baton-go.links.read"));
+        when(useCase.getLink(link().id())).thenReturn(link());
         when(useCase.searchLinks(any())).thenReturn(new LinkSearchResult(
                 List.of(link()), null, false, link().evaluatedAt()
         ));
-
-        mockMvc.perform(request(HttpMethod.valueOf(method), "/api/v1/links")
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + MANAGEMENT_JWT))
-                .andExpect(status().isOk());
-        verify(useCase).searchLinks(any());
-    }
-
-    @ParameterizedTest
-    @ValueSource(strings = {"GET", "HEAD"})
-    @DisplayName("일괄 조회의 GET과 HEAD는 조회 권한으로 접근할 수 있다")
-    void acceptsReadScopeForLinkBatch(String method) throws Exception {
-        when(jwtDecoder.decode(MANAGEMENT_JWT)).thenReturn(jwt("baton-go.links.read"));
-        when(useCase.getLinks(any())).thenReturn(new LinkBatchResult(
+        when(useCase.getLinks(List.of(link().id()))).thenReturn(new LinkBatchResult(
                 List.of(link()), List.of(), link().evaluatedAt()
         ));
 
-        mockMvc.perform(request(HttpMethod.valueOf(method), "/api/v1/links/batch")
-                        .param("linkIds", link().id().toString())
+        mockMvc.perform(request(HttpMethod.valueOf(method), path)
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + MANAGEMENT_JWT))
                 .andExpect(status().isOk());
-        verify(useCase).getLinks(List.of(link().id()));
     }
 
     @Test

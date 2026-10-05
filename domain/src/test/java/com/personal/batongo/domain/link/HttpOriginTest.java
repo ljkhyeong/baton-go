@@ -37,31 +37,13 @@ class HttpOriginTest {
     }
 
     @Test
-    @DisplayName("기본 HTTPS 포트와 명시적 443 포트는 같은 출처다")
-    void comparesOriginsUsingEffectivePorts() {
-        HttpOrigin origin = HttpOrigin.require(URI.create("https://go.example"), "origin");
-        HttpOrigin explicitDefault = HttpOrigin.require(
-                URI.create("https://GO.example:443/"),
-                "origin"
-        );
-        HttpOrigin differentPort = HttpOrigin.require(
-                URI.create("https://go.example:444"),
-                "origin"
-        );
-
-        assertThat(origin.sameOrigin(explicitDefault)).isTrue();
-        assertThat(origin.sameOrigin(differentPort)).isFalse();
-    }
-
-    @Test
-    @DisplayName("같은 출처의 스킴·호스트·기본 포트·루트 경로를 표준 형식으로 바꾼다")
+    @DisplayName("같은 출처의 스킴·호스트·기본 포트·루트 경로를 표준 형식으로 바꾸고 다른 포트는 다른 출처로 본다")
     void canonicalizesEquivalentOriginRepresentations() {
-        HttpOrigin canonical = HttpOrigin.require(
-                URI.create("HTTPS://GO.Example:443/"),
-                "origin"
-        );
+        HttpOrigin canonical = HttpOrigin.require(URI.create("HTTPS://GO.Example:443/"), "origin");
 
         assertThat(canonical.value()).isEqualTo(URI.create("https://go.example"));
+        assertThat(canonical.sameOrigin(HttpOrigin.require(URI.create("https://go.example:444"), "origin")))
+                .isFalse();
     }
 
     @Test

@@ -9,9 +9,14 @@ import com.personal.batongo.application.link.CreationIdempotencyKey;
 import com.personal.batongo.application.link.LinkCodeKeyGuard;
 import com.personal.batongo.application.link.LinkRetentionService;
 import com.personal.batongo.application.link.SmartLinkService;
+import com.personal.batongo.application.link.error.IdempotencyKeyConflictException;
+import com.personal.batongo.application.link.error.LinkCodeKeyBindingException;
+import com.personal.batongo.application.link.error.LinkNotFoundException;
+import com.personal.batongo.application.link.error.LinkPurgedException;
 import com.personal.batongo.application.link.port.in.ResolveLinkUseCase;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.CreateLinkCommand;
+import com.personal.batongo.application.link.port.in.SmartLinkUseCase.CreatedLinkResult;
 import com.personal.batongo.application.link.port.out.LinkCodeKeyGuardPort;
 import com.personal.batongo.application.link.port.out.LinkCreationReservationPort;
 import com.personal.batongo.application.link.port.out.LinkRetentionPort;
@@ -22,15 +27,14 @@ import com.personal.batongo.domain.link.TargetSystem;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
-import com.personal.batongo.application.link.error.LinkPurgedException;
-import com.personal.batongo.application.link.error.LinkNotFoundException;
-import com.personal.batongo.application.link.error.IdempotencyKeyConflictException;
-import java.util.Map;
-import java.util.UUID;
+import java.util.function.Function;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
@@ -46,6 +50,7 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.mysql.MySQLContainer;
 
+/** 키 교체와 보존 기간 정리처럼 여러 HMAC 키를 등록한 상태의 링크 수명 주기를 확인한다. */
 @Tag("mysql")
 @Testcontainers
 @SpringBootTest(properties = {
@@ -58,15 +63,16 @@ import org.testcontainers.mysql.MySQLContainer;
         "baton-go.targets.baton-base-url=https://baton.example",
         "baton-go.targets.round-base-url=https://baton.example"
 })
-class LinkRetentionIntegrationTest {
+class LinkLifecycleIntegrationTest {
 
     private static final String DEFAULT_KEY = "test-default-key-with-at-least-thirty-two-characters";
     private static final String CURRENT = "test-current-key-with-at-least-thirty-two-characters";
+    private static final Instant CREATED = Instant.parse("2026-01-01T00:00:00Z");
+    private static final Instant EXPIRED = CREATED.plus(Duration.ofDays(1));
 
     @Container
     @ServiceConnection(name = "mysql")
-    static final MySQLContainer MYSQL = new MySQLContainer(MySqlTestImage.NAME)
-            .withUrlParam("connectTimeout", "3000").withUrlParam("socketTimeout", "30000");
+    static final MySQLContainer MYSQL = MySqlTestImage.container();
 
     @Autowired private SmartLinkUseCase links;
     @Autowired private ResolveLinkUseCase resolver;
@@ -85,8 +91,40 @@ class LinkRetentionIntegrationTest {
         jdbc.update("DELETE FROM smart_links");
     }
 
-    private static final Instant CREATED = Instant.parse("2026-01-01T00:00:00Z");
-    private static final Instant EXPIRED = CREATED.plus(Duration.ofDays(1));
+    @Test
+    @DisplayName("키 교체 전후의 생성 요청은 각각 저장한 키로 같은 단축 URL을 반환한다")
+    void persistsWinningKeyAndReplaysAcrossRotation() {
+        var oldCommand = command(null);
+        var oldLink = links.createLink(oldCommand);
+        var currentCommand = command(null);
+        var properties = new LinkCodeProperties(DEFAULT_KEY, "k202609", Map.of("k202609", CURRENT));
+
+        var oldReplay = withKeys(properties, clock, service -> service.createLink(oldCommand));
+        var currentLink = withKeys(properties, clock, service -> service.createLink(currentCommand));
+        var currentReplay = links.createLink(currentCommand);
+
+        assertThat(oldReplay.shortUrl()).isEqualTo(oldLink.shortUrl());
+        assertThat(currentReplay.shortUrl()).isEqualTo(currentLink.shortUrl());
+        assertThat(currentReplay.replayed()).isTrue();
+        assertThat(jdbc.queryForObject("SELECT key_id FROM link_creation_requests WHERE link_id = UUID_TO_BIN(?)",
+                String.class, oldLink.link().id().toString())).isEqualTo("default");
+        assertThat(jdbc.queryForObject("SELECT key_id FROM link_creation_requests WHERE link_id = UUID_TO_BIN(?)",
+                String.class, currentLink.link().id().toString())).isEqualTo("k202609");
+    }
+
+    @Test
+    @DisplayName("키 ID의 비밀값 변경과 기존 결과 반환에 필요한 키 제거는 키 등록 검사에서 거부한다")
+    void rejectsChangedOrMissingRequiredKey() {
+        withKeys(new LinkCodeProperties(DEFAULT_KEY, "k202609", Map.of("k202609", CURRENT)), clock,
+                service -> service.createLink(command(null)));
+
+        assertThatThrownBy(() -> withKeys(new LinkCodeProperties(DEFAULT_KEY), clock, service -> null))
+                .isInstanceOf(LinkCodeKeyBindingException.class);
+        assertThatThrownBy(() -> withKeys(new LinkCodeProperties(
+                DEFAULT_KEY, "k202609", Map.of("k202609", "different-key-with-at-least-thirty-two-characters")
+        ), clock, service -> null)).isInstanceOf(LinkCodeKeyBindingException.class);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM smart_links", Integer.class)).isEqualTo(1);
+    }
 
     @Test
     @DisplayName("보존 기간이 지난 종료 링크만 나누어 정리하고 생성 키를 재사용하지 않는다")
@@ -94,10 +132,9 @@ class LinkRetentionIntegrationTest {
         var expiredCommand = command(EXPIRED);
         var expired = create(expiredCommand);
         create(command(EXPIRED));
-        var revokedCommand = command(null);
-        var revoked = create(revokedCommand);
+        var revoked = create(command(null));
         jdbc.update("UPDATE smart_links SET revoked_at = ? WHERE id = UUID_TO_BIN(?)",
-                java.time.LocalDateTime.ofInstant(EXPIRED, ZoneOffset.UTC), revoked.link().id().toString());
+                LocalDateTime.ofInstant(EXPIRED, ZoneOffset.UTC), revoked.link().id().toString());
         var active = create(command(null));
 
         assertThat(purge(EXPIRED.minusNanos(1000), 100)).isZero();
@@ -182,20 +219,26 @@ class LinkRetentionIntegrationTest {
         var command = command(EXPIRED);
         create(command);
         assertThat(purge(EXPIRED, 100)).isEqualTo(1);
-        var codes = new SecureLinkCodeAdapter(new LinkCodeProperties(null, "k202609", Map.of("k202609", CURRENT)));
-        var guard = new LinkCodeKeyGuard(codes, guardPort);
-        new TransactionTemplate(transactionManager).executeWithoutResult(status -> guard.verifyOrBind());
-        var service = new SmartLinkService(repository, reservations, codes, guard, publicOrigin, clock);
-        assertThatThrownBy(() -> new TransactionTemplate(transactionManager).execute(status -> service.createLink(command)))
+
+        assertThatThrownBy(() -> withKeys(new LinkCodeProperties(null, "k202609", Map.of("k202609", CURRENT)),
+                clock, service -> service.createLink(command)))
                 .isInstanceOf(LinkPurgedException.class);
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM smart_links", Integer.class)).isZero();
     }
 
-    private SmartLinkUseCase.CreatedLinkResult create(CreateLinkCommand command) {
-        var codes = new SecureLinkCodeAdapter(new LinkCodeProperties(DEFAULT_KEY));
-        var service = new SmartLinkService(repository, reservations, codes, new LinkCodeKeyGuard(codes, guardPort),
-                publicOrigin, Clock.fixed(CREATED, ZoneOffset.UTC));
-        return new TransactionTemplate(transactionManager).execute(status -> service.createLink(command));
+    private CreatedLinkResult create(CreateLinkCommand command) {
+        return withKeys(new LinkCodeProperties(DEFAULT_KEY), Clock.fixed(CREATED, ZoneOffset.UTC),
+                service -> service.createLink(command));
+    }
+
+    private <T> T withKeys(LinkCodeProperties properties, Clock serviceClock, Function<SmartLinkService, T> operation) {
+        var codes = new SecureLinkCodeAdapter(properties);
+        var guard = new LinkCodeKeyGuard(codes, guardPort);
+        var service = new SmartLinkService(repository, reservations, codes, guard, publicOrigin, serviceClock);
+        return new TransactionTemplate(transactionManager).execute(status -> {
+            guard.verifyOrBind();
+            return operation.apply(service);
+        });
     }
 
     private int purge(Instant cutoff, int batchSize) {
@@ -204,7 +247,7 @@ class LinkRetentionIntegrationTest {
         return new TransactionTemplate(transactionManager).execute(status -> service.purge(period, batchSize));
     }
 
-    private CreateLinkCommand command(Instant expiresAt) {
+    private static CreateLinkCommand command(Instant expiresAt) {
         return new CreateLinkCommand(CreationIdempotencyKey.parseRequest(UUID.randomUUID().toString()),
                 TargetSystem.ROUND, "/room/abcd-efgh-jkmn", LinkPurpose.MEETING_ENTRY, null, expiresAt);
     }

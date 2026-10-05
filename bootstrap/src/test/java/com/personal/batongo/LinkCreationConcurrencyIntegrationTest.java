@@ -30,6 +30,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -71,9 +72,7 @@ class LinkCreationConcurrencyIntegrationTest {
 
     @Container
     @ServiceConnection(name = "mysql")
-    static final MySQLContainer MYSQL = new MySQLContainer(MySqlTestImage.NAME)
-            .withUrlParam("connectTimeout", "3000")
-            .withUrlParam("socketTimeout", "30000");
+    static final MySQLContainer MYSQL = MySqlTestImage.container();
 
     @Autowired
     private SmartLinkUseCase smartLinkUseCase;
@@ -90,56 +89,54 @@ class LinkCreationConcurrencyIntegrationTest {
     @Autowired
     private ControllablePublicLinkOriginPort controllablePublicLinkOriginPort;
 
+    private ExecutorService executor;
+
+    @AfterEach
+    void releaseBlockedCreations() {
+        controllableReservationPort.releaseFirstOwner();
+        controllableReservationPort.reset();
+        if (executor != null) {
+            executor.shutdownNow();
+        }
+    }
+
     @Test
     @DisplayName("동시에 같은 생성 요청을 보내도 MySQL에는 링크와 예약이 한 건만 남는다")
     void serializesConcurrentCreation() throws Exception {
         CreateLinkCommand command = roundCommand(IDEMPOTENCY_KEY, "/room/abcd-efgh-jkmn");
-        ExecutorService executor = Executors.newFixedThreadPool(CONCURRENCY);
         controllableReservationPort.arm(CONCURRENCY, false);
+        List<Future<CreatedLinkResult>> futures = submitConcurrentCreations(command);
 
-        try {
-            List<Future<CreatedLinkResult>> futures = submitConcurrentCreations(
-                    executor,
-                    command
-            );
+        awaitBlockedCreations(CONCURRENCY - 1);
+        assertThat(futures).allMatch(future -> !future.isDone());
 
-            controllableReservationPort.awaitAllEntered();
-            controllableReservationPort.awaitFirstOwnerReserved();
-            awaitReservationInsertWaiters(CONCURRENCY - 1);
-            assertThat(futures).allMatch(future -> !future.isDone());
-
-            controllableReservationPort.releaseFirstOwner();
-            List<CreatedLinkResult> results = new ArrayList<>();
-            for (Future<CreatedLinkResult> future : futures) {
-                results.add(future.get(20, TimeUnit.SECONDS));
-            }
-
-            assertSingleWinner(results);
-            assertSingleStoredLink(command.targetPath());
-            assertThat(jdbcTemplate.queryForObject(
-                    "SELECT code_hash FROM smart_links WHERE target_path = ?",
-                    String.class,
-                    command.targetPath()
-            ))
-                    .matches("^[0-9a-f]{64}$");
-            assertThat(jdbcTemplate.queryForObject(
-                    """
-                            SELECT request.idempotency_key_hash
-                            FROM link_creation_requests request
-                            JOIN smart_links link ON link.id = request.link_id
-                            WHERE link.target_path = ?
-                            """,
-                    String.class,
-                    command.targetPath()
-            ))
-                    .matches("^[0-9a-f]{64}$");
-            assertThatThrownBy(() -> smartLinkUseCase.createLink(roundCommand(IDEMPOTENCY_KEY, "/room/qrst-uvwx-yz23")))
-                    .isInstanceOf(IdempotencyKeyConflictException.class);
-        } finally {
-            controllableReservationPort.releaseFirstOwner();
-            controllableReservationPort.reset();
-            executor.shutdownNow();
+        controllableReservationPort.releaseFirstOwner();
+        List<CreatedLinkResult> results = new ArrayList<>();
+        for (Future<CreatedLinkResult> future : futures) {
+            results.add(future.get(20, TimeUnit.SECONDS));
         }
+
+        assertSingleWinner(results);
+        assertSingleStoredLink(command.targetPath());
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT code_hash FROM smart_links WHERE target_path = ?",
+                String.class,
+                command.targetPath()
+        ))
+                .matches("^[0-9a-f]{64}$");
+        assertThat(jdbcTemplate.queryForObject(
+                """
+                        SELECT request.idempotency_key_hash
+                        FROM link_creation_requests request
+                        JOIN smart_links link ON link.id = request.link_id
+                        WHERE link.target_path = ?
+                        """,
+                String.class,
+                command.targetPath()
+        ))
+                .matches("^[0-9a-f]{64}$");
+        assertThatThrownBy(() -> smartLinkUseCase.createLink(roundCommand(IDEMPOTENCY_KEY, "/room/qrst-uvwx-yz23")))
+                .isInstanceOf(IdempotencyKeyConflictException.class);
     }
 
     @Test
@@ -147,109 +144,83 @@ class LinkCreationConcurrencyIntegrationTest {
     void convergesOnStoredPublicOriginAcrossConcurrentReplicas() throws Exception {
         String idempotencyKey = "f14af1a6-9d56-4a41-8f47-c05f7c8898a1";
         CreateLinkCommand command = roundCommand(idempotencyKey, "/room/wxyz-2345-6789");
-        ExecutorService executor = Executors.newFixedThreadPool(2);
+        executor = Executors.newFixedThreadPool(2);
         controllableReservationPort.arm(2, false);
+        Future<CreatedLinkResult> firstFuture = executor.submit(() -> controllablePublicLinkOriginPort.withOrigin(
+                "https://go-a.example", () -> smartLinkUseCase.createLink(command)
+        ));
+        Future<CreatedLinkResult> secondFuture = executor.submit(() -> controllablePublicLinkOriginPort.withOrigin(
+                "https://go-b.example", () -> smartLinkUseCase.createLink(command)
+        ));
 
-        try {
-            Future<CreatedLinkResult> firstFuture = executor.submit(() ->
-                    controllablePublicLinkOriginPort.withOrigin(
-                            "https://go-a.example",
-                            () -> smartLinkUseCase.createLink(command)
-                    ));
-            Future<CreatedLinkResult> secondFuture = executor.submit(() ->
-                    controllablePublicLinkOriginPort.withOrigin(
-                            "https://go-b.example",
-                            () -> smartLinkUseCase.createLink(command)
-                    ));
+        awaitBlockedCreations(1);
+        controllableReservationPort.releaseFirstOwner();
 
-            controllableReservationPort.awaitAllEntered();
-            controllableReservationPort.awaitFirstOwnerReserved();
-            awaitReservationInsertWaiters(1);
-            controllableReservationPort.releaseFirstOwner();
+        CreatedLinkResult first = firstFuture.get(20, TimeUnit.SECONDS);
+        CreatedLinkResult second = secondFuture.get(20, TimeUnit.SECONDS);
+        String storedOrigin = jdbcTemplate.queryForObject(
+                """
+                        SELECT public_origin
+                        FROM link_creation_requests
+                        WHERE idempotency_key_hash = ?
+                        """,
+                String.class,
+                linkCodePort.hashIdempotencyKey(idempotencyKey)
+        );
+        URI expectedShortUrl = URI.create(
+                storedOrigin + first.shortUrl().getRawPath()
+        );
 
-            CreatedLinkResult first = firstFuture.get(20, TimeUnit.SECONDS);
-            CreatedLinkResult second = secondFuture.get(20, TimeUnit.SECONDS);
-            String storedOrigin = jdbcTemplate.queryForObject(
-                    """
-                            SELECT public_origin
-                            FROM link_creation_requests
-                            WHERE idempotency_key_hash = ?
-                            """,
-                    String.class,
-                    linkCodePort.hashIdempotencyKey(idempotencyKey)
-            );
-            URI expectedShortUrl = URI.create(
-                    storedOrigin + first.shortUrl().getRawPath()
-            );
-
-            assertThat(storedOrigin)
-                    .isIn("https://go-a.example", "https://go-b.example");
-            assertThat(first.link().id()).isEqualTo(second.link().id());
-            assertThat(first.shortUrl()).isEqualTo(expectedShortUrl);
-            assertThat(second.shortUrl()).isEqualTo(expectedShortUrl);
-            assertThat(List.of(first, second))
-                    .filteredOn(result -> !result.replayed())
-                    .hasSize(1);
-        } finally {
-            controllableReservationPort.releaseFirstOwner();
-            controllableReservationPort.reset();
-            executor.shutdownNow();
-        }
+        assertThat(storedOrigin)
+                .isIn("https://go-a.example", "https://go-b.example");
+        assertThat(first.link().id()).isEqualTo(second.link().id());
+        assertThat(first.shortUrl()).isEqualTo(expectedShortUrl);
+        assertThat(second.shortUrl()).isEqualTo(expectedShortUrl);
+        assertThat(List.of(first, second))
+                .filteredOn(result -> !result.replayed())
+                .hasSize(1);
     }
 
     @Test
     @DisplayName("첫 생성 트랜잭션이 롤백되면 대기 요청 하나가 이어서 처리하고 나머지는 재시도할 수 있다")
     void transfersOwnershipAfterWinnerRollback() throws Exception {
         CreateLinkCommand command = roundCommand(ROLLBACK_IDEMPOTENCY_KEY, "/room/mnpq-rstu-vwxy");
-        ExecutorService executor = Executors.newFixedThreadPool(CONCURRENCY);
         controllableReservationPort.arm(CONCURRENCY, true);
+        List<Future<CreatedLinkResult>> futures = submitConcurrentCreations(command);
 
-        try {
-            List<Future<CreatedLinkResult>> futures = submitConcurrentCreations(
-                    executor,
-                    command
-            );
+        awaitBlockedCreations(CONCURRENCY - 1);
+        assertThat(futures).allMatch(future -> !future.isDone());
 
-            controllableReservationPort.awaitAllEntered();
-            controllableReservationPort.awaitFirstOwnerReserved();
-            awaitReservationInsertWaiters(CONCURRENCY - 1);
-            assertThat(futures).allMatch(future -> !future.isDone());
-
-            controllableReservationPort.releaseFirstOwner();
-            List<CreatedLinkResult> results = new ArrayList<>();
-            int rollbackFailures = 0;
-            int retryableFailures = 0;
-            for (Future<CreatedLinkResult> future : futures) {
-                try {
-                    results.add(future.get(20, TimeUnit.SECONDS));
-                } catch (ExecutionException exception) {
-                    if (exception.getCause() instanceof ForcedReservationRollbackException) {
-                        rollbackFailures++;
-                    } else {
-                        assertThat(exception.getCause())
-                                .isInstanceOf(TransientDataAccessException.class);
-                        retryableFailures++;
-                    }
+        controllableReservationPort.releaseFirstOwner();
+        List<CreatedLinkResult> results = new ArrayList<>();
+        int rollbackFailures = 0;
+        int retryableFailures = 0;
+        for (Future<CreatedLinkResult> future : futures) {
+            try {
+                results.add(future.get(20, TimeUnit.SECONDS));
+            } catch (ExecutionException exception) {
+                if (exception.getCause() instanceof ForcedReservationRollbackException) {
+                    rollbackFailures++;
+                } else {
+                    assertThat(exception.getCause())
+                            .isInstanceOf(TransientDataAccessException.class);
+                    retryableFailures++;
                 }
             }
-
-            assertThat(rollbackFailures).isEqualTo(1);
-            assertThat(retryableFailures).isBetween(0, CONCURRENCY - 2);
-            assertThat(results).isNotEmpty();
-            assertThat(results.size() + rollbackFailures + retryableFailures)
-                    .isEqualTo(CONCURRENCY);
-            CreatedLinkResult first = assertSingleWinner(results);
-
-            CreatedLinkResult replay = smartLinkUseCase.createLink(command);
-            assertThat(replay.replayed()).isTrue();
-            assertThat(replay.link().id()).isEqualTo(first.link().id());
-            assertThat(replay.shortUrl()).isEqualTo(first.shortUrl());
-            assertSingleStoredLink(command.targetPath());
-        } finally {
-            controllableReservationPort.releaseFirstOwner();
-            controllableReservationPort.reset();
-            executor.shutdownNow();
         }
+
+        assertThat(rollbackFailures).isEqualTo(1);
+        assertThat(retryableFailures).isBetween(0, CONCURRENCY - 2);
+        assertThat(results).isNotEmpty();
+        assertThat(results.size() + rollbackFailures + retryableFailures)
+                .isEqualTo(CONCURRENCY);
+        CreatedLinkResult first = assertSingleWinner(results);
+
+        CreatedLinkResult replay = smartLinkUseCase.createLink(command);
+        assertThat(replay.replayed()).isTrue();
+        assertThat(replay.link().id()).isEqualTo(first.link().id());
+        assertThat(replay.shortUrl()).isEqualTo(first.shortUrl());
+        assertSingleStoredLink(command.targetPath());
     }
 
     private CreatedLinkResult assertSingleWinner(List<CreatedLinkResult> results) {
@@ -295,10 +266,8 @@ class LinkCreationConcurrencyIntegrationTest {
         );
     }
 
-    private List<Future<CreatedLinkResult>> submitConcurrentCreations(
-            ExecutorService executor,
-            CreateLinkCommand command
-    ) {
+    private List<Future<CreatedLinkResult>> submitConcurrentCreations(CreateLinkCommand command) {
+        executor = Executors.newFixedThreadPool(CONCURRENCY);
         List<Future<CreatedLinkResult>> futures = new ArrayList<>();
         for (int index = 0; index < CONCURRENCY; index++) {
             futures.add(executor.submit(() -> smartLinkUseCase.createLink(command)));
@@ -306,7 +275,10 @@ class LinkCreationConcurrencyIntegrationTest {
         return futures;
     }
 
-    private void awaitReservationInsertWaiters(int expectedWaiters) {
+    /** 첫 요청이 예약을 잡고 멈춘 동안 나머지 요청이 같은 예약 INSERT에서 기다릴 때까지 대기한다. */
+    private void awaitBlockedCreations(int expectedWaiters) {
+        controllableReservationPort.awaitAllEntered();
+        controllableReservationPort.awaitFirstOwnerReserved();
         await().atMost(10, TimeUnit.SECONDS)
                 .pollInterval(25, TimeUnit.MILLISECONDS)
                 .until(() -> jdbcTemplate.queryForObject(

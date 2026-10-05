@@ -8,6 +8,7 @@ import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.security.oauth2.server.resource.autoconfigure.OAuth2ResourceServerAutoConfiguration;
@@ -26,25 +27,17 @@ class ManagementJwtConfigurationValidatorTest {
                     "spring.security.oauth2.resourceserver.jwt.jwk-set-uri=https://identity.example/issuer/jwks"
             );
 
-    @Test
-    @DisplayName("관리 JWT 대상을 생략하면 기본값으로 시작한다")
-    void acceptsDefaultAudience() {
-        contextRunner.run(context -> {
+    @ParameterizedTest
+    @CsvSource({", baton-go", "baton-go-management, baton-go-management"})
+    @DisplayName("관리 JWT 대상을 생략하면 기본값으로, 명시하면 그 값으로 시작한다")
+    void acceptsDefaultOrConfiguredAudience(String configured, String expected) {
+        var runner = configured == null ? contextRunner
+                : contextRunner.withPropertyValues("BATON_GO_MANAGEMENT_JWT_AUDIENCE=" + configured);
+        runner.run(context -> {
             assertThat(context).hasNotFailed();
             assertThat(context.getBean(OAuth2ResourceServerProperties.class).getJwt().getAudiences())
-                    .containsExactly("baton-go");
+                    .containsExactly(expected);
         });
-    }
-
-    @Test
-    @DisplayName("명시한 관리 JWT 대상으로 시작한다")
-    void acceptsConfiguredAudience() {
-        contextRunner.withPropertyValues("BATON_GO_MANAGEMENT_JWT_AUDIENCE=baton-go-management")
-                .run(context -> {
-                    assertThat(context).hasNotFailed();
-                    assertThat(context.getBean(OAuth2ResourceServerProperties.class).getJwt().getAudiences())
-                            .containsExactly("baton-go-management");
-                });
     }
 
     @ParameterizedTest
@@ -73,31 +66,15 @@ class ManagementJwtConfigurationValidatorTest {
         )).doesNotThrowAnyException();
     }
 
-    @Test
-    @DisplayName("운영 HTTP 관리 JWT 발급자를 시작 단계에서 거부한다")
-    void rejectsRemoteHttpIssuer() {
-        assertThatThrownBy(() -> validator(
-                "http://identity.example/issuer",
-                "https://identity.example/issuer/jwks"
-        )).isInstanceOf(IllegalArgumentException.class);
-    }
-
-    @Test
-    @DisplayName("운영 HTTP 관리 JWT JWK Set을 시작 단계에서 거부한다")
-    void rejectsRemoteHttpJwkSet() {
-        assertThatThrownBy(() -> validator(
-                "https://identity.example/issuer",
-                "http://identity.example/issuer/jwks"
-        )).isInstanceOf(IllegalArgumentException.class);
-    }
-
-    @Test
-    @DisplayName("명시적인 관리 JWT JWK Set이 없으면 시작 단계에서 거부한다")
-    void rejectsMissingJwkSet() {
-        assertThatThrownBy(() -> validator(
-                "https://identity.example/issuer",
-                null
-        )).isInstanceOf(IllegalArgumentException.class);
+    @ParameterizedTest
+    @CsvSource({
+            "http://identity.example/issuer, https://identity.example/issuer/jwks",
+            "https://identity.example/issuer, http://identity.example/issuer/jwks",
+            "https://identity.example/issuer,"
+    })
+    @DisplayName("운영 HTTP 발급자·JWK Set이나 명시적인 JWK Set이 없는 관리 JWT 설정은 시작 단계에서 거부한다")
+    void rejectsRemoteHttpOrMissingEndpoints(String issuerUri, String jwkSetUri) {
+        assertThatThrownBy(() -> validator(issuerUri, jwkSetUri)).isInstanceOf(IllegalArgumentException.class);
     }
 
     private ManagementJwtConfigurationValidator validator(String issuerUri, String jwkSetUri) {

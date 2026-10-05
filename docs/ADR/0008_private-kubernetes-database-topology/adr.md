@@ -24,7 +24,7 @@ BATON MySQL을 공유하면 초기 인프라 수는 줄지만 백업, 장애, �
   부여한다. 공개 출처·요청 제한 ConfigMap을 별도로 두어 애플리케이션 설정 변경으로 MySQL이
   재시작되지 않게 한다.
 - 애플리케이션 Deployment는 Flyway를 비활성화하고 런타임 DML 자격 증명만 받는다. 같은
-  배포 이미지의 `--baton-go.migration-only=true` 모드는 컴포넌트 탐색·웹·JPA·도메인 실행기
+  배포 이미지의 `--baton-go.migration-only=true` 모드는 컴포넌트 탐색·웹·도메인 실행기
   없이 DataSource와 Flyway만 시작하고 종료한다. 일회성 Kubernetes Job만 마이그레이션 자격 증명을
   받아 스키마를 적용한다. Spring Boot의 표준 `FlywayMigrationInitializer`가 컨텍스트 시작 중
   마이그레이션과 검증을 수행하며 Flyway 예외는 Job의 0이 아닌 종료 코드로 전파된다. 저장소는

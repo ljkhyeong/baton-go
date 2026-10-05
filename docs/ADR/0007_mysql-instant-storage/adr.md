@@ -18,13 +18,10 @@ MySQL `DATETIME`은 시간대를 자체 저장하거나 변환하지 않으므�
   `smart_links.created_at`과 `link_creation_requests.created_at`은 `DATETIME(6)`로 저장한다.
 - 도메인과 API의 절대 시각 타입은 계속 UTC `Instant`를 사용하고 DB 정밀도에 맞춰
   마이크로초까지만 저장한다.
-- Hibernate의 `hibernate.jdbc.time_zone=UTC` 설정과 명시적 JDBC 읽기·쓰기의
-  JDBC 4.2 `LocalDateTime`↔UTC `Instant` 변환을 유지한다. `DATETIME(6)` 값을 서버 또는
-  호스트의 로컬 시각으로 해석하지 않는다.
-- V4 Flyway 마이그레이션은 세션 시간대를 UTC로 고정한 상태에서 기존 `TIMESTAMP(6)` 값을
-  `DATETIME(6)`로 변환한 뒤 이전 세션 시간대를 복원한다.
-- 기존 null 허용 여부, 만료 시각 검사 제약 조건, 고유 제약 조건과 만료 인덱스는
-  변경하지 않는다.
+- 모든 영속화는 `JdbcClient`의 명시적 JDBC 4.2 `LocalDateTime`↔UTC `Instant` 변환을
+  사용한다. `DATETIME(6)` 값을 서버 또는 호스트의 로컬 시각으로 해석하지 않는다.
+- 결정 당시에는 V4 마이그레이션이 기존 `TIMESTAMP(6)` 값을 변환했다. 적용된 DB가 없어
+  2026-10-05에 처음부터 `DATETIME(6)`을 쓰는 단일 기준선 V1로 다시 만들었다.
 - MySQL 자체는 `1000-01-01`부터 저장할 수 있지만 Java/JDBC 기본 `GregorianCalendar`는
   1582년 이전 날짜에 율리우스력 전환을 적용해 원시 날짜를 이동시킬 수 있다. API 지원
   최소값은 원시 SQL과 같은 역산 그레고리력 날짜가 보존되는

@@ -62,7 +62,7 @@ v1 규칙 이전에 저장된 GO DB는 없으므로 별도 점검·폐기 운영
 - Spring Boot 4.1
 - Gradle 9.7.1
 - MySQL 8, Flyway
-- Spring Data JPA
+- Spring JDBC `JdbcClient`
 - Actuator, Micrometer Prometheus
 
 내부 코드는 포트·어댑터 구조를 사용하며 하나의 독립 마이크로서비스로 배포한다.
@@ -143,10 +143,13 @@ docker compose --env-file .env up --build -d
 docker compose --env-file .env ps
 ```
 
-`MYSQL_ROOT_HOST=localhost`는 새 MySQL 데이터 디렉터리를 초기화할 때만 적용된다. 기존
-`baton_go_mysql_data` 볼륨을 사용하는 환경은 `mysql.user`에서 `root@'%'` 존재 여부를
-확인하고 로컬 관리자 계정의 접근을 검증한 뒤 해당 원격 root 계정을 수동 폐기한다.
-이 점검을 위해 기존 볼륨을 삭제하지 않는다.
+`MYSQL_ROOT_HOST=localhost`는 새 MySQL 데이터 디렉터리를 초기화할 때만 적용된다.
+첫 운영 배포 전인 2026-10-05에 마이그레이션을 V1 하나로 다시 만들었으므로 그 이전에 만든 로컬
+`baton_go_mysql_data` 볼륨은 Flyway 검증에 실패한다. 보존할 데이터가 없다면 볼륨을 지우고 다시 시작한다.
+
+```bash
+docker compose --env-file .env down -v
+```
 
 ## 비공개 Kubernetes 배포
 
@@ -243,7 +246,7 @@ Gradle은 `gradle/verification-metadata.xml`의 SHA-256으로 내려받은 의�
 운영 이미지 빌드를 함께 확인한다. 기존 캐시만 사용하면 POM·Gradle 모듈 메타데이터의
 체크섬 누락이 드러나지 않을 수 있다.
 
-Flyway/JPA와 동시 생성 동작을 포함한 MySQL 통합 검증은 Docker가 실행 중인 환경에서
+Flyway 스키마·JDBC 저장소와 동시 생성 동작을 포함한 MySQL 통합 검증은 Docker가 실행 중인 환경에서
 별도로 수행한다. 이 테스트 묶음은 Kubernetes 배포용 MySQL 초기화 스크립트, TLS
 `VERIFY_IDENTITY`, 실행 계정의 DML 전용 권한, 마이그레이션 전용 실행기와
 Testcontainers·Compose 이미지 일치도를 함께 검증한다.

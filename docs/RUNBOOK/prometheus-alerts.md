@@ -216,7 +216,7 @@ YAML 규칙을 기준으로 하며, 표와 테스트도 같은 변경에서 갱�
 | --- | --- |
 | `LINK_CREATION_REPLAY_UNAVAILABLE` | 생성 예약이 가리키는 링크의 누락과 DB 복원·수동 변경 이력을 확인한다. 예약을 삭제하거나 새 링크로 대체하기 전에 저장 일관성을 복구한다. |
 | `LINK_CODE_REPLAY_UNAVAILABLE` | 현재 파생 코드와 저장 코드 해시가 일치하지 않는다. 생성 당시 HMAC 비밀값·파생 버전과 데이터 이력을 확인하고 [키 정보 등록 절차](../ADR/0004_link-code-key-binding/adr.md)를 따른다. |
-| `LINK_CODE_CONFIGURATION_MISMATCH` | 현재 HMAC 설정이 DB 보호 정보와 일치하는지 확인한다. 비밀값이나 보호 정보를 임의로 덮어쓰지 않고 [키 정보 등록 절차](../ADR/0004_link-code-key-binding/adr.md)를 따른다. |
+| `LINK_CODE_CONFIGURATION_MISMATCH` | 현재 HMAC 설정이 DB에 등록된 키 정보(`link_code_keys`)와 일치하는지 확인한다. 비밀값이나 등록 키 정보를 임의로 덮어쓰지 않고 [키 교체 결정](../ADR/0011_link-code-key-ring/adr.md)을 따른다. |
 | `PUBLIC_LINK_ORIGIN_REPLAY_UNAVAILABLE` | 최초 생성 예약의 공개 출처가 없거나 표준 URL 형식이 아니다. 현재 출처를 추정 입력하지 않고 [공개 출처 보존 결정](../ADR/0009_idempotent-public-origin-replay/adr.md)에 따라 최초 출처를 복구한다. |
 
 이 카운터는 HTTP 요청 처리 중 발생한 오류만 집계한다. 시작 단계의 키 정보 등록 실패로 프로세스가

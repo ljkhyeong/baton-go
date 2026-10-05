@@ -34,7 +34,7 @@ docker compose --env-file .env -f compose.yml -f compose.key-ring.yml up -d app
 
 ## 일반 교체 순서
 
-1. V6를 적용하고 DB와 현재 키 묶음의 복구본을 함께 확보한다.
+1. DB와 현재 키 묶음의 복구본을 함께 확보한다.
 2. 현재 발급 키를 유지한 채 새 ID·비밀값을 모든 Pod에 추가한다. 각 Pod 재시작과 준비 상태를 확인한다.
 3. `BATONGO_LINKCODE_ACTIVEKEYID`를 새 ID로 바꾸고 Pod를 순차 교체한다. 두 키가 모두 있는
    동안 발급 키가 다른 Pod도 생성 예약에 저장된 키 ID로 기존 URL을 반환한다.

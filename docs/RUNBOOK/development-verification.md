@@ -15,7 +15,7 @@
 | HTTP 형식·상태·인증 | `./gradlew :adapter-in-web:test` |
 | Slack·Discord·Healthchecks 웹훅 템플릿·URL 예시 | `python3 tools/verify-webhooks.py --output /tmp/baton-go-webhooks`. 로컬 Docker가 필요하며 외부 메시지는 전송하지 않는다. |
 | Java 패키지·모듈 의존 | `./gradlew --no-daemon :bootstrap:test --tests '*ArchitectureRulesTest'` |
-| JPA·SQL·Flyway·DB 동시성 | `./gradlew --no-daemon :bootstrap:mysqlTest` |
+| JDBC·SQL·Flyway·DB 동시성 | `./gradlew --no-daemon :bootstrap:mysqlTest` |
 | Redis 요청 제한·연결 설정 | `./gradlew --no-daemon :bootstrap:redisTest` |
 | Prometheus 수집·경보 | [설정·규칙 검증](prometheus-alerts.md#로컬ci-검증). Kubernetes 권한 변경은 Kustomize와 strict schema 검증을 함께 실행한다. Java·DB 테스트는 생략한다. |
 | 여러 모듈에 영향을 주는 변경 | `./gradlew test`. 실행 패키지·의존성·배포 변경은 README의 추가 검증을 적용한다. |

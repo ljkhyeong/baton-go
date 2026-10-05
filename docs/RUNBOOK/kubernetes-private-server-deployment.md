@@ -432,8 +432,8 @@ PVC에는 사용자 분리 초기화 스크립트도 다시 실행되지 않는�
 완료한 뒤 Secret과 워크로드를 전환한다. DB Secret만 먼저 바꾸지 않는다. 이 저장소의 첫
 비공개 서버 배포는 신규 빈 DB를 전제로 한다.
 
-일회성 Job이 Flyway 스키마를 만든 뒤 장기 실행 애플리케이션은 DML 사용자로 JPA 스키마를
-검증한다. 신규 빈 DB는 애플리케이션 시작 시 현재 HMAC 키 정보를 자동 등록한다. 이후에는 DB와
+일회성 Job이 Flyway 스키마를 만든 뒤 장기 실행 애플리케이션은 DML 사용자로 접속한다.
+신규 빈 DB는 애플리케이션 시작 시 현재 HMAC 키 정보를 자동 등록한다. 이후에는 DB와
 `BATON_GO_LINK_CODE_SECRET`을 항상 같은 시점의 복구 단위로
 보존한다. HMAC 키 교체는 [키 교체 절차](link-code-key-rotation.md)의 키 ID 추가·선배포·전환 순서를 따른다.
 
@@ -781,12 +781,11 @@ Kustomize 적용은 Job과 Deployment 순서를 보장하지 않으므로 모든
 
 ### 마이그레이션 Job 실패 복구
 
-MySQL 8.4의 InnoDB `ALTER TABLE`은 **각 DDL 문장 단위**로 전체 적용 또는 롤백되는
-원자적 DDL이다. 하지만 여러 DDL이 든 Flyway SQL 파일 전체가 하나의 트랜잭션은 아니다.
-V4는 `smart_links`의 시각 열을 바꾸는 첫 `ALTER TABLE`과
-`link_creation_requests.created_at`을 바꾸는 둘째 `ALTER TABLE`로 구성되므로 첫 문장만
-커밋된 혼합 상태가 가능하다. V5는 `public_origin` 열을 추가하는 한 문장이지만,
-열 추가 커밋 후 Flyway 성공 이력 기록 전에 프로세스가 종료될 수 있다.
+MySQL 8.4의 InnoDB DDL은 **각 문장 단위**로 전체 적용 또는 롤백되는 원자적 DDL이다.
+하지만 여러 DDL이 든 Flyway SQL 파일 전체가 하나의 트랜잭션은 아니다. 기준선 V1은 세
+`CREATE TABLE` 문장이므로 일부 테이블만 만들어진 상태가 가능하고, 마지막 문장 커밋 뒤 Flyway
+성공 이력 기록 전에 프로세스가 종료될 수도 있다. 이후 버전을 추가하면 그 버전의 부분 적용 상태와
+판별 조회를 이 절에 함께 적는다.
 
 Job이 `Failed`이거나 결과가 불명확하면 다음 순서를 지킨다.
 
@@ -834,71 +833,33 @@ Job이 `Failed`이거나 결과가 불명확하면 다음 순서를 지킨다.
    ```
 
 3. Job을 삭제하거나 다시 적용하기 전에 승인된 읽기 전용 DB 관리 채널에서
-   `flyway_schema_history`와 실제 컬럼 정의를 같은 시점에 대조한다. 조회 결과도 위 사고
+   `flyway_schema_history`와 실제 테이블을 같은 시점에 대조한다. 조회 결과도 위 사고
    저장소에 보존하고 자격 증명은 SQL 인자·셸 기록에 넣지 않는다.
 
    ```sql
    SELECT installed_rank, version, description, script, checksum, installed_on, success
    FROM flyway_schema_history
-   WHERE version IN ('4', '5')
    ORDER BY installed_rank;
 
-   SELECT table_name, column_name, column_type, is_nullable,
-          character_set_name, collation_name
-   FROM information_schema.columns
+   SELECT table_name, table_rows
+   FROM information_schema.tables
    WHERE table_schema = DATABASE()
-     AND (
-       (table_name = 'smart_links'
-        AND column_name IN ('not_before', 'expires_at', 'revoked_at', 'created_at'))
-       OR (table_name = 'link_creation_requests'
-           AND column_name IN ('created_at', 'public_origin'))
-     )
-   ORDER BY table_name, ordinal_position;
+     AND table_name IN ('smart_links', 'link_creation_requests', 'link_code_keys');
    ```
 
-4. V4의 스키마 변경이 모두 적용되면 `smart_links` 네 열과 `link_creation_requests.created_at`이
-   모두 `datetime(6)`이고, `smart_links.created_at`과
-   `link_creation_requests.created_at`만 `NOT NULL`인 상태다. V4 성공 이력이 없을 때는
-   다음처럼 분기한다.
+4. V1 성공 이력이 없으면 기준선 생성 중 실패다. 첫 배포의 빈 DB이므로 만들어진 테이블의 행 수가
+   모두 0인지 `COUNT(*)`로 확인한다. 행이 없으면 일관된 백업을 남긴 뒤 승인된 관리 채널에서 만들어진
+   V1 테이블과 실패 이력을 정리하고 변경하지 않은 V1을 다시 실행한다. 행이 있으면 테이블을
+   지우지 않고 데이터를 보존하는 별도 DBA 복구 계획을 사용한다.
 
-   - 모두 기존 `timestamp(6)`: DDL 적용 전 실패다. 원인을 제거하고 백업을 확보한
-     뒤 변경하지 않은 V4 재실행을 검토한다.
-   - `smart_links`만 스키마 변경이 적용되고 `link_creation_requests.created_at`이
-     `timestamp(6)`: 첫 `ALTER TABLE`만 커밋된 V4 혼합 상태다. 즉시 일관된 백업을
-     확보하고 첫 `ALTER` 재실행의 잠금·시간 영향과 둘째 `ALTER` 완료를 격리
-     환경에서 시험한 뒤 기존 V4를 수정 없이 다시 실행할지, 이전 일관된
-     백업으로 복원할지 DBA와 결정한다.
-   - 모든 스키마 변경이 적용된 상태: DDL은 완료됐지만 성공 이력 기록 전에 종료됐을 수 있다.
-     일관된 백업을 확보하고 동일 `MODIFY` 재실행의 잠금·시간 영향을 검증한 뒤
-     변경하지 않은 V4 재실행 또는 이전 일관된 백업 복원을 선택한다.
-   - 위 세 상태 외의 조합: 수동 변경이나 추가 스키마 차이로 분류하고 재실행하지 않는다.
-
-5. V5 성공 이력이 없을 때 `public_origin`이 없으면 DDL 전 실패로 분류한다.
-   열이 `varchar(255)`, `ascii`, `ascii_bin`, `NULL` 허용으로 존재하면 DDL 커밋과
-   Flyway 이력 사이 실패로 분류하고 다음 조회로 쓰기 여부를 확인한다.
-
-   ```sql
-   SELECT COUNT(*) AS rows_with_public_origin
-   FROM link_creation_requests
-   WHERE public_origin IS NOT NULL;
-   ```
-
-   이 집계만으로는 실패 구간에 쓰기가 없었음을 증명할 수 없다. Job 시작 시각, 구 Pod
-   종료, 외부 프록시·아웃박스 차단 기록과 해당 구간 `created_at` 행 수를 함께 대조한다.
-   V5 실행 전부터 쓰기 차단이 유지됐고 값이 한 건도 없음을 증명한 경우에만 일관된 백업 후
-   격리된 복구 환경에서 Flyway 성공 이력 없는 열 제거·변경하지 않은 V5 재실행 절차를
-   검증한다. 값이 있거나 쓰기 차단을 증명할 수 없으면 열을 삭제하지 않고 이전 일관된 백업
-   복원 또는 데이터를 보존하는 별도 DBA 복구 계획을 사용한다. 컬럼 정의가 다르면
-   스키마 불일치로 분류한다.
-
-6. `flyway_schema_history.success=1`인데 실제 컬럼 정의가 기대와 다르면 적용된
+5. `flyway_schema_history.success=1`인데 실제 컬럼 정의가 기대와 다르면 적용된
    마이그레이션을 수정하지 않고 백업 복원 또는 다음 버전의 마이그레이션으로
    스키마를 수정한다. Flyway `repair`는 스키마를 복구하지 않는다. 실패 이력이 있고 실제
    스키마 구조, 백업·복구 선택과 재실행 절차를 확정한 경우에만 DBA와
    서비스 소유자가 해당 실패 이력 정리를 승인한다. 조사 전 무조건 `repair`를
    실행하거나 `flyway_schema_history`를 SQL로 수정·삭제·추가하지 않는다.
 
-7. 확정한 복구를 격리 환경에서 먼저 재현한다. 실제 환경에서는 Job `Complete`,
+6. 확정한 복구를 격리 환경에서 먼저 재현한다. 실제 환경에서는 Job `Complete`,
    Flyway 이력과 실제 컬럼 정의 일치, 애플리케이션 준비 상태, 새 생성·동일 요청
    재시도·단축 링크 접속 처리·폐기를 순서대로 확인한 뒤에만 호출자 쓰기와 공개 링크 접속을
    다시 연다.

@@ -11,7 +11,7 @@ import org.springframework.context.ConfigurableApplicationContext;
 /**
  * Kubernetes의 일회성 DB 마이그레이션 Job에 필요한 Spring 구성만 시작합니다.
  *
- * <p>일반 애플리케이션 컴포넌트, 웹 서버, JPA와 링크 코드 키 검사는 시작하지 않습니다.
+ * <p>일반 애플리케이션 컴포넌트, 웹 서버와 링크 코드 키 검사는 시작하지 않습니다.
  * Job에는 마이그레이션 계정만, 장기 실행 애플리케이션에는 DML 계정만 주입합니다.</p>
  */
 public final class DatabaseMigrationRunner {

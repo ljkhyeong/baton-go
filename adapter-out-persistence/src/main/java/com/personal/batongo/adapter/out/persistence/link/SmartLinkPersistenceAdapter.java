@@ -5,7 +5,7 @@ import com.personal.batongo.application.link.port.out.SmartLinkRepository.Stored
 import com.personal.batongo.application.link.port.out.SmartLinkRepository.StoredLinkResolution;
 import com.personal.batongo.application.link.port.out.SmartLinkRepository.StoredLinkSnapshot;
 import com.personal.batongo.domain.link.SmartLink;
-import jakarta.persistence.EntityManager;
+import com.personal.batongo.domain.link.TrustedTarget;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
@@ -32,20 +32,31 @@ public class SmartLinkPersistenceAdapter implements SmartLinkRepository {
             FROM smart_links stored_link
             """;
 
-    private final EntityManager entityManager;
     private final JdbcClient jdbcClient;
 
-    public SmartLinkPersistenceAdapter(
-            EntityManager entityManager,
-            JdbcClient jdbcClient
-    ) {
-        this.entityManager = entityManager;
+    public SmartLinkPersistenceAdapter(JdbcClient jdbcClient) {
         this.jdbcClient = jdbcClient;
     }
 
     @Override
     public void save(SmartLink smartLink) {
-        entityManager.persist(new SmartLinkEntity(smartLink));
+        TrustedTarget target = smartLink.trustedTarget();
+        jdbcClient.sql("""
+                        INSERT INTO smart_links (
+                            id, code_hash, target_system, target_path, purpose, not_before, expires_at, created_at
+                        ) VALUES (UUID_TO_BIN(?), ?, ?, ?, ?, ?, ?, ?)
+                        """)
+                .params(
+                        smartLink.id().toString(),
+                        smartLink.codeHash(),
+                        target.targetSystem().name(),
+                        target.targetPath(),
+                        target.purpose().name(),
+                        UtcDateTimes.write(smartLink.notBefore()),
+                        UtcDateTimes.write(smartLink.expiresAt()),
+                        UtcDateTimes.write(smartLink.createdAt())
+                )
+                .update();
     }
 
     @Override

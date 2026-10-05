@@ -18,6 +18,6 @@ final class UtcDateTimes {
     }
 
     static LocalDateTime write(Instant value) {
-        return LocalDateTime.ofInstant(value, ZoneOffset.UTC);
+        return value == null ? null : LocalDateTime.ofInstant(value, ZoneOffset.UTC);
     }
 }

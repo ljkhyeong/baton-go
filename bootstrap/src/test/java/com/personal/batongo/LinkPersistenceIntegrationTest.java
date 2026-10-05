@@ -216,7 +216,7 @@ class LinkPersistenceIntegrationTest {
     }
 
     @Test
-    @DisplayName("Flyway와 JPA는 2040년 링크의 생성·재시도·폐기 시각을 마이크로초까지 보존한다")
+    @DisplayName("Flyway 스키마와 JDBC 저장소는 2040년 링크의 생성·재시도·폐기 시각을 마이크로초까지 보존한다")
     void persistsCreationReplayAndRevocationAfterTimestampLimit() {
         CreateLinkCommand command = new CreateLinkCommand(
                 CreationIdempotencyKey.parseRequest(FAR_FUTURE_IDEMPOTENCY_KEY),

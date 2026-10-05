@@ -32,14 +32,6 @@ spring:
   flyway:
     validate-migration-naming: true
     fail-on-missing-locations: true
-  jpa:
-    open-in-view: false
-    hibernate:
-      ddl-auto: validate
-    properties:
-      hibernate:
-        jdbc:
-          time_zone: UTC
 
 server:
   shutdown: graceful

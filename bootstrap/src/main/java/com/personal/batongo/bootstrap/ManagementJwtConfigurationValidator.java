@@ -21,9 +21,7 @@ public class ManagementJwtConfigurationValidator {
     }
 
     private static void requireSecureEndpoint(String value, String name) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(name + "는 필수입니다");
-        }
+        Assert.hasText(value, name + "는 필수입니다");
         HttpOrigin origin;
         try {
             URI endpoint = URI.create(value);

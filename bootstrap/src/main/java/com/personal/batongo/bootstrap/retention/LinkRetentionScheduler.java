@@ -43,8 +43,7 @@ public class LinkRetentionScheduler {
         Gauge.builder(
                         "baton.go.link.retention.scheduler.interval.seconds",
                         properties,
-                        value -> value.interval().getSeconds()
-                                + value.interval().getNano() / 1_000_000_000.0
+                        value -> value.interval().toNanos() / 1_000_000_000.0
                 )
                 .description("자동 정리 실행 간격")
                 .register(meters);

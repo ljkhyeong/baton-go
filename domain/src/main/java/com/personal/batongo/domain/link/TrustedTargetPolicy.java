@@ -39,30 +39,23 @@ public final class TrustedTargetPolicy {
             String purpose,
             String targetPath
     ) {
-        // 허용 조합은 정의된 열거형 이름만 포함하므로 확인 뒤 변환은 실패하지 않는다.
-        return isAllowed(targetSystem, purpose, targetPath)
-                ? Optional.of(new TrustedTarget(
-                        TargetSystem.valueOf(targetSystem),
-                        LinkPurpose.valueOf(purpose),
-                        targetPath
-                ))
-                : Optional.empty();
-    }
-
-    public static boolean isAllowed(
-            String targetSystem,
-            String purpose,
-            String targetPath
-    ) {
         if (targetSystem == null || purpose == null || targetPath == null) {
-            return false;
+            return Optional.empty();
         }
-        return switch (targetSystem) {
+        boolean allowed = switch (targetSystem) {
             case "BATON" -> "NAVIGATION".equals(purpose)
                     && BATON_NAVIGATION_PATH.matcher(targetPath).matches();
             case "ROUND" -> "MEETING_ENTRY".equals(purpose)
                     && ROUND_MEETING_ENTRY_PATH.matcher(targetPath).matches();
             default -> false;
         };
+        // 허용 조합은 정의된 열거형 이름만 포함하므로 확인 뒤 변환은 실패하지 않는다.
+        return allowed
+                ? Optional.of(new TrustedTarget(
+                        TargetSystem.valueOf(targetSystem),
+                        LinkPurpose.valueOf(purpose),
+                        targetPath
+                ))
+                : Optional.empty();
     }
 }

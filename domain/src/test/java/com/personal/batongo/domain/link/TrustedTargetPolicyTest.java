@@ -32,11 +32,11 @@ class TrustedTargetPolicyTest {
                 targetPath
         );
 
-        assertThat(TrustedTargetPolicy.isAllowed(
+        assertThat(TrustedTargetPolicy.findAllowed(
                 targetSystem.name(),
                 purpose.name(),
                 targetPath
-        )).isTrue();
+        )).isPresent();
         assertThat(target.targetSystem()).isEqualTo(targetSystem);
         assertThat(target.purpose()).isEqualTo(purpose);
         assertThat(target.targetPath()).isEqualTo(targetPath);
@@ -205,11 +205,11 @@ class TrustedTargetPolicyTest {
             LinkPurpose purpose,
             String targetPath
     ) {
-        assertThat(TrustedTargetPolicy.isAllowed(
+        assertThat(TrustedTargetPolicy.findAllowed(
                 targetSystem.name(),
                 purpose.name(),
                 targetPath
-        )).isFalse();
+        )).isEmpty();
         assertThatThrownBy(() -> TrustedTargetPolicy.requireAllowed(
                 targetSystem,
                 purpose,

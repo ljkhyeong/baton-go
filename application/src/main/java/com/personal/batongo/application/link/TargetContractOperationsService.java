@@ -68,7 +68,7 @@ public class TargetContractOperationsService implements TargetContractOperations
         }
         StoredLinkSnapshot storedLink = repository.findStoredByIdForUpdate(command.linkId())
                 .orElseThrow(LinkNotFoundException::new);
-        if (storedLink.hasAllowedTarget()) {
+        if (storedLink.trustedTarget().isPresent()) {
             throw new TargetContractRemediationNotApplicableException();
         }
         if (storedLink.revokedAt() != null) {
@@ -103,7 +103,7 @@ public class TargetContractOperationsService implements TargetContractOperations
     }
 
     private InventoryItem toInventoryItem(StoredLinkSnapshot storedLink) {
-        Compliance compliance = storedLink.hasAllowedTarget()
+        Compliance compliance = storedLink.trustedTarget().isPresent()
                 ? Compliance.COMPLIANT
                 : Compliance.NON_COMPLIANT;
         RemediationState remediationState = switch (compliance) {

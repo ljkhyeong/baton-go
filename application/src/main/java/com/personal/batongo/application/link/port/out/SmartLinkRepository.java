@@ -1,6 +1,7 @@
 package com.personal.batongo.application.link.port.out;
 
 import com.personal.batongo.domain.link.SmartLink;
+import com.personal.batongo.domain.link.TrustedTarget;
 import com.personal.batongo.domain.link.TrustedTargetPolicy;
 import java.time.Instant;
 import java.util.List;
@@ -69,8 +70,9 @@ public interface SmartLinkRepository {
             long version,
             boolean creationRequestPresent
     ) {
-        public boolean hasAllowedTarget() {
-            return TrustedTargetPolicy.isAllowed(targetSystem, purpose, targetPath);
+        /** v1 계약에 맞는 저장 대상만 신뢰 대상으로 바꾼다. */
+        public Optional<TrustedTarget> trustedTarget() {
+            return TrustedTargetPolicy.findAllowed(targetSystem, purpose, targetPath);
         }
 
         @Override

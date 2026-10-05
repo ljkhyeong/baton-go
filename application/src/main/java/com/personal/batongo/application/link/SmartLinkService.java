@@ -15,10 +15,8 @@ import com.personal.batongo.application.link.port.out.PublicLinkOriginPort;
 import com.personal.batongo.application.link.port.out.SmartLinkRepository;
 import com.personal.batongo.application.link.port.out.SmartLinkRepository.StoredLinkReplay;
 import com.personal.batongo.application.link.port.out.SmartLinkRepository.StoredLinkSnapshot;
-import com.personal.batongo.domain.link.LinkPurpose;
 import com.personal.batongo.domain.link.LinkRevocationPolicy;
 import com.personal.batongo.domain.link.SmartLink;
-import com.personal.batongo.domain.link.TargetSystem;
 import com.personal.batongo.domain.link.TrustedTarget;
 import com.personal.batongo.domain.link.TrustedTargetPolicy;
 import java.time.Clock;
@@ -216,8 +214,8 @@ public class SmartLinkService implements SmartLinkUseCase {
     public LinkResult getLink(UUID linkId) {
         StoredLinkSnapshot storedLink = repository.findStoredById(linkId)
                 .orElseThrow(LinkNotFoundException::new);
-        requireManagedTrustedTarget(storedLink);
-        return toResult(storedLink, clock.instant());
+        TrustedTarget target = requireManagedTrustedTarget(storedLink);
+        return toResult(storedLink, target, storedLink.revokedAt(), clock.instant());
     }
 
     @Override
@@ -230,13 +228,13 @@ public class SmartLinkService implements SmartLinkUseCase {
         List<UUID> uniqueIds = linkIds.stream().distinct().toList();
         List<StoredLinkSnapshot> stored = repository.findStoredByIds(uniqueIds);
         Instant evaluatedAt = clock.instant();
-        Map<UUID, StoredLinkSnapshot> allowed = stored.stream()
-                .filter(StoredLinkSnapshot::hasAllowedTarget)
-                .collect(Collectors.toMap(StoredLinkSnapshot::id, Function.identity()));
+        Map<UUID, LinkResult> found = stored.stream()
+                .flatMap(link -> link.trustedTarget()
+                        .map(target -> toResult(link, target, link.revokedAt(), evaluatedAt)).stream())
+                .collect(Collectors.toMap(LinkResult::id, Function.identity()));
         return new LinkBatchResult(
-                uniqueIds.stream().map(allowed::get).filter(Objects::nonNull)
-                        .map(link -> toResult(link, evaluatedAt)).toList(),
-                uniqueIds.stream().filter(id -> !allowed.containsKey(id)).toList(),
+                uniqueIds.stream().map(found::get).filter(Objects::nonNull).toList(),
+                uniqueIds.stream().filter(id -> !found.containsKey(id)).toList(),
                 evaluatedAt
         );
     }
@@ -268,8 +266,8 @@ public class SmartLinkService implements SmartLinkUseCase {
                         || (stored.expiresAt() != null && !stored.expiresAt().isBefore(query.expiresFrom())))
                 .filter(stored -> query.expiresBefore() == null
                         || (stored.expiresAt() != null && stored.expiresAt().isBefore(query.expiresBefore())))
-                .filter(StoredLinkSnapshot::hasAllowedTarget)
-                .map(stored -> toResult(stored, evaluatedAt))
+                .flatMap(stored -> stored.trustedTarget()
+                        .map(target -> toResult(stored, target, stored.revokedAt(), evaluatedAt)).stream())
                 .filter(link -> query.status() == null || link.status() == query.status())
                 .toList();
         // 반환할 링크가 없어도 마지막으로 읽은 행 다음부터 조회한다.
@@ -281,10 +279,10 @@ public class SmartLinkService implements SmartLinkUseCase {
     public RevokedLinkResult revokeLink(UUID linkId) {
         StoredLinkSnapshot storedLink = repository.findStoredByIdForUpdate(linkId)
                 .orElseThrow(LinkNotFoundException::new);
-        requireManagedTrustedTarget(storedLink);
+        TrustedTarget target = requireManagedTrustedTarget(storedLink);
         if (storedLink.revokedAt() != null) {
             return new RevokedLinkResult(
-                    toResult(storedLink, clock.instant()),
+                    toResult(storedLink, target, storedLink.revokedAt(), clock.instant()),
                     true
             );
         }
@@ -298,7 +296,7 @@ public class SmartLinkService implements SmartLinkUseCase {
                 revokedAt
         );
         return new RevokedLinkResult(
-                toResult(storedLink, revokedAt, clock.instant()),
+                toResult(storedLink, target, revokedAt, clock.instant()),
                 false
         );
     }
@@ -336,26 +334,21 @@ public class SmartLinkService implements SmartLinkUseCase {
         );
     }
 
-    private void requireManagedTrustedTarget(StoredLinkSnapshot storedLink) {
-        if (!storedLink.hasAllowedTarget()) {
-            throw new LinkNotFoundException();
-        }
-    }
-
-    private LinkResult toResult(StoredLinkSnapshot storedLink, Instant evaluatedAt) {
-        return toResult(storedLink, storedLink.revokedAt(), evaluatedAt);
+    private TrustedTarget requireManagedTrustedTarget(StoredLinkSnapshot storedLink) {
+        return storedLink.trustedTarget().orElseThrow(LinkNotFoundException::new);
     }
 
     private LinkResult toResult(
             StoredLinkSnapshot storedLink,
+            TrustedTarget target,
             Instant revokedAt,
             Instant evaluatedAt
     ) {
         return new LinkResult(
                 storedLink.id(),
-                TargetSystem.valueOf(storedLink.targetSystem()),
-                storedLink.targetPath(),
-                LinkPurpose.valueOf(storedLink.purpose()),
+                target.targetSystem(),
+                target.targetPath(),
+                target.purpose(),
                 storedLink.notBefore(),
                 storedLink.expiresAt(),
                 revokedAt,

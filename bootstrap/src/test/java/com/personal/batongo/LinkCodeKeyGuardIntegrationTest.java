@@ -1,10 +1,8 @@
-package com.personal.batongo.bootstrap.guard;
+package com.personal.batongo;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.personal.batongo.BatonGoApplication;
-import com.personal.batongo.MySqlTestImage;
 import com.personal.batongo.application.link.CreationIdempotencyKey;
 import com.personal.batongo.application.link.LinkCodeDerivationIdentity;
 import com.personal.batongo.application.link.LinkCodeKeyRingIdentity;
@@ -92,7 +90,7 @@ class LinkCodeKeyGuardIntegrationTest {
     }
 
     @Test
-    @DisplayName("빈 데이터베이스의 키 미등록 행은 시작 검증에서 현재 HMAC 키 정보를 등록한다")
+    @DisplayName("빈 데이터베이스는 시작 검증에서 현재 HMAC 키 정보를 등록한다")
     void bindsEmptyDatabaseDuringStartupValidation() throws Exception {
         unbind();
 
@@ -141,7 +139,7 @@ class LinkCodeKeyGuardIntegrationTest {
     }
 
     @Test
-    @DisplayName("기존 링크가 있는 데이터베이스의 키 미등록 행은 자동 등록하지 않는다")
+    @DisplayName("링크가 있는데 키 정보가 없는 데이터베이스는 키를 자동 등록하지 않는다")
     void rejectsUnboundDatabaseWithExistingLink() {
         smartLinkUseCase.createLink(command(
                 "0508cdd2-3b3d-4728-820a-36c135531574"
@@ -157,7 +155,7 @@ class LinkCodeKeyGuardIntegrationTest {
     }
 
     @Test
-    @DisplayName("기존 생성 예약만 있어도 키 미등록 행은 자동 등록하지 않는다")
+    @DisplayName("생성 예약만 있어도 키 정보가 없으면 키를 자동 등록하지 않는다")
     void rejectsUnboundDatabaseWithExistingReservation() {
         jdbcTemplate.update(
                 """

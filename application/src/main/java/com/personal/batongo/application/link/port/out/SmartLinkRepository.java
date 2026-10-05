@@ -24,7 +24,7 @@ public interface SmartLinkRepository {
 
     List<StoredLinkSnapshot> scanStoredAfter(UUID afterLinkId, int limit);
 
-    void revokeStored(UUID id, long currentVersion, Instant revokedAt);
+    void revokeStored(UUID id, Instant revokedAt);
 
     record StoredLinkReplay(
             UUID id,
@@ -66,8 +66,7 @@ public interface SmartLinkRepository {
             Instant notBefore,
             Instant expiresAt,
             Instant revokedAt,
-            Instant createdAt,
-            long version
+            Instant createdAt
     ) {
         /** v1 계약에 맞는 저장 대상만 신뢰 대상으로 바꾼다. */
         public Optional<TrustedTarget> trustedTarget() {

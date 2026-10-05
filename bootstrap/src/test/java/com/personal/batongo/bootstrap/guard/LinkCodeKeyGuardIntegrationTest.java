@@ -141,25 +141,6 @@ class LinkCodeKeyGuardIntegrationTest {
     }
 
     @Test
-    @DisplayName("HMAC 키 등록 행이 유실되면 시작과 생성을 거부한다")
-    void rejectsMissingGuardRowAtStartupAndCreation() {
-        jdbcTemplate.update("DELETE FROM link_code_key_guard WHERE guard_id = 1");
-
-        assertThatThrownBy(() -> startupValidator.run(
-                new DefaultApplicationArguments(new String[0])
-        ))
-                .isInstanceOf(LinkCodeKeyBindingException.class);
-        assertThatThrownBy(() -> smartLinkUseCase.createLink(command(
-                "adbb1c82-4ed5-461e-9cb8-431bb5e6fda2"
-        )))
-                .isInstanceOf(LinkCodeKeyBindingException.class);
-
-        assertThat(linkCount()).isZero();
-        assertThat(reservationCount()).isZero();
-        assertThat(storedIdentity()).isNull();
-    }
-
-    @Test
     @DisplayName("기존 링크가 있는 데이터베이스의 키 미등록 행은 자동 등록하지 않는다")
     void rejectsUnboundDatabaseWithExistingLink() {
         smartLinkUseCase.createLink(command(
@@ -183,8 +164,10 @@ class LinkCodeKeyGuardIntegrationTest {
                         INSERT INTO link_creation_requests (
                             idempotency_key_hash,
                             link_id,
+                            public_origin,
+                            key_id,
                             created_at
-                        ) VALUES (?, UUID_TO_BIN(?), UTC_TIMESTAMP(6))
+                        ) VALUES (?, UUID_TO_BIN(?), 'https://go.example', 'legacy', UTC_TIMESTAMP(6))
                         """,
                 "d".repeat(64),
                 "9752e1df-8f49-480c-87b4-e871b28ee0c4"
@@ -304,50 +287,21 @@ class LinkCodeKeyGuardIntegrationTest {
                 "INSERT INTO link_code_keys (key_id, derivation_version, key_fingerprint) VALUES ('legacy', ?, ?)",
                 identity.version(), identity.hmacFingerprint()
         );
-        jdbcTemplate.update(
-                """
-                        INSERT INTO link_code_key_guard (
-                            guard_id,
-                            derivation_version,
-                            key_fingerprint
-                        ) VALUES (1, ?, ?) AS new
-                        ON DUPLICATE KEY UPDATE
-                            derivation_version = new.derivation_version,
-                            key_fingerprint = new.key_fingerprint
-                        """,
-                identity.version(),
-                identity.hmacFingerprint()
-        );
     }
 
     private void unbind() {
         jdbcTemplate.update("DELETE FROM link_code_keys");
-        jdbcTemplate.update(
-                """
-                        UPDATE link_code_key_guard
-                        SET derivation_version = NULL, key_fingerprint = NULL
-                        WHERE guard_id = 1
-                        """
-        );
     }
 
     private LinkCodeDerivationIdentity storedIdentity() {
         return jdbcTemplate.query(
-                """
-                        SELECT derivation_version, key_fingerprint
-                        FROM link_code_key_guard
-                        WHERE guard_id = 1
-                        """,
-                resultSet -> {
-                    if (!resultSet.next()) {
-                        return null;
-                    }
-                    String version = resultSet.getString("derivation_version");
-                    String fingerprint = resultSet.getString("key_fingerprint");
-                    return version == null || fingerprint == null
-                            ? null
-                            : new LinkCodeDerivationIdentity(version, fingerprint);
-                }
+                "SELECT derivation_version, key_fingerprint FROM link_code_keys WHERE key_id = 'legacy'",
+                resultSet -> resultSet.next()
+                        ? new LinkCodeDerivationIdentity(
+                                resultSet.getString("derivation_version"),
+                                resultSet.getString("key_fingerprint")
+                        )
+                        : null
         );
     }
 

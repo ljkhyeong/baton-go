@@ -163,9 +163,7 @@ public class SmartLinkService implements SmartLinkUseCase {
     }
 
     private PublicLinkOrigin requireReplayOrigin(String storedOrigin) {
-        if (storedOrigin == null) {
-            throw new PublicLinkOriginReplayUnavailableException();
-        }
+        // 정리 전 예약의 공개 출처는 DB 제약으로 항상 저장되며, 정규 형식이 아니면 현재 설정으로 대체하지 않는다.
         try {
             return PublicLinkOrigin.fromStored(storedOrigin);
         } catch (IllegalArgumentException exception) {
@@ -248,11 +246,7 @@ public class SmartLinkService implements SmartLinkUseCase {
                 storedLink.createdAt(),
                 clock.instant()
         );
-        repository.revokeStored(
-                storedLink.id(),
-                storedLink.version(),
-                revokedAt
-        );
+        repository.revokeStored(storedLink.id(), revokedAt);
         return new RevokedLinkResult(
                 toResult(storedLink, target, revokedAt, clock.instant()),
                 false

@@ -27,8 +27,7 @@ public class SmartLinkPersistenceAdapter implements SmartLinkRepository {
                    stored_link.not_before,
                    stored_link.expires_at,
                    stored_link.revoked_at,
-                   stored_link.created_at,
-                   stored_link.version
+                   stored_link.created_at
             FROM smart_links stored_link
             """;
 
@@ -156,22 +155,9 @@ public class SmartLinkPersistenceAdapter implements SmartLinkRepository {
     }
 
     @Override
-    public void revokeStored(
-            UUID id,
-            long currentVersion,
-            Instant revokedAt
-    ) {
-        long nextVersion = Math.incrementExact(currentVersion);
-        jdbcClient.sql("""
-                        UPDATE smart_links
-                        SET revoked_at = ?, version = ?
-                        WHERE id = UUID_TO_BIN(?)
-                        """)
-                .params(
-                        UtcDateTimes.write(revokedAt),
-                        nextVersion,
-                        id.toString()
-                )
+    public void revokeStored(UUID id, Instant revokedAt) {
+        jdbcClient.sql("UPDATE smart_links SET revoked_at = ? WHERE id = UUID_TO_BIN(?)")
+                .params(UtcDateTimes.write(revokedAt), id.toString())
                 .update();
     }
 
@@ -197,8 +183,7 @@ public class SmartLinkPersistenceAdapter implements SmartLinkRepository {
                 UtcDateTimes.read(resultSet, "not_before"),
                 UtcDateTimes.read(resultSet, "expires_at"),
                 UtcDateTimes.read(resultSet, "revoked_at"),
-                UtcDateTimes.read(resultSet, "created_at"),
-                resultSet.getLong("version")
+                UtcDateTimes.read(resultSet, "created_at")
         );
     }
 }

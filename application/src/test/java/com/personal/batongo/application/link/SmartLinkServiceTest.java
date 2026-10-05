@@ -3,7 +3,6 @@ package com.personal.batongo.application.link;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -204,7 +203,7 @@ class SmartLinkServiceTest {
         assertThat(revoked.link().evaluatedAt()).isEqualTo(NOW);
         verify(repository).findStoredById(LINK_ID);
         verify(repository).findStoredByIdForUpdate(LINK_ID);
-        verify(repository).revokeStored(LINK_ID, 3L, NOW);
+        verify(repository).revokeStored(LINK_ID, NOW);
     }
 
     @Test
@@ -219,8 +218,7 @@ class SmartLinkServiceTest {
                 null,
                 NOW.plusSeconds(300),
                 firstRevokedAt,
-                NOW.minusSeconds(60),
-                3L
+                NOW.minusSeconds(60)
         );
         when(repository.findStoredByIdForUpdate(LINK_ID)).thenReturn(Optional.of(snapshot));
 
@@ -230,7 +228,7 @@ class SmartLinkServiceTest {
         assertThat(result.link().revokedAt()).isEqualTo(firstRevokedAt);
         assertThat(result.link().status()).isEqualTo(Status.REVOKED);
         assertThat(result.link().evaluatedAt()).isEqualTo(NOW);
-        verify(repository, never()).revokeStored(any(), anyLong(), any());
+        verify(repository, never()).revokeStored(any(), any());
     }
 
     @Test
@@ -250,7 +248,7 @@ class SmartLinkServiceTest {
         assertThat(result.evaluatedAt()).isEqualTo(snapshot.expiresAt());
         assertThat(result.createdAt()).isEqualTo(snapshot.createdAt());
         verify(repository, never()).save(any());
-        verify(repository, never()).revokeStored(any(), anyLong(), any());
+        verify(repository, never()).revokeStored(any(), any());
     }
 
     @Test
@@ -266,7 +264,7 @@ class SmartLinkServiceTest {
 
         verify(repository).findStoredById(LINK_ID);
         verify(repository).findStoredByIdForUpdate(LINK_ID);
-        verify(repository, never()).revokeStored(any(), anyLong(), any());
+        verify(repository, never()).revokeStored(any(), any());
     }
 
     @Test
@@ -294,7 +292,7 @@ class SmartLinkServiceTest {
         verify(clock).instant();
         verify(repository, never()).findStoredById(any());
         verify(repository, never()).save(any());
-        verify(repository, never()).revokeStored(any(), anyLong(), any());
+        verify(repository, never()).revokeStored(any(), any());
     }
 
     @Test
@@ -350,7 +348,7 @@ class SmartLinkServiceTest {
         assertThat(result.hasMore()).isFalse();
         assertThat(result.nextAfterLinkId()).isNull();
         verify(repository, never()).save(any());
-        verify(repository, never()).revokeStored(any(), anyLong(), any());
+        verify(repository, never()).revokeStored(any(), any());
     }
 
     @Test
@@ -453,8 +451,7 @@ class SmartLinkServiceTest {
                 null,
                 expiresAt,
                 null,
-                createdAt,
-                0
+                createdAt
         );
     }
 
@@ -506,8 +503,7 @@ class SmartLinkServiceTest {
                 null,
                 NOW.plusSeconds(300),
                 null,
-                NOW.minusSeconds(60),
-                3L
+                NOW.minusSeconds(60)
         );
     }
 

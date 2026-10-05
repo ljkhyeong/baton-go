@@ -315,14 +315,14 @@ class LinkPersistenceIntegrationTest {
         ));
     }
     @Test
-    @DisplayName("최초 공개 출처를 확인할 수 없는 기존 예약은 현재 설정으로 채우지 않는다")
-    void rejectsExistingMysqlReservationWithoutPublicOrigin() {
+    @DisplayName("정규 형식이 아닌 저장 공개 출처는 현재 설정으로 대체하지 않는다")
+    void rejectsStoredPublicOriginOutsideCanonicalForm() {
         String idempotencyKey = "cc9d17dd-d02d-4c14-842c-afbb03887fc6";
         String linkId = "93d4229a-0edf-4d85-a769-0efb7e58c179";
         String targetPath = "/room/qrst-6789-uvwx";
         insertStoredLink(linkId, linkCodePort.issue(idempotencyKey, "legacy").codeHash(),
                 "ROUND", targetPath, "MEETING_ENTRY");
-        insertReservation(idempotencyKey, linkId, null);
+        insertReservation(idempotencyKey, linkId, "HTTPS://GO.EXAMPLE");
 
         assertThatThrownBy(() -> smartLinkUseCase.createLink(new CreateLinkCommand(
                 CreationIdempotencyKey.parseRequest(idempotencyKey),
@@ -402,9 +402,8 @@ class LinkPersistenceIntegrationTest {
                             target_system,
                             target_path,
                             purpose,
-                            created_at,
-                            version
-                        ) VALUES (UUID_TO_BIN(?), ?, ?, ?, ?, UTC_TIMESTAMP(6), 0)
+                            created_at
+                        ) VALUES (UUID_TO_BIN(?), ?, ?, ?, ?, UTC_TIMESTAMP(6))
                         """,
                 linkId,
                 codeHash,
@@ -421,8 +420,9 @@ class LinkPersistenceIntegrationTest {
                             idempotency_key_hash,
                             link_id,
                             public_origin,
+                            key_id,
                             created_at
-                        ) VALUES (?, UUID_TO_BIN(?), ?, UTC_TIMESTAMP(6))
+                        ) VALUES (?, UUID_TO_BIN(?), ?, 'legacy', UTC_TIMESTAMP(6))
                         """,
                 linkCodePort.hashIdempotencyKey(idempotencyKey),
                 linkId,
@@ -447,7 +447,7 @@ class LinkPersistenceIntegrationTest {
     ) throws Exception {
         String codeHash = linkCodePort.issue(idempotencyKey, "legacy").codeHash();
         insertStoredLink(linkId, codeHash, rawTargetSystem, rawTargetPath, rawPurpose);
-        insertReservation(idempotencyKey, linkId, null);
+        insertReservation(idempotencyKey, linkId, "https://go.example");
 
         String responseBody = mockMvc.perform(post("/api/v1/links")
                         .with(linkCreateJwt())

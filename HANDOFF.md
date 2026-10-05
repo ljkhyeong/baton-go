@@ -104,6 +104,16 @@
 
 ## 최근 검증
 
+- 정리·커서 리팩터링은 미커밋 변경이 없는 `main`의 `6c09109`에서 시작해 `6af1a72`·`07ffbb8`에 저장했다.
+  영속성 어댑터가 계산하던 정리 요청 해시를 `LinkRetentionService`로 옮겨 어댑터는 잠금 조회와 정리 SQL만 맡고,
+  `LinkCreationFingerprint`는 애플리케이션 패키지 안으로 숨겼다. 관리 목록과 대상 계약 점검에 중복된
+  `limit + 1`건 조회·최대 500건·다음 커서 규칙은 `StoredLinkScan`으로 모았다. SQL·잠금·오류 코드·응답은 같다.
+  Java 21에서 `./gradlew --no-daemon test`와 `:bootstrap:mysqlTest --tests '*LinkRetentionIntegrationTest'
+  --tests '*TargetContractOperationsIntegrationTest' --tests '*LinkPersistenceIntegrationTest'`를 통과했다.
+  도메인 72·애플리케이션 48·웹 135·외부 26·guard-tool 4·bootstrap 32·MySQL 21개 테스트에 실패·제외가 없고
+  계층 규칙 5개도 통과했다. 스케줄러 테스트는 포트 대신 서비스를 목으로 쓰고, 정리 통합 테스트는 실제 서비스를
+  거쳐 정리한다. 로그는 같은 스크래치패드의 `refactor-*.log`다. 키 가드 어댑터의 키 묶음 판정은 잠금 순서와
+  얽혀 있어 이번 범위에서 제외했다. Redis·배포 구성은 바뀌지 않아 Redis 통합 검증과 이미지 빌드는 하지 않았다.
 - 이미지 증명 추가는 미커밋 변경이 없는 `main`의 `0983bf2`에서 시작해 워크플로를 `64e4d75`에 저장했다.
   다음 작업 6의 서명·빌드 출처 검증을 위해 `actions/attest` v4.2.2(`1e69f48`)로 증명을 만드는
   `image-attestation` 작업과 보관 워크플로의 재검증을 추가했다. `id-token`·`attestations: write`는 새 작업에만 준다.
@@ -119,8 +129,8 @@
   이미지 빌드는 하지 않았다. 이후 원격 `main`에 반영했고 `a20146e`의
   [원격 CI](https://github.com/ljkhyeong/baton-go/actions/runs/37253336070)는 필수 검증·의존성 제출·출처 증명
   세 작업이 모두 성공했다. 증명 작업의 생성·배포 기준 검증 단계도 성공했고, 증명 API에서 게시 다이제스트
-  `sha256:4e240e27…`의 SLSA·CycloneDX 증명 2개를 조회했다. 로컬 GHCR 인증이 필요한 배포 전 확인 명령과
-  Release 생성은 실행하지 않았다.
+  `sha256:4e240e27…`의 SLSA·CycloneDX 증명 2개를 조회했다. 기록 커밋 `6c09109`의 원격 CI도 세 작업이 모두
+  성공했다. 로컬 GHCR 인증이 필요한 배포 전 확인 명령과 Release 생성은 실행하지 않았다.
 - 사용 사례 경계 리팩터링은 미커밋 변경이 없는 `main`의 `8844ab5`에서 시작해 `c08c2ee`·`7a45c28`에 저장했다.
   익명 공개 경로의 접속 처리를 `ResolveLinkUseCase`·`LinkResolutionService`로 분리해 공개 컨트롤러는 이 포트만,
   관리 서비스는 대상 URL 포트 없이 동작한다. `StoredLinkSnapshot.trustedTarget()`이 허용 확인과 신뢰 대상 변환을

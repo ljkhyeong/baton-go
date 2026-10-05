@@ -280,7 +280,7 @@ public class SmartLinkService implements SmartLinkUseCase {
                     true
             );
         }
-        Instant revokedAt = LinkRevocationPolicy.requireFirstRevocationAt(
+        Instant revokedAt = LinkRevocationPolicy.firstRevocationAt(
                 storedLink.createdAt(),
                 clock.instant()
         );

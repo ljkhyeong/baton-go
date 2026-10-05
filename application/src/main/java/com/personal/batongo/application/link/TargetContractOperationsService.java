@@ -70,7 +70,7 @@ public class TargetContractOperationsService implements TargetContractOperations
             throw new TargetContractRemediationStaleException();
         }
 
-        Instant revokedAt = LinkRevocationPolicy.requireFirstRevocationAt(
+        Instant revokedAt = LinkRevocationPolicy.firstRevocationAt(
                 storedLink.createdAt(),
                 clock.instant()
         );

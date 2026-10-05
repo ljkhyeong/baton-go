@@ -29,6 +29,8 @@
   기존 예약 재시도 경로, 기존 DB용 `guard-tool`, 대상 계약 v1 점검·폐기 운영 API·scope·설정이 없다.
   공개 조회·관리 API에서 계약 위반 저장 대상을 404로 숨기는 방어와 재시도 저장값 누락 오류는 유지한다.
 - 폐기를 처리한 서버의 시계가 생성 시각보다 늦으면 500 대신 폐기 시각을 생성 시각으로 맞춘다.
+- Spring Boot 4.1.1이 관리하는 Tomcat·Jackson은 루트 `build.gradle`의 해석 규칙으로 보안 수정본인 Tomcat 11.0.26·
+  Jackson 3.1.7을 쓴다. 이 버전을 포함한 Boot 패치가 나오면 Boot를 올리고 규칙을 지운다.
 - 영속성은 JPA 없이 Spring `JdbcClient`로만 처리한다. 첫 운영 배포 전이라 마이그레이션을 최종 스키마의
   단일 V1으로 다시 만들었고 `link_code_key_guard` 보호 행과 `version` 열이 없다. 그 이전에 만든 로컬
   MySQL 볼륨은 [README 안내](README.md#로컬-실행)에 따라 다시 만든다.
@@ -114,6 +116,17 @@
 
 ## 최근 검증
 
+- 의존성 보안 갱신은 미커밋 변경이 없는 `main`의 `3b07f2d`에서 시작해 `6135d99`와 문서 커밋에 저장했다. 푸시 때 확인한
+  Dependabot 경고 10건은 Tomcat `tomcat-embed-core` 11.0.24(치명 3, GHSA-gcx9-497g-6cp6 등)와 Jackson
+  `jackson-core`·`jackson-databind` 3.1.5(높음 5·보통 2)였다. 최신 안정 Boot가 4.1.1이라 BOM 갱신으로 해결할 수 없어
+  `enforcedPlatform` 위에 `eachDependency` 규칙을 두고 `org.apache.tomcat.embed`를 11.0.26, `tools.jackson*`을 3.1.7로
+  바꿨다. 검증 메타데이터에 새 버전 7개를 추가하고, 원래 파일을 치운 `--dry-run` 결과와 대조해 쓰이지 않는 Tomcat
+  11.0.24 항목 3개를 지웠다. Jackson 3.1.5는 Spring Boot Gradle 플러그인 빌드 경로에서 계속 쓰여 남겼다.
+  Java 21에서 결과 디렉터리를 비운 뒤 `./gradlew --no-daemon --refresh-dependencies build :adapter-in-web:apiContractDocs
+  :bootstrap:mysqlTest :bootstrap:redisTest`를 통과했다. 도메인 72·애플리케이션 41·웹 120·외부 20·bootstrap 29·
+  MySQL 29·Redis 3개에 실패·제외가 없고 REST Docs 조각은 84개다. `docker build --no-cache`가 성공했고 실행 jar에
+  Tomcat 11.0.26·Jackson 3.1.7만 들어 있음을 확인했다. CI 운영 이미지 기동 단계도 같은 스크립트로 로컬 실행해 통과했다.
+  경고 종료는 원격 CI의 의존성 제출 뒤 GitHub에서 확인한다. 원격 반영은 하지 않았다.
 - Redis 설정 보안 보완은 미커밋 변경이 없는 `main`의 `6a4ad30`에서 시작해 `67117a6`과 문서 커밋에 저장했다.
   4차 정리의 `spring.data.redis.url`은 Spring Boot가 형식 오류 때 URL 전체를 시작 실패 메시지에 출력하고 자격 증명도
   URL에서만 읽는 것을 Boot 4.1.1 클래스에서 확인했다. 그래서 URL과 `BATON_GO_REDIS_URI`를 없애고 주소·TLS·DB 번호는

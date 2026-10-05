@@ -63,7 +63,9 @@ class DistributedResolverQuotaIntegrationTest {
         runner.run(context -> assertThat(context).hasNotFailed()
                 .doesNotHaveBean(PublicResolverQuotaPort.class)
                 .doesNotHaveBean("redisHealthContributor"));
-        runner.withPropertyValues("baton-go.distributed-resolver-quota.enabled=true", "spring.data.redis.url=" + redisUrl())
+        runner.withPropertyValues("baton-go.distributed-resolver-quota.enabled=true",
+                        "spring.data.redis.host=" + REDIS.getHost(),
+                        "spring.data.redis.port=" + REDIS.getMappedPort(6379))
                 .run(context -> {
                     assertThat(context.getBean(PublicResolverQuotaPort.class).acquireRetryAfterSeconds()).isZero();
                     assertThat(redisHealth(context)).isEqualTo(Status.UP);
@@ -74,7 +76,7 @@ class DistributedResolverQuotaIntegrationTest {
     @DisplayName("분산 제한 Redis에 연결하지 못하면 공개 요청 제한과 준비 상태가 대기 시간 안에 장애로 응답한다")
     void reportsUnreachableRedisAsUnavailable() {
         runner.withPropertyValues("baton-go.distributed-resolver-quota.enabled=true",
-                        "spring.data.redis.url=redis://127.0.0.1:1")
+                        "spring.data.redis.host=127.0.0.1", "spring.data.redis.port=1")
                 .run(context -> {
                     assertThatThrownBy(context.getBean(PublicResolverQuotaPort.class)::acquireRetryAfterSeconds)
                             .isInstanceOf(PublicResolverQuotaUnavailableException.class);
@@ -119,10 +121,6 @@ class DistributedResolverQuotaIntegrationTest {
             firstConnection.destroy();
             secondConnection.destroy();
         }
-    }
-
-    private static String redisUrl() {
-        return "redis://" + REDIS.getHost() + ":" + REDIS.getMappedPort(6379);
     }
 
     private static LettuceConnectionFactory connectionFactory() {

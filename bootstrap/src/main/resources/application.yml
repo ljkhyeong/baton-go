@@ -34,10 +34,13 @@ spring:
     fail-on-missing-locations: true
   data:
     redis:
-      # 분산 요청 제한을 켤 때만 연결한다. 꺼져 있으면 기본 주소에 연결하지 않는다.
-      url: ${BATON_GO_REDIS_URI:redis://localhost:6379}
+      # 분산 요청 제한을 켤 때만 연결한다. 주소·TLS는 SPRING_DATA_REDIS_HOST·PORT·SSL_ENABLED,
+      # 자격 증명은 SPRING_DATA_REDIS_USERNAME·PASSWORD로 주입한다. url은 형식 오류 메시지에
+      # 비밀번호까지 출력되므로 쓰지 않는다.
       timeout: ${BATON_GO_DISTRIBUTED_RESOLVER_QUOTA_TIMEOUT:500ms}
       connect-timeout: ${BATON_GO_DISTRIBUTED_RESOLVER_QUOTA_TIMEOUT:500ms}
+      repositories:
+        enabled: false
 
 server:
   shutdown: graceful

@@ -29,6 +29,11 @@
   기존 예약 재시도 경로, 기존 DB용 `guard-tool`, 대상 계약 v1 점검·폐기 운영 API·scope·설정이 없다.
   공개 조회·관리 API에서 계약 위반 저장 대상을 404로 숨기는 방어와 재시도 저장값 누락 오류는 유지한다.
 - 폐기를 처리한 서버의 시계가 생성 시각보다 늦으면 500 대신 폐기 시각을 생성 시각으로 맞춘다.
+- 영속성은 JPA 없이 Spring `JdbcClient`로만 처리한다. 첫 운영 배포 전이라 마이그레이션을 최종 스키마의
+  단일 V1으로 다시 만들었고 `link_code_key_guard` 보호 행과 `version` 열이 없다. 그 이전에 만든 로컬
+  MySQL 볼륨은 [README 안내](README.md#로컬-실행)에 따라 다시 만든다.
+- 관리 보안 필터의 401·403·인증 서비스 500은 `HandlerExceptionResolver`를 거쳐 `GlobalExceptionHandler`가
+  응답한다.
   실제 운영 환경 검증과 배포는 남아 있다.
 - `go.b4ton.com` 운영 예시와 Cloudflare DNS API 인증서 갱신·Discord·Slack 웹훅 알림의 선택 설정을
   추가했다. [외부 API 연동 절차](docs/RUNBOOK/external-api-integrations.md)를 따르며
@@ -108,6 +113,19 @@
 
 ## 최근 검증
 
+- 2차 과감한 정리는 미커밋 변경이 없는 `main`의 `48bb23e`에서 시작해 `9dab25f`·`772a3bb`·`9eeb4da`·`f4eda73`·
+  `fea3c98`에 저장했다. 운영 데이터와 적용된 DB가 없다는 사용자 확인에 따라 JPA를 제거해 영속성을
+  `JdbcClient`로 통일하고, V1~V7을 최종 스키마의 V1 하나로 다시 만들었다. 보호 행·`version` 열·쓰이지 않던
+  만료 인덱스를 없애고 정리 전 예약의 공개 출처를 검사 제약으로 강제했다. 저장 링크 레코드 3종을 `StoredLink`로
+  합치고 `FilterErrorResponseWriter`를 지워 보안 필터 오류를 MVC 예외 처리기로 모았다. 운영 코드 603줄을 지우고
+  196줄을 더했으며 테스트는 504줄을 지우고 103줄을 더했다.
+  Java 21에서 결과 디렉터리를 비운 뒤 `./gradlew --no-daemon build :adapter-in-web:apiContractDocs
+  :bootstrap:mysqlTest :bootstrap:redisTest`를 통과했다. 도메인 73·애플리케이션 42·웹 124·외부 25·bootstrap 31·
+  MySQL 29·Redis 3개에 실패·제외가 없고 REST Docs 조각은 84개다. `docker build`와 CI의 운영 이미지 기동 단계를
+  같은 스크립트로 로컬 실행해 통과했다. 실행 클래스패스에 Hibernate ORM·Spring Data JPA가 없음을 확인했다.
+  MockMvc는 HEAD 본문을 버리지 않아 관리 HEAD 403의 빈 본문 확인을 실제 HTTP 서버 테스트로 옮겼다.
+  로그는 같은 스크래치패드의 `bold-*.log`와 `smoke/run.log`다. Gradle 검증 메타데이터의 쓰이지 않는 JPA 항목은
+  다시 생성하려면 네트워크 조회가 필요해 남겼다. 원격 반영과 원격 CI 실행은 하지 않았다.
 - 과거 호환 정리는 미커밋 변경이 없는 `main`의 `bfb9a14`에서 시작해 `7c1c0a0`·`274fb64`·`110abfd`·`c950b5d`·
   `c3e2e0b`·`c3040ae`에 저장했다. 보존할 기존 GO DB가 없다는 사용자 확인에 따라 과거 형식 멱등 재시도,
   `guard-tool` 모듈·CI 단계, 대상 계약 운영 API와 점검 전용 예약 존재 조회를 제거했다. 예시에서 사라진 공개
@@ -581,7 +599,8 @@
    GO 연동과 이후 BATON·공휴일 기능을 함께 유지한다. 아직 배포하지 않은 GO 마이그레이션 V40~V42는
    계정 비활성화 V39 다음 순서이며, 운영 DB에 적용한 파일은 교체하지 않는다.
    BATON 연동 브랜치의 GO 검증 고정 커밋은 원격 `main`의 `bf93dc3`이다. 이후 GO에서 과거 형식 멱등성 키와
-   대상 계약 운영 API를 제거했으므로 고정 커밋을 올릴 때 BATON의 GO 계약 검증을 다시 실행한다. BATON Actions의
+   대상 계약 운영 API를 제거하고 마이그레이션 기준선을 다시 만들었으므로 고정 커밋을 올릴 때 새 GO DB로
+   BATON의 GO 계약 검증을 다시 실행한다. BATON Actions의
    `BATON_GO_CONTRACT_READ_TOKEN` 등록을 확인한 뒤 GitHub 품질 게이트를 실행한다.
    실제 서비스 JWT와 HTTPS 환경에서 생성 응답 유실 후 취소·폐기까지 재시도되는지 확인한다.
    상태 확인 장애 경보와 링크 생성·폐기·상태 일괄 조회도 검증한다.
@@ -611,4 +630,4 @@
 
 운영·복구 절차는
 [비공개 Kubernetes 배포 절차](docs/RUNBOOK/kubernetes-private-server-deployment.md)와
-[HMAC 키 정보 등록 결정](docs/ADR/0004_link-code-key-binding/adr.md)을 따른다.
+[발급 키 버전 결정](docs/ADR/0011_link-code-key-ring/adr.md)을 따른다.

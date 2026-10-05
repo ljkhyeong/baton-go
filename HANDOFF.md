@@ -99,6 +99,18 @@
 
 ## 최근 검증
 
+- 사용 사례 경계 리팩터링은 미커밋 변경이 없는 `main`의 `8844ab5`에서 시작해 `c08c2ee`·`7a45c28`에 저장했다.
+  익명 공개 경로의 접속 처리를 `ResolveLinkUseCase`·`LinkResolutionService`로 분리해 공개 컨트롤러는 이 포트만,
+  관리 서비스는 대상 URL 포트 없이 동작한다. `StoredLinkSnapshot.trustedTarget()`이 허용 확인과 신뢰 대상 변환을
+  함께 해 관리 결과의 문자열 `valueOf` 전제를 없앴다. 판정 순서·오류 코드·응답은 같다.
+  Java 21에서 `./gradlew --no-daemon :application:test :adapter-in-web:test :adapter-in-web:apiContractDocs
+  :bootstrap:test :bootstrap:mysqlTest`를 통과했다. 애플리케이션 48·웹 135·bootstrap 32·MySQL 45개에 실패·제외가
+  없고 REST Docs 조각 96개는 무작위 요청 ID를 빼고 같다. 두 번째 단계 뒤 애플리케이션·bootstrap과
+  MySQL `LinkPersistenceIntegrationTest`·`TargetContractOperationsIntegrationTest` 17개를 다시 통과했다.
+  첫 실행에서 모든 컨트롤러를 스캔하는 관리 인증 테스트가 새 포트 빈을 찾지 못해 실패했고,
+  공개 컨트롤러 생성용 목을 추가해 해결했다. 로그는 같은 스크래치패드의
+  `baton-go-refactor-pass3-*-20261005.log`다. Redis 구성은 바뀌지 않아 Redis 통합 검증은 실행하지 않았다.
+
 - BATON 상태 확인 일괄화는 GO 코드를 바꾸지 않고 BATON `codex/go-link-integration-20260905`의
   `533a3099`·`b6b50a41`에 저장했다. BATON이 링크별 `GET /api/v1/links/{id}` 대신 남은 건수와 GO 한도
   100개 안에서 함께 선점한 링크를 `GET /api/v1/links/batch` 한 번으로 확인한다. `notFoundIds`만 종료로

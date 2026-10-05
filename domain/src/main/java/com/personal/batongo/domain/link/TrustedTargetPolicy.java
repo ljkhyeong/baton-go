@@ -27,22 +27,11 @@ public final class TrustedTargetPolicy {
             LinkPurpose purpose,
             String targetPath
     ) {
-        if (targetSystem == null) {
-            throw new LinkValidationException("대상 시스템은 필수입니다");
-        }
-        if (purpose == null) {
-            throw new LinkValidationException("링크 목적은 필수입니다");
-        }
-        if (targetPath == null) {
-            throw new LinkValidationException("대상 경로는 필수입니다");
-        }
-
-        if (!isAllowed(targetSystem.name(), purpose.name(), targetPath)) {
-            throw new LinkValidationException(
-                    "v1에서 허용하지 않는 대상 시스템·목적·경로 조합입니다"
-            );
-        }
-        return new TrustedTarget(targetSystem, purpose, targetPath);
+        return findAllowed(
+                targetSystem == null ? null : targetSystem.name(),
+                purpose == null ? null : purpose.name(),
+                targetPath
+        ).orElseThrow(() -> new LinkValidationException("v1에서 허용하지 않는 대상 시스템·목적·경로 조합입니다"));
     }
 
     public static Optional<TrustedTarget> findAllowed(

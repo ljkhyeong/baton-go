@@ -77,13 +77,7 @@ public class SmartLinkService implements SmartLinkUseCase {
         );
 
         if (!reservation.owner()) {
-            return replayCreation(
-                    reservation,
-                    requestedTarget,
-                    command.notBefore(),
-                    command.expiresAt(),
-                    issuedCode
-            );
+            return replayCreation(reservation, requestedTarget, command, issuedCode);
         }
 
         repository.save(new SmartLink(
@@ -136,20 +130,14 @@ public class SmartLinkService implements SmartLinkUseCase {
     private CreatedLinkResult replayCreation(
             LinkCreationReservationPort.Reservation reservation,
             TrustedTarget requestedTarget,
-            Instant notBefore,
-            Instant expiresAt,
+            CreateLinkCommand command,
             IssuedLinkCode issuedCode
     ) {
         StoredLink existing = repository.findById(reservation.linkId())
                 .orElseThrow(() -> new LinkCreationReplayUnavailableException(
                         reservation.linkId()
                 ));
-        requireSameCreationRequest(
-                existing,
-                requestedTarget,
-                notBefore,
-                expiresAt
-        );
+        requireSameCreationRequest(existing, requestedTarget, command);
         if (!existing.codeHash().equals(issuedCode.codeHash())) {
             throw new LinkCodeReplayMismatchException();
         }
@@ -235,34 +223,25 @@ public class SmartLinkService implements SmartLinkUseCase {
         StoredLink storedLink = repository.findByIdForUpdate(linkId)
                 .orElseThrow(LinkNotFoundException::new);
         TrustedTarget target = requireManagedTrustedTarget(storedLink);
+        Instant now = clock.instant();
         if (storedLink.revokedAt() != null) {
-            return new RevokedLinkResult(
-                    toResult(storedLink, target, storedLink.revokedAt(), clock.instant()),
-                    true
-            );
+            return new RevokedLinkResult(toResult(storedLink, target, storedLink.revokedAt(), now), true);
         }
-        Instant revokedAt = LinkRevocationPolicy.firstRevocationAt(
-                storedLink.createdAt(),
-                clock.instant()
-        );
+        Instant revokedAt = LinkRevocationPolicy.firstRevocationAt(storedLink.createdAt(), now);
         repository.revoke(storedLink.id(), revokedAt);
-        return new RevokedLinkResult(
-                toResult(storedLink, target, revokedAt, clock.instant()),
-                false
-        );
+        return new RevokedLinkResult(toResult(storedLink, target, revokedAt, now), false);
     }
 
     private void requireSameCreationRequest(
             StoredLink existing,
             TrustedTarget requestedTarget,
-            Instant notBefore,
-            Instant expiresAt
+            CreateLinkCommand command
     ) {
         boolean sameRequest = requestedTarget.targetSystem().name().equals(existing.targetSystem())
                 && requestedTarget.targetPath().equals(existing.targetPath())
                 && requestedTarget.purpose().name().equals(existing.purpose())
-                && Objects.equals(existing.notBefore(), notBefore)
-                && Objects.equals(existing.expiresAt(), expiresAt);
+                && Objects.equals(existing.notBefore(), command.notBefore())
+                && Objects.equals(existing.expiresAt(), command.expiresAt());
         if (!sameRequest) {
             throw new IdempotencyKeyConflictException();
         }

@@ -97,8 +97,8 @@
 - 종료 링크 자동 정리 실행 간격은 최소 1초다. 빈 값과 `0s`는 설정 바인딩 단계에서 거부한다.
 - 자동 정리를 켜면 Pod별 실행 완료 시각과 설정 간격을 지표로 제공한다. 완료 신호가 실행 간격의
   3배(최소 3분)를 넘긴 상태로 2분 지속되면 정체 경보가 발생한다.
-- 준비 상태는 DB와 활성화한 분산 요청 제한 Redis를 확인한다. Redis `PING`이 실패하면
-  `/readyz`는 503이며 `/livez`는 정상 상태를 유지한다.
+- 준비 상태는 DB와 활성화한 분산 요청 제한 Redis를 확인한다. Redis는 Spring Boot 자동 구성과 기본 상태 확인
+  (`INFO`)을 사용하며, 실패하면 `/readyz`는 503이고 `/livez`는 정상 상태를 유지한다.
 - `BatonGoReadinessFailed`는 Pod별 `/readyz` 요청이 최근 2분간 12건 이상이고 503 비율이
   50%를 넘는 상태가 2분 지속되면 발생한다.
 - 애플리케이션은 종료 신호를 받으면 새 요청 수락을 멈추고 진행 중인 요청을 최대 30초 기다린다.
@@ -114,6 +114,19 @@
 
 ## 최근 검증
 
+- 4차 정리는 미커밋 변경이 없는 `main`의 `ee5fb6e`에서 시작해 `3b42af5`·`cab0abd`와 문서 커밋에 저장했다.
+  분산 요청 제한이 직접 만들던 Lettuce 클라이언트·연결 빈과 `PING` 상태 확인을 지우고 Spring Boot
+  `spring.data.redis` 자동 구성, `StringRedisTemplate`·`RedisScript`, 기본 `redis` 상태 확인으로 바꿨다. 끊긴 연결의
+  명령을 쌓지 않는 옵션은 `LettuceClientOptionsBuilderCustomizer`로 유지했다. 기존 환경 변수 이름은 그대로 쓴다.
+  Spring Boot가 빈 Redis URL을 시작 단계에서 거부하는 것을 임시 테스트로 확인해 Compose는 형식이 맞는 기본 주소를
+  넘긴다. Redis 연결은 첫 사용 때 맺으므로 연결 실패는 시작 대신 `/readyz`·시작 탐침 실패로 드러나며, 운영 ACL에는
+  `INFO`·`EVALSHA`가 필요하다. 테스트에서만 쓰던 `TrustedTargetPolicy.isAllowed`도 합쳤다. 운영 코드 120줄을 지우고
+  45줄을 더했으며 Spring Data Redis 의존성 검증 항목 14개를 추가했다. 링크 코드 키의 Bean Validation 전환은 실패
+  메시지에 거부한 비밀값이 찍혀 하지 않았다. Java 21에서 결과 디렉터리를 비운 뒤 `./gradlew --no-daemon build
+  :bootstrap:mysqlTest :bootstrap:redisTest`를 통과했다. 도메인 72·애플리케이션 41·웹 120·외부 20·bootstrap 29·
+  MySQL 29·Redis 3개에 실패·제외가 없다. `docker build`와 CI 운영 이미지 기동 단계를 같은 스크립트로 로컬 실행해
+  분산 제한을 끈 기본 구성의 준비 상태와 공개 오류 응답을 확인했다. 로그는 스크래치패드의 `smoke/run.log`다.
+  원격 반영은 하지 않았다.
 - 테스트·인계 정리는 미커밋 변경이 없는 `main`의 `41348ab`에서 시작해 `0da197b`와 문서 커밋에 저장했다.
   읽기 전용 검토 두 건의 후보 중 다른 테스트가 같은 분기를 확인하는 테스트를 지우거나 매개변수 테스트로 합쳤다.
   생성 실패 오류 매핑과 복구 실패 카운터는 HTTP 테스트 하나로 모았고, 같은 설정의 키 교체·보존 정리 MySQL

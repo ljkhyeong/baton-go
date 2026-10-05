@@ -594,7 +594,7 @@ kubectl label namespace <approved-edge-or-caller-namespace> \
 주 HTTP 포트에도 등록한다. Kubernetes 탐침의 포트 이름은 `http`(`8080`)이며 시작·준비
 탐침은 `/readyz`, 생존 탐침은 `/livez`를 호출한다. Docker 상태 확인도 `8080/readyz`를
 사용한다. 주 HTTP 포트 장애를 관리 포트의 정상 응답이 가리지 않게 하기 위한 설정이다.
-DB 장애와 분산 요청 제한을 켠 경우의 Redis `PING` 실패는 준비 상태만 503으로 바꾸며
+DB 장애와 분산 요청 제한을 켠 경우의 Redis 상태 확인(`INFO`) 실패는 준비 상태만 503으로 바꾸며
 생존 상태에는 포함하지 않는다. Prometheus 등 나머지 Actuator 경로는 `8081`을 유지한다.
 
 애플리케이션은 Spring Boot 정상 종료를 사용한다. 종료 신호를 받으면 새 요청 수락을 멈추고

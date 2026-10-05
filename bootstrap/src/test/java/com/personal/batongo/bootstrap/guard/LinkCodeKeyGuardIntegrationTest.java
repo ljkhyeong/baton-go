@@ -18,7 +18,6 @@ import com.personal.batongo.application.link.port.out.LinkCodePort;
 import com.personal.batongo.bootstrap.guard.ExistingDatabaseLinkCodeKeyBinder.BindingResult;
 import com.personal.batongo.domain.link.LinkPurpose;
 import com.personal.batongo.domain.link.TargetSystem;
-import java.util.Locale;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -255,23 +254,6 @@ class LinkCodeKeyGuardIntegrationTest {
         unbind();
 
         BindingResult result = bindExistingDatabase(canaryIdempotencyKey);
-
-        assertThat(result).isEqualTo(BindingResult.BOUND);
-        assertThat(storedIdentity()).isEqualTo(linkCodePort.keyRingIdentity().activeIdentity());
-        assertThat(linkCount()).isEqualTo(1L);
-        assertThat(reservationCount()).isEqualTo(1L);
-    }
-
-    @Test
-    @DisplayName("기존 MySQL의 대문자 버전 7 검증용 요청은 과거 규칙으로 변환해 키 정보를 등록한다")
-    void bindsExistingDatabaseWithLegacyUppercaseVersionSevenCanary() {
-        String canonicalCanary = "019ae750-9234-7abc-8def-123456789abc";
-        insertLegacyCreation(canonicalCanary);
-        unbind();
-
-        BindingResult result = bindExistingDatabase(
-                canonicalCanary.toUpperCase(Locale.ROOT)
-        );
 
         assertThat(result).isEqualTo(BindingResult.BOUND);
         assertThat(storedIdentity()).isEqualTo(linkCodePort.keyRingIdentity().activeIdentity());

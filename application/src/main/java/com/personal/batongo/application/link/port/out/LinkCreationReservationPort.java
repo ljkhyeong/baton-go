@@ -1,12 +1,9 @@
 package com.personal.batongo.application.link.port.out;
 
 import java.time.Instant;
-import java.util.Optional;
 import java.util.UUID;
 
 public interface LinkCreationReservationPort {
-
-    Optional<Reservation> find(String idempotencyKeyHash);
 
     Reservation reserve(
             String idempotencyKeyHash,

@@ -557,7 +557,7 @@ class LinkManagementHttpContractTest {
             "2026-07-30T10:00:00.123456Z",
             "2026-07-30T10:00:00.123456789Z"
     })
-    @DisplayName("계약된 마이크로초와 과거 나노초 시각은 원본 Instant로 전달한다")
+    @DisplayName("웹 계층은 마이크로초와 나노초 시각을 절삭하지 않고 원본 Instant로 전달한다")
     void forwardsCanonicalCreationTimesWithoutChangingTheirMeaning(String rawTime)
             throws Exception {
         when(useCase.createLink(any())).thenAnswer(invocation -> {

@@ -1,10 +1,7 @@
 package com.personal.batongo.application.link;
 
-import com.personal.batongo.application.link.error.InvalidIdempotencyKeyException;
 import com.personal.batongo.application.link.error.InvalidRequestException;
 import java.time.Instant;
-import java.time.temporal.ChronoUnit;
-import java.util.Objects;
 
 final class CreationRequestAdmissionPolicy {
 
@@ -15,66 +12,15 @@ final class CreationRequestAdmissionPolicy {
     private CreationRequestAdmissionPolicy() {
     }
 
-    static Decision evaluate(
-            CreationIdempotencyKey idempotencyKey,
-            Instant notBefore,
-            Instant expiresAt
-    ) {
-        if (!isWithinRange(notBefore) || !isWithinRange(expiresAt)) {
+    /** MySQL DATETIME(6)에 그대로 저장되는 시각만 받아 재시도 비교가 저장값과 어긋나지 않게 한다. */
+    static void requireStorableTimes(Instant notBefore, Instant expiresAt) {
+        if (!isStorable(notBefore) || !isStorable(expiresAt)) {
             throw InvalidRequestException.creationTime();
         }
-
-        Instant storedNotBefore = databaseTime(notBefore);
-        Instant storedExpiresAt = databaseTime(expiresAt);
-        if (!idempotencyKey.allowsNewReservation()) {
-            return new Decision(
-                    storedNotBefore,
-                    storedExpiresAt,
-                    ReplayOnlyReason.LEGACY_IDEMPOTENCY_KEY
-            );
-        }
-        if (!Objects.equals(notBefore, storedNotBefore)
-                || !Objects.equals(expiresAt, storedExpiresAt)) {
-            return new Decision(
-                    storedNotBefore,
-                    storedExpiresAt,
-                    ReplayOnlyReason.SUB_MICROSECOND_TIME
-            );
-        }
-        return new Decision(storedNotBefore, storedExpiresAt, ReplayOnlyReason.NONE);
     }
 
-    private static Instant databaseTime(Instant value) {
-        return value == null ? null : value.truncatedTo(ChronoUnit.MICROS);
-    }
-
-    private static boolean isWithinRange(Instant value) {
-        return value == null || !value.isBefore(MINIMUM) && !value.isAfter(MAXIMUM);
-    }
-
-    enum ReplayOnlyReason {
-        NONE,
-        LEGACY_IDEMPOTENCY_KEY,
-        SUB_MICROSECOND_TIME
-    }
-
-    record Decision(
-            Instant notBefore,
-            Instant expiresAt,
-            ReplayOnlyReason replayOnlyReason
-    ) {
-        boolean allowsNewReservation() {
-            return replayOnlyReason == ReplayOnlyReason.NONE;
-        }
-
-        RuntimeException missingReservationException() {
-            return switch (replayOnlyReason) {
-                case LEGACY_IDEMPOTENCY_KEY -> new InvalidIdempotencyKeyException();
-                case SUB_MICROSECOND_TIME -> InvalidRequestException.creationTime();
-                case NONE -> new IllegalStateException(
-                        "새 링크 요청에는 기존 예약 누락 오류를 사용할 수 없습니다"
-                );
-            };
-        }
+    private static boolean isStorable(Instant value) {
+        return value == null
+                || !value.isBefore(MINIMUM) && !value.isAfter(MAXIMUM) && value.getNano() % 1_000 == 0;
     }
 }

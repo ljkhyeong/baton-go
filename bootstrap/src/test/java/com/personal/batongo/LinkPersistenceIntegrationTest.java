@@ -315,38 +315,6 @@ class LinkPersistenceIntegrationTest {
         ));
     }
     @Test
-    @DisplayName("과거 대문자 UUID 요청은 기존 MySQL 예약과 일치하면 행을 늘리지 않고 기존 결과를 반환한다")
-    void replaysLegacyUppercaseUuidFromExistingMysqlReservation() throws Exception {
-        String rawIdempotencyKey = "00000000-0000-7000-8000-00000000000A";
-        String normalizedIdempotencyKey = rawIdempotencyKey.toLowerCase(
-                java.util.Locale.ROOT
-        );
-        String linkId = "466d487c-e690-4bf7-b116-f99f380f1b82";
-        String targetPath = "/room/efgh-jkmn-pqrs";
-        insertStoredLink(linkId, linkCodePort.issue(normalizedIdempotencyKey, "legacy").codeHash(),
-                "ROUND", targetPath, "MEETING_ENTRY");
-        insertReservation(normalizedIdempotencyKey, linkId, "https://go.example");
-
-        mockMvc.perform(post("/api/v1/links")
-                        .with(linkCreateJwt())
-                        .header("Idempotency-Key", rawIdempotencyKey)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {
-                                  "targetSystem": "ROUND",
-                                  "targetPath": "%s",
-                                  "purpose": "MEETING_ENTRY"
-                                }
-                                """.formatted(targetPath)))
-                .andExpect(status().isOk())
-                .andExpect(header().string("Idempotency-Replayed", "true"))
-                .andExpect(jsonPath("$.id").value(linkId));
-
-        assertThat(storedLinkCount(targetPath)).isOne();
-        assertThat(reservationCount(linkCodePort.hashIdempotencyKey(normalizedIdempotencyKey))).isOne();
-    }
-
-    @Test
     @DisplayName("최초 공개 출처를 확인할 수 없는 기존 예약은 현재 설정으로 채우지 않는다")
     void rejectsExistingMysqlReservationWithoutPublicOrigin() {
         String idempotencyKey = "cc9d17dd-d02d-4c14-842c-afbb03887fc6";
@@ -365,43 +333,6 @@ class LinkPersistenceIntegrationTest {
                 null
         )))
                 .isInstanceOf(PublicLinkOriginReplayUnavailableException.class);
-    }
-
-    @Test
-    @DisplayName("과거 나노초 요청은 기존 MySQL 예약의 마이크로초 요청 내용과 일치하면 기존 결과를 반환한다")
-    void replaysLegacySubMicrosecondTimeFromExistingMysqlReservation() throws Exception {
-        String idempotencyKey = "61a78df8-4859-4e66-8ad9-57c3a29bd2d2";
-        String targetPath = "/room/abcd-2345-efgh";
-        Instant historicalExpiresAt = Instant.parse("2040-06-02T13:00:00.123456789Z");
-        Instant storedExpiresAt = Instant.parse("2040-06-02T13:00:00.123456Z");
-        CreatedLinkResult created = smartLinkUseCase.createLink(new CreateLinkCommand(
-                CreationIdempotencyKey.parseRequest(idempotencyKey),
-                TargetSystem.ROUND,
-                targetPath,
-                LinkPurpose.MEETING_ENTRY,
-                null,
-                storedExpiresAt
-        ));
-
-        mockMvc.perform(post("/api/v1/links")
-                        .with(linkCreateJwt())
-                        .header("Idempotency-Key", idempotencyKey)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {
-                                  "targetSystem": "ROUND",
-                                  "targetPath": "%s",
-                                  "purpose": "MEETING_ENTRY",
-                                  "expiresAt": "%s"
-                                }
-                                """.formatted(targetPath, historicalExpiresAt)))
-                .andExpect(status().isOk())
-                .andExpect(header().string("Idempotency-Replayed", "true"))
-                .andExpect(jsonPath("$.id").value(created.link().id().toString()))
-                .andExpect(jsonPath("$.expiresAt").value(storedExpiresAt.toString()));
-
-        assertThat(storedLinkCount(targetPath)).isOne();
-        assertThat(reservationCount(linkCodePort.hashIdempotencyKey(idempotencyKey))).isOne();
     }
 
     @Test
@@ -504,14 +435,6 @@ class LinkPersistenceIntegrationTest {
                 "SELECT COUNT(*) FROM link_creation_requests WHERE idempotency_key_hash = ?",
                 Long.class,
                 idempotencyKeyHash
-        );
-    }
-
-    private long storedLinkCount(String targetPath) {
-        return jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM smart_links WHERE target_path = ?",
-                Long.class,
-                targetPath
         );
     }
 

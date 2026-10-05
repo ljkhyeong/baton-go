@@ -12,7 +12,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import com.personal.batongo.application.link.error.InvalidIdempotencyKeyException;
 import com.personal.batongo.application.link.error.IdempotencyKeyConflictException;
 import com.personal.batongo.application.link.error.InvalidRequestException;
 import com.personal.batongo.application.link.error.LinkCodeReplayMismatchException;
@@ -128,24 +127,6 @@ class SmartLinkServiceTest {
                 keyGuardPort,
                 publicLinkOriginPort
         );
-    }
-
-    @Test
-    @DisplayName("기존 결과 조회 전용 요청은 기존 예약만 읽고 새 행을 만들지 않는다")
-    void keepsReplayOnlyRequestOutOfCreationPorts() {
-        assertThatThrownBy(() -> service.createLink(new CreateLinkCommand(
-                CreationIdempotencyKey.parseRequest(
-                        "8E448211-66AE-44AB-9888-C4960648C22B"
-                ),
-                TargetSystem.BATON,
-                BATON_PATH,
-                LinkPurpose.NAVIGATION,
-                null,
-                null
-        ))).isExactlyInstanceOf(InvalidIdempotencyKeyException.class);
-        verify(reservationPort).find(IDEMPOTENCY_HASH);
-        verify(reservationPort, never()).reserve(anyString(), any(), anyString(), anyString(), any());
-        verifyNoInteractions(repository, keyGuardPort, publicLinkOriginPort);
     }
 
     @Test

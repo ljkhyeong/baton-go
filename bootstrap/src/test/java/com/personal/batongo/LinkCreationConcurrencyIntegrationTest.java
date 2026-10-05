@@ -383,11 +383,6 @@ class LinkCreationConcurrencyIntegrationTest {
             this.delegate = delegate;
         }
 
-        @Override
-        public java.util.Optional<Reservation> find(String idempotencyKeyHash) {
-            return delegate.find(idempotencyKeyHash);
-        }
-
         void arm(int expectedRequests, boolean failFirstOwner) {
             this.allEntered = new CountDownLatch(expectedRequests);
             this.firstOwnerReserved = new CountDownLatch(1);

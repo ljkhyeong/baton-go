@@ -152,7 +152,10 @@ class LinkRetentionIntegrationTest {
         try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
             var replay = executor.submit(() -> new TransactionTemplate(transactionManager).execute(status -> {
                 var codes = new SecureLinkCodeAdapter(new LinkCodeProperties(LEGACY));
-                reservations.find(codes.hashIdempotencyKey(command.idempotencyKey().value())).orElseThrow();
+                jdbc.queryForObject("""
+                        SELECT BIN_TO_UUID(link_id) FROM link_creation_requests
+                        WHERE idempotency_key_hash = ? FOR SHARE
+                        """, String.class, codes.hashIdempotencyKey(command.idempotencyKey().value()));
                 held.countDown();
                 try {
                     if (!release.await(10, TimeUnit.SECONDS)) throw new IllegalStateException("재생 해제 대기 초과");

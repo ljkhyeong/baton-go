@@ -32,11 +32,20 @@ spring:
   flyway:
     validate-migration-naming: true
     fail-on-missing-locations: true
+  data:
+    redis:
+      # 분산 요청 제한을 켤 때만 연결한다. 꺼져 있으면 기본 주소에 연결하지 않는다.
+      url: ${BATON_GO_REDIS_URI:redis://localhost:6379}
+      timeout: ${BATON_GO_DISTRIBUTED_RESOLVER_QUOTA_TIMEOUT:500ms}
+      connect-timeout: ${BATON_GO_DISTRIBUTED_RESOLVER_QUOTA_TIMEOUT:500ms}
 
 server:
   shutdown: graceful
 
 management:
+  health:
+    redis:
+      enabled: ${baton-go.distributed-resolver-quota.enabled}
   metrics:
     distribution:
       slo:
@@ -49,11 +58,13 @@ management:
         include: health,metrics,prometheus
   endpoint:
     health:
+      # 분산 요청 제한을 끄면 redis 상태 확인이 없으므로 준비 상태 묶음에서 빠진다.
+      validate-group-membership: false
       probes:
         add-additional-paths: true
       group:
         readiness:
-          include: readinessState,db,resolverQuotaRedis
+          include: readinessState,db,redis
 
 baton-go:
   public-base-url: ${BATON_GO_PUBLIC_BASE_URL}
@@ -62,10 +73,8 @@ baton-go:
     read-timeout: ${BATON_GO_MANAGEMENT_JWK_READ_TIMEOUT:5s}
   distributed-resolver-quota:
     enabled: ${BATON_GO_DISTRIBUTED_RESOLVER_QUOTA_ENABLED:false}
-    redis-uri: ${BATON_GO_REDIS_URI:}
     capacity: ${BATON_GO_DISTRIBUTED_RESOLVER_QUOTA_CAPACITY:300}
     window: ${BATON_GO_DISTRIBUTED_RESOLVER_QUOTA_WINDOW:1m}
-    timeout: ${BATON_GO_DISTRIBUTED_RESOLVER_QUOTA_TIMEOUT:500ms}
   link-retention:
     enabled: ${BATON_GO_LINK_RETENTION_ENABLED:false}
     period: ${BATON_GO_LINK_RETENTION_PERIOD:}

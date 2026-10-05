@@ -2,17 +2,14 @@ package com.personal.batongo.adapter.out.external.ratelimit;
 
 import com.personal.batongo.application.link.error.PublicResolverQuotaUnavailableException;
 import com.personal.batongo.application.link.port.out.PublicResolverQuotaPort;
-import io.lettuce.core.RedisException;
-import io.lettuce.core.ScriptOutputType;
-import io.lettuce.core.api.StatefulRedisConnection;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.stereotype.Component;
+import java.util.List;
+import org.springframework.dao.DataAccessException;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.RedisScript;
 
-@Component
-@ConditionalOnProperty(name = "baton-go.distributed-resolver-quota.enabled", havingValue = "true")
 public class RedisResolverQuotaAdapter implements PublicResolverQuotaPort {
-    private static final String KEY = "baton-go:public-resolver:quota:v1";
-    private static final String SCRIPT = """
+    private static final List<String> KEYS = List.of("baton-go:public-resolver:quota:v1");
+    private static final RedisScript<Long> SCRIPT = RedisScript.of("""
             local count = tonumber(redis.call('GET', KEYS[1]) or '0')
             local ttl = redis.call('PTTL', KEYS[1])
             if count > 0 and ttl < 0 then return -1 end
@@ -20,25 +17,25 @@ public class RedisResolverQuotaAdapter implements PublicResolverQuotaPort {
             redis.call('INCR', KEYS[1])
             if count == 0 then redis.call('PEXPIRE', KEYS[1], ARGV[2]) end
             return 0
-            """;
-    private final StatefulRedisConnection<String, String> connection;
+            """, Long.class);
+    private final StringRedisTemplate redis;
     private final DistributedResolverQuotaProperties properties;
 
-    public RedisResolverQuotaAdapter(StatefulRedisConnection<String, String> connection,
-                                     DistributedResolverQuotaProperties properties) {
-        this.connection = connection;
+    public RedisResolverQuotaAdapter(StringRedisTemplate redis, DistributedResolverQuotaProperties properties) {
+        this.redis = redis;
         this.properties = properties;
     }
 
     @Override
     public long acquireRetryAfterSeconds() {
+        Long remaining;
         try {
-            Long remaining = connection.sync().eval(SCRIPT, ScriptOutputType.INTEGER,
-                    new String[]{KEY}, Long.toString(properties.capacity()), Long.toString(properties.window().toMillis()));
-            if (remaining == null || remaining < 0) throw new PublicResolverQuotaUnavailableException();
-            return Math.ceilDiv(remaining, 1000);
-        } catch (RedisException exception) {
+            remaining = redis.execute(SCRIPT, KEYS,
+                    Long.toString(properties.capacity()), Long.toString(properties.window().toMillis()));
+        } catch (DataAccessException exception) {
             throw new PublicResolverQuotaUnavailableException();
         }
+        if (remaining == null || remaining < 0) throw new PublicResolverQuotaUnavailableException();
+        return Math.ceilDiv(remaining, 1000);
     }
 }

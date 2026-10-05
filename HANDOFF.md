@@ -24,7 +24,11 @@
 - 관리 링크 목록에 `expiresFrom`·`expiresBefore`를 추가했다. `status=ACTIVE`와 함께 지정하면
   곧 만료될 링크를 찾을 수 있다. 시작 시각은 포함하고 끝 시각과 무기한 링크는 제외한다.
   기존 생성 기간·대상·상태 필터, 조회 한도와 빈 페이지의 다음 커서는 유지한다.
-- 종료 링크 자동 삭제, Redis 분산 요청 제한, 대상 계약 점검·폐기 API는 기본 중지 상태다.
+- 종료 링크 자동 삭제와 Redis 분산 요청 제한은 기본 중지 상태다.
+- 보존할 기존 GO DB가 없어 과거 배포 호환 기능을 제거했다. 대문자·nil·버전 6 이상 UUID와 나노초 시각의
+  기존 예약 재시도 경로, 기존 DB용 `guard-tool`, 대상 계약 v1 점검·폐기 운영 API·scope·설정이 없다.
+  공개 조회·관리 API에서 계약 위반 저장 대상을 404로 숨기는 방어와 재시도 저장값 누락 오류는 유지한다.
+- 폐기를 처리한 서버의 시계가 생성 시각보다 늦으면 500 대신 폐기 시각을 생성 시각으로 맞춘다.
   실제 운영 환경 검증과 배포는 남아 있다.
 - `go.b4ton.com` 운영 예시와 Cloudflare DNS API 인증서 갱신·Discord·Slack 웹훅 알림의 선택 설정을
   추가했다. [외부 API 연동 절차](docs/RUNBOOK/external-api-integrations.md)를 따르며
@@ -104,6 +108,17 @@
 
 ## 최근 검증
 
+- 과거 호환 정리는 미커밋 변경이 없는 `main`의 `bfb9a14`에서 시작해 `7c1c0a0`·`274fb64`·`110abfd`·`c950b5d`·
+  `c3e2e0b`·`c3040ae`에 저장했다. 보존할 기존 GO DB가 없다는 사용자 확인에 따라 과거 형식 멱등 재시도,
+  `guard-tool` 모듈·CI 단계, 대상 계약 운영 API와 점검 전용 예약 존재 조회를 제거했다. 예시에서 사라진 공개
+  비밀값 차단, 내부 키 지문 형식 검사, 설정과 겹친 발급 키 검사도 지웠다. 폐기 시각 검사의 500은
+  `274fb64`에서 생성 시각 보정으로 고쳤다. 운영 코드 818줄, 테스트 1,431줄, 문서·스킬 442줄을 줄였다.
+  Java 21에서 `./gradlew --no-daemon build :adapter-in-web:apiContractDocs :bootstrap:mysqlTest
+  :bootstrap:redisTest`를 통과했다. 도메인 73·애플리케이션 42·웹 123·외부 25·bootstrap 31·MySQL 32·Redis 3개에
+  실패·제외가 없고 REST Docs 조각은 84개다. `docker build`도 성공했다. 단계마다 대상 테스트를 먼저 실행했으며,
+  3단계에서 guard-tool의 과거 대문자 검증용 요청 테스트가 실패해 같은 단계에서 제거했다. CI 변경은
+  actionlint 1.7.12, 설정 변경은 Compose·Kustomize 렌더, 문서는 전체 링크 검사로 확인했다. 로그는 같은
+  스크래치패드의 `cleanup-*.log`다. 원격 반영과 원격 CI 실행은 하지 않았다.
 - 정리·커서 리팩터링은 미커밋 변경이 없는 `main`의 `6c09109`에서 시작해 `6af1a72`·`07ffbb8`에 저장했다.
   영속성 어댑터가 계산하던 정리 요청 해시를 `LinkRetentionService`로 옮겨 어댑터는 잠금 조회와 정리 SQL만 맡고,
   `LinkCreationFingerprint`는 애플리케이션 패키지 안으로 숨겼다. 관리 목록과 대상 계약 점검에 중복된
@@ -558,42 +573,41 @@
 
 ## 다음 작업
 
-1. [대상 계약 v1 점검·폐기 절차](docs/RUNBOOK/target-contract-v1-remediation.md)에 따라
-   배포 DB의 모든 링크를 점검하고 `unrevoked non-compliant=0`, 승인되지 않은 `HOLD=0` 결과를 기록한다.
-2. 실제 릴리스 이미지에서 BATON·ROUND 인증, 공개 HTTPS와 외부 coturn을 연결한다.
+1. 실제 릴리스 이미지에서 BATON·ROUND 인증, 공개 HTTPS와 외부 coturn을 연결한다.
    세션·CSRF·쿠키·JWK 교체·TURN·WebSocket 검증 결과를 기록한다. GO 관리 API는
    Spring Security JWT와 작업별 scope로 전환했으므로 실제 발급자 식별자·JWK, 서비스 신원,
    audience·scope와 키 교체를 비공개 네트워크에서 검증한다.
-3. 최신 BATON 변경과 GO 연동 브랜치를 병합하고 충돌한 동작을 검증한다.
+2. 최신 BATON 변경과 GO 연동 브랜치를 병합하고 충돌한 동작을 검증한다.
    GO 연동과 이후 BATON·공휴일 기능을 함께 유지한다. 아직 배포하지 않은 GO 마이그레이션 V40~V42는
    계정 비활성화 V39 다음 순서이며, 운영 DB에 적용한 파일은 교체하지 않는다.
-   BATON 연동 브랜치의 GO 검증 고정 커밋은 원격 `main`의 `bf93dc3`이다. BATON Actions의
+   BATON 연동 브랜치의 GO 검증 고정 커밋은 원격 `main`의 `bf93dc3`이다. 이후 GO에서 과거 형식 멱등성 키와
+   대상 계약 운영 API를 제거했으므로 고정 커밋을 올릴 때 BATON의 GO 계약 검증을 다시 실행한다. BATON Actions의
    `BATON_GO_CONTRACT_READ_TOKEN` 등록을 확인한 뒤 GitHub 품질 게이트를 실행한다.
    실제 서비스 JWT와 HTTPS 환경에서 생성 응답 유실 후 취소·폐기까지 재시도되는지 확인한다.
    상태 확인 장애 경보와 링크 생성·폐기·상태 일괄 조회도 검증한다.
    상태 확인·링크 생성 요청 저장·GO API 호출은 기본 중지하며 기존 방의 링크 일괄 생성은 포함하지 않는다.
    카카오 앱의 무료 사용 설정·실제 메시지 전송과 실기기 QR 스캔을 확인한다.
-4. 외부 프록시에서 공개 `/l`과 비공개 `/api/v1` 라우팅을 분리하고, 분산 요청률 제한과
+3. 외부 프록시에서 공개 `/l`과 비공개 `/api/v1` 라우팅을 분리하고, 분산 요청률 제한과
    `/l/{code}` 접근 로그 마스킹을 적용한다. 분산 제한 구현은 준비되었으며 실제 Redis·Ingress 검증은 남아 있다.
-5. 실제 비공개 클러스터에서 DNS·TLS·CNI·NetworkPolicy·startup/liveness/readiness probe와
+4. 실제 비공개 클러스터에서 DNS·TLS·CNI·NetworkPolicy·startup/liveness/readiness probe와
    PVC·Secret의 생성·교체·복구·삭제를 검증한다. 현재 ingress 전용 NetworkPolicy에 더해 환경별 DNS·MySQL
    egress 허용 목록과 기본 차단 정책을 정하고 실제 CNI의 허용·차단 결과를 기록한다.
    `restricted` 정책 강제 적용 전에는 고정 MySQL 이미지로 신규·복원·현재 PVC의 기동,
    TLS·초기화·마이그레이션을 검증한다.
-6. 첫 릴리스 태그에서 보관 워크플로의 증명 재검증을 실행한다. 배포 전 확인 명령으로 승인한
+5. 첫 릴리스 태그에서 보관 워크플로의 증명 재검증을 실행한다. 배포 전 확인 명령으로 승인한
    다이제스트만 배포되는지 검증하고 결과를 배포 기록에 남긴다.
-7. Prometheus 수집, 경보 규칙, 알림 경로와 담당자를 연결하고 마이그레이션 실패,
+6. Prometheus 수집, 경보 규칙, 알림 경로와 담당자를 연결하고 마이그레이션 실패,
    Pod 비정상, 5xx·429, DB 준비 상태, 저장 대상 계약 위반, PVC 용량과 백업 실패 경보의
    시험 결과를 기록한다.
-8. 재시도 시 기존 URL 반환 보장 기간과 만료·폐기 링크 보존 기간, 자동 정리 뒤 HTTP 의미, 백업·감사
+7. 재시도 시 기존 URL 반환 보장 기간과 만료·폐기 링크 보존 기간, 자동 정리 뒤 HTTP 의미, 백업·감사
    보존과 PVC 경보·증설 기준을 함께 결정한다. 정리 구현은 준비되어 있으며 이 결정 전에는
    자동 정리를 활성화하지 않는다.
-9. 플랫폼 백업 정책에 RPO·RTO·주기·보존 기간·담당자·실패 경보·결과 보관 위치를 명시하고,
+8. 플랫폼 백업 정책에 RPO·RTO·주기·보존 기간·담당자·실패 경보·결과 보관 위치를 명시하고,
    DB와 같은 버전의 `BATON_GO_LINK_CODE_SECRET`을 한 복구 단위로 사용한 격리 복원,
    장애 대응과 이미지 되돌리기 훈련을 완료한다.
-10. HMAC 비밀값 유출 시 Secret만 바꾸지 말고 링크 생성과 공개 경로를 먼저 차단한다.
-    기존 링크 폐기·재발급과 키 목록 전환을 함께 수행하는 복구 절차를 정하고 훈련한다.
-    평상시 키 교체도 [운영 절차](docs/RUNBOOK/link-code-key-rotation.md)에 따라 배포·전환·복원을 검증한다.
+9. HMAC 비밀값 유출 시 Secret만 바꾸지 말고 링크 생성과 공개 경로를 먼저 차단한다.
+   기존 링크 폐기·재발급과 키 목록 전환을 함께 수행하는 복구 절차를 정하고 훈련한다.
+   평상시 키 교체도 [운영 절차](docs/RUNBOOK/link-code-key-rotation.md)에 따라 배포·전환·복원을 검증한다.
 
 운영·복구 절차는
 [비공개 Kubernetes 배포 절차](docs/RUNBOOK/kubernetes-private-server-deployment.md)와

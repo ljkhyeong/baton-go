@@ -32,10 +32,6 @@ public class PublicLinkErrorPage {
                 .getContentAsString(StandardCharsets.UTF_8);
     }
 
-    public ResponseEntity<String> render(ResponseEntity<ErrorResponse> error) {
-        return render(error, null);
-    }
-
     public ResponseEntity<String> render(ResponseEntity<ErrorResponse> error, Instant notBefore) {
         ErrorResponse body = error.getBody();
         String title = "RATE_LIMIT_UNAVAILABLE".equals(body.code())

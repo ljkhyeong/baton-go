@@ -48,8 +48,9 @@
   `8ab710f`의 원격 CI에서 GHCR 게시·다이제스트 보존 단계가 성공했다. 홈서버 이미지 수신은 미확인이다.
 - 게시 다이제스트에 SLSA 빌드 출처·CycloneDX SBOM 증명을 만들고 배포 기준으로 검증하는 CI 작업과
   릴리스 보관 시 증명 재검증을 `64e4d75`에 추가했다. 공개 저장소라 서명 묶음은 Sigstore 공개 투명성
-  로그에 기록된다. [배포 전 확인](docs/RUNBOOK/image-security-reports.md#빌드-출처sbom-증명) 명령을 준비했으며
-  원격 `main` 미반영으로 실제 증명 생성·검증은 확인하지 않았다.
+  로그에 기록된다. `a20146e`의 원격 CI에서 증명 생성과 배포 기준 검증이 성공했다.
+  릴리스 보관 워크플로의 재검증과 [배포 전 확인](docs/RUNBOOK/image-security-reports.md#빌드-출처sbom-증명)
+  명령의 홈서버 실행은 남아 있다.
 - 기존 태그와 같은 커밋의 성공한 `main` CI 자료를 GitHub Release 초안에 첨부하는
   [보관 워크플로](.github/workflows/release-evidence.yml)를 추가했다. 검사·게시 자료의 일치와
   필수 파일을 확인하며 재빌드하지 않는다. 실제 태그 등록·Release 생성·발행은 하지 않았다.
@@ -115,7 +116,11 @@
   변경 문서 4개의 링크·앵커 문제는 0건이고 배포 전 확인 명령은 Bash 구문·ShellCheck를 통과했다. 도구와 로그는
   스크래치패드 `9beb8bea-0936-4cc1-98ce-24ef4a8084ad/scratchpad/attestation-validation`의 `run-scenarios.sh`·
   `scenarios.log`·`actionlint-attestation.log`다. Java·DB·이미지가 바뀌지 않아 Gradle·MySQL·Redis 검증과
-  이미지 빌드는 하지 않았다. 원격 push, 실제 증명 생성·GHCR 조회와 Release 생성은 하지 않았다.
+  이미지 빌드는 하지 않았다. 이후 원격 `main`에 반영했고 `a20146e`의
+  [원격 CI](https://github.com/ljkhyeong/baton-go/actions/runs/37253336070)는 필수 검증·의존성 제출·출처 증명
+  세 작업이 모두 성공했다. 증명 작업의 생성·배포 기준 검증 단계도 성공했고, 증명 API에서 게시 다이제스트
+  `sha256:4e240e27…`의 SLSA·CycloneDX 증명 2개를 조회했다. 로컬 GHCR 인증이 필요한 배포 전 확인 명령과
+  Release 생성은 실행하지 않았다.
 - 사용 사례 경계 리팩터링은 미커밋 변경이 없는 `main`의 `8844ab5`에서 시작해 `c08c2ee`·`7a45c28`에 저장했다.
   익명 공개 경로의 접속 처리를 `ResolveLinkUseCase`·`LinkResolutionService`로 분리해 공개 컨트롤러는 이 포트만,
   관리 서비스는 대상 URL 포트 없이 동작한다. `StoredLinkSnapshot.trustedTarget()`이 허용 확인과 신뢰 대상 변환을
@@ -565,8 +570,8 @@
    egress 허용 목록과 기본 차단 정책을 정하고 실제 CNI의 허용·차단 결과를 기록한다.
    `restricted` 정책 강제 적용 전에는 고정 MySQL 이미지로 신규·복원·현재 PVC의 기동,
    TLS·초기화·마이그레이션을 검증한다.
-6. 원격 `main` CI에서 게시 이미지의 빌드 출처·SBOM 증명 생성·검증과 릴리스 보관의 증명 재검증을 확인한다.
-   배포 전 확인 명령으로 승인한 다이제스트만 배포되는지 검증하고 결과를 배포 기록에 남긴다.
+6. 첫 릴리스 태그에서 보관 워크플로의 증명 재검증을 실행한다. 배포 전 확인 명령으로 승인한
+   다이제스트만 배포되는지 검증하고 결과를 배포 기록에 남긴다.
 7. Prometheus 수집, 경보 규칙, 알림 경로와 담당자를 연결하고 마이그레이션 실패,
    Pod 비정상, 5xx·429, DB 준비 상태, 저장 대상 계약 위반, PVC 용량과 백업 실패 경보의
    시험 결과를 기록한다.

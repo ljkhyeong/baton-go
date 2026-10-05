@@ -25,8 +25,7 @@ import com.personal.batongo.application.link.port.out.LinkCodePort;
 import com.personal.batongo.application.link.port.out.LinkCreationReservationPort;
 import com.personal.batongo.application.link.port.out.PublicLinkOriginPort;
 import com.personal.batongo.application.link.port.out.SmartLinkRepository;
-import com.personal.batongo.application.link.port.out.SmartLinkRepository.StoredLinkReplay;
-import com.personal.batongo.application.link.port.out.SmartLinkRepository.StoredLinkSnapshot;
+import com.personal.batongo.application.link.port.out.SmartLinkRepository.StoredLink;
 import com.personal.batongo.domain.link.LinkPurpose;
 import com.personal.batongo.domain.link.LinkAvailabilityPolicy.Status;
 import com.personal.batongo.domain.link.LinkValidationException;
@@ -146,7 +145,7 @@ class SmartLinkServiceTest {
     void reportsMissingReservedLinkAsReplayFailure() {
         Instant expiresAt = NOW.plusSeconds(300);
         configureReplay(expiresAt);
-        when(repository.findReplayById(LINK_ID)).thenReturn(Optional.empty());
+        when(repository.findById(LINK_ID)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.createLink(command(expiresAt)))
                 .isInstanceOfSatisfying(
@@ -160,8 +159,8 @@ class SmartLinkServiceTest {
     void rejectsReplayWithUnknownStoredTarget() {
         Instant expiresAt = NOW.plusSeconds(60);
         configureReplay(expiresAt);
-        when(repository.findReplayById(LINK_ID)).thenReturn(Optional.of(new StoredLinkReplay(
-                LINK_ID, "UNKNOWN", BATON_PATH, LinkPurpose.NAVIGATION.name(), CODE_HASH,
+        when(repository.findById(LINK_ID)).thenReturn(Optional.of(new StoredLink(
+                LINK_ID, CODE_HASH, "UNKNOWN", BATON_PATH, LinkPurpose.NAVIGATION.name(),
                 null, expiresAt, null, NOW
         )));
 
@@ -187,9 +186,9 @@ class SmartLinkServiceTest {
     @Test
     @DisplayName("관리 조회와 폐기는 각각 일반 조회와 행 잠금 포트를 사용한다")
     void getsAndRevokesLinkWithLock() {
-        StoredLinkSnapshot snapshot = storedSnapshot();
-        when(repository.findStoredById(LINK_ID)).thenReturn(Optional.of(snapshot));
-        when(repository.findStoredByIdForUpdate(LINK_ID)).thenReturn(Optional.of(snapshot));
+        StoredLink snapshot = storedSnapshot();
+        when(repository.findById(LINK_ID)).thenReturn(Optional.of(snapshot));
+        when(repository.findByIdForUpdate(LINK_ID)).thenReturn(Optional.of(snapshot));
         var found = service.getLink(LINK_ID);
         var revoked = service.revokeLink(LINK_ID);
 
@@ -201,17 +200,18 @@ class SmartLinkServiceTest {
         assertThat(revoked.link().revokedAt()).isEqualTo(NOW);
         assertThat(revoked.link().status()).isEqualTo(Status.REVOKED);
         assertThat(revoked.link().evaluatedAt()).isEqualTo(NOW);
-        verify(repository).findStoredById(LINK_ID);
-        verify(repository).findStoredByIdForUpdate(LINK_ID);
-        verify(repository).revokeStored(LINK_ID, NOW);
+        verify(repository).findById(LINK_ID);
+        verify(repository).findByIdForUpdate(LINK_ID);
+        verify(repository).revoke(LINK_ID, NOW);
     }
 
     @Test
     @DisplayName("이미 폐기한 링크는 최초 폐기 시각을 유지하고 다시 갱신하지 않는다")
     void preservesFirstRevocationWithoutAnotherUpdate() {
         Instant firstRevokedAt = NOW.minusSeconds(30);
-        StoredLinkSnapshot snapshot = new StoredLinkSnapshot(
+        StoredLink snapshot = new StoredLink(
                 LINK_ID,
+                CODE_HASH,
                 TargetSystem.BATON.name(),
                 BATON_PATH,
                 LinkPurpose.NAVIGATION.name(),
@@ -220,7 +220,7 @@ class SmartLinkServiceTest {
                 firstRevokedAt,
                 NOW.minusSeconds(60)
         );
-        when(repository.findStoredByIdForUpdate(LINK_ID)).thenReturn(Optional.of(snapshot));
+        when(repository.findByIdForUpdate(LINK_ID)).thenReturn(Optional.of(snapshot));
 
         var result = service.revokeLink(LINK_ID);
 
@@ -228,7 +228,7 @@ class SmartLinkServiceTest {
         assertThat(result.link().revokedAt()).isEqualTo(firstRevokedAt);
         assertThat(result.link().status()).isEqualTo(Status.REVOKED);
         assertThat(result.link().evaluatedAt()).isEqualTo(NOW);
-        verify(repository, never()).revokeStored(any(), any());
+        verify(repository, never()).revoke(any(), any());
     }
 
     @Test
@@ -236,8 +236,8 @@ class SmartLinkServiceTest {
     void evaluatesManagedLinkAfterDatabaseRead() {
         Clock clock = mock(Clock.class);
         when(clock.instant()).thenReturn(NOW);
-        StoredLinkSnapshot snapshot = storedSnapshot();
-        when(repository.findStoredById(LINK_ID)).thenAnswer(invocation -> {
+        StoredLink snapshot = storedSnapshot();
+        when(repository.findById(LINK_ID)).thenAnswer(invocation -> {
             when(clock.instant()).thenReturn(snapshot.expiresAt());
             return Optional.of(snapshot);
         });
@@ -248,23 +248,23 @@ class SmartLinkServiceTest {
         assertThat(result.evaluatedAt()).isEqualTo(snapshot.expiresAt());
         assertThat(result.createdAt()).isEqualTo(snapshot.createdAt());
         verify(repository, never()).save(any());
-        verify(repository, never()).revokeStored(any(), any());
+        verify(repository, never()).revoke(any(), any());
     }
 
     @Test
     @DisplayName("없는 링크의 관리 조회와 폐기는 LINK_NOT_FOUND 오류를 반환한다")
     void rejectsMissingManagedLink() {
-        when(repository.findStoredById(LINK_ID)).thenReturn(Optional.empty());
-        when(repository.findStoredByIdForUpdate(LINK_ID)).thenReturn(Optional.empty());
+        when(repository.findById(LINK_ID)).thenReturn(Optional.empty());
+        when(repository.findByIdForUpdate(LINK_ID)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.getLink(LINK_ID))
                 .isExactlyInstanceOf(LinkNotFoundException.class);
         assertThatThrownBy(() -> service.revokeLink(LINK_ID))
                 .isExactlyInstanceOf(LinkNotFoundException.class);
 
-        verify(repository).findStoredById(LINK_ID);
-        verify(repository).findStoredByIdForUpdate(LINK_ID);
-        verify(repository, never()).revokeStored(any(), any());
+        verify(repository).findById(LINK_ID);
+        verify(repository).findByIdForUpdate(LINK_ID);
+        verify(repository, never()).revoke(any(), any());
     }
 
     @Test
@@ -275,7 +275,7 @@ class SmartLinkServiceTest {
         var hidden = searchSnapshot(3, "UNKNOWN", "/secret-target", NOW, null);
         UUID missingId = new UUID(0, 4);
         List<UUID> uniqueIds = List.of(expired.id(), missingId, active.id(), hidden.id());
-        when(repository.findStoredByIds(uniqueIds)).thenReturn(List.of(active, hidden, expired));
+        when(repository.findByIds(uniqueIds)).thenReturn(List.of(active, hidden, expired));
         Clock clock = mock(Clock.class);
         when(clock.instant()).thenReturn(NOW, NOW.plusSeconds(1));
 
@@ -288,11 +288,11 @@ class SmartLinkServiceTest {
         assertThat(result.notFoundIds()).containsExactly(missingId, hidden.id());
         assertThat(result.evaluatedAt()).isEqualTo(NOW);
         assertThat(result.items()).allSatisfy(link -> assertThat(link.evaluatedAt()).isEqualTo(NOW));
-        verify(repository).findStoredByIds(uniqueIds);
+        verify(repository).findByIds(uniqueIds);
         verify(clock).instant();
-        verify(repository, never()).findStoredById(any());
+        verify(repository, never()).findById(any());
         verify(repository, never()).save(any());
-        verify(repository, never()).revokeStored(any(), any());
+        verify(repository, never()).revoke(any(), any());
     }
 
     @Test
@@ -304,7 +304,7 @@ class SmartLinkServiceTest {
 
         assertThat(result.items()).isEmpty();
         assertThat(result.notFoundIds()).containsExactlyElementsOf(ids);
-        verify(repository).findStoredByIds(ids);
+        verify(repository).findByIds(ids);
     }
 
     @Test
@@ -326,7 +326,7 @@ class SmartLinkServiceTest {
         Instant from = NOW.minusSeconds(60);
         var first = searchSnapshot(1, "BATON", BATON_PATH, from, null);
         var second = searchSnapshot(2, "BATON", BATON_PATH, NOW.minusSeconds(1), null);
-        when(repository.scanStoredAfter(null, 101)).thenReturn(List.of(
+        when(repository.scanAfter(null, 101)).thenReturn(List.of(
                 first,
                 second,
                 searchSnapshot(3, "BATON", BATON_PATH, from.minusNanos(1), null),
@@ -348,7 +348,7 @@ class SmartLinkServiceTest {
         assertThat(result.hasMore()).isFalse();
         assertThat(result.nextAfterLinkId()).isNull();
         verify(repository, never()).save(any());
-        verify(repository, never()).revokeStored(any(), any());
+        verify(repository, never()).revoke(any(), any());
     }
 
     @Test
@@ -357,8 +357,8 @@ class SmartLinkServiceTest {
         var invalidPath = searchSnapshot(1, "BATON", "/teams/legacy", NOW, null);
         var unknownSystem = searchSnapshot(2, "UNKNOWN", "/secret-target", NOW, null);
         var valid = searchSnapshot(3, "BATON", BATON_PATH, NOW, null);
-        when(repository.scanStoredAfter(null, 3)).thenReturn(List.of(invalidPath, unknownSystem, valid));
-        when(repository.scanStoredAfter(unknownSystem.id(), 3)).thenReturn(List.of(valid));
+        when(repository.scanAfter(null, 3)).thenReturn(List.of(invalidPath, unknownSystem, valid));
+        when(repository.scanAfter(unknownSystem.id(), 3)).thenReturn(List.of(valid));
 
         var first = service.searchLinks(new LinkSearchQuery(null, 2, null, null, null, null, null, null));
         var next = service.searchLinks(new LinkSearchQuery(
@@ -401,7 +401,7 @@ class SmartLinkServiceTest {
         var within = searchSnapshot(3, "BATON", BATON_PATH, NOW, before.minusNanos(1));
         var atEnd = searchSnapshot(4, "BATON", BATON_PATH, NOW, before);
         var noExpiry = searchSnapshot(5, "BATON", BATON_PATH, NOW, null);
-        when(repository.scanStoredAfter(null, 101)).thenReturn(List.of(earlier, atStart, within, atEnd, noExpiry));
+        when(repository.scanAfter(null, 101)).thenReturn(List.of(earlier, atStart, within, atEnd, noExpiry));
 
         var bounded = service.searchLinks(new LinkSearchQuery(null, 100, null, null, null, from, before, null));
         var fromOnly = service.searchLinks(new LinkSearchQuery(null, 100, null, null, null, from, null, null));
@@ -419,8 +419,8 @@ class SmartLinkServiceTest {
         var noExpiry = searchSnapshot(2, "BATON", BATON_PATH, NOW, null);
         var expiring = searchSnapshot(3, "BATON", BATON_PATH, NOW, NOW.plusSeconds(30));
         var anotherSystem = searchSnapshot(4, "ROUND", ROUND_PATH, NOW, NOW.plusSeconds(30));
-        when(repository.scanStoredAfter(null, 3)).thenReturn(List.of(expired, noExpiry, expiring));
-        when(repository.scanStoredAfter(noExpiry.id(), 3)).thenReturn(List.of(expiring, anotherSystem));
+        when(repository.scanAfter(null, 3)).thenReturn(List.of(expired, noExpiry, expiring));
+        when(repository.scanAfter(noExpiry.id(), 3)).thenReturn(List.of(expiring, anotherSystem));
 
         var first = service.searchLinks(new LinkSearchQuery(
                 null, 2, TargetSystem.BATON, NOW.minusSeconds(60), NOW.plusSeconds(1),
@@ -440,11 +440,12 @@ class SmartLinkServiceTest {
         assertThat(next.nextAfterLinkId()).isNull();
     }
 
-    private StoredLinkSnapshot searchSnapshot(
+    private StoredLink searchSnapshot(
             int id, String targetSystem, String targetPath, Instant createdAt, Instant expiresAt
     ) {
-        return new StoredLinkSnapshot(
+        return new StoredLink(
                 new UUID(0, id),
+                CODE_HASH,
                 targetSystem,
                 targetPath,
                 "ROUND".equals(targetSystem) ? "MEETING_ENTRY" : "NAVIGATION",
@@ -468,13 +469,13 @@ class SmartLinkServiceTest {
                 "legacy", null, null,
                 false
         ));
-        when(repository.findReplayById(LINK_ID)).thenReturn(Optional.of(
-                new StoredLinkReplay(
+        when(repository.findById(LINK_ID)).thenReturn(Optional.of(
+                new StoredLink(
                         LINK_ID,
+                        CODE_HASH,
                         TargetSystem.BATON.name(),
                         BATON_PATH,
                         LinkPurpose.NAVIGATION.name(),
-                        CODE_HASH,
                         null,
                         expiresAt,
                         null,
@@ -494,9 +495,10 @@ class SmartLinkServiceTest {
         );
     }
 
-    private StoredLinkSnapshot storedSnapshot() {
-        return new StoredLinkSnapshot(
+    private StoredLink storedSnapshot() {
+        return new StoredLink(
                 LINK_ID,
+                CODE_HASH,
                 TargetSystem.BATON.name(),
                 BATON_PATH,
                 LinkPurpose.NAVIGATION.name(),

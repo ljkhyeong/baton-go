@@ -13,7 +13,7 @@ import com.personal.batongo.application.link.error.LinkNotFoundException;
 import com.personal.batongo.application.link.error.StoredTargetPolicyViolationException;
 import com.personal.batongo.application.link.port.out.LinkCodePort;
 import com.personal.batongo.application.link.port.out.SmartLinkRepository;
-import com.personal.batongo.application.link.port.out.SmartLinkRepository.StoredLinkResolution;
+import com.personal.batongo.application.link.port.out.SmartLinkRepository.StoredLink;
 import com.personal.batongo.application.link.port.out.TargetUrlPort;
 import com.personal.batongo.domain.link.LinkPurpose;
 import com.personal.batongo.domain.link.TargetSystem;
@@ -54,8 +54,9 @@ class LinkResolutionServiceTest {
     @DisplayName("활성 링크 접속은 대상 URL 생성 포트가 만든 URL을 반환한다")
     void resolvesThroughTrustedTargetPort() {
         URI destination = URI.create("https://baton.example" + BATON_PATH);
-        when(repository.findResolutionByCodeHash(CODE_HASH)).thenReturn(Optional.of(new StoredLinkResolution(
-                LINK_ID, TargetSystem.BATON.name(), BATON_PATH, LinkPurpose.NAVIGATION.name(), null, null, null
+        when(repository.findByCodeHash(CODE_HASH)).thenReturn(Optional.of(new StoredLink(
+                LINK_ID, CODE_HASH, TargetSystem.BATON.name(), BATON_PATH, LinkPurpose.NAVIGATION.name(),
+                null, null, null, NOW
         )));
         when(targetUrlPort.resolve(any())).thenReturn(destination);
 
@@ -70,9 +71,9 @@ class LinkResolutionServiceTest {
     @Test
     @DisplayName("저장 대상이 규칙을 위반하면 활성·만료 확인 전에 거부한다")
     void hidesKnownStoredPolicyViolationBeforeLifecycleCheck() {
-        when(repository.findResolutionByCodeHash(CODE_HASH)).thenReturn(Optional.of(new StoredLinkResolution(
-                LINK_ID, TargetSystem.BATON.name(), ROUND_PATH, LinkPurpose.NAVIGATION.name(),
-                null, null, NOW.minusSeconds(1)
+        when(repository.findByCodeHash(CODE_HASH)).thenReturn(Optional.of(new StoredLink(
+                LINK_ID, CODE_HASH, TargetSystem.BATON.name(), ROUND_PATH, LinkPurpose.NAVIGATION.name(),
+                null, null, NOW.minusSeconds(1), NOW.minusSeconds(60)
         )));
 
         assertThatThrownBy(() -> service.resolveLink(RAW_CODE))
@@ -84,7 +85,7 @@ class LinkResolutionServiceTest {
     @Test
     @DisplayName("없는 공개 코드는 링크 존재 여부를 드러내지 않는다")
     void hidesMissingLink() {
-        when(repository.findResolutionByCodeHash(CODE_HASH)).thenReturn(Optional.empty());
+        when(repository.findByCodeHash(CODE_HASH)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.resolveLink(RAW_CODE))
                 .isExactlyInstanceOf(LinkNotFoundException.class);

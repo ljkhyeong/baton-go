@@ -13,8 +13,7 @@ import com.personal.batongo.application.link.port.out.LinkCodePort;
 import com.personal.batongo.application.link.port.out.LinkCreationReservationPort;
 import com.personal.batongo.application.link.port.out.PublicLinkOriginPort;
 import com.personal.batongo.application.link.port.out.SmartLinkRepository;
-import com.personal.batongo.application.link.port.out.SmartLinkRepository.StoredLinkReplay;
-import com.personal.batongo.application.link.port.out.SmartLinkRepository.StoredLinkSnapshot;
+import com.personal.batongo.application.link.port.out.SmartLinkRepository.StoredLink;
 import com.personal.batongo.domain.link.LinkRevocationPolicy;
 import com.personal.batongo.domain.link.SmartLink;
 import com.personal.batongo.domain.link.TrustedTarget;
@@ -141,7 +140,7 @@ public class SmartLinkService implements SmartLinkUseCase {
             Instant expiresAt,
             IssuedLinkCode issuedCode
     ) {
-        StoredLinkReplay existing = repository.findReplayById(reservation.linkId())
+        StoredLink existing = repository.findById(reservation.linkId())
                 .orElseThrow(() -> new LinkCreationReplayUnavailableException(
                         reservation.linkId()
                 ));
@@ -156,7 +155,7 @@ public class SmartLinkService implements SmartLinkUseCase {
         }
         PublicLinkOrigin storedOrigin = requireReplayOrigin(reservation.publicOrigin());
         return new CreatedLinkResult(
-                toResult(existing, requestedTarget),
+                toResult(existing, requestedTarget, existing.revokedAt(), clock.instant()),
                 storedOrigin.shortUrl(issuedCode.rawCode()),
                 true
         );
@@ -174,7 +173,7 @@ public class SmartLinkService implements SmartLinkUseCase {
     @Override
     @Transactional(readOnly = true)
     public LinkResult getLink(UUID linkId) {
-        StoredLinkSnapshot storedLink = repository.findStoredById(linkId)
+        StoredLink storedLink = repository.findById(linkId)
                 .orElseThrow(LinkNotFoundException::new);
         TrustedTarget target = requireManagedTrustedTarget(storedLink);
         return toResult(storedLink, target, storedLink.revokedAt(), clock.instant());
@@ -188,7 +187,7 @@ public class SmartLinkService implements SmartLinkUseCase {
             throw InvalidRequestException.linkBatch();
         }
         List<UUID> uniqueIds = linkIds.stream().distinct().toList();
-        List<StoredLinkSnapshot> stored = repository.findStoredByIds(uniqueIds);
+        List<StoredLink> stored = repository.findByIds(uniqueIds);
         Instant evaluatedAt = clock.instant();
         Map<UUID, LinkResult> found = stored.stream()
                 .flatMap(link -> link.trustedTarget()
@@ -233,7 +232,7 @@ public class SmartLinkService implements SmartLinkUseCase {
 
     @Override
     public RevokedLinkResult revokeLink(UUID linkId) {
-        StoredLinkSnapshot storedLink = repository.findStoredByIdForUpdate(linkId)
+        StoredLink storedLink = repository.findByIdForUpdate(linkId)
                 .orElseThrow(LinkNotFoundException::new);
         TrustedTarget target = requireManagedTrustedTarget(storedLink);
         if (storedLink.revokedAt() != null) {
@@ -246,7 +245,7 @@ public class SmartLinkService implements SmartLinkUseCase {
                 storedLink.createdAt(),
                 clock.instant()
         );
-        repository.revokeStored(storedLink.id(), revokedAt);
+        repository.revoke(storedLink.id(), revokedAt);
         return new RevokedLinkResult(
                 toResult(storedLink, target, revokedAt, clock.instant()),
                 false
@@ -254,7 +253,7 @@ public class SmartLinkService implements SmartLinkUseCase {
     }
 
     private void requireSameCreationRequest(
-            StoredLinkReplay existing,
+            StoredLink existing,
             TrustedTarget requestedTarget,
             Instant notBefore,
             Instant expiresAt
@@ -269,29 +268,12 @@ public class SmartLinkService implements SmartLinkUseCase {
         }
     }
 
-    private LinkResult toResult(
-            StoredLinkReplay storedLink,
-            TrustedTarget trustedTarget
-    ) {
-        return new LinkResult(
-                storedLink.id(),
-                trustedTarget.targetSystem(),
-                trustedTarget.targetPath(),
-                trustedTarget.purpose(),
-                storedLink.notBefore(),
-                storedLink.expiresAt(),
-                storedLink.revokedAt(),
-                storedLink.createdAt(),
-                clock.instant()
-        );
-    }
-
-    private TrustedTarget requireManagedTrustedTarget(StoredLinkSnapshot storedLink) {
+    private TrustedTarget requireManagedTrustedTarget(StoredLink storedLink) {
         return storedLink.trustedTarget().orElseThrow(LinkNotFoundException::new);
     }
 
     private LinkResult toResult(
-            StoredLinkSnapshot storedLink,
+            StoredLink storedLink,
             TrustedTarget target,
             Instant revokedAt,
             Instant evaluatedAt

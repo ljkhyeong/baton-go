@@ -12,54 +12,22 @@ public interface SmartLinkRepository {
 
     void save(SmartLink smartLink);
 
-    Optional<StoredLinkReplay> findReplayById(UUID id);
+    Optional<StoredLink> findById(UUID id);
 
-    Optional<StoredLinkResolution> findResolutionByCodeHash(String codeHash);
+    Optional<StoredLink> findByIdForUpdate(UUID id);
 
-    Optional<StoredLinkSnapshot> findStoredById(UUID id);
+    Optional<StoredLink> findByCodeHash(String codeHash);
 
-    List<StoredLinkSnapshot> findStoredByIds(List<UUID> ids);
+    List<StoredLink> findByIds(List<UUID> ids);
 
-    Optional<StoredLinkSnapshot> findStoredByIdForUpdate(UUID id);
+    List<StoredLink> scanAfter(UUID afterLinkId, int limit);
 
-    List<StoredLinkSnapshot> scanStoredAfter(UUID afterLinkId, int limit);
+    void revoke(UUID id, Instant revokedAt);
 
-    void revokeStored(UUID id, Instant revokedAt);
-
-    record StoredLinkReplay(
+    /** 저장된 링크 원문이다. 알 수 없는 대상 시스템·목적도 404로 숨길 수 있도록 문자열로 읽는다. */
+    record StoredLink(
             UUID id,
-            String targetSystem,
-            String targetPath,
-            String purpose,
             String codeHash,
-            Instant notBefore,
-            Instant expiresAt,
-            Instant revokedAt,
-            Instant createdAt
-    ) {
-        @Override
-        public String toString() {
-            return "StoredLinkReplay[id=" + id + "]";
-        }
-    }
-
-    record StoredLinkResolution(
-            UUID id,
-            String targetSystem,
-            String targetPath,
-            String purpose,
-            Instant notBefore,
-            Instant expiresAt,
-            Instant revokedAt
-    ) {
-        @Override
-        public String toString() {
-            return "StoredLinkResolution[id=" + id + "]";
-        }
-    }
-
-    record StoredLinkSnapshot(
-            UUID id,
             String targetSystem,
             String targetPath,
             String purpose,
@@ -75,7 +43,7 @@ public interface SmartLinkRepository {
 
         @Override
         public String toString() {
-            return "StoredLinkSnapshot[id=" + id + "]";
+            return "StoredLink[id=" + id + "]";
         }
     }
 }

@@ -5,11 +5,10 @@ import com.personal.batongo.application.link.error.StoredTargetPolicyViolationEx
 import com.personal.batongo.application.link.port.in.ResolveLinkUseCase;
 import com.personal.batongo.application.link.port.out.LinkCodePort;
 import com.personal.batongo.application.link.port.out.SmartLinkRepository;
-import com.personal.batongo.application.link.port.out.SmartLinkRepository.StoredLinkResolution;
+import com.personal.batongo.application.link.port.out.SmartLinkRepository.StoredLink;
 import com.personal.batongo.application.link.port.out.TargetUrlPort;
 import com.personal.batongo.domain.link.LinkAvailabilityPolicy;
 import com.personal.batongo.domain.link.TrustedTarget;
-import com.personal.batongo.domain.link.TrustedTargetPolicy;
 import java.time.Clock;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,13 +37,10 @@ public class LinkResolutionService implements ResolveLinkUseCase {
     @Override
     public ResolvedLinkResult resolveLink(String rawCode) {
         String codeHash = linkCodePort.hash(rawCode);
-        StoredLinkResolution storedLink = repository.findResolutionByCodeHash(codeHash)
+        StoredLink storedLink = repository.findByCodeHash(codeHash)
                 .orElseThrow(LinkNotFoundException::new);
-        TrustedTarget trustedTarget = TrustedTargetPolicy.findAllowed(
-                storedLink.targetSystem(),
-                storedLink.purpose(),
-                storedLink.targetPath()
-        ).orElseThrow(() -> new StoredTargetPolicyViolationException(storedLink.id()));
+        TrustedTarget trustedTarget = storedLink.trustedTarget()
+                .orElseThrow(() -> new StoredTargetPolicyViolationException(storedLink.id()));
         LinkAvailabilityPolicy.requireResolvableAt(
                 storedLink.revokedAt(),
                 storedLink.notBefore(),

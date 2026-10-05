@@ -22,7 +22,9 @@ jobs:
     timeout-minutes: 5
     permissions:
       actions: read
+      attestations: read
       contents: write
+      packages: read
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
@@ -66,18 +68,37 @@ jobs:
           image_reference="$(jq --exit-status --raw-output '.image_reference' "$publication")"
           image_attempt="$(jq --raw-output '.run_attempt' "$publication")"
 
+          export DOCKER_CONFIG
+          DOCKER_CONFIG="$(mktemp -d "$RUNNER_TEMP/baton-go-registry.XXXXXX")"
+          trap 'rm -rf "$DOCKER_CONFIG"' EXIT
+          printf '%s' "$GH_TOKEN" | docker login ghcr.io \
+            --username "$GITHUB_ACTOR" --password-stdin
+          verify_attestation() {
+            gh attestation verify "oci://$image_reference" --repo "$GH_REPO" \
+              --signer-workflow "$GH_REPO/.github/workflows/ci.yml" \
+              --source-ref refs/heads/main --source-digest "$source_commit" \
+              --deny-self-hosted-runners --predicate-type "$1" --format json
+          }
+          mkdir -p "$evidence_dir/attestation"
+          verify_attestation https://slsa.dev/provenance/v1 \
+            >"$evidence_dir/attestation/provenance-verification.json"
+          verify_attestation https://cyclonedx.org/bom \
+            >"$evidence_dir/attestation/sbom-verification.json"
+
           archive="$RUNNER_TEMP/baton-go-release-evidence.tar.gz"
           tar -czf "$archive" -C "$evidence_dir" \
             ci-run.json security/image-metadata.json security/scanner.json \
             security/sbom.cdx.json security/vulnerabilities.json security/vulnerabilities.txt \
-            security/dependency-graph.json publication/image-publication.json
+            security/dependency-graph.json publication/image-publication.json \
+            attestation/provenance-verification.json attestation/sbom-verification.json
           notes="$RUNNER_TEMP/baton-go-release-evidence.md"
           {
             printf '소스 커밋: %s\n\n' "$source_commit"
             printf '검증 실행: %s (시도 %s)\n\n' "$run_url" "$run_attempt"
             printf '이미지 게시 시도: %s\n\n' "$image_attempt"
             printf '배포 이미지: %s\n\n' "$image_reference"
-            printf '첨부 자료는 해당 CI의 검사 결과입니다. 이미지 서명과 운영 배포 승인은 별도로 확인합니다.\n'
+            printf '첨부 자료는 해당 CI의 검사 결과와 이 워크플로의 빌드 출처·SBOM 증명 검증 결과입니다. '
+            printf '운영 배포 승인은 별도로 확인합니다.\n'
           } >"$notes"
           gh release create --draft --verify-tag --title "$RELEASE_TAG" --notes-file "$notes" \
             -- "$RELEASE_TAG" "$archive" "$publication"

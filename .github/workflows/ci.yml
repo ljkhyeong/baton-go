@@ -520,3 +520,84 @@ jobs:
           gh api --method POST "repos/$GITHUB_REPOSITORY/dependency-graph/snapshots" \
             --input image-security/dependency-graph.json \
             --jq '"의존성 제출 완료: \(.id)"'
+
+  image-attestation:
+    name: 게시 이미지 출처 증명
+    needs: verification
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      attestations: write
+      contents: read
+      id-token: write
+      packages: read
+    steps:
+      - name: 검증한 이미지 보고서 받기
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: baton-go-image-security
+          path: image-security
+
+      - name: 이미지 게시 기록 받기
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: baton-go-image-publication
+          path: image-publication
+
+      - name: 증명 대상 확인
+        id: subject
+        run: |
+          set -euo pipefail
+          publication=image-publication/image-publication.json
+          jq --exit-status --arg commit "$GITHUB_SHA" \
+            --arg run_url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            --slurpfile scan image-security/image-metadata.json '
+              .source_commit == $commit and .workflow_run == $run_url
+              and (del(.image_reference, .image_tag, .workflow_run, .run_attempt)
+                == ($scan[0] | del(.image_reference)))
+            ' "$publication" >/dev/null
+          repository="ghcr.io/${GITHUB_REPOSITORY,,}"
+          reference="$(jq --exit-status --raw-output '.image_reference' "$publication")"
+          digest="${reference#"$repository@"}"
+          if [[ ! "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            printf '%s\n' '게시 기록이 이 저장소의 이미지 다이제스트를 가리키지 않습니다.' >&2
+            exit 1
+          fi
+          printf 'name=%s\ndigest=%s\n' "$repository" "$digest" >>"$GITHUB_OUTPUT"
+
+      - name: 빌드 출처 증명 생성
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-name: ${{ steps.subject.outputs.name }}
+          subject-digest: ${{ steps.subject.outputs.digest }}
+
+      - name: SBOM 증명 생성
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-name: ${{ steps.subject.outputs.name }}
+          subject-digest: ${{ steps.subject.outputs.digest }}
+          sbom-path: image-security/sbom.cdx.json
+
+      - name: 배포 기준으로 증명 검증
+        env:
+          GH_TOKEN: ${{ github.token }}
+          IMAGE: ${{ steps.subject.outputs.name }}@${{ steps.subject.outputs.digest }}
+        run: |
+          set -euo pipefail
+          export DOCKER_CONFIG
+          DOCKER_CONFIG="$(mktemp -d "$RUNNER_TEMP/baton-go-registry.XXXXXX")"
+          trap 'rm -rf "$DOCKER_CONFIG"' EXIT
+          printf '%s' "$GH_TOKEN" | docker login ghcr.io \
+            --username "$GITHUB_ACTOR" --password-stdin
+          for predicate_type in https://slsa.dev/provenance/v1 https://cyclonedx.org/bom; do
+            gh attestation verify "oci://$IMAGE" --repo "$GITHUB_REPOSITORY" \
+              --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/ci.yml" \
+              --source-ref refs/heads/main --source-digest "$GITHUB_SHA" \
+              --deny-self-hosted-runners --predicate-type "$predicate_type" >/dev/null
+          done
+          {
+            printf '### 이미지 출처 증명\n\n'
+            printf -- '- 이미지: %s\n' "$IMAGE"
+            printf -- '- 검증: SLSA 빌드 출처, CycloneDX SBOM\n'
+          } >>"$GITHUB_STEP_SUMMARY"

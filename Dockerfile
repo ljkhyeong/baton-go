@@ -10,7 +10,6 @@ COPY application/build.gradle application/build.gradle
 COPY adapter-in-web/build.gradle adapter-in-web/build.gradle
 COPY adapter-out-persistence/build.gradle adapter-out-persistence/build.gradle
 COPY adapter-out-external/build.gradle adapter-out-external/build.gradle
-COPY guard-tool/build.gradle guard-tool/build.gradle
 COPY bootstrap/build.gradle bootstrap/build.gradle
 
 COPY domain/src/main domain/src/main

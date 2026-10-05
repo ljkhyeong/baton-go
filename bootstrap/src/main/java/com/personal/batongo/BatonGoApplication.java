@@ -4,7 +4,6 @@ import com.personal.batongo.application.link.LinkCodeKeyGuard;
 import com.personal.batongo.bootstrap.DatabaseMigrationRunner;
 import java.time.Clock;
 import java.time.Duration;
-import java.util.Arrays;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -15,24 +14,12 @@ import org.springframework.context.annotation.Bean;
 @ConfigurationPropertiesScan
 public class BatonGoApplication {
 
-    private static final String GUARD_BINDING_CONFIRMATION =
-            "--confirm-writers-stopped";
-
     public static void main(String[] args) {
-        requireNormalApplicationArguments(args);
         if (DatabaseMigrationRunner.isRequested(args)) {
             DatabaseMigrationRunner.run(args);
             return;
         }
         SpringApplication.run(BatonGoApplication.class, args);
-    }
-
-    private static void requireNormalApplicationArguments(String[] args) {
-        if (Arrays.asList(args).contains(GUARD_BINDING_CONFIRMATION)) {
-            throw new IllegalArgumentException(
-                    "키 등록 확인 인자는 전용 guard-tool에서만 사용할 수 있습니다"
-            );
-        }
     }
 
     @Bean

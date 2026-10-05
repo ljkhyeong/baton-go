@@ -206,41 +206,6 @@ jobs:
           retention-days: 14
           compression-level: 0
 
-      - name: Guard 결합 도구 fail-closed 실행 검증
-        run: |
-          set -euo pipefail
-
-          guard_jar=guard-tool/build/libs/baton-go-guard-binding.jar
-          smoke_dir="$(mktemp -d)"
-          trap 'rm -rf -- "$smoke_dir"' EXIT
-
-          printf '%s\n' '00000000-0000-4000-8000-000000000000' \
-            >"$smoke_dir/canary.in"
-          canary_status=0
-          env \
-            BATON_GO_LINK_CODE_SECRET=ci-guard-smoke-secret-000000000000 \
-            'BATON_GO_DB_URL=jdbc:mysql://127.0.0.1:1/guard_smoke?connectTimeout=100' \
-            BATON_GO_DB_USERNAME=guard_smoke \
-            BATON_GO_DB_PASSWORD=guard_smoke \
-            java -jar "$guard_jar" --confirm-writers-stopped \
-            <"$smoke_dir/canary.in" \
-            >"$smoke_dir/canary.out" 2>"$smoke_dir/canary.err" \
-            || canary_status=$?
-
-          test "$canary_status" -eq 3
-          test ! -s "$smoke_dir/canary.out"
-          test -s "$smoke_dir/canary.err"
-          for sensitive_value in \
-            '00000000-0000-4000-8000-000000000000' \
-            'ci-guard-smoke-secret-000000000000' \
-            'jdbc:mysql://127.0.0.1:1/guard_smoke?connectTimeout=100' \
-            guard_smoke; do
-            if grep -Fq -- "$sensitive_value" "$smoke_dir/canary.err"; then
-              printf '%s\n' 'Guard 오류 출력에 검증용 비밀값이 노출되었습니다.' >&2
-              exit 1
-            fi
-          done
-
       - name: 운영 이미지 빌드 검증
         run: docker build --tag "$BATON_GO_APP_IMAGE" .
 

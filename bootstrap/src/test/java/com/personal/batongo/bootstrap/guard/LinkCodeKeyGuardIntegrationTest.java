@@ -15,7 +15,6 @@ import com.personal.batongo.application.link.port.in.SmartLinkUseCase;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.CreateLinkCommand;
 import com.personal.batongo.application.link.port.out.LinkCodeKeyGuardPort;
 import com.personal.batongo.application.link.port.out.LinkCodePort;
-import com.personal.batongo.bootstrap.guard.ExistingDatabaseLinkCodeKeyBinder.BindingResult;
 import com.personal.batongo.domain.link.LinkPurpose;
 import com.personal.batongo.domain.link.TargetSystem;
 import java.util.concurrent.CountDownLatch;
@@ -24,7 +23,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-import javax.sql.DataSource;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
@@ -86,9 +84,6 @@ class LinkCodeKeyGuardIntegrationTest {
 
     @Autowired
     private PlatformTransactionManager transactionManager;
-
-    @Autowired
-    private DataSource dataSource;
 
     @BeforeEach
     void resetDatabase() {
@@ -246,49 +241,6 @@ class LinkCodeKeyGuardIntegrationTest {
         }
     }
 
-    @Test
-    @DisplayName("보관한 검증용 요청이 현재 HMAC 키와 맞으면 기존 데이터베이스에 키 정보를 등록한다")
-    void bindsExistingDatabaseAfterCanaryVerification() {
-        String canaryIdempotencyKey = "60fa8eb4-e104-459d-aa45-e4a07831998e";
-        smartLinkUseCase.createLink(command(canaryIdempotencyKey));
-        unbind();
-
-        BindingResult result = bindExistingDatabase(canaryIdempotencyKey);
-
-        assertThat(result).isEqualTo(BindingResult.BOUND);
-        assertThat(storedIdentity()).isEqualTo(linkCodePort.keyRingIdentity().activeIdentity());
-        assertThat(linkCount()).isEqualTo(1L);
-        assertThat(reservationCount()).isEqualTo(1L);
-    }
-
-    @Test
-    @DisplayName("검증용 요청이 HMAC 키와 맞지 않으면 기존 데이터베이스에 키 정보를 등록하지 않는다")
-    void rejectsExistingDatabaseWhenCanaryDoesNotMatch() {
-        String storedCanary = "527d7731-0e2a-49f9-a1cc-302673d4253f";
-        String wrongCanary = "a95e14e3-92aa-490a-9afe-65c88dbc680e";
-        smartLinkUseCase.createLink(command(storedCanary));
-        unbind();
-
-        assertThatThrownBy(() -> bindExistingDatabase(wrongCanary))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageNotContaining(storedCanary)
-                .hasMessageNotContaining(wrongCanary)
-                .hasMessageNotContaining(linkCodePort.keyRingIdentity().activeIdentity().hmacFingerprint());
-        assertThat(storedIdentity()).isNull();
-    }
-
-    @Test
-    @DisplayName("같은 키 정보가 등록된 데이터베이스는 검증용 요청 확인 뒤 성공한다")
-    void confirmsAlreadyBoundDatabaseAfterCanaryVerification() {
-        String canaryIdempotencyKey = "b46dd6bc-91f1-4f73-81e4-ceb63a438f66";
-        smartLinkUseCase.createLink(command(canaryIdempotencyKey));
-
-        BindingResult result = bindExistingDatabase(canaryIdempotencyKey);
-
-        assertThat(result).isEqualTo(BindingResult.ALREADY_BOUND);
-        assertThat(storedIdentity()).isEqualTo(linkCodePort.keyRingIdentity().activeIdentity());
-    }
-
     private LinkCodeDerivationIdentity bindAndHoldTransaction(
             LinkCodeDerivationIdentity identity,
             CountDownLatch bound,
@@ -327,51 +279,6 @@ class LinkCodeKeyGuardIntegrationTest {
                 }
         );
         return identity;
-    }
-
-    private BindingResult bindExistingDatabase(String canaryIdempotencyKey) {
-        return new ExistingDatabaseLinkCodeKeyBinder().bind(
-                dataSource,
-                linkCodePort,
-                CreationIdempotencyKey.parseRequest(canaryIdempotencyKey)
-        );
-    }
-
-    private void insertLegacyCreation(String canonicalCanary) {
-        String linkId = "2df34d5c-2d80-4ae3-a82c-16ae447b3a61";
-        jdbcTemplate.update(
-                """
-                        INSERT INTO smart_links (
-                            id,
-                            code_hash,
-                            target_system,
-                            target_path,
-                            purpose,
-                            not_before,
-                            expires_at,
-                            revoked_at,
-                            created_at,
-                            version
-                        ) VALUES (
-                            UUID_TO_BIN(?), ?, 'BATON', ?, 'NAVIGATION',
-                            NULL, NULL, NULL, UTC_TIMESTAMP(6), 0
-                        )
-                        """,
-                linkId,
-                linkCodePort.issue(canonicalCanary, "legacy").codeHash(),
-                CANONICAL_BATON_TARGET
-        );
-        jdbcTemplate.update(
-                """
-                        INSERT INTO link_creation_requests (
-                            idempotency_key_hash,
-                            link_id,
-                            created_at
-                        ) VALUES (?, UUID_TO_BIN(?), UTC_TIMESTAMP(6))
-                        """,
-                linkCodePort.hashIdempotencyKey(canonicalCanary),
-                linkId
-        );
     }
 
     private CreateLinkCommand command(String idempotencyKey) {

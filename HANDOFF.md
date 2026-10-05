@@ -33,7 +33,8 @@
   단일 V1으로 다시 만들었고 `link_code_key_guard` 보호 행과 `version` 열이 없다. 그 이전에 만든 로컬
   MySQL 볼륨은 [README 안내](README.md#로컬-실행)에 따라 다시 만든다.
 - 관리 보안 필터의 401·403·인증 서비스 500은 `HandlerExceptionResolver`를 거쳐 `GlobalExceptionHandler`가
-  응답한다.
+  응답한다. 공개 링크 오류는 같은 advice 안의 JSON·HTML 처리기 두 개로 협상한다.
+- `BATON_GO_LINK_CODE_SECRET` 단일 비밀값의 키 ID는 `default`다. 키 교체 시 `BATONGO_LINKCODE_KEYS_DEFAULT`로 옮긴다.
   실제 운영 환경 검증과 배포는 남아 있다.
 - `go.b4ton.com` 운영 예시와 Cloudflare DNS API 인증서 갱신·Discord·Slack 웹훅 알림의 선택 설정을
   추가했다. [외부 API 연동 절차](docs/RUNBOOK/external-api-integrations.md)를 따르며
@@ -113,6 +114,18 @@
 
 ## 최근 검증
 
+- 3차 정리는 미커밋 변경이 없는 `main`의 `d9aa3a7`에서 시작해 `f334005`·`a5d39a9`·`90e7935`·`fc2dfde`·`e6e511d`와
+  문서 커밋에 저장했다. 공개 링크 오류 처리기 쌍 12개를 협상 매핑 2개와 예외 패턴 분기로 합치고, 도달하지 않는
+  대상 정책 null 검증과 서비스 매개변수 풀기를 정리했다. 단일 비밀값 키 ID를 `legacy`에서 `default`로 바꾸고 키 확인
+  통합 테스트를 다른 키 테스트 패키지로 옮겼다. 운영 코드 155줄을 지우고 45줄을 더했다. Gradle 권장 방식대로 기존
+  파일을 치운 오프라인 `--write-verification-metadata sha256 --dry-run` 결과와 대조해 JPA 계열 검증 항목 34개를
+  지웠다. 처음 48개를 지운 시도는 캐시 없는 이미지 빌드가 플러그인 경로의 `tools.jackson:jackson-base:3.1.5` POM을
+  요구해 실패했고, 공통 BOM·부모 POM을 남기는 방식으로 바꿨다. `--refresh-dependencies build`와 `docker build --no-cache`
+  가 검증을 통과했다. Java 21에서 결과 디렉터리를 비운 뒤 `./gradlew --no-daemon build :adapter-in-web:apiContractDocs
+  :bootstrap:mysqlTest :bootstrap:redisTest`를 통과했다. 도메인 73·애플리케이션 42·웹 124·외부 25·bootstrap 31·
+  MySQL 29·Redis 3개에 실패·제외가 없고 REST Docs 조각은 84개다. 최종 트리의 `docker build`도 성공했다.
+  로그는 같은 스크래치패드의 `r3-*.log`·`verif-*.log`다. 생성·조회 사용 사례 분리, 관리 목록 쿼리 객체 바인딩,
+  JWK 테스트 서버 공용화와 Spring Data Redis 전환은 이점보다 변경 범위가 커 하지 않았다. 원격 반영은 하지 않았다.
 - 2차 과감한 정리는 미커밋 변경이 없는 `main`의 `48bb23e`에서 시작해 `9dab25f`·`772a3bb`·`9eeb4da`·`f4eda73`·
   `fea3c98`에 저장했다. 운영 데이터와 적용된 DB가 없다는 사용자 확인에 따라 JPA를 제거해 영속성을
   `JdbcClient`로 통일하고, V1~V7을 최종 스키마의 V1 하나로 다시 만들었다. 보호 행·`version` 열·쓰이지 않던

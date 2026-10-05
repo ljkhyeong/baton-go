@@ -6,7 +6,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.personal.batongo.application.link.error.LinkNotFoundException;
-import com.personal.batongo.application.link.port.in.SmartLinkUseCase;
+import com.personal.batongo.application.link.port.in.ResolveLinkUseCase;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -42,7 +42,7 @@ class PublicResolverRateLimitHttpIntegrationTest {
     private static final String REQUEST_ID = "public-rate-limit-integration";
 
     @MockitoBean
-    private SmartLinkUseCase useCase;
+    private ResolveLinkUseCase useCase;
 
     @Value("${local.server.port}")
     private int port;

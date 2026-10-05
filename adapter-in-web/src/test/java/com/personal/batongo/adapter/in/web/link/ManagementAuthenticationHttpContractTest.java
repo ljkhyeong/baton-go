@@ -26,6 +26,7 @@ import com.personal.batongo.adapter.in.web.ManagementApiSecurityConfiguration;
 import com.personal.batongo.adapter.in.web.ManagementOperationLogger;
 import com.personal.batongo.adapter.in.web.RequestIdFilter;
 import com.personal.batongo.adapter.in.web.WebMvcConfiguration;
+import com.personal.batongo.application.link.port.in.ResolveLinkUseCase;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.CreatedLinkResult;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.LinkResult;
@@ -128,6 +129,10 @@ class ManagementAuthenticationHttpContractTest {
 
     @MockitoBean
     private TargetContractOperationsUseCase operationsUseCase;
+
+    // 함께 스캔되는 공개 링크 컨트롤러 생성에만 필요하다.
+    @MockitoBean
+    private ResolveLinkUseCase resolveLinkUseCase;
 
     @MockitoBean
     private JwtDecoder jwtDecoder;

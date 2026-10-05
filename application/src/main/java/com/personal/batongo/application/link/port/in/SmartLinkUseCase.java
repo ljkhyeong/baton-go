@@ -19,8 +19,6 @@ public interface SmartLinkUseCase {
 
     LinkSearchResult searchLinks(LinkSearchQuery query);
 
-    ResolvedLinkResult resolveLink(String rawCode);
-
     RevokedLinkResult revokeLink(UUID linkId);
 
     record LinkBatchResult(List<LinkResult> items, List<UUID> notFoundIds, Instant evaluatedAt) {
@@ -77,14 +75,6 @@ public interface SmartLinkUseCase {
         @Override
         public String toString() {
             return "CreatedLinkResult[redacted]";
-        }
-    }
-
-    record ResolvedLinkResult(URI destination) {
-
-        @Override
-        public String toString() {
-            return "ResolvedLinkResult[destination=redacted]";
         }
     }
 

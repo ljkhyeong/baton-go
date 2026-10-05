@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -19,7 +18,6 @@ import com.personal.batongo.application.link.error.InvalidRequestException;
 import com.personal.batongo.application.link.error.LinkCodeReplayMismatchException;
 import com.personal.batongo.application.link.error.LinkCreationReplayUnavailableException;
 import com.personal.batongo.application.link.error.LinkNotFoundException;
-import com.personal.batongo.application.link.error.StoredTargetPolicyViolationException;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.CreateLinkCommand;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.LinkResult;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.LinkSearchQuery;
@@ -30,9 +28,7 @@ import com.personal.batongo.application.link.port.out.LinkCreationReservationPor
 import com.personal.batongo.application.link.port.out.PublicLinkOriginPort;
 import com.personal.batongo.application.link.port.out.SmartLinkRepository;
 import com.personal.batongo.application.link.port.out.SmartLinkRepository.StoredLinkReplay;
-import com.personal.batongo.application.link.port.out.SmartLinkRepository.StoredLinkResolution;
 import com.personal.batongo.application.link.port.out.SmartLinkRepository.StoredLinkSnapshot;
-import com.personal.batongo.application.link.port.out.TargetUrlPort;
 import com.personal.batongo.domain.link.LinkPurpose;
 import com.personal.batongo.domain.link.LinkAvailabilityPolicy.Status;
 import com.personal.batongo.domain.link.LinkValidationException;
@@ -83,7 +79,6 @@ class SmartLinkServiceTest {
     private final LinkCodePort linkCodePort = mock(LinkCodePort.class);
     private final LinkCodeKeyGuardPort keyGuardPort = mock(LinkCodeKeyGuardPort.class);
     private final PublicLinkOriginPort publicLinkOriginPort = mock(PublicLinkOriginPort.class);
-    private final TargetUrlPort targetUrlPort = mock(TargetUrlPort.class);
     private final SmartLinkService service = service(linkCodePort, Clock.fixed(NOW, ZoneOffset.UTC));
 
     @BeforeEach
@@ -109,8 +104,7 @@ class SmartLinkServiceTest {
                 reservationPort,
                 repository,
                 keyGuardPort,
-                publicLinkOriginPort,
-                targetUrlPort
+                publicLinkOriginPort
         );
     }
 
@@ -132,8 +126,7 @@ class SmartLinkServiceTest {
                 reservationPort,
                 repository,
                 keyGuardPort,
-                publicLinkOriginPort,
-                targetUrlPort
+                publicLinkOriginPort
         );
     }
 
@@ -152,7 +145,7 @@ class SmartLinkServiceTest {
         ))).isExactlyInstanceOf(InvalidIdempotencyKeyException.class);
         verify(reservationPort).find(IDEMPOTENCY_HASH);
         verify(reservationPort, never()).reserve(anyString(), any(), anyString(), anyString(), any());
-        verifyNoInteractions(repository, keyGuardPort, publicLinkOriginPort, targetUrlPort);
+        verifyNoInteractions(repository, keyGuardPort, publicLinkOriginPort);
     }
 
     @Test
@@ -209,65 +202,6 @@ class SmartLinkServiceTest {
         assertThat(replay.link().id()).isEqualTo(LINK_ID);
         assertThat(replay.shortUrl())
                 .isEqualTo(URI.create("https://go.example/l/" + RAW_CODE));
-    }
-
-    @Test
-    @DisplayName("활성 링크 접속은 대상 URL 생성 포트가 만든 URL을 반환한다")
-    void resolvesThroughTrustedTargetPort() {
-        StoredLinkResolution resolution = new StoredLinkResolution(
-                LINK_ID,
-                TargetSystem.BATON.name(),
-                BATON_PATH,
-                LinkPurpose.NAVIGATION.name(),
-                null,
-                null,
-                null
-        );
-        URI destination = URI.create("https://baton.example" + BATON_PATH);
-        when(repository.findResolutionByCodeHash(CODE_HASH))
-                .thenReturn(Optional.of(resolution));
-        when(targetUrlPort.resolve(any()))
-                .thenReturn(destination);
-
-        var result = service.resolveLink(RAW_CODE);
-
-        assertThat(result.destination()).isEqualTo(destination);
-        verify(targetUrlPort).resolve(argThat(target ->
-                target.targetSystem() == TargetSystem.BATON
-                        && target.targetPath().equals(BATON_PATH)));
-    }
-
-    @Test
-    @DisplayName("저장 대상이 규칙을 위반하면 활성·만료 확인 전에 거부한다")
-    void hidesKnownStoredPolicyViolationBeforeLifecycleCheck() {
-        when(repository.findResolutionByCodeHash(CODE_HASH)).thenReturn(Optional.of(
-                new StoredLinkResolution(
-                        LINK_ID,
-                        TargetSystem.BATON.name(),
-                        ROUND_PATH,
-                        LinkPurpose.NAVIGATION.name(),
-                        null,
-                        null,
-                        NOW.minusSeconds(1)
-                )
-        ));
-
-        assertThatThrownBy(() -> service.resolveLink(RAW_CODE))
-                .isExactlyInstanceOf(StoredTargetPolicyViolationException.class);
-
-        verifyNoInteractions(targetUrlPort);
-    }
-
-    @Test
-    @DisplayName("없는 공개 코드는 링크 존재 여부를 드러내지 않는다")
-    void hidesMissingLink() {
-        when(repository.findResolutionByCodeHash(CODE_HASH))
-                .thenReturn(Optional.empty());
-
-        assertThatThrownBy(() -> service.resolveLink(RAW_CODE))
-                .isExactlyInstanceOf(LinkNotFoundException.class);
-
-        verifyNoInteractions(targetUrlPort);
     }
 
     @Test
@@ -606,7 +540,6 @@ class SmartLinkServiceTest {
                 configuredLinkCodePort,
                 new LinkCodeKeyGuard(configuredLinkCodePort, keyGuardPort),
                 publicLinkOriginPort,
-                targetUrlPort,
                 clock
         );
     }

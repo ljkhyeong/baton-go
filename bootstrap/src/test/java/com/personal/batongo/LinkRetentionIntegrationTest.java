@@ -8,13 +8,13 @@ import com.personal.batongo.adapter.out.external.link.SecureLinkCodeAdapter;
 import com.personal.batongo.application.link.CreationIdempotencyKey;
 import com.personal.batongo.application.link.LinkCodeKeyGuard;
 import com.personal.batongo.application.link.SmartLinkService;
+import com.personal.batongo.application.link.port.in.ResolveLinkUseCase;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.CreateLinkCommand;
 import com.personal.batongo.application.link.port.out.LinkCodeKeyGuardPort;
 import com.personal.batongo.application.link.port.out.LinkCreationReservationPort;
 import com.personal.batongo.application.link.port.out.PublicLinkOriginPort;
 import com.personal.batongo.application.link.port.out.SmartLinkRepository;
-import com.personal.batongo.application.link.port.out.TargetUrlPort;
 import com.personal.batongo.domain.link.LinkPurpose;
 import com.personal.batongo.domain.link.TargetSystem;
 import java.time.Clock;
@@ -67,12 +67,12 @@ class LinkRetentionIntegrationTest {
             .withUrlParam("connectTimeout", "3000").withUrlParam("socketTimeout", "30000");
 
     @Autowired private SmartLinkUseCase links;
+    @Autowired private ResolveLinkUseCase resolver;
     @Autowired private com.personal.batongo.application.link.port.out.LinkRetentionPort retention;
     @Autowired private SmartLinkRepository repository;
     @Autowired private LinkCreationReservationPort reservations;
     @Autowired private LinkCodeKeyGuardPort guardPort;
     @Autowired private PublicLinkOriginPort publicOrigin;
-    @Autowired private TargetUrlPort targets;
     @Autowired private Clock clock;
     @Autowired private PlatformTransactionManager transactionManager;
     @Autowired private JdbcTemplate jdbc;
@@ -107,7 +107,7 @@ class LinkRetentionIntegrationTest {
         assertThatThrownBy(() -> links.createLink(new CreateLinkCommand(expiredCommand.idempotencyKey(),
                 TargetSystem.ROUND, "/room/bcde-fghj-kmnp", LinkPurpose.MEETING_ENTRY, null, EXPIRED)))
                 .isInstanceOf(IdempotencyKeyConflictException.class);
-        assertThatThrownBy(() -> links.resolveLink(expired.shortUrl().getPath().substring(3)))
+        assertThatThrownBy(() -> resolver.resolveLink(expired.shortUrl().getPath().substring(3)))
                 .isInstanceOf(LinkNotFoundException.class);
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM link_creation_requests WHERE purged_at IS NOT NULL AND public_origin IS NULL",
                 Integer.class)).isEqualTo(3);
@@ -180,7 +180,7 @@ class LinkRetentionIntegrationTest {
         var codes = new SecureLinkCodeAdapter(new LinkCodeProperties(null, "k202609", Map.of("k202609", CURRENT)));
         var guard = new LinkCodeKeyGuard(codes, guardPort);
         new TransactionTemplate(transactionManager).executeWithoutResult(status -> guard.verifyOrBind());
-        var service = new SmartLinkService(repository, reservations, codes, guard, publicOrigin, targets, clock);
+        var service = new SmartLinkService(repository, reservations, codes, guard, publicOrigin, clock);
         assertThatThrownBy(() -> new TransactionTemplate(transactionManager).execute(status -> service.createLink(command)))
                 .isInstanceOf(LinkPurgedException.class);
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM smart_links", Integer.class)).isZero();
@@ -189,7 +189,7 @@ class LinkRetentionIntegrationTest {
     private SmartLinkUseCase.CreatedLinkResult create(CreateLinkCommand command) {
         var codes = new SecureLinkCodeAdapter(new LinkCodeProperties(LEGACY));
         var service = new SmartLinkService(repository, reservations, codes, new LinkCodeKeyGuard(codes, guardPort),
-                publicOrigin, targets, Clock.fixed(CREATED, ZoneOffset.UTC));
+                publicOrigin, Clock.fixed(CREATED, ZoneOffset.UTC));
         return new TransactionTemplate(transactionManager).execute(status -> service.createLink(command));
     }
 

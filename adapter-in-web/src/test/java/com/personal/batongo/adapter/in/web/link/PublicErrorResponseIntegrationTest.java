@@ -12,7 +12,7 @@ import com.personal.batongo.adapter.in.web.RequestIdFilter;
 import com.personal.batongo.adapter.in.web.WebMvcConfiguration;
 import com.personal.batongo.application.link.error.LinkNotFoundException;
 import com.personal.batongo.application.link.error.StoredTargetPolicyViolationException;
-import com.personal.batongo.application.link.port.in.SmartLinkUseCase;
+import com.personal.batongo.application.link.port.in.ResolveLinkUseCase;
 import com.personal.batongo.domain.link.LinkUnavailableException;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.net.URI;
@@ -68,7 +68,7 @@ class PublicErrorResponseIntegrationTest {
     }
 
     @MockitoBean
-    private SmartLinkUseCase useCase;
+    private ResolveLinkUseCase useCase;
 
     @Value("${local.server.port}")
     private int port;

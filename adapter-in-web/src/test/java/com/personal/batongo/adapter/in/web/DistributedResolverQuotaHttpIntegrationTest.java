@@ -5,7 +5,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.personal.batongo.application.link.error.PublicResolverQuotaUnavailableException;
-import com.personal.batongo.application.link.port.in.SmartLinkUseCase;
+import com.personal.batongo.application.link.port.in.ResolveLinkUseCase;
 import com.personal.batongo.application.link.port.out.PublicResolverQuotaPort;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -32,7 +32,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 @DirtiesContext
 class DistributedResolverQuotaHttpIntegrationTest {
 
-    @MockitoBean private SmartLinkUseCase useCase;
+    @MockitoBean private ResolveLinkUseCase useCase;
     @MockitoBean private PublicResolverQuotaPort quota;
     @Value("${local.server.port}") private int port;
 

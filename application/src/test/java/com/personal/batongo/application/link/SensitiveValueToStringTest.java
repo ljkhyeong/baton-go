@@ -5,7 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.CreateLinkCommand;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.CreatedLinkResult;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.LinkResult;
-import com.personal.batongo.application.link.port.in.SmartLinkUseCase.ResolvedLinkResult;
+import com.personal.batongo.application.link.port.in.ResolveLinkUseCase.ResolvedLinkResult;
 import com.personal.batongo.application.link.port.out.IssuedLinkCode;
 import com.personal.batongo.domain.link.LinkPurpose;
 import com.personal.batongo.domain.link.TargetSystem;

@@ -7,7 +7,6 @@ import com.personal.batongo.application.link.error.LinkCreationReplayUnavailable
 import com.personal.batongo.application.link.error.LinkNotFoundException;
 import com.personal.batongo.application.link.error.LinkPurgedException;
 import com.personal.batongo.application.link.error.PublicLinkOriginReplayUnavailableException;
-import com.personal.batongo.application.link.error.StoredTargetPolicyViolationException;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase;
 import com.personal.batongo.application.link.port.out.IssuedLinkCode;
 import com.personal.batongo.application.link.port.out.LinkCodePort;
@@ -15,10 +14,7 @@ import com.personal.batongo.application.link.port.out.LinkCreationReservationPor
 import com.personal.batongo.application.link.port.out.PublicLinkOriginPort;
 import com.personal.batongo.application.link.port.out.SmartLinkRepository;
 import com.personal.batongo.application.link.port.out.SmartLinkRepository.StoredLinkReplay;
-import com.personal.batongo.application.link.port.out.SmartLinkRepository.StoredLinkResolution;
 import com.personal.batongo.application.link.port.out.SmartLinkRepository.StoredLinkSnapshot;
-import com.personal.batongo.application.link.port.out.TargetUrlPort;
-import com.personal.batongo.domain.link.LinkAvailabilityPolicy;
 import com.personal.batongo.domain.link.LinkPurpose;
 import com.personal.batongo.domain.link.LinkRevocationPolicy;
 import com.personal.batongo.domain.link.SmartLink;
@@ -45,7 +41,6 @@ public class SmartLinkService implements SmartLinkUseCase {
     private final LinkCodePort linkCodePort;
     private final LinkCodeKeyGuard linkCodeKeyGuard;
     private final PublicLinkOriginPort publicLinkOriginPort;
-    private final TargetUrlPort targetUrlPort;
     private final Clock clock;
 
     public SmartLinkService(
@@ -54,7 +49,6 @@ public class SmartLinkService implements SmartLinkUseCase {
             LinkCodePort linkCodePort,
             LinkCodeKeyGuard linkCodeKeyGuard,
             PublicLinkOriginPort publicLinkOriginPort,
-            TargetUrlPort targetUrlPort,
             Clock clock
     ) {
         this.repository = repository;
@@ -62,7 +56,6 @@ public class SmartLinkService implements SmartLinkUseCase {
         this.linkCodePort = linkCodePort;
         this.linkCodeKeyGuard = linkCodeKeyGuard;
         this.publicLinkOriginPort = publicLinkOriginPort;
-        this.targetUrlPort = targetUrlPort;
         this.clock = clock;
     }
 
@@ -282,26 +275,6 @@ public class SmartLinkService implements SmartLinkUseCase {
         // 반환할 링크가 없어도 마지막으로 읽은 행 다음부터 조회한다.
         UUID nextAfterLinkId = hasMore ? scanned.get(query.limit() - 1).id() : null;
         return new LinkSearchResult(items, nextAfterLinkId, hasMore, evaluatedAt);
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public ResolvedLinkResult resolveLink(String rawCode) {
-        String codeHash = linkCodePort.hash(rawCode);
-        StoredLinkResolution storedLink = repository.findResolutionByCodeHash(codeHash)
-                .orElseThrow(LinkNotFoundException::new);
-        TrustedTarget trustedTarget = TrustedTargetPolicy.findAllowed(
-                storedLink.targetSystem(),
-                storedLink.purpose(),
-                storedLink.targetPath()
-        ).orElseThrow(() -> new StoredTargetPolicyViolationException(storedLink.id()));
-        LinkAvailabilityPolicy.requireResolvableAt(
-                storedLink.revokedAt(),
-                storedLink.notBefore(),
-                storedLink.expiresAt(),
-                clock.instant()
-        );
-        return new ResolvedLinkResult(targetUrlPort.resolve(trustedTarget));
     }
 
     @Override

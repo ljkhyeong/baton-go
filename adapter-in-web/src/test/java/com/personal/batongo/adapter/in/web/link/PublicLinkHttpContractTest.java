@@ -21,8 +21,8 @@ import com.personal.batongo.adapter.in.web.RequestIdFilter;
 import com.personal.batongo.adapter.in.web.WebMvcConfiguration;
 import com.personal.batongo.application.link.error.LinkNotFoundException;
 import com.personal.batongo.application.link.error.StoredTargetPolicyViolationException;
-import com.personal.batongo.application.link.port.in.SmartLinkUseCase;
-import com.personal.batongo.application.link.port.in.SmartLinkUseCase.ResolvedLinkResult;
+import com.personal.batongo.application.link.port.in.ResolveLinkUseCase;
+import com.personal.batongo.application.link.port.in.ResolveLinkUseCase.ResolvedLinkResult;
 import com.personal.batongo.domain.link.LinkUnavailableException;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.io.IOException;
@@ -64,13 +64,13 @@ class PublicLinkHttpContractTest {
             "baton.go.public.resolver.target.contract.violations";
     private static final String PUBLIC_NOT_FOUND_REQUEST_ID = "public-not-found-contract";
 
-    private SmartLinkUseCase useCase;
+    private ResolveLinkUseCase useCase;
     private SimpleMeterRegistry meterRegistry;
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp(RestDocumentationContextProvider restDocumentation) throws IOException {
-        useCase = mock(SmartLinkUseCase.class);
+        useCase = mock(ResolveLinkUseCase.class);
         meterRegistry = new SimpleMeterRegistry();
         LinkResolverController controller = new LinkResolverController(useCase);
         var jsonMapper = JsonMapper.builder()

@@ -15,7 +15,6 @@ import com.personal.batongo.application.link.port.out.LinkCodeKeyGuardPort;
 import com.personal.batongo.application.link.port.out.LinkCreationReservationPort;
 import com.personal.batongo.application.link.port.out.PublicLinkOriginPort;
 import com.personal.batongo.application.link.port.out.SmartLinkRepository;
-import com.personal.batongo.application.link.port.out.TargetUrlPort;
 import com.personal.batongo.domain.link.LinkPurpose;
 import com.personal.batongo.domain.link.TargetSystem;
 import java.time.Clock;
@@ -63,7 +62,6 @@ class LinkCodeKeyRingIntegrationTest {
     @Autowired private LinkCreationReservationPort reservations;
     @Autowired private LinkCodeKeyGuardPort guardPort;
     @Autowired private PublicLinkOriginPort publicOrigin;
-    @Autowired private TargetUrlPort targets;
     @Autowired private Clock clock;
     @Autowired private PlatformTransactionManager transactionManager;
     @Autowired private JdbcTemplate jdbc;
@@ -112,7 +110,7 @@ class LinkCodeKeyRingIntegrationTest {
     private <T> T withKeys(LinkCodeProperties properties, Function<SmartLinkService, T> operation) {
         var codes = new SecureLinkCodeAdapter(properties);
         var guard = new LinkCodeKeyGuard(codes, guardPort);
-        var service = new SmartLinkService(repository, reservations, codes, guard, publicOrigin, targets, clock);
+        var service = new SmartLinkService(repository, reservations, codes, guard, publicOrigin, clock);
         return new TransactionTemplate(transactionManager).execute(status -> {
             guard.verifyOrBind();
             return operation.apply(service);

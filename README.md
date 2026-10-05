@@ -235,7 +235,9 @@ CI는 운영 이미지를 Compose로 실행해 상태 확인, 없는 링크의 H
 HEAD의 응답 형식·빈 본문과 요청률 제한 `429`를 점검한다. 오류 상태별 세부 계약은 웹 테스트에서 검증한다.
 같은 이미지의 SBOM·취약점 보고서와 검사 대상 정보를 `baton-go-image-security` 산출물로 보존한다.
 `main` push의 검증이 통과하면 같은 이미지를 GHCR에 게시하고 배포 다이제스트를 별도 산출물에 남긴다.
-릴리스 태그의 검사 자료는 [보관 워크플로](.github/workflows/release-evidence.yml)로 Release 초안에 첨부할 수 있다.
+게시 다이제스트에는 [빌드 출처·SBOM 증명](docs/RUNBOOK/image-security-reports.md#빌드-출처sbom-증명)을 만들고
+배포 전 확인과 같은 조건으로 검증한다.
+릴리스 태그의 검사 자료는 [보관 워크플로](.github/workflows/release-evidence.yml)가 증명을 다시 검증한 뒤 Release 초안에 첨부한다.
 발행하면 [릴리스 변경 방지](docs/RUNBOOK/image-security-reports.md#릴리스-변경-방지) 설정이 첨부 파일과 태그를 잠근다.
 보관한 SBOM은 [릴리스 취약점 재검사](docs/RUNBOOK/image-security-reports.md#릴리스-취약점-재검사)로
 이미지를 다시 빌드하지 않고 최신 취약점 DB와 대조할 수 있다.

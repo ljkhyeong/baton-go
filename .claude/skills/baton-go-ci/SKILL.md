@@ -41,9 +41,10 @@ CI `필수 검증` 작업의 단계 이름으로 로컬 재현 범위를 고른�
 | 운영 이미지 기동·상태·공개 오류 응답 검증 | 이미지 빌드 후 해당 `run` 블록 (Compose 기동, `/readyz`, 공개 오류 HTML·JSON, `429`) |
 | MySQL 통합 검증 | `./gradlew --no-daemon :bootstrap:mysqlTest :bootstrap:redisTest` (Docker 필요) |
 | 검증한 운영 이미지 GHCR 게시, Java 의존성 알림 연동 | `main` push 전용. 권한(`packages`·`contents: write`)·GitHub API 응답 확인 |
+| 게시 이미지 출처 증명 | `main` push 전용. 같은 실행의 게시·검사 산출물 일치, `id-token`·`attestations` 권한, `gh attestation verify` 오류 문구 확인. 절차는 `docs/RUNBOOK/image-security-reports.md#빌드-출처sbom-증명` |
 
 릴리스 워크플로(`release-evidence.yml`, `release-vulnerability-review.yml`)는 `main`에서 수동 실행하며 태그를 입력받는다.
-실패하면 태그와 같은 커밋의 성공한 CI 산출물(`baton-go-image-security`, `baton-go-image-publication`)이 있는지 먼저 확인하고
+실패하면 태그와 같은 커밋의 성공한 CI 산출물(`baton-go-image-security`, `baton-go-image-publication`)과 게시 이미지 증명이 있는지 먼저 확인하고
 `docs/RUNBOOK/image-security-reports.md`의 해당 절을 따른다.
 
 ## 3. 원인 분류와 수정

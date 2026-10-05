@@ -61,12 +61,12 @@ PR이나 검증 실패에서는 제출하지 않으며, 제출 실패 시 CI가 
 
 ## 릴리스에서 별도로 확인할 사항
 
-`main` push의 빌드·검사·실행·DB 검증이 통과하면 아래 절차로 이미지를 게시한다.
-이미지 서명, 취약점 등급별 배포 차단과 운영 배포는 별도로 수행한다.
-게시 성공만으로 공개 운영을 승인하지 않는다.
+`main` push의 빌드·검사·실행·DB 검증이 통과하면 아래 절차로 이미지를 게시하고 빌드 출처·SBOM을 증명한다.
+취약점 등급별 배포 차단과 운영 배포는 별도로 수행한다.
+게시와 증명 성공만으로 공개 운영을 승인하지 않는다.
 
 릴리스 담당자는 실제 배포할 매니페스트 다이제스트와 플랫폼에 맞는 검사 결과를 확보하고,
-발견 사항의 처리·예외 승인, 서명·provenance 검증과 보존 위치를 기록한다. 상세 배포 점검 항목은
+발견 사항의 처리·예외 승인, [증명 검증](#빌드-출처sbom-증명) 결과와 보존 위치를 기록한다. 상세 배포 점검 항목은
 [비공개 Kubernetes 배포 절차](kubernetes-private-server-deployment.md)를 따른다.
 
 ## GHCR 자동 게시와 배포 참조
@@ -82,7 +82,7 @@ PR·검증 실패에서는 게시하지 않는다. 게시 전 검사 보고서�
   이미 같은 이름의 패키지가 있다면 패키지의 Actions 접근 설정에서 이 저장소에 쓰기 권한을 허용한다.
 - 성공한 실행은 게시 다이제스트를 실행 요약과 `baton-go-image-publication` 산출물에 남긴다.
   `image-publication.json`에는 검사 메타데이터와 게시 태그·다이제스트·실행 주소가 들어 있다.
-  이 파일은 서명된 provenance가 아니다.
+  이 파일은 서명되지 않은 게시 기록이다. 서명된 빌드 출처는 [증명](#빌드-출처sbom-증명)으로 확인한다.
 
 원격 `main`에 반영한 뒤 첫 게시 성공과 패키지 접근 권한을 확인한다. 같은 실행의
 `baton-go-image-security`와 `baton-go-image-publication`을 함께 검토하고 릴리스 기록으로 보관한다.
@@ -103,6 +103,48 @@ Actions 산출물은 14일 뒤 만료되며, 게시된 패키지의 보관 기�
 GHCR의 컨테이너 이미지 저장·전송은 현재 무료다. CI 실행 시간과 보고서 보존은 기존 Actions 사용량에
 포함되므로 무료 할당량과 유료 사용 차단 설정을 유지한다. 유료 실행기나 추가 저장 서비스는 쓰지 않는다.
 
+## 빌드 출처·SBOM 증명
+
+검증 작업 전체가 성공한 `main` push에서는 별도 `게시 이미지 출처 증명` 작업이 게시한 매니페스트
+다이제스트에 GitHub 아티팩트 증명을 만든다. 이미지를 다시 빌드·게시하지 않는다.
+
+1. 같은 실행의 `baton-go-image-publication`과 `baton-go-image-security`를 받아 커밋·실행·검사
+   메타데이터를 대조하고, 이미지 참조가 `ghcr.io/ljkhyeong/baton-go@sha256:<64자리>`인지 확인한다.
+2. `actions/attest`로 SLSA 빌드 출처(`https://slsa.dev/provenance/v1`)와 같은 실행의
+   `sbom.cdx.json`을 담은 CycloneDX SBOM(`https://cyclonedx.org/bom`) 증명을 만든다.
+3. 아래 배포 전 확인과 같은 조건으로 두 증명을 다시 검증한다.
+
+`id-token: write`와 `attestations: write`는 이 작업에만 준다. 증명은 GitHub 증명 API에 저장하며
+레지스트리에 별도 증명 객체를 올리지 않는다. 비공개 패키지의 다이제스트 조회에는 `packages: read`와
+단계 안의 임시 Docker 인증 파일을 사용한다. 이 작업이 실패하면 CI가 실패로 표시되고, 이미지가 이미
+게시됐어도 [보관 워크플로](#릴리스-검사-자료-보관)는 해당 커밋을 받지 않는다. 실패한 작업만 재실행하면
+같은 실행의 게시 기록으로 다시 증명한다.
+
+공개 저장소의 증명은 무료이며 Sigstore 공개 인스턴스로 서명된다. 서명 묶음은 공개 투명성 로그에
+영구 기록되고, 이미지 다이제스트·소스 커밋·워크플로·SBOM은 증명 API로 누구나 조회할 수 있다.
+소스·Dockerfile·Gradle 검증 메타데이터와 발행한 Release 첨부 자료도 이미 공개 범위이며, 비밀값은
+증명에 넣지 않는다. 저장소를 비공개로 바꾸면 GitHub Enterprise Cloud 없이 이 작업이 실패하므로
+증명 방식을 다시 정한다.
+
+배포 전에는 오버레이에 넣을 다이제스트와 릴리스 소스 커밋으로 두 증명을 확인한다. 비공개 패키지는
+`read:packages` 권한으로 `docker login ghcr.io`를 먼저 실행해야 다이제스트를 조회할 수 있다.
+
+```bash
+image='ghcr.io/ljkhyeong/baton-go@sha256:<게시 다이제스트>'
+source_commit='<릴리스 소스 커밋 40자리>'
+for predicate_type in https://slsa.dev/provenance/v1 https://cyclonedx.org/bom; do
+  gh attestation verify "oci://$image" --repo ljkhyeong/baton-go \
+    --signer-workflow ljkhyeong/baton-go/.github/workflows/ci.yml \
+    --source-ref refs/heads/main --source-digest "$source_commit" \
+    --deny-self-hosted-runners --predicate-type "$predicate_type"
+done
+```
+
+통과하면 해당 다이제스트를 이 저장소 `main`의 CI 워크플로가 GitHub 호스팅 실행기에서 지정한 커밋으로
+만들었고, 같은 다이제스트에 SBOM이 연결됐음을 확인한 것이다. 취약점 수용, 운영 배포 승인과 클러스터의
+이미지 허용 정책은 대신하지 않는다. 다른 저장소·워크플로·브랜치·커밋이나 자체 호스팅 실행기에서 만든
+증명은 거부한다.
+
 ## 릴리스 검사 자료 보관
 
 [보관 워크플로](../../.github/workflows/release-evidence.yml)는 기존 Git 태그를 선택하면 같은 커밋의
@@ -112,19 +154,21 @@ GHCR의 컨테이너 이미지 저장·전송은 현재 무료다. CI 실행 시
 2. Actions의 `릴리스 검사 자료 보관`에서 실행 브랜치를 `main`으로 두고 기존 태그를 입력한다.
    아직 Release가 없는 태그를 사용하며, CI 자료가 만료되기 전인 14일 안에 실행한다.
 3. 만들어진 초안에서 소스 커밋·CI 실행·배포 이미지와 첨부 자료를 검토한 뒤 Release를 발행한다.
-   비공개 저장소의 접근 권한은 유지된다. 워크플로가 운영 배포나 이미지 서명을 수행하지는 않는다.
+   비공개 저장소의 접근 권한은 유지된다. 워크플로는 CI가 만든 증명을 검증만 하며 운영 배포나 새 증명을
+   만들지 않는다.
 
 초안에는 다음 두 파일을 첨부한다.
 
 | 파일 | 내용 |
 | --- | --- |
-| `baton-go-release-evidence.tar.gz` | CI 실행 정보, SBOM·취약점·검사기·Java 의존성 보고서, 검사·게시 메타데이터 |
+| `baton-go-release-evidence.tar.gz` | CI 실행 정보, SBOM·취약점·검사기·Java 의존성 보고서, 검사·게시 메타데이터, 빌드 출처·SBOM 증명 검증 결과 |
 | `image-publication.json` | 배포 이미지 다이제스트·플랫폼·소스 커밋을 바로 확인할 게시 기록 |
 
 같은 커밋의 성공한 `CI` 중 최신 실행을 선택하고 검사·게시 자료의 커밋·CI 실행·이미지 정보를
 대조한다. 의존성 제출 등 실패한 작업만 재실행하면 이미지는 이전 시도에서 게시됐을 수 있다.
 같은 실행에서 생성한 정상 자료는 재사용하고, 초안에 최종 CI 성공 시도와 이미지 게시 시도를 각각 기록한다.
 성공한 실행이 없거나 자료가 만료·누락·불일치하거나 게시 시도가 CI의 현재 시도보다 크면 생성 전에 실패한다.
+게시 이미지의 증명을 [배포 전 확인](#빌드-출처sbom-증명)과 같은 조건으로 검증하지 못해도 생성 전에 중단한다.
 기존 Release가 있는 태그도 중단한다. 업로드 도중 실패한 초안은 남을 수 있으므로 첨부 상태를
 확인한 뒤 이 워크플로가 만든 미완성 초안만 정리하고 재실행한다. 발행한 Release는 삭제하지 않는다.
 
@@ -214,4 +258,7 @@ CI와 재검사 워크플로의 `TRIVY_IMAGE`는 함께 갱신한다.
 - [Trivy SBOM 생성](https://trivy.dev/docs/latest/supply-chain/sbom/)
 - [GitHub Actions 이미지 게시](https://docs.github.com/en/actions/tutorials/publish-packages/publish-docker-images)
 - [GHCR 인증·접근 권한](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry)
+- [GitHub 아티팩트 증명](https://docs.github.com/en/actions/concepts/security/artifact-attestations)
+- [증명 생성 액션](https://github.com/actions/attest)
+- [증명 검증 명령](https://cli.github.com/manual/gh_attestation_verify)
 - [GitHub Packages 요금](https://docs.github.com/en/billing/concepts/product-billing/github-packages)

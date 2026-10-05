@@ -99,6 +99,14 @@
 
 ## 최근 검증
 
+- BATON 상태 확인 일괄화는 GO 코드를 바꾸지 않고 BATON `codex/go-link-integration-20260905`의
+  `533a3099`·`b6b50a41`에 저장했다. BATON이 링크별 `GET /api/v1/links/{id}` 대신 남은 건수와 GO 한도
+  100개 안에서 함께 선점한 링크를 `GET /api/v1/links/batch` 한 번으로 확인한다. `notFoundIds`만 종료로
+  반영하고 응답 누락·조회 실패 묶음은 재확인한다. 일괄 조회가 없던 기존 고정 커밋 `b4b4df2` 대신 이를
+  포함한 원격 `main`의 `bf93dc3`으로 BATON의 GO 검증 고정 커밋을 올렸다. BATON 정책 123·GO 클라이언트 10·
+  GO 아웃박스 MySQL 통합 15개와 `bf93dc3` 별도 체크아웃의 `ops/tests/go-consumer-contract.sh`를 통과했다.
+  계약 검증은 실제 GO에서 활성 링크와 직접 폐기한 링크의 `ENDED` 반영을 일괄 조회로 확인했다.
+  검증 기록은 BATON의 `output/verification/latest.md`다. BATON 브랜치 병합·원격 반영은 하지 않았다.
 - 포트 경계 리팩터링은 미커밋 변경이 없는 `main`의 `b4e2a77`에서 시작해 `ce8bea2`·`55aa072`에 저장했다.
   애플리케이션이 쓰지 않는 `LinkCodePort.derivationIdentity()`와 현재 키 `issue(String)`를 없애고, 현재 키 정보는
   `LinkCodeKeyRingIdentity.activeIdentity()`, 저장값 비교는 `LinkCodeDerivationIdentity.matches()`로 모아
@@ -515,7 +523,7 @@
 3. 최신 BATON 변경과 GO 연동 브랜치를 병합하고 충돌한 동작을 검증한다.
    GO 연동과 이후 BATON·공휴일 기능을 함께 유지한다. 아직 배포하지 않은 GO 마이그레이션 V40~V42는
    계정 비활성화 V39 다음 순서이며, 운영 DB에 적용한 파일은 교체하지 않는다.
-   고정 GO 커밋 `b4b4df22cbabf7a71697d60db5294ecfeb857e86`의 원격 반영과 BATON Actions의
+   BATON 연동 브랜치의 GO 검증 고정 커밋은 원격 `main`의 `bf93dc3`이다. BATON Actions의
    `BATON_GO_CONTRACT_READ_TOKEN` 등록을 확인한 뒤 GitHub 품질 게이트를 실행한다.
    실제 서비스 JWT와 HTTPS 환경에서 생성 응답 유실 후 취소·폐기까지 재시도되는지 확인한다.
    상태 확인 장애 경보와 링크 생성·폐기·상태 일괄 조회도 검증한다.

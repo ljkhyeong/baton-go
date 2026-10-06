@@ -15,7 +15,11 @@ public final class TrustedTargetProperties implements TargetUrlPort {
     public TrustedTargetProperties(URI batonBaseUrl, URI roundBaseUrl) {
         this.batonOrigin = HttpOrigin.require(batonBaseUrl, "BATON base URL");
         this.roundOrigin = HttpOrigin.require(roundBaseUrl, "ROUND base URL");
-        requireDeploymentTopology(batonOrigin, roundOrigin);
+        boolean localDevelopment = batonOrigin.isLoopback() && roundOrigin.isLoopback();
+        // 같은 출처는 스킴·호스트가 같으므로 루프백 혼합과 HTTP 운영 출처도 함께 거부된다.
+        if (!localDevelopment && !(batonOrigin.isHttps() && batonOrigin.sameOrigin(roundOrigin))) {
+            throw new IllegalArgumentException("운영 BATON·ROUND 기본 URL은 같은 HTTPS 출처여야 합니다");
+        }
     }
 
     public HttpOrigin batonOrigin() {
@@ -29,25 +33,5 @@ public final class TrustedTargetProperties implements TargetUrlPort {
             case ROUND -> roundOrigin;
         };
         return origin.resolve(target.targetPath());
-    }
-
-    private static void requireDeploymentTopology(
-            HttpOrigin batonOrigin,
-            HttpOrigin roundOrigin
-    ) {
-        boolean batonLoopback = batonOrigin.isLoopback();
-        boolean roundLoopback = roundOrigin.isLoopback();
-        if (batonLoopback && roundLoopback) {
-            return;
-        }
-        if (batonLoopback
-                || roundLoopback
-                || !batonOrigin.isHttps()
-                || !roundOrigin.isHttps()
-                || !batonOrigin.sameOrigin(roundOrigin)) {
-            throw new IllegalArgumentException(
-                    "운영 BATON·ROUND 기본 URL은 같은 HTTPS 출처여야 합니다"
-            );
-        }
     }
 }

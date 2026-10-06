@@ -2,7 +2,6 @@ package com.personal.batongo.bootstrap.retention;
 
 import com.personal.batongo.application.link.LinkRetentionService;
 import io.micrometer.core.instrument.Counter;
-import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
 import java.util.concurrent.atomic.AtomicLong;
@@ -33,20 +32,9 @@ public class LinkRetentionScheduler {
         this.heartbeatEpochSeconds = new AtomicLong(clock.instant().getEpochSecond());
         purged = meters.counter("baton.go.link.retention.purged");
         failures = meters.counter("baton.go.link.retention.failures");
-        Gauge.builder(
-                        "baton.go.link.retention.scheduler.heartbeat.seconds",
-                        heartbeatEpochSeconds,
-                        AtomicLong::doubleValue
-                )
-                .description("마지막 자동 정리 실행 완료 시각")
-                .register(meters);
-        Gauge.builder(
-                        "baton.go.link.retention.scheduler.interval.seconds",
-                        properties,
-                        value -> value.interval().toNanos() / 1_000_000_000.0
-                )
-                .description("자동 정리 실행 간격")
-                .register(meters);
+        meters.gauge("baton.go.link.retention.scheduler.heartbeat.seconds", heartbeatEpochSeconds);
+        meters.gauge("baton.go.link.retention.scheduler.interval.seconds", properties,
+                value -> value.interval().toNanos() / 1_000_000_000.0);
     }
 
     @Scheduled(fixedDelayString = "${baton-go.link-retention.interval:60s}",

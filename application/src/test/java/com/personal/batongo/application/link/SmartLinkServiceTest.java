@@ -64,7 +64,7 @@ class SmartLinkServiceTest {
                     "a".repeat(64)
             );
     private static final CreationIdempotencyKey IDEMPOTENCY_KEY =
-            CreationIdempotencyKey.parseRequest(
+            new CreationIdempotencyKey(
                     "8e448211-66ae-44ab-9888-c4960648c22b"
             );
     private static final PublicLinkOrigin PUBLIC_ORIGIN =
@@ -434,7 +434,7 @@ class SmartLinkServiceTest {
                 repository,
                 reservationPort,
                 configuredLinkCodePort,
-                new LinkCodeKeyGuard(configuredLinkCodePort, keyGuardPort),
+                keyGuardPort,
                 publicLinkOriginPort,
                 clock
         );

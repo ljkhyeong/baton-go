@@ -7,7 +7,6 @@ import com.personal.batongo.application.link.CreationIdempotencyKey;
 import com.personal.batongo.application.link.LinkCodeDerivationIdentity;
 import com.personal.batongo.application.link.LinkCodeKeyRingIdentity;
 import java.util.Map;
-import com.personal.batongo.application.link.LinkCodeKeyGuard;
 import com.personal.batongo.application.link.error.LinkCodeKeyBindingException;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.CreateLinkCommand;
@@ -68,9 +67,6 @@ class LinkCodeKeyGuardIntegrationTest {
     private LinkCodePort linkCodePort;
 
     @Autowired
-    private LinkCodeKeyGuard linkCodeKeyGuard;
-
-    @Autowired
     private LinkCodeKeyGuardPort linkCodeKeyGuardPort;
 
     @Autowired
@@ -86,7 +82,7 @@ class LinkCodeKeyGuardIntegrationTest {
     @BeforeEach
     void resetDatabase() {
         clearLinkData();
-        bind(linkCodePort.keyRingIdentity().activeIdentity());
+        bind(linkCodePort.keyRingIdentity().keys().get("default"));
     }
 
     @Test
@@ -96,7 +92,7 @@ class LinkCodeKeyGuardIntegrationTest {
 
         startupValidator.run(new DefaultApplicationArguments(new String[0]));
 
-        assertThat(storedIdentity()).isEqualTo(linkCodePort.keyRingIdentity().activeIdentity());
+        assertThat(storedIdentity()).isEqualTo(linkCodePort.keyRingIdentity().keys().get("default"));
     }
 
     @Test
@@ -117,7 +113,7 @@ class LinkCodeKeyGuardIntegrationTest {
     @Test
     @DisplayName("저장된 HMAC 키 정보가 다르면 시작과 생성을 거부한다")
     void rejectsMismatchedIdentityAtStartupAndCreation() {
-        LinkCodeDerivationIdentity current = linkCodePort.keyRingIdentity().activeIdentity();
+        LinkCodeDerivationIdentity current = linkCodePort.keyRingIdentity().keys().get("default");
         LinkCodeDerivationIdentity different = new LinkCodeDerivationIdentity(
                 current.version(),
                 "f".repeat(64)
@@ -156,7 +152,7 @@ class LinkCodeKeyGuardIntegrationTest {
         jdbcTemplate.update(insertStoredData);
         unbind();
 
-        assertThatThrownBy(() -> linkCodeKeyGuard.verifyOrBind())
+        assertThatThrownBy(() -> startupValidator.run(new DefaultApplicationArguments(new String[0])))
                 .isInstanceOf(LinkCodeKeyBindingException.class);
 
         assertThat(linkCount() + reservationCount()).isEqualTo(1L);
@@ -167,7 +163,7 @@ class LinkCodeKeyGuardIntegrationTest {
     @DisplayName("서로 다른 HMAC 키 정보를 동시에 처음 등록하면 하나만 성공한다")
     void serializesConcurrentInitialBinding() throws Exception {
         unbind();
-        LinkCodeDerivationIdentity first = linkCodePort.keyRingIdentity().activeIdentity();
+        LinkCodeDerivationIdentity first = linkCodePort.keyRingIdentity().keys().get("default");
         LinkCodeDerivationIdentity second = new LinkCodeDerivationIdentity(
                 first.version(),
                 "e".repeat(64)
@@ -247,7 +243,7 @@ class LinkCodeKeyGuardIntegrationTest {
 
     private CreateLinkCommand command(String idempotencyKey) {
         return new CreateLinkCommand(
-                CreationIdempotencyKey.parseRequest(idempotencyKey),
+                new CreationIdempotencyKey(idempotencyKey),
                 TargetSystem.BATON,
                 CANONICAL_BATON_TARGET,
                 LinkPurpose.NAVIGATION,

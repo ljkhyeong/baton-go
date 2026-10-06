@@ -171,11 +171,11 @@ class LinkPersistenceIntegrationTest {
     @DisplayName("일괄 조회는 요청한 MySQL 링크만 읽고 폐기 상태와 누락 ID를 구분한다")
     void getsStoredLinksInBatch() throws Exception {
         var active = smartLinkUseCase.createLink(new CreateLinkCommand(
-                CreationIdempotencyKey.parseRequest(UUID.randomUUID().toString()),
+                new CreationIdempotencyKey(UUID.randomUUID().toString()),
                 TargetSystem.ROUND, "/room/abcd-efgh-jkmn", LinkPurpose.MEETING_ENTRY, null, null
         )).link();
         var revoked = smartLinkUseCase.createLink(new CreateLinkCommand(
-                CreationIdempotencyKey.parseRequest(UUID.randomUUID().toString()),
+                new CreationIdempotencyKey(UUID.randomUUID().toString()),
                 TargetSystem.BATON, CANONICAL_BATON_TARGET, LinkPurpose.NAVIGATION, null, null
         )).link();
         smartLinkUseCase.revokeLink(revoked.id());
@@ -217,7 +217,7 @@ class LinkPersistenceIntegrationTest {
     @DisplayName("Flyway 스키마와 JDBC 저장소는 2040년 링크의 생성·재시도·폐기 시각을 마이크로초까지 보존한다")
     void persistsCreationReplayAndRevocationAfterTimestampLimit() {
         CreateLinkCommand command = new CreateLinkCommand(
-                CreationIdempotencyKey.parseRequest(FAR_FUTURE_IDEMPOTENCY_KEY),
+                new CreationIdempotencyKey(FAR_FUTURE_IDEMPOTENCY_KEY),
                 TargetSystem.ROUND,
                 "/room/wxyz-2345-6789",
                 LinkPurpose.MEETING_ENTRY,
@@ -323,7 +323,7 @@ class LinkPersistenceIntegrationTest {
         insertReservation(idempotencyKey, linkId, "HTTPS://GO.EXAMPLE");
 
         assertThatThrownBy(() -> smartLinkUseCase.createLink(new CreateLinkCommand(
-                CreationIdempotencyKey.parseRequest(idempotencyKey),
+                new CreationIdempotencyKey(idempotencyKey),
                 TargetSystem.ROUND,
                 targetPath,
                 LinkPurpose.MEETING_ENTRY,

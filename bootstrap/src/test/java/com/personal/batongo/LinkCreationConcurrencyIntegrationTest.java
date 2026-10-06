@@ -257,7 +257,7 @@ class LinkCreationConcurrencyIntegrationTest {
 
     private static CreateLinkCommand roundCommand(String idempotencyKey, String targetPath) {
         return new CreateLinkCommand(
-                CreationIdempotencyKey.parseRequest(idempotencyKey),
+                new CreationIdempotencyKey(idempotencyKey),
                 TargetSystem.ROUND,
                 targetPath,
                 LinkPurpose.MEETING_ENTRY,

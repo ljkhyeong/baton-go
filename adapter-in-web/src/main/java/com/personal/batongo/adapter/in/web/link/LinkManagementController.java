@@ -54,7 +54,7 @@ public class LinkManagementController {
             Principal principal
     ) {
         CreatedLinkResult result = smartLinkUseCase.createLink(new CreateLinkCommand(
-                CreationIdempotencyKey.parseRequest(idempotencyKey),
+                new CreationIdempotencyKey(idempotencyKey),
                 request.targetSystem(),
                 request.targetPath(),
                 request.purpose(),

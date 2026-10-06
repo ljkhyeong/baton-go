@@ -6,7 +6,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.personal.batongo.adapter.out.external.link.LinkCodeProperties;
 import com.personal.batongo.adapter.out.external.link.SecureLinkCodeAdapter;
 import com.personal.batongo.application.link.CreationIdempotencyKey;
-import com.personal.batongo.application.link.LinkCodeKeyGuard;
 import com.personal.batongo.application.link.LinkRetentionService;
 import com.personal.batongo.application.link.SmartLinkService;
 import com.personal.batongo.application.link.error.IdempotencyKeyConflictException;
@@ -18,6 +17,7 @@ import com.personal.batongo.application.link.port.in.SmartLinkUseCase;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.CreateLinkCommand;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.CreatedLinkResult;
 import com.personal.batongo.application.link.port.out.LinkCodeKeyGuardPort;
+import com.personal.batongo.application.link.port.out.LinkCodePort;
 import com.personal.batongo.application.link.port.out.LinkCreationReservationPort;
 import com.personal.batongo.application.link.port.out.LinkRetentionPort;
 import com.personal.batongo.application.link.port.out.PublicLinkOriginPort;
@@ -80,6 +80,7 @@ class LinkLifecycleIntegrationTest {
     @Autowired private SmartLinkRepository repository;
     @Autowired private LinkCreationReservationPort reservations;
     @Autowired private LinkCodeKeyGuardPort guardPort;
+    @Autowired private LinkCodePort linkCodes;
     @Autowired private PublicLinkOriginPort publicOrigin;
     @Autowired private Clock clock;
     @Autowired private PlatformTransactionManager transactionManager;
@@ -118,7 +119,8 @@ class LinkLifecycleIntegrationTest {
         withKeys(new LinkCodeProperties(DEFAULT_KEY, "k202609", Map.of("k202609", CURRENT)), clock,
                 service -> service.createLink(command(null)));
 
-        assertThatThrownBy(() -> withKeys(new LinkCodeProperties(DEFAULT_KEY), clock, service -> null))
+        assertThatThrownBy(() -> withKeys(new LinkCodeProperties(DEFAULT_KEY, "default", Map.of()), clock,
+                service -> null))
                 .isInstanceOf(LinkCodeKeyBindingException.class);
         assertThatThrownBy(() -> withKeys(new LinkCodeProperties(
                 DEFAULT_KEY, "k202609", Map.of("k202609", "different-key-with-at-least-thirty-two-characters")
@@ -188,11 +190,10 @@ class LinkLifecycleIntegrationTest {
         var release = new CountDownLatch(1);
         try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
             var replay = executor.submit(() -> new TransactionTemplate(transactionManager).execute(status -> {
-                var codes = new SecureLinkCodeAdapter(new LinkCodeProperties(DEFAULT_KEY));
                 jdbc.queryForObject("""
                         SELECT BIN_TO_UUID(link_id) FROM link_creation_requests
                         WHERE idempotency_key_hash = ? FOR SHARE
-                        """, String.class, codes.hashIdempotencyKey(command.idempotencyKey().value()));
+                        """, String.class, linkCodes.hashIdempotencyKey(command.idempotencyKey().value()));
                 held.countDown();
                 try {
                     if (!release.await(10, TimeUnit.SECONDS)) throw new IllegalStateException("재생 해제 대기 초과");
@@ -227,16 +228,15 @@ class LinkLifecycleIntegrationTest {
     }
 
     private CreatedLinkResult create(CreateLinkCommand command) {
-        return withKeys(new LinkCodeProperties(DEFAULT_KEY), Clock.fixed(CREATED, ZoneOffset.UTC),
+        return withKeys(new LinkCodeProperties(DEFAULT_KEY, "default", Map.of()), Clock.fixed(CREATED, ZoneOffset.UTC),
                 service -> service.createLink(command));
     }
 
     private <T> T withKeys(LinkCodeProperties properties, Clock serviceClock, Function<SmartLinkService, T> operation) {
         var codes = new SecureLinkCodeAdapter(properties);
-        var guard = new LinkCodeKeyGuard(codes, guardPort);
-        var service = new SmartLinkService(repository, reservations, codes, guard, publicOrigin, serviceClock);
+        var service = new SmartLinkService(repository, reservations, codes, guardPort, publicOrigin, serviceClock);
         return new TransactionTemplate(transactionManager).execute(status -> {
-            guard.verifyOrBind();
+            guardPort.verifyOrBind(codes.keyRingIdentity());
             return operation.apply(service);
         });
     }
@@ -248,7 +248,7 @@ class LinkLifecycleIntegrationTest {
     }
 
     private static CreateLinkCommand command(Instant expiresAt) {
-        return new CreateLinkCommand(CreationIdempotencyKey.parseRequest(UUID.randomUUID().toString()),
+        return new CreateLinkCommand(new CreationIdempotencyKey(UUID.randomUUID().toString()),
                 TargetSystem.ROUND, "/room/abcd-efgh-jkmn", LinkPurpose.MEETING_ENTRY, null, expiresAt);
     }
 }

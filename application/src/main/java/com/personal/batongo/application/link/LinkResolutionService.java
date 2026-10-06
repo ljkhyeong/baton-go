@@ -11,10 +11,8 @@ import com.personal.batongo.domain.link.LinkAvailabilityPolicy;
 import com.personal.batongo.domain.link.TrustedTarget;
 import java.time.Clock;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 @Service
-@Transactional(readOnly = true)
 public class LinkResolutionService implements ResolveLinkUseCase {
 
     private final SmartLinkRepository repository;

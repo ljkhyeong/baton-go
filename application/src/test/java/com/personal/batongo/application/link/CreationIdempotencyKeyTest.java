@@ -21,7 +21,7 @@ class CreationIdempotencyKeyTest {
     })
     @DisplayName("멱등성 키는 버전 1~5의 소문자 RFC 표준 UUID를 허용한다")
     void acceptsSupportedCanonicalUuids(String value) {
-        CreationIdempotencyKey key = CreationIdempotencyKey.parseRequest(value);
+        CreationIdempotencyKey key = new CreationIdempotencyKey(value);
 
         assertThat(key.value()).isEqualTo(value);
     }
@@ -39,7 +39,7 @@ class CreationIdempotencyKeyTest {
     })
     @DisplayName("대문자·nil·버전 6 이상·RFC 외 변형을 포함한 다른 UUID 표기는 거부한다")
     void rejectsNonCanonicalUuids(String value) {
-        assertThatThrownBy(() -> CreationIdempotencyKey.parseRequest(value))
+        assertThatThrownBy(() -> new CreationIdempotencyKey(value))
                 .isExactlyInstanceOf(InvalidIdempotencyKeyException.class);
     }
 }

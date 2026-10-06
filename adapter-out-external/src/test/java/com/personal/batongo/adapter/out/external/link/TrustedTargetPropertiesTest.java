@@ -37,6 +37,22 @@ class TrustedTargetPropertiesTest {
     }
 
     @Test
+    @DisplayName("운영 BATON·ROUND가 표준화 후 같은 HTTPS 출처면 허용한다")
+    void acceptsSameHttpsOriginOutsideLocalDevelopment() {
+        TrustedTargetProperties properties = new TrustedTargetProperties(
+                URI.create("https://baton.example"),
+                URI.create("https://BATON.example:443")
+        );
+
+        assertThat(properties.resolve(TrustedTargetPolicy.requireAllowed(
+                TargetSystem.ROUND,
+                LinkPurpose.MEETING_ENTRY,
+                "/room/abcd-efgh-jkmp"
+        )))
+                .isEqualTo(URI.create("https://baton.example/room/abcd-efgh-jkmp"));
+    }
+
+    @Test
     @DisplayName("운영 BATON·ROUND 출처가 서로 다르면 거부한다")
     void rejectsDifferentOriginsOutsideLocalDevelopment() {
         assertThatThrownBy(() -> new TrustedTargetProperties(

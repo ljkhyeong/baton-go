@@ -9,6 +9,7 @@ import com.personal.batongo.application.link.error.LinkPurgedException;
 import com.personal.batongo.application.link.error.PublicLinkOriginReplayUnavailableException;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase;
 import com.personal.batongo.application.link.port.out.IssuedLinkCode;
+import com.personal.batongo.application.link.port.out.LinkCodeKeyGuardPort;
 import com.personal.batongo.application.link.port.out.LinkCodePort;
 import com.personal.batongo.application.link.port.out.LinkCreationReservationPort;
 import com.personal.batongo.application.link.port.out.PublicLinkOriginPort;
@@ -30,13 +31,14 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
-@Transactional
 public class SmartLinkService implements SmartLinkUseCase {
+
+    private static final int MAX_SEARCH_LIMIT = 500;
 
     private final SmartLinkRepository repository;
     private final LinkCreationReservationPort reservationPort;
     private final LinkCodePort linkCodePort;
-    private final LinkCodeKeyGuard linkCodeKeyGuard;
+    private final LinkCodeKeyGuardPort keyGuardPort;
     private final PublicLinkOriginPort publicLinkOriginPort;
     private final Clock clock;
 
@@ -44,40 +46,53 @@ public class SmartLinkService implements SmartLinkUseCase {
             SmartLinkRepository repository,
             LinkCreationReservationPort reservationPort,
             LinkCodePort linkCodePort,
-            LinkCodeKeyGuard linkCodeKeyGuard,
+            LinkCodeKeyGuardPort keyGuardPort,
             PublicLinkOriginPort publicLinkOriginPort,
             Clock clock
     ) {
         this.repository = repository;
         this.reservationPort = reservationPort;
         this.linkCodePort = linkCodePort;
-        this.linkCodeKeyGuard = linkCodeKeyGuard;
+        this.keyGuardPort = keyGuardPort;
         this.publicLinkOriginPort = publicLinkOriginPort;
         this.clock = clock;
     }
 
     @Override
+    @Transactional
     public CreatedLinkResult createLink(CreateLinkCommand command) {
         CreationRequestAdmissionPolicy.requireStorableTimes(command.notBefore(), command.expiresAt());
         String idempotencyKeyHash = linkCodePort.hashIdempotencyKey(command.idempotencyKey().value());
-        TrustedTarget requestedTarget = requireAllowedTarget(command);
-        linkCodeKeyGuard.verifyBound();
+        TrustedTarget requestedTarget = TrustedTargetPolicy.requireAllowed(
+                command.targetSystem(), command.purpose(), command.targetPath()
+        );
+        String requestHash = LinkCreationFingerprint.of(
+                requestedTarget.targetSystem().name(), requestedTarget.purpose().name(),
+                requestedTarget.targetPath(), command.notBefore(), command.expiresAt()
+        );
+        LinkCodeKeyRingIdentity keyRing = linkCodePort.keyRingIdentity();
+        keyGuardPort.verifyBound(keyRing);
         PublicLinkOrigin currentOrigin = publicLinkOriginPort.current();
         Instant now = clock.instant();
         LinkCreationReservationPort.Reservation reservation = reservationPort.reserve(
                 idempotencyKeyHash,
                 UUID.randomUUID(),
                 currentOrigin.serialized(),
-                linkCodePort.keyRingIdentity().activeKeyId(),
+                keyRing.activeKeyId(),
                 now
         );
-        requireNotPurged(reservation, requestedTarget, command);
+        if (reservation.purgedAt() != null) {
+            // 정리된 예약은 같은 요청이면 삭제 안내, 다른 요청이면 키 재사용 충돌로 구분한다.
+            throw requestHash.equals(reservation.requestHash())
+                    ? new LinkPurgedException()
+                    : new IdempotencyKeyConflictException();
+        }
         IssuedLinkCode issuedCode = linkCodePort.issue(
                 command.idempotencyKey().value(), reservation.keyId()
         );
 
         if (!reservation.owner()) {
-            return replayCreation(reservation, requestedTarget, command, issuedCode);
+            return replayCreation(reservation, requestedTarget, requestHash, issuedCode);
         }
 
         repository.save(new SmartLink(
@@ -105,39 +120,21 @@ public class SmartLinkService implements SmartLinkUseCase {
         );
     }
 
-    private void requireNotPurged(LinkCreationReservationPort.Reservation reservation,
-                                  TrustedTarget target, CreateLinkCommand command) {
-        if (reservation.purgedAt() == null) {
-            return;
-        }
-        String requestHash = LinkCreationFingerprint.of(target.targetSystem().name(),
-                target.purpose().name(), target.targetPath(),
-                command.notBefore(), command.expiresAt());
-        if (!requestHash.equals(reservation.requestHash())) {
-            throw new IdempotencyKeyConflictException();
-        }
-        throw new LinkPurgedException();
-    }
-
-    private TrustedTarget requireAllowedTarget(CreateLinkCommand command) {
-        return TrustedTargetPolicy.requireAllowed(
-                command.targetSystem(),
-                command.purpose(),
-                command.targetPath()
-        );
-    }
-
     private CreatedLinkResult replayCreation(
             LinkCreationReservationPort.Reservation reservation,
             TrustedTarget requestedTarget,
-            CreateLinkCommand command,
+            String requestHash,
             IssuedLinkCode issuedCode
     ) {
         StoredLink existing = repository.findById(reservation.linkId())
                 .orElseThrow(() -> new LinkCreationReplayUnavailableException(
                         reservation.linkId()
                 ));
-        requireSameCreationRequest(existing, requestedTarget, command);
+        String storedHash = LinkCreationFingerprint.of(existing.targetSystem(), existing.purpose(),
+                existing.targetPath(), existing.notBefore(), existing.expiresAt());
+        if (!requestHash.equals(storedHash)) {
+            throw new IdempotencyKeyConflictException();
+        }
         if (!existing.codeHash().equals(issuedCode.codeHash())) {
             throw new LinkCodeReplayMismatchException();
         }
@@ -159,7 +156,6 @@ public class SmartLinkService implements SmartLinkUseCase {
     }
 
     @Override
-    @Transactional(readOnly = true)
     public LinkResult getLink(UUID linkId) {
         StoredLink storedLink = repository.findById(linkId)
                 .orElseThrow(LinkNotFoundException::new);
@@ -168,7 +164,6 @@ public class SmartLinkService implements SmartLinkUseCase {
     }
 
     @Override
-    @Transactional(readOnly = true)
     public LinkBatchResult getLinks(List<UUID> linkIds) {
         if (linkIds == null || linkIds.isEmpty() || linkIds.size() > 100
                 || linkIds.stream().anyMatch(Objects::isNull)) {
@@ -189,36 +184,32 @@ public class SmartLinkService implements SmartLinkUseCase {
     }
 
     @Override
-    @Transactional(readOnly = true)
     public LinkSearchResult searchLinks(LinkSearchQuery query) {
-        if (!StoredLinkScan.isValidLimit(query.limit())
-                || (query.createdFrom() != null && query.createdBefore() != null
-                && !query.createdBefore().isAfter(query.createdFrom()))
-                || (query.expiresFrom() != null && query.expiresBefore() != null
-                && !query.expiresBefore().isAfter(query.expiresFrom()))) {
+        int limit = query.limit();
+        if (limit < 1 || limit > MAX_SEARCH_LIMIT
+                || !isOrderedRange(query.createdFrom(), query.createdBefore())
+                || !isOrderedRange(query.expiresFrom(), query.expiresBefore())) {
             throw InvalidRequestException.linkSearch();
         }
-        StoredLinkScan scan = StoredLinkScan.read(repository, query.afterLinkId(), query.limit());
+        // 다음 행 확인용으로 한 건을 더 읽는다. 반환할 항목이 없어도 마지막으로 검사한 행 다음부터 이어서 조회한다.
+        List<StoredLink> scanned = repository.scanAfter(query.afterLinkId(), limit + 1);
+        boolean hasMore = scanned.size() > limit;
+        List<StoredLink> rows = hasMore ? scanned.subList(0, limit) : scanned;
         Instant evaluatedAt = clock.instant();
-        List<LinkResult> items = scan.rows().stream()
+        List<LinkResult> items = rows.stream()
                 .filter(stored -> query.targetSystem() == null
                         || query.targetSystem().name().equals(stored.targetSystem()))
-                .filter(stored -> query.createdFrom() == null
-                        || !stored.createdAt().isBefore(query.createdFrom()))
-                .filter(stored -> query.createdBefore() == null
-                        || stored.createdAt().isBefore(query.createdBefore()))
-                .filter(stored -> query.expiresFrom() == null
-                        || (stored.expiresAt() != null && !stored.expiresAt().isBefore(query.expiresFrom())))
-                .filter(stored -> query.expiresBefore() == null
-                        || (stored.expiresAt() != null && stored.expiresAt().isBefore(query.expiresBefore())))
+                .filter(stored -> isInRange(stored.createdAt(), query.createdFrom(), query.createdBefore()))
+                .filter(stored -> isInRange(stored.expiresAt(), query.expiresFrom(), query.expiresBefore()))
                 .flatMap(stored -> stored.trustedTarget()
                         .map(target -> toResult(stored, target, stored.revokedAt(), evaluatedAt)).stream())
                 .filter(link -> query.status() == null || link.status() == query.status())
                 .toList();
-        return new LinkSearchResult(items, scan.nextAfterLinkId(), scan.hasMore(), evaluatedAt);
+        return new LinkSearchResult(items, hasMore ? rows.getLast().id() : null, hasMore, evaluatedAt);
     }
 
     @Override
+    @Transactional
     public RevokedLinkResult revokeLink(UUID linkId) {
         StoredLink storedLink = repository.findByIdForUpdate(linkId)
                 .orElseThrow(LinkNotFoundException::new);
@@ -232,19 +223,14 @@ public class SmartLinkService implements SmartLinkUseCase {
         return new RevokedLinkResult(toResult(storedLink, target, revokedAt, now), false);
     }
 
-    private void requireSameCreationRequest(
-            StoredLink existing,
-            TrustedTarget requestedTarget,
-            CreateLinkCommand command
-    ) {
-        boolean sameRequest = requestedTarget.targetSystem().name().equals(existing.targetSystem())
-                && requestedTarget.targetPath().equals(existing.targetPath())
-                && requestedTarget.purpose().name().equals(existing.purpose())
-                && Objects.equals(existing.notBefore(), command.notBefore())
-                && Objects.equals(existing.expiresAt(), command.expiresAt());
-        if (!sameRequest) {
-            throw new IdempotencyKeyConflictException();
-        }
+    private static boolean isOrderedRange(Instant from, Instant before) {
+        return from == null || before == null || before.isAfter(from);
+    }
+
+    /** 시작은 포함하고 끝은 제외한다. 기간을 지정하면 값이 없는 행(만료 없음)은 제외한다. */
+    private static boolean isInRange(Instant value, Instant from, Instant before) {
+        return (from == null || (value != null && !value.isBefore(from)))
+                && (before == null || (value != null && value.isBefore(before)));
     }
 
     private TrustedTarget requireManagedTrustedTarget(StoredLink storedLink) {

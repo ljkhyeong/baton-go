@@ -4,25 +4,19 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.regex.Pattern;
 import org.springframework.boot.context.properties.ConfigurationProperties;
-import org.springframework.boot.context.properties.bind.ConstructorBinding;
+import org.springframework.boot.context.properties.bind.DefaultValue;
 
 @ConfigurationProperties("baton-go.link-code")
 public record LinkCodeProperties(
         String secret,
-        String activeKeyId,
-        Map<String, String> keys
+        @DefaultValue("default") String activeKeyId,
+        @DefaultValue Map<String, String> keys
 ) {
 
     private static final Pattern KEY_ID = Pattern.compile("[a-z][a-z0-9]{0,31}");
 
-    public LinkCodeProperties(String secret) {
-        this(secret, "default", Map.of());
-    }
-
-    @ConstructorBinding
     public LinkCodeProperties {
-        activeKeyId = activeKeyId == null ? "default" : activeKeyId;
-        Map<String, String> configured = new LinkedHashMap<>(keys == null ? Map.of() : keys);
+        Map<String, String> configured = new LinkedHashMap<>(keys);
         if (secret != null && !secret.isEmpty()) {
             if (configured.putIfAbsent("default", secret) != null) {
                 throw new IllegalArgumentException("기본 키는 secret 또는 keys.default 중 한 곳에서 설정해야 합니다");

@@ -15,7 +15,7 @@ class SecureLinkCodeAdapterTest {
     private static final String IDEMPOTENCY_KEY = "8e448211-66ae-44ab-9888-c4960648c22b";
 
     private final SecureLinkCodeAdapter adapter =
-            new SecureLinkCodeAdapter(new LinkCodeProperties(SECRET));
+            new SecureLinkCodeAdapter(new LinkCodeProperties(SECRET, "default", Map.of()));
 
     @Test
     @DisplayName("현재 발급 키를 바꿔도 기존 키로 만든 코드는 유지한다")
@@ -43,12 +43,12 @@ class SecureLinkCodeAdapterTest {
     @Test
     @DisplayName("HMAC 키 정보는 파생 버전과 전용 구분 문자열로 만든 고정 지문을 사용한다")
     void createsStableDerivationIdentity() {
-        var identity = adapter.keyRingIdentity().activeIdentity();
+        var identity = adapter.keyRingIdentity().keys().get("default");
 
         assertThat(identity.version()).isEqualTo("hmac-sha256-link-code-v1");
         assertThat(identity.hmacFingerprint())
                 .isEqualTo("11dd631d8939f29fdaea9662caead21123dc1fa154068d8be607f3add28e4daa");
-        assertThat(identity.toString()).doesNotContain(identity.hmacFingerprint());
+        assertThat(adapter.keyRingIdentity().toString()).doesNotContain(identity.hmacFingerprint());
     }
 
     @Test
@@ -57,11 +57,11 @@ class SecureLinkCodeAdapterTest {
         String composed = "é".repeat(32);
         String decomposed = "e\u0301".repeat(32);
 
-        var composedAdapter = new SecureLinkCodeAdapter(new LinkCodeProperties(composed));
-        var decomposedAdapter = new SecureLinkCodeAdapter(new LinkCodeProperties(decomposed));
+        var composedAdapter = new SecureLinkCodeAdapter(new LinkCodeProperties(composed, "default", Map.of()));
+        var decomposedAdapter = new SecureLinkCodeAdapter(new LinkCodeProperties(decomposed, "default", Map.of()));
 
-        assertThat(composedAdapter.keyRingIdentity().activeIdentity())
-                .isNotEqualTo(decomposedAdapter.keyRingIdentity().activeIdentity());
+        assertThat(composedAdapter.keyRingIdentity().keys())
+                .isNotEqualTo(decomposedAdapter.keyRingIdentity().keys());
     }
 
     @Test

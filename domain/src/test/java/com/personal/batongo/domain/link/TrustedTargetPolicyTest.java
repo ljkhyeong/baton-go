@@ -92,38 +92,15 @@ class TrustedTargetPolicyTest {
     }
 
     @ParameterizedTest(name = "{index}: {0}")
-    @MethodSource("nonCanonicalPathShapes")
-    @DisplayName("대상 경로의 공백·끝 슬래시·추가 경로 구간을 거부한다")
-    void rejectsWhitespaceTrailingSlashAndAdditionalSegments(
+    @MethodSource({"nonCanonicalPathShapes", "crossedTargetCombinations", "resourceOpenTargets"})
+    @DisplayName("경로의 공백·끝 슬래시·추가 구간, 정의되지 않은 조합과 예약된 RESOURCE_OPEN 목적을 거부한다")
+    void rejectsUndefinedTargets(
             String description,
             TargetSystem targetSystem,
             LinkPurpose purpose,
             String targetPath
     ) {
         assertRejected(targetSystem, purpose, targetPath);
-    }
-
-    @ParameterizedTest(name = "{index}: {0}")
-    @MethodSource("crossedTargetCombinations")
-    @DisplayName("대상 시스템·목적·경로를 정의되지 않은 조합으로 사용할 수 없다")
-    void rejectsCrossedSystemPurposeAndLocator(
-            String description,
-            TargetSystem targetSystem,
-            LinkPurpose purpose,
-            String targetPath
-    ) {
-        assertRejected(targetSystem, purpose, targetPath);
-    }
-
-    @ParameterizedTest(name = "{index}: {0}")
-    @MethodSource("resourceOpenTargets")
-    @DisplayName("예약된 RESOURCE_OPEN 목적은 v1에서 사용할 수 없다")
-    void rejectsReservedResourceOpenPurpose(
-            String description,
-            TargetSystem targetSystem,
-            String targetPath
-    ) {
-        assertRejected(targetSystem, LinkPurpose.RESOURCE_OPEN, targetPath);
     }
 
     private static Stream<Arguments> allowedV1Targets() {
@@ -191,8 +168,8 @@ class TrustedTargetPolicyTest {
 
     private static Stream<Arguments> resourceOpenTargets() {
         return Stream.of(
-                Arguments.of("BATON RESOURCE_OPEN", TargetSystem.BATON, BATON_PATH),
-                Arguments.of("ROUND RESOURCE_OPEN", TargetSystem.ROUND, ROUND_PATH)
+                Arguments.of("BATON RESOURCE_OPEN", TargetSystem.BATON, LinkPurpose.RESOURCE_OPEN, BATON_PATH),
+                Arguments.of("ROUND RESOURCE_OPEN", TargetSystem.ROUND, LinkPurpose.RESOURCE_OPEN, ROUND_PATH)
         );
     }
 

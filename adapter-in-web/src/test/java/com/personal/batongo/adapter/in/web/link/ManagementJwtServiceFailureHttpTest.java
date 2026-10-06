@@ -16,12 +16,7 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
-import java.security.KeyPairGenerator;
-import java.security.interfaces.RSAPrivateKey;
-import java.security.interfaces.RSAPublicKey;
 import java.time.Duration;
-import java.time.Instant;
-import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.AfterAll;
@@ -37,9 +32,6 @@ import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpHeaders;
 import org.springframework.security.authentication.AuthenticationServiceException;
-import org.springframework.security.oauth2.jwt.JwtClaimsSet;
-import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
-import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -56,6 +48,8 @@ import org.springframework.test.web.servlet.MockMvc;
 class ManagementJwtServiceFailureHttpTest {
 
     private static final String JWK_FAILURE_BODY = "sensitive-jwk-service-error";
+    // JWK Set 조회가 서명 검증보다 먼저 실패하므로 서명은 쓰이지 않는다. 헤더는 RS256, 페이로드는 JSON 객체({})다.
+    private static final String TOKEN = "eyJhbGciOiJSUzI1NiIsImtpZCI6InRlc3Qta2V5In0.e30.c2lnbmF0dXJl";
     private static HttpServer jwkServer;
     private static volatile CountDownLatch responseRelease = new CountDownLatch(0);
 
@@ -98,19 +92,6 @@ class ManagementJwtServiceFailureHttpTest {
     @ValueSource(booleans = {false, true})
     @DisplayName("JWK 장애·읽기 시간 초과는 공통 500으로 응답하고 민감한 원문을 기록하지 않는다")
     void handlesJwkServiceFailure(boolean delayedResponse, CapturedOutput output) throws Exception {
-        var generator = KeyPairGenerator.getInstance("RSA");
-        generator.initialize(2048);
-        var keyPair = generator.generateKeyPair();
-        Instant now = Instant.now();
-        var claims = JwtClaimsSet.builder().issuer("https://identity.example")
-                .subject("test-client").audience(List.of("baton-go"))
-                .issuedAt(now.minusSeconds(5)).expiresAt(now.plusSeconds(300))
-                .claim("scope", "baton-go.links.read").build();
-        String token = NimbusJwtEncoder.withKeyPair(
-                        (RSAPublicKey) keyPair.getPublic(),
-                        (RSAPrivateKey) keyPair.getPrivate())
-                .jwkPostProcessor(key -> key.keyID("test-key"))
-                .build().encode(JwtEncoderParameters.from(claims)).getTokenValue();
         String requestId = "jwk-service-failure-test";
         var serviceFailures = meterRegistry.get(
                 "baton.go.management.authentication.service.failures"
@@ -121,7 +102,7 @@ class ManagementJwtServiceFailureHttpTest {
         try {
             assertTimeout(Duration.ofSeconds(3), () -> mockMvc.perform(
                             get("/api/v1/links/83a430c4-5c5d-4eb4-a815-7a5ba1fd4aae")
-                                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + TOKEN)
                                     .header("X-Request-Id", requestId))
                     .andExpect(status().isInternalServerError())
                     .andExpect(header().doesNotExist(HttpHeaders.WWW_AUTHENTICATE))
@@ -136,7 +117,7 @@ class ManagementJwtServiceFailureHttpTest {
         }
 
         assertThat(output).contains(requestId, AuthenticationServiceException.class.getName())
-                .doesNotContain(JWK_FAILURE_BODY, token);
+                .doesNotContain(JWK_FAILURE_BODY, TOKEN);
         assertThat(serviceFailures.count()).isEqualTo(previousFailures + 1);
     }
 }

@@ -2,6 +2,8 @@ package com.personal.batongo;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.springframework.test.jdbc.JdbcTestUtils.countRowsInTable;
+import static org.springframework.test.jdbc.JdbcTestUtils.deleteFromTables;
 
 import com.personal.batongo.application.link.CreationIdempotencyKey;
 import com.personal.batongo.application.link.LinkCodeDerivationIdentity;
@@ -81,7 +83,7 @@ class LinkCodeKeyGuardIntegrationTest {
 
     @BeforeEach
     void resetDatabase() {
-        clearLinkData();
+        deleteFromTables(jdbcTemplate, "link_creation_requests", "smart_links");
         bind(linkCodePort.keyRingIdentity().keys().get("default"));
     }
 
@@ -105,8 +107,8 @@ class LinkCodeKeyGuardIntegrationTest {
         )))
                 .isInstanceOf(LinkCodeKeyBindingException.class);
 
-        assertThat(linkCount()).isZero();
-        assertThat(reservationCount()).isZero();
+        assertThat(countRowsInTable(jdbcTemplate, "smart_links")).isZero();
+        assertThat(countRowsInTable(jdbcTemplate, "link_creation_requests")).isZero();
         assertThat(storedIdentity()).isNull();
     }
 
@@ -130,8 +132,8 @@ class LinkCodeKeyGuardIntegrationTest {
                 "4ab8831d-78c6-47c2-b984-e2723e818245"
         )))
                 .isInstanceOf(LinkCodeKeyBindingException.class);
-        assertThat(linkCount()).isZero();
-        assertThat(reservationCount()).isZero();
+        assertThat(countRowsInTable(jdbcTemplate, "smart_links")).isZero();
+        assertThat(countRowsInTable(jdbcTemplate, "link_creation_requests")).isZero();
     }
 
     @ParameterizedTest
@@ -155,7 +157,8 @@ class LinkCodeKeyGuardIntegrationTest {
         assertThatThrownBy(() -> startupValidator.run(new DefaultApplicationArguments(new String[0])))
                 .isInstanceOf(LinkCodeKeyBindingException.class);
 
-        assertThat(linkCount() + reservationCount()).isEqualTo(1L);
+        assertThat(countRowsInTable(jdbcTemplate, "smart_links")
+                + countRowsInTable(jdbcTemplate, "link_creation_requests")).isEqualTo(1);
         assertThat(storedIdentity()).isNull();
     }
 
@@ -252,11 +255,6 @@ class LinkCodeKeyGuardIntegrationTest {
         );
     }
 
-    private void clearLinkData() {
-        jdbcTemplate.update("DELETE FROM link_creation_requests");
-        jdbcTemplate.update("DELETE FROM smart_links");
-    }
-
     private void bind(LinkCodeDerivationIdentity identity) {
         jdbcTemplate.update("DELETE FROM link_code_keys");
         jdbcTemplate.update(
@@ -278,20 +276,6 @@ class LinkCodeKeyGuardIntegrationTest {
                                 resultSet.getString("key_fingerprint")
                         )
                         : null
-        );
-    }
-
-    private long linkCount() {
-        return jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM smart_links",
-                Long.class
-        );
-    }
-
-    private long reservationCount() {
-        return jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM link_creation_requests",
-                Long.class
         );
     }
 }

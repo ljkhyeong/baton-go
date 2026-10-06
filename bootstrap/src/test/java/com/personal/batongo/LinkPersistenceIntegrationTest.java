@@ -37,17 +37,14 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Import;
-import org.springframework.context.annotation.Primary;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.test.context.bean.override.convention.TestBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -59,7 +56,6 @@ import org.testcontainers.mysql.MySQLContainer;
 @Tag("mysql")
 @Testcontainers
 @AutoConfigureMockMvc
-@Import(LinkPersistenceIntegrationTest.FixedClockTestConfiguration.class)
 @SpringBootTest(properties = {
         "spring.security.oauth2.resourceserver.jwt.issuer-uri=https://identity.example",
         "spring.security.oauth2.resourceserver.jwt.jwk-set-uri=https://identity.example/jwks",
@@ -91,6 +87,10 @@ class LinkPersistenceIntegrationTest {
     @Container
     @ServiceConnection(name = "mysql")
     static final MySQLContainer MYSQL = MySqlTestImage.container();
+
+    // 운영 Clock 빈을 아래 clock()의 먼 미래 고정 시각으로 바꾼다.
+    @TestBean
+    private Clock clock;
 
     @Autowired
     private SmartLinkUseCase smartLinkUseCase;
@@ -504,14 +504,8 @@ class LinkPersistenceIntegrationTest {
         ));
     }
 
-    @TestConfiguration(proxyBeanMethods = false)
-    static class FixedClockTestConfiguration {
-
-        @Bean
-        @Primary
-        Clock farFutureClock() {
-            return Clock.fixed(FAR_FUTURE_NOW, ZoneOffset.UTC);
-        }
+    static Clock clock() {
+        return Clock.fixed(FAR_FUTURE_NOW, ZoneOffset.UTC);
     }
 
     private record StoredAbsoluteTimes(

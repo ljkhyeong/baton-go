@@ -2,6 +2,10 @@ package com.personal.batongo;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.springframework.test.jdbc.JdbcTestUtils.countRowsInTable;
+import static org.springframework.test.jdbc.JdbcTestUtils.countRowsInTableWhere;
+import static org.springframework.test.jdbc.JdbcTestUtils.deleteFromTables;
+import static org.springframework.test.jdbc.JdbcTestUtils.dropTables;
 
 import com.personal.batongo.adapter.out.external.link.LinkCodeProperties;
 import com.personal.batongo.adapter.out.external.link.SecureLinkCodeAdapter;
@@ -88,8 +92,7 @@ class LinkLifecycleIntegrationTest {
 
     @BeforeEach
     void clearLinks() {
-        jdbc.update("DELETE FROM link_creation_requests");
-        jdbc.update("DELETE FROM smart_links");
+        deleteFromTables(jdbc, "link_creation_requests", "smart_links");
     }
 
     @Test
@@ -125,7 +128,7 @@ class LinkLifecycleIntegrationTest {
         assertThatThrownBy(() -> withKeys(new LinkCodeProperties(
                 DEFAULT_KEY, "k202609", Map.of("k202609", "different-key-with-at-least-thirty-two-characters")
         ), clock, service -> null)).isInstanceOf(LinkCodeKeyBindingException.class);
-        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM smart_links", Integer.class)).isEqualTo(1);
+        assertThat(countRowsInTable(jdbc, "smart_links")).isEqualTo(1);
     }
 
     @Test
@@ -150,9 +153,9 @@ class LinkLifecycleIntegrationTest {
                 .isInstanceOf(IdempotencyKeyConflictException.class);
         assertThatThrownBy(() -> resolver.resolveLink(expired.shortUrl().getPath().substring(3)))
                 .isInstanceOf(LinkNotFoundException.class);
-        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM link_creation_requests WHERE purged_at IS NOT NULL AND public_origin IS NULL",
-                Integer.class)).isEqualTo(3);
-        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM smart_links", Integer.class)).isEqualTo(1);
+        assertThat(countRowsInTableWhere(jdbc, "link_creation_requests",
+                "purged_at IS NOT NULL AND public_origin IS NULL")).isEqualTo(3);
+        assertThat(countRowsInTable(jdbc, "smart_links")).isEqualTo(1);
     }
 
     @Test
@@ -170,13 +173,11 @@ class LinkLifecycleIntegrationTest {
             jdbc.update("INSERT INTO retention_delete_blocker VALUES (UUID_TO_BIN(?))",
                     second.link().id().toString());
             assertThatThrownBy(() -> purge(EXPIRED, 100)).isInstanceOf(DataAccessException.class);
-            assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM smart_links", Integer.class)).isEqualTo(2);
-            assertThat(jdbc.queryForObject("""
-                    SELECT COUNT(*) FROM link_creation_requests
-                    WHERE purged_at IS NULL AND request_hash IS NULL AND public_origin IS NOT NULL
-                    """, Integer.class)).isEqualTo(2);
+            assertThat(countRowsInTable(jdbc, "smart_links")).isEqualTo(2);
+            assertThat(countRowsInTableWhere(jdbc, "link_creation_requests",
+                    "purged_at IS NULL AND request_hash IS NULL AND public_origin IS NOT NULL")).isEqualTo(2);
         } finally {
-            jdbc.execute("DROP TABLE retention_delete_blocker");
+            dropTables(jdbc, "retention_delete_blocker");
         }
         assertThat(purge(EXPIRED, 100)).isEqualTo(2);
     }
@@ -224,7 +225,7 @@ class LinkLifecycleIntegrationTest {
         assertThatThrownBy(() -> withKeys(new LinkCodeProperties(null, "k202609", Map.of("k202609", CURRENT)),
                 clock, service -> service.createLink(command)))
                 .isInstanceOf(LinkPurgedException.class);
-        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM smart_links", Integer.class)).isZero();
+        assertThat(countRowsInTable(jdbc, "smart_links")).isZero();
     }
 
     private CreatedLinkResult create(CreateLinkCommand command) {

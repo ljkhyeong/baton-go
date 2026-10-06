@@ -4,22 +4,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
 import com.personal.batongo.adapter.in.web.ErrorResponse;
-import com.personal.batongo.adapter.in.web.GlobalExceptionHandler;
-import com.personal.batongo.adapter.in.web.PublicLinkErrorPage;
-import com.personal.batongo.adapter.in.web.ManagementApiSecurityConfiguration;
-import com.personal.batongo.adapter.in.web.RequestIdFilter;
-import com.personal.batongo.adapter.in.web.WebMvcConfiguration;
+import com.personal.batongo.adapter.in.web.PublicResolverHttpTestConfiguration;
 import com.personal.batongo.application.link.error.LinkNotFoundException;
 import com.personal.batongo.application.link.error.StoredTargetPolicyViolationException;
 import com.personal.batongo.application.link.port.in.ResolveLinkUseCase;
 import com.personal.batongo.domain.link.LinkAvailabilityPolicy.Status;
 import com.personal.batongo.domain.link.LinkUnavailableException;
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
 import java.util.stream.Stream;
@@ -31,94 +21,80 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
+import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureRestTestClient;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
-import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import tools.jackson.databind.json.JsonMapper;
+import org.springframework.test.web.servlet.client.RestTestClient;
+import org.springframework.test.web.servlet.client.RestTestClient.ResponseSpec;
 
-@SpringBootTest(classes = PublicErrorResponseIntegrationTest.WebConfiguration.class,
+@SpringBootTest(classes = PublicResolverHttpTestConfiguration.class,
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = {
+                "baton-go.public-resolver-rate-limit.capacity=1000",
+                "baton-go.public-resolver-rate-limit.window=15s",
                 "spring.security.oauth2.resourceserver.jwt.issuer-uri=https://identity.example",
                 "spring.security.oauth2.resourceserver.jwt.audiences=baton-go",
                 "spring.security.oauth2.resourceserver.jwt.jwk-set-uri=http://127.0.0.1:1/jwks"
         })
+@AutoConfigureRestTestClient
 @ExtendWith(OutputCaptureExtension.class)
 @DirtiesContext
 class PublicErrorResponseIntegrationTest {
 
     private static final String PUBLIC_CODE = "VOvLShvx93kQpj8x7w2HYQ";
     private static final String REQUEST_ID = "public-error-integration";
-
-    @Configuration(proxyBeanMethods = false)
-    @EnableAutoConfiguration
-    @Import({ManagementApiSecurityConfiguration.class,
-            LinkResolverController.class, GlobalExceptionHandler.class, PublicLinkExceptionHandler.class,
-            RequestIdFilter.class, WebMvcConfiguration.class, SimpleMeterRegistry.class,
-            PublicLinkErrorPage.class})
-    static class WebConfiguration {
-    }
+    private static final String HTML_UTF8 = "text/html;charset=UTF-8";
 
     @MockitoBean
     private ResolveLinkUseCase useCase;
 
-    @Value("${local.server.port}")
-    private int port;
-
     @Autowired
-    private JsonMapper jsonMapper;
+    private RestTestClient client;
 
     @Test
     @DisplayName("지원하지 않는 응답 형식을 요청해도 없는 링크는 JSON 404를 반환한다")
-    void keepsNotFoundForUnsupportedResponseType() throws Exception {
+    void keepsNotFoundForUnsupportedResponseType() {
         when(useCase.resolveLink(PUBLIC_CODE)).thenThrow(new LinkNotFoundException());
 
-        HttpResponse<String> response = requestError(MediaType.APPLICATION_XML_VALUE);
-
-        assertThat(response.statusCode()).isEqualTo(404);
-        assertThat(response.headers().firstValue(HttpHeaders.CONTENT_TYPE))
-                .contains(MediaType.APPLICATION_JSON_VALUE);
-        assertThat(jsonMapper.readValue(response.body(), ErrorResponse.class)).isEqualTo(
-                new ErrorResponse("LINK_NOT_FOUND", "링크를 찾을 수 없습니다", REQUEST_ID)
-        );
+        requestError(MediaType.APPLICATION_XML_VALUE, HttpMethod.GET)
+                .expectStatus().isNotFound()
+                .expectHeader().valueEquals(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                .expectBody(ErrorResponse.class)
+                .isEqualTo(new ErrorResponse("LINK_NOT_FOUND", "링크를 찾을 수 없습니다", REQUEST_ID));
     }
 
     @ParameterizedTest
     @ValueSource(strings = {"text/html", "application/json", "*/*", "application/xml"})
     @DisplayName("공개 서버 오류는 HTML 우선 요청만 안내 화면으로 응답하고 예외 원문을 숨긴다")
-    void keepsUnexpectedFailureRedacted(String accept, CapturedOutput output) throws Exception {
+    void keepsUnexpectedFailureRedacted(String accept, CapturedOutput output) {
         String sensitiveMessage = "sensitive-exception-message";
         when(useCase.resolveLink(PUBLIC_CODE)).thenThrow(new IllegalStateException(sensitiveMessage));
 
-        HttpResponse<String> response = requestError(accept);
+        ResponseSpec response = requestError(accept, HttpMethod.GET).expectStatus().isEqualTo(500);
 
-        assertThat(response.statusCode()).isEqualTo(500);
         if (MediaType.TEXT_HTML_VALUE.equals(accept)) {
-            assertThat(response.headers().firstValue(HttpHeaders.CONTENT_TYPE))
-                    .contains("text/html;charset=UTF-8");
-            assertThat(response.headers().firstValue("Content-Security-Policy").orElseThrow())
-                    .contains("default-src 'none'");
-            assertThat(response.headers().firstValue(HttpHeaders.VARY)).contains(HttpHeaders.ACCEPT);
-            assertThat(response.body()).contains(
-                    "<html lang=\"ko\">", "잠시 후 다시 열어 주세요", "<code>" + REQUEST_ID + "</code>",
-                    "<a class=\"retry\" href=\"\">다시 열기</a>"
-            );
+            response.expectHeader().valueEquals(HttpHeaders.CONTENT_TYPE, HTML_UTF8)
+                    .expectHeader().value("Content-Security-Policy",
+                            csp -> assertThat(csp).contains("default-src 'none'"))
+                    .expectHeader().value(HttpHeaders.VARY, vary -> assertThat(vary).isEqualTo(HttpHeaders.ACCEPT))
+                    .expectBody(String.class).value(body -> assertThat(body).contains(
+                            "<html lang=\"ko\">", "잠시 후 다시 열어 주세요", "<code>" + REQUEST_ID + "</code>",
+                            "<a class=\"retry\" href=\"\">다시 열기</a>"
+                    ));
         } else {
-            assertThat(response.headers().firstValue(HttpHeaders.CONTENT_TYPE))
-                    .contains(MediaType.APPLICATION_JSON_VALUE);
-            assertThat(jsonMapper.readValue(response.body(), ErrorResponse.class)).isEqualTo(
-                    new ErrorResponse("INTERNAL_ERROR", "서버에서 요청을 처리하지 못했습니다", REQUEST_ID)
-            );
+            response.expectHeader().valueEquals(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                    .expectBody(ErrorResponse.class).isEqualTo(
+                            new ErrorResponse("INTERNAL_ERROR", "서버에서 요청을 처리하지 못했습니다", REQUEST_ID)
+                    );
         }
-        assertThat(response.body()).doesNotContain(sensitiveMessage, PUBLIC_CODE);
+        response.expectBody(String.class)
+                .value(body -> assertThat(body).doesNotContain(sensitiveMessage, PUBLIC_CODE));
         assertThat(output).contains(REQUEST_ID, IllegalStateException.class.getName())
                 .doesNotContain(sensitiveMessage, PUBLIC_CODE);
     }
@@ -126,32 +102,25 @@ class PublicErrorResponseIntegrationTest {
     @ParameterizedTest
     @MethodSource("headErrors")
     @DisplayName("실제 HTTP 서버의 공개 오류 HEAD는 응답 형식을 유지하고 본문을 보내지 않는다")
-    void returnsHeaderOnlyPublicError(Exception failure, String accept, int expectedStatus) throws Exception {
+    void returnsHeaderOnlyPublicError(Exception failure, String accept, int expectedStatus) {
         when(useCase.resolveLink(PUBLIC_CODE)).thenThrow(failure);
 
-        HttpResponse<String> response = requestError(accept, "HEAD");
-
-        assertThat(response.statusCode()).isEqualTo(expectedStatus);
-        assertThat(response.headers().firstValue(HttpHeaders.CONTENT_TYPE))
-                .contains(MediaType.TEXT_HTML_VALUE.equals(accept)
-                        ? "text/html;charset=UTF-8" : MediaType.APPLICATION_JSON_VALUE);
-        assertThat(response.headers().firstValue(HttpHeaders.LOCATION)).isEmpty();
-        assertThat(response.body()).isEmpty();
+        requestError(accept, HttpMethod.HEAD)
+                .expectStatus().isEqualTo(expectedStatus)
+                .expectHeader().valueEquals(HttpHeaders.CONTENT_TYPE,
+                        MediaType.TEXT_HTML_VALUE.equals(accept) ? HTML_UTF8 : MediaType.APPLICATION_JSON_VALUE)
+                .expectHeader().doesNotExist(HttpHeaders.LOCATION)
+                .expectBody().isEmpty();
     }
 
     @Test
     @DisplayName("실제 HTTP 서버의 관리 인증 오류 HEAD는 JSON 형식과 인증 안내를 유지하고 본문을 보내지 않는다")
-    void returnsHeaderOnlyManagementAuthenticationError() throws Exception {
-        HttpResponse<String> response = send(
-                "/api/v1/links/83a430c4-5c5d-4eb4-a815-7a5ba1fd4aae", MediaType.APPLICATION_JSON_VALUE, "HEAD"
-        );
-
-        assertThat(response.statusCode()).isEqualTo(401);
-        assertThat(response.headers().firstValue(HttpHeaders.WWW_AUTHENTICATE))
-                .contains("Bearer realm=\"baton-go-management\"");
-        assertThat(response.headers().firstValue(HttpHeaders.CONTENT_TYPE))
-                .contains(MediaType.APPLICATION_JSON_VALUE);
-        assertThat(response.body()).isEmpty();
+    void returnsHeaderOnlyManagementAuthenticationError() {
+        send(HttpMethod.HEAD, "/api/v1/links/83a430c4-5c5d-4eb4-a815-7a5ba1fd4aae", MediaType.APPLICATION_JSON_VALUE)
+                .expectStatus().isUnauthorized()
+                .expectHeader().valueEquals(HttpHeaders.WWW_AUTHENTICATE, "Bearer realm=\"baton-go-management\"")
+                .expectHeader().valueEquals(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                .expectBody().isEmpty();
     }
 
     private static Stream<Arguments> headErrors() {
@@ -168,24 +137,17 @@ class PublicErrorResponseIntegrationTest {
         );
     }
 
-    private HttpResponse<String> requestError(String accept) throws Exception {
-        return requestError(accept, "GET");
+    private ResponseSpec requestError(String accept, HttpMethod method) {
+        return send(method, "/l/" + PUBLIC_CODE, accept);
     }
 
-    private HttpResponse<String> requestError(String accept, String method) throws Exception {
-        return send("/l/" + PUBLIC_CODE, accept, method);
-    }
-
-    private HttpResponse<String> send(String path, String accept, String method) throws Exception {
-        try (var client = HttpClient.newHttpClient()) {
-            var request = HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + path))
-                    .header(HttpHeaders.ACCEPT, accept).header("X-Request-Id", REQUEST_ID)
-                    .timeout(Duration.ofSeconds(5)).method(method, HttpRequest.BodyPublishers.noBody()).build();
-            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-            assertThat(response.headers().firstValue("X-Request-Id")).contains(REQUEST_ID);
-            assertThat(response.headers().firstValue(HttpHeaders.CACHE_CONTROL)).contains("no-store");
-            assertThat(response.headers().firstValue("Referrer-Policy")).contains("no-referrer");
-            return response;
-        }
+    private ResponseSpec send(HttpMethod method, String path, String accept) {
+        return client.method(method).uri(path)
+                .header(HttpHeaders.ACCEPT, accept)
+                .header("X-Request-Id", REQUEST_ID)
+                .exchange()
+                .expectHeader().valueEquals("X-Request-Id", REQUEST_ID)
+                .expectHeader().valueEquals(HttpHeaders.CACHE_CONTROL, "no-store")
+                .expectHeader().valueEquals("Referrer-Policy", "no-referrer");
     }
 }

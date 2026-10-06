@@ -50,7 +50,6 @@ import org.springframework.restdocs.RestDocumentationExtension;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.servlet.config.annotation.DelegatingWebMvcConfiguration;
-import tools.jackson.databind.json.JsonMapper;
 
 @ExtendWith(RestDocumentationExtension.class)
 class PublicLinkHttpContractTest {
@@ -74,9 +73,6 @@ class PublicLinkHttpContractTest {
         useCase = mock(ResolveLinkUseCase.class);
         meterRegistry = new SimpleMeterRegistry();
         LinkResolverController controller = new LinkResolverController(useCase);
-        var jsonMapper = JsonMapper.builder()
-                .findAndAddModules()
-                .build();
         var errors = new GlobalExceptionHandler(meterRegistry);
         var mvcConfiguration = new DelegatingWebMvcConfiguration();
         mvcConfiguration.setConfigurers(List.of(new WebMvcConfiguration()));
@@ -88,7 +84,7 @@ class PublicLinkHttpContractTest {
                 .setContentNegotiationManager(mvcConfiguration.mvcContentNegotiationManager())
                 .setMessageConverters(
                         new StringHttpMessageConverter(StandardCharsets.UTF_8),
-                        new JacksonJsonHttpMessageConverter(jsonMapper)
+                        new JacksonJsonHttpMessageConverter()
                 )
                 .addFilters(new RequestIdFilter())
                 .apply(documentationConfiguration(restDocumentation))

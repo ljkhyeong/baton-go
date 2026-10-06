@@ -1,5 +1,6 @@
 package com.personal.batongo;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -89,6 +90,7 @@ class ManagementJwtBootstrapIntegrationTest {
     void assemblesManagementJwtAuthentication() throws Exception {
         mockMvc.perform(get(MISSING_LINK_PATH))
                 .andExpect(status().isUnauthorized())
+                .andExpect(result -> assertThat(result.getRequest().getSession(false)).isNull())
                 .andExpect(header().string(
                         HttpHeaders.WWW_AUTHENTICATE,
                         "Bearer realm=\"baton-go-management\""

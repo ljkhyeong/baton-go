@@ -21,7 +21,6 @@ import org.springframework.security.oauth2.server.resource.web.authentication.Be
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.AccessDeniedHandler;
-import org.springframework.security.web.authentication.AuthenticationEntryPointFailureHandler;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.servlet.HandlerExceptionResolver;
@@ -66,9 +65,6 @@ public class ManagementApiSecurityConfiguration {
                 exceptionResolver.resolveException(request, response, null, exception);
         AccessDeniedHandler accessDeniedHandler = (request, response, exception) ->
                 exceptionResolver.resolveException(request, response, null, exception);
-        AuthenticationEntryPointFailureHandler failureHandler =
-                new AuthenticationEntryPointFailureHandler(authenticationEntryPoint);
-        failureHandler.setRethrowAuthenticationServiceException(false);
 
         http.securityMatcher("/api/v1/**")
                 .authorizeHttpRequests(authorize -> authorize
@@ -88,7 +84,8 @@ public class ManagementApiSecurityConfiguration {
                         .withObjectPostProcessor(new ObjectPostProcessor<BearerTokenAuthenticationFilter>() {
                             @Override
                             public <O extends BearerTokenAuthenticationFilter> O postProcess(O filter) {
-                                filter.setAuthenticationFailureHandler(failureHandler);
+                                // 기본 처리기는 JWK 조회 실패를 다시 던지므로 모든 인증 실패를 진입점으로 보낸다.
+                                filter.setAuthenticationFailureHandler(authenticationEntryPoint::commence);
                                 return filter;
                             }
                         })
@@ -100,7 +97,6 @@ public class ManagementApiSecurityConfiguration {
                 .sessionManagement(session -> session
                         .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
                 )
-                .requestCache(cache -> cache.disable())
                 .csrf(AbstractHttpConfigurer::disable);
 
         return http.build();

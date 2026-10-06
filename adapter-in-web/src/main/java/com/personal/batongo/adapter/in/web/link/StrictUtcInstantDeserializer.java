@@ -17,8 +17,6 @@ public final class StrictUtcInstantDeserializer extends StdDeserializer<Instant>
 
     private static final DateTimeFormatter UTC_INSTANT_FORMATTER =
             new DateTimeFormatterBuilder()
-                    .parseCaseSensitive()
-                    .parseStrict()
                     .appendValue(ChronoField.YEAR, 4)
                     .appendPattern("-MM-dd'T'HH:mm:ss")
                     .optionalStart()

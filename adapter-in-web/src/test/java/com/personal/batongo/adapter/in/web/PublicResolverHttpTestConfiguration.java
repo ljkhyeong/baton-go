@@ -23,7 +23,6 @@ import org.springframework.context.annotation.Import;
         PublicLinkExceptionHandler.class,
         RequestIdFilter.class,
         WebMvcConfiguration.class,
-        PublicResolverWebMvcConfiguration.class,
         PublicResolverRateLimitInterceptor.class,
         PublicResolverRateLimiter.class,
         PublicLinkErrorPage.class,

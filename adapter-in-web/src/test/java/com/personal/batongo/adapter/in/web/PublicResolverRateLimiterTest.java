@@ -4,14 +4,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import com.personal.batongo.adapter.in.web.PublicResolverRateLimiter.RateLimitDecision;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.concurrent.Callable;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.stream.IntStream;
@@ -33,13 +31,10 @@ class PublicResolverRateLimiterTest {
         );
         PublicResolverRateLimiter limiter = limiter(clock, 2, Duration.ofSeconds(10));
 
-        assertThat(limiter.acquire().allowed()).isTrue();
-        assertThat(limiter.acquire().allowed()).isTrue();
+        assertThat(limiter.acquireRetryAfterSeconds()).isZero();
+        assertThat(limiter.acquireRetryAfterSeconds()).isZero();
 
-        RateLimitDecision rejected = limiter.acquire();
-
-        assertThat(rejected.allowed()).isFalse();
-        assertThat(rejected.retryAfterSeconds()).isEqualTo(9);
+        assertThat(limiter.acquireRetryAfterSeconds()).isEqualTo(9);
     }
 
     @Test
@@ -53,10 +48,10 @@ class PublicResolverRateLimiterTest {
         );
         PublicResolverRateLimiter limiter = limiter(clock, 1, Duration.ofSeconds(10));
 
-        assertThat(limiter.acquire().allowed()).isTrue();
-        assertThat(limiter.acquire().allowed()).isFalse();
+        assertThat(limiter.acquireRetryAfterSeconds()).isZero();
+        assertThat(limiter.acquireRetryAfterSeconds()).isPositive();
 
-        assertThat(limiter.acquire().allowed()).isTrue();
+        assertThat(limiter.acquireRetryAfterSeconds()).isZero();
     }
 
     @Test
@@ -66,8 +61,8 @@ class PublicResolverRateLimiterTest {
         when(clock.instant()).thenReturn(START, START.minusSeconds(1));
         PublicResolverRateLimiter limiter = limiter(clock, 1, Duration.ofSeconds(10));
 
-        assertThat(limiter.acquire().allowed()).isTrue();
-        assertThat(limiter.acquire().allowed()).isTrue();
+        assertThat(limiter.acquireRetryAfterSeconds()).isZero();
+        assertThat(limiter.acquireRetryAfterSeconds()).isZero();
     }
 
     @Test
@@ -79,23 +74,12 @@ class PublicResolverRateLimiterTest {
                 capacity,
                 Duration.ofMinutes(1)
         );
-        ExecutorService executor = Executors.newFixedThreadPool(16);
+        List<Callable<Boolean>> calls = IntStream.range(0, 200)
+                .mapToObj(index -> (Callable<Boolean>) () -> limiter.acquireRetryAfterSeconds() == 0)
+                .toList();
 
-        try {
-            List<Callable<Boolean>> calls = IntStream.range(0, 200)
-                    .mapToObj(index -> (Callable<Boolean>) () -> limiter.acquire().allowed())
-                    .toList();
-            List<Future<Boolean>> results = executor.invokeAll(calls);
-
-            long allowed = 0;
-            for (Future<Boolean> result : results) {
-                if (result.get()) {
-                    allowed++;
-                }
-            }
-            assertThat(allowed).isEqualTo(capacity);
-        } finally {
-            executor.shutdownNow();
+        try (var executor = Executors.newFixedThreadPool(16)) {
+            assertThat(executor.invokeAll(calls)).filteredOn(Future::resultNow).hasSize(capacity);
         }
     }
 

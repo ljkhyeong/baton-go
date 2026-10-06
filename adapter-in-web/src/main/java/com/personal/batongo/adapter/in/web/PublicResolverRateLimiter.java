@@ -8,8 +8,6 @@ import org.springframework.stereotype.Component;
 @Component
 public class PublicResolverRateLimiter {
 
-    private static final RateLimitDecision PERMITTED = new RateLimitDecision(true, 0);
-
     private final Clock clock;
     private final long capacity;
     private final Duration window;
@@ -26,41 +24,20 @@ public class PublicResolverRateLimiter {
         this.window = properties.window();
     }
 
-    synchronized RateLimitDecision acquire() {
+    /** 허용하면 0, 거부하면 다음 구간까지 남은 시간을 올림한 Retry-After 초를 반환한다. */
+    synchronized long acquireRetryAfterSeconds() {
         Instant now = clock.instant();
-        if (windowStartedAt == null) {
-            return startWindow(now);
-        }
-
-        Duration elapsed = Duration.between(windowStartedAt, now);
+        Duration elapsed = windowStartedAt == null ? window : Duration.between(windowStartedAt, now);
+        // 첫 요청, 구간 경과와 시계 역행은 새 구간을 시작한다.
         if (elapsed.isNegative() || elapsed.compareTo(window) >= 0) {
-            return startWindow(now);
+            windowStartedAt = now;
+            permitsUsed = 0;
         }
         if (permitsUsed < capacity) {
             permitsUsed++;
-            return PERMITTED;
+            return 0;
         }
-
-        return new RateLimitDecision(false, retryAfterSeconds(window.minus(elapsed)));
-    }
-
-    private RateLimitDecision startWindow(Instant now) {
-        windowStartedAt = now;
-        permitsUsed = 1;
-        return PERMITTED;
-    }
-
-    private long retryAfterSeconds(Duration remaining) {
-        long seconds = remaining.getSeconds();
-        if (remaining.getNano() > 0) {
-            seconds++;
-        }
-        return Math.max(1, seconds);
-    }
-
-    record RateLimitDecision(
-            boolean allowed,
-            long retryAfterSeconds
-    ) {
+        Duration remaining = window.minus(elapsed);
+        return remaining.getSeconds() + (remaining.getNano() > 0 ? 1 : 0);
     }
 }

@@ -35,7 +35,10 @@
   단일 V1으로 다시 만들었고 `link_code_key_guard` 보호 행과 `version` 열이 없다. 그 이전에 만든 로컬
   MySQL 볼륨은 [README 안내](README.md#로컬-실행)에 따라 다시 만든다.
 - 관리 보안 필터의 401·403·인증 서비스 500은 `HandlerExceptionResolver`를 거쳐 `GlobalExceptionHandler`가
-  응답한다. 공개 링크 오류는 같은 advice 안의 JSON·HTML 처리기 두 개로 협상한다.
+  응답한다. 프로젝트 예외는 처리기 하나의 예외 유형 switch로, Spring MVC 예외는 `ResponseEntityExceptionHandler`
+  재정의로 처리한다. 공개 링크 오류는 같은 advice 안의 JSON·HTML 처리기 두 개로 협상한다.
+  예상하지 못한 오류 로그는 Boot `StandardStackTracePrinter`로 예외 유형·호출 위치만 한 줄에 남기며,
+  요청 ID는 MDC에서 읽는다.
 - `BATON_GO_LINK_CODE_SECRET` 단일 비밀값의 키 ID는 `default`다. 키 교체 시 `BATONGO_LINKCODE_KEYS_DEFAULT`로 옮긴다.
 - `go.b4ton.com` 운영 예시와 Cloudflare DNS API 인증서 갱신·Discord·Slack 웹훅 알림의 선택 설정을
   추가했다. [외부 API 연동 절차](docs/RUNBOOK/external-api-integrations.md)를 따르며
@@ -103,18 +106,56 @@
   (`INFO`)을 사용하며, 실패하면 `/readyz`는 503이고 `/livez`는 정상 상태를 유지한다.
 - `BatonGoReadinessFailed`는 Pod별 `/readyz` 요청이 최근 2분간 12건 이상이고 503 비율이
   50%를 넘는 상태가 2분 지속되면 발생한다.
-- 애플리케이션은 종료 신호를 받으면 새 요청 수락을 멈추고 진행 중인 요청을 최대 30초 기다린다.
-  Kubernetes와 Compose의 강제 종료 제한은 40초다.
+- 애플리케이션은 Spring Boot 기본 정상 종료로 종료 신호를 받으면 새 요청 수락을 멈추고 진행 중인 요청을
+  최대 30초 기다린다. Kubernetes와 Compose의 강제 종료 제한은 40초다.
+- 관리 포트 8081은 상태 확인과 `/actuator/prometheus`만 노출한다.
 - 롤링 업데이트는 가용 Pod를 줄이지 않고 새 Pod 한 개만 추가한다. 새 Pod는 준비 상태를 10초간
   유지한 뒤 가용 상태로 인정한다.
 - BATON 연동 작업 공간은 `/private/tmp/baton-go-integration-20260905`, 브랜치는
   `codex/go-link-integration-20260905`다. 최근 확인 리비전은 `90557822`, 코드 기준은 `bc888b15`다.
   GO 연동·카카오톡 공유·QR 기능을 반영했으며 BATON 메인 병합과 실제 전송·스캔 검증은 남아 있다.
 - 완료 내역과 이전 검증의 리비전·명령·로그는
-  [구현·검증 기록](docs/HISTORY/2026-09-08-implementation-verification.md)과
-  [2026-10-05 검증 기록](docs/HISTORY/2026-10-05-verification-history.md)에 보관한다.
+  [구현·검증 기록](docs/HISTORY/2026-09-08-implementation-verification.md),
+  [2026-10-05 검증 기록](docs/HISTORY/2026-10-05-verification-history.md)과
+  [2026-10-06 검증 기록](docs/HISTORY/2026-10-06-verification-history.md)에 보관한다.
 
 ## 최근 검증
+
+- 5차 정리는 미커밋 변경이 없는 `main`의 `971f5b3`에서 시작해 `888fe7b`·`8195880`·`4edb104`·`f0c9f85`·`17fa541`에
+  저장했다. JDK·Spring 표준 API로 대체할 직접 구현과 불필요 코드를 감사 워크플로로 찾았다. 모듈·관점별 탐색 7개와
+  완전성 비평이 후보 36건을 냈고, 후보마다 실현성·동작·보안운영 반박 검증 3개를 거쳤다. 통과한 후보를 적용했으며
+  주요 내용은 다음과 같다.
+  - 예외별 처리기 16개를 예외 유형 switch 하나로 합쳤다.
+  - 원인·스택 직접 수집을 Boot `StandardStackTracePrinter`로 바꾸고 요청 ID를 MDC 하나에서 읽는다.
+  - 요청 제한 인터셉터는 `includeHttpMethods(GET, HEAD)`로 자기 등록하고 0/Retry-After 초를 반환한다.
+  - Bearer 실패 처리기를 진입점 메서드 참조로 바꿨다.
+  - `LinkCodeKeyGuard`·`StoredLinkScan`·`DatabaseMigrationRunner`·`PublicResolverWebMvcConfiguration`을 지웠다.
+    시작 키 검사는 Boot `TransactionTemplate` 안에서 실행한다.
+  - 재시도 동일성은 `LinkCreationFingerprint` 하나로 판정한다.
+  - 단일 조회의 읽기 전용 트랜잭션을 없앴다.
+  - 보존 정리는 주입한 `JdbcClient`로 링크별 실행하고, 예약 재조회는 `single()`을 쓴다.
+  - `LinkCodeProperties` 기본값을 `@DefaultValue`로 옮기고 `CreationIdempotencyKey`·키 식별 record를 단순화했다.
+  - 게이지를 `MeterRegistry#gauge`로 등록하고 중복 Boot 의존성 선언과 Boot 기본값 설정을 지웠다.
+  - `/actuator/metrics` 노출을 지웠다.
+  - 실제 서버·DB 테스트를 `RestTestClient`·`JdbcTestUtils`·`@TestBean`으로 바꿨다.
+
+  적용하지 않은 후보는 다음과 같다.
+  - `application.yml`의 `baton-go` 환경 변수 매핑 제거: 빈 값이 `@DefaultValue`로 대체돼 시작 거부 계약이 깨진다.
+  - 단일 `BATON_GO_LINK_CODE_SECRET` 경로 제거: Compose 오버레이와 Kubernetes Secret 구성을 함께 바꿔야 해 보류했다.
+  - 대상 허용 테스트 통합: 메서드 이름이 사실과 달라지고 줄이 길어진다.
+
+  운영 코드 27개 파일에서 662줄을 지우고 304줄을 더했다. 전체로는 55개 파일에서 1,120줄을 지우고 620줄을 더했다.
+  Java 21에서 `./gradlew --no-daemon build :adapter-in-web:apiContractDocs :bootstrap:mysqlTest :bootstrap:redisTest`를
+  통과했다. 도메인 72·애플리케이션 41·웹 120·외부 22·bootstrap 29·MySQL 29·Redis 3개에 실패·제외가 없고 REST Docs
+  조각은 84개다. `docker build`가 성공했고 CI 운영 이미지 기동 단계도 같은 스크립트로 로컬 실행해 통과했다. 이 단계는
+  공개 오류·429·지표 0 노출과 마이그레이션 전용 실행을 확인한다. 중간 커밋 3개는 별도 작업 트리에서 `test`와
+  `:bootstrap:compileTestJava`를 통과했다. 요청 제한 메서드 필터를 지운 변이에서는 새 OPTIONS 단언이 실패해
+  회귀를 잡는 것을 확인했다. 의존성 선언 변경 전후의 런타임 클래스패스가 같고, 검증 메타데이터 변경은 없다.
+  문서 링크 검사는 40개 파일에서 문제 0건이다. 계약·보안·트랜잭션·테스트·문서 관점의 diff 검토와 지적별 반박
+  검증에서 확정 결함은 없었다. 남은 차이는 `RestTestClient` 전환으로 실제 서버 테스트의 요청별 5초 제한이
+  없어진 것이다. 로그와 감사 결과는 세션 스크래치패드(`46e02272-…/scratchpad`)의 `full-verify.log`·
+  `smoke-run.log`·`docker-build.log`·`commit-check-*.log`·`audit-final.json`이다. 이전 검증 항목 5개는
+  [2026-10-06 검증 기록](docs/HISTORY/2026-10-06-verification-history.md)으로 옮겼다. 원격 반영은 하지 않았다.
 
 - 의존성 보안 갱신은 미커밋 변경이 없는 `main`의 `3b07f2d`에서 시작해 `6135d99`와 문서 커밋에 저장했다. 푸시 때 확인한
   Dependabot 경고 10건은 Tomcat `tomcat-embed-core` 11.0.24(치명 3, GHSA-gcx9-497g-6cp6 등)와 Jackson
@@ -163,72 +204,6 @@
   문제 0건이다. JWK 테스트 서버·실제 서버 요청 헬퍼 공용화는 줄어드는 양이 작고 JWK 캐시 순서에 기대게 돼 하지
   않았다. Redis 테스트·운영 코드·이미지가 바뀌지 않아 Redis 통합 검증과 이미지 빌드는 하지 않았다.
   원격 반영은 하지 않았다.
-- 3차 정리는 미커밋 변경이 없는 `main`의 `d9aa3a7`에서 시작해 `f334005`·`a5d39a9`·`90e7935`·`fc2dfde`·`e6e511d`와
-  문서 커밋에 저장했다. 공개 링크 오류 처리기 쌍 12개를 협상 매핑 2개와 예외 패턴 분기로 합치고, 도달하지 않는
-  대상 정책 null 검증과 서비스 매개변수 풀기를 정리했다. 단일 비밀값 키 ID를 `legacy`에서 `default`로 바꾸고 키 확인
-  통합 테스트를 다른 키 테스트 패키지로 옮겼다. 운영 코드 155줄을 지우고 45줄을 더했다. Gradle 권장 방식대로 기존
-  파일을 치운 오프라인 `--write-verification-metadata sha256 --dry-run` 결과와 대조해 JPA 계열 검증 항목 34개를
-  지웠다. 처음 48개를 지운 시도는 캐시 없는 이미지 빌드가 플러그인 경로의 `tools.jackson:jackson-base:3.1.5` POM을
-  요구해 실패했고, 공통 BOM·부모 POM을 남기는 방식으로 바꿨다. `--refresh-dependencies build`와 `docker build --no-cache`
-  가 검증을 통과했다. Java 21에서 결과 디렉터리를 비운 뒤 `./gradlew --no-daemon build :adapter-in-web:apiContractDocs
-  :bootstrap:mysqlTest :bootstrap:redisTest`를 통과했다. 도메인 73·애플리케이션 42·웹 124·외부 25·bootstrap 31·
-  MySQL 29·Redis 3개에 실패·제외가 없고 REST Docs 조각은 84개다. 최종 트리의 `docker build`도 성공했다.
-  로그는 같은 스크래치패드의 `r3-*.log`·`verif-*.log`다. 생성·조회 사용 사례 분리, 관리 목록 쿼리 객체 바인딩,
-  JWK 테스트 서버 공용화와 Spring Data Redis 전환은 이점보다 변경 범위가 커 하지 않았다. 이후 원격 `main`에 반영했고
-  `41348ab`의 [원격 CI](https://github.com/ljkhyeong/baton-go/actions/runs/37260550380)가 성공했다.
-- 2차 과감한 정리는 미커밋 변경이 없는 `main`의 `48bb23e`에서 시작해 `9dab25f`·`772a3bb`·`9eeb4da`·`f4eda73`·
-  `fea3c98`에 저장했다. 운영 데이터와 적용된 DB가 없다는 사용자 확인에 따라 JPA를 제거해 영속성을
-  `JdbcClient`로 통일하고, V1~V7을 최종 스키마의 V1 하나로 다시 만들었다. 보호 행·`version` 열·쓰이지 않던
-  만료 인덱스를 없애고 정리 전 예약의 공개 출처를 검사 제약으로 강제했다. 저장 링크 레코드 3종을 `StoredLink`로
-  합치고 `FilterErrorResponseWriter`를 지워 보안 필터 오류를 MVC 예외 처리기로 모았다. 운영 코드 603줄을 지우고
-  196줄을 더했으며 테스트는 504줄을 지우고 103줄을 더했다.
-  Java 21에서 결과 디렉터리를 비운 뒤 `./gradlew --no-daemon build :adapter-in-web:apiContractDocs
-  :bootstrap:mysqlTest :bootstrap:redisTest`를 통과했다. 도메인 73·애플리케이션 42·웹 124·외부 25·bootstrap 31·
-  MySQL 29·Redis 3개에 실패·제외가 없고 REST Docs 조각은 84개다. `docker build`와 CI의 운영 이미지 기동 단계를
-  같은 스크립트로 로컬 실행해 통과했다. 실행 클래스패스에 Hibernate ORM·Spring Data JPA가 없음을 확인했다.
-  MockMvc는 HEAD 본문을 버리지 않아 관리 HEAD 403의 빈 본문 확인을 실제 HTTP 서버 테스트로 옮겼다.
-  로그는 같은 스크래치패드의 `bold-*.log`와 `smoke/run.log`다. Gradle 검증 메타데이터의 쓰이지 않는 JPA 항목은
-  다시 생성하려면 네트워크 조회가 필요해 남겼고 3차 정리에서 지웠다. 이후 원격 `main`에 반영했고
-  `41348ab`의 [원격 CI](https://github.com/ljkhyeong/baton-go/actions/runs/37260550380)가 성공했다.
-- 과거 호환 정리는 미커밋 변경이 없는 `main`의 `bfb9a14`에서 시작해 `7c1c0a0`·`274fb64`·`110abfd`·`c950b5d`·
-  `c3e2e0b`·`c3040ae`에 저장했다. 보존할 기존 GO DB가 없다는 사용자 확인에 따라 과거 형식 멱등 재시도,
-  `guard-tool` 모듈·CI 단계, 대상 계약 운영 API와 점검 전용 예약 존재 조회를 제거했다. 예시에서 사라진 공개
-  비밀값 차단, 내부 키 지문 형식 검사, 설정과 겹친 발급 키 검사도 지웠다. 폐기 시각 검사의 500은
-  `274fb64`에서 생성 시각 보정으로 고쳤다. 운영 코드 818줄, 테스트 1,431줄, 문서·스킬 442줄을 줄였다.
-  Java 21에서 `./gradlew --no-daemon build :adapter-in-web:apiContractDocs :bootstrap:mysqlTest
-  :bootstrap:redisTest`를 통과했다. 도메인 73·애플리케이션 42·웹 123·외부 25·bootstrap 31·MySQL 32·Redis 3개에
-  실패·제외가 없고 REST Docs 조각은 84개다. `docker build`도 성공했다. 단계마다 대상 테스트를 먼저 실행했으며,
-  3단계에서 guard-tool의 과거 대문자 검증용 요청 테스트가 실패해 같은 단계에서 제거했다. CI 변경은
-  actionlint 1.7.12, 설정 변경은 Compose·Kustomize 렌더, 문서는 전체 링크 검사로 확인했다. 로그는 같은
-  스크래치패드의 `cleanup-*.log`다. 이후 원격 `main`에 반영했고
-  `41348ab`의 [원격 CI](https://github.com/ljkhyeong/baton-go/actions/runs/37260550380)가 성공했다.
-- 정리·커서 리팩터링은 미커밋 변경이 없는 `main`의 `6c09109`에서 시작해 `6af1a72`·`07ffbb8`에 저장했다.
-  영속성 어댑터가 계산하던 정리 요청 해시를 `LinkRetentionService`로 옮겨 어댑터는 잠금 조회와 정리 SQL만 맡고,
-  `LinkCreationFingerprint`는 애플리케이션 패키지 안으로 숨겼다. 관리 목록과 대상 계약 점검에 중복된
-  `limit + 1`건 조회·최대 500건·다음 커서 규칙은 `StoredLinkScan`으로 모았다. SQL·잠금·오류 코드·응답은 같다.
-  Java 21에서 `./gradlew --no-daemon test`와 `:bootstrap:mysqlTest --tests '*LinkRetentionIntegrationTest'
-  --tests '*TargetContractOperationsIntegrationTest' --tests '*LinkPersistenceIntegrationTest'`를 통과했다.
-  도메인 72·애플리케이션 48·웹 135·외부 26·guard-tool 4·bootstrap 32·MySQL 21개 테스트에 실패·제외가 없고
-  계층 규칙 5개도 통과했다. 스케줄러 테스트는 포트 대신 서비스를 목으로 쓰고, 정리 통합 테스트는 실제 서비스를
-  거쳐 정리한다. 로그는 같은 스크래치패드의 `refactor-*.log`다. 키 가드 어댑터의 키 묶음 판정은 잠금 순서와
-  얽혀 있어 이번 범위에서 제외했다. Redis·배포 구성은 바뀌지 않아 Redis 통합 검증과 이미지 빌드는 하지 않았다.
-- 이미지 증명 추가는 미커밋 변경이 없는 `main`의 `0983bf2`에서 시작해 워크플로를 `64e4d75`에 저장했다.
-  다음 작업 6의 서명·빌드 출처 검증을 위해 `actions/attest` v4.2.2(`1e69f48`)로 증명을 만드는
-  `image-attestation` 작업과 보관 워크플로의 재검증을 추가했다. `id-token`·`attestations: write`는 새 작업에만 준다.
-  actionlint 1.7.12(ShellCheck 0.11.0)로 워크플로 3개를 통과했다. 추출한 실제 단계 스크립트를 Ubuntu 24.04·
-  bash 5.2·jq 1.7과 대체 `gh`·`docker`·`git`으로 실행해 증명 대상 9건(정상·대문자 저장소·커밋/실행/검사
-  불일치·다른 저장소·다이제스트 형식), CI 검증 3건, 보관 4건의 16개 시나리오를 통과했다. 첫 실행의 4건 실패는
-  대체 도구의 기록 형식과 시나리오 실행 주소의 대소문자 오류였다. `gh` 2.86.0의 검증 플래그는 공개
-  `ghcr.io/actions/actions-runner` 증명에서 일치 시 통과, 소스 커밋·ref·서명 워크플로 불일치 시 거부를 확인했다.
-  CI와 같은 Trivy 0.72.0 `convert`의 CycloneDX가 `actions/attest`의 판별 필드를 갖는 것도 네트워크 없이 확인했다.
-  변경 문서 4개의 링크·앵커 문제는 0건이고 배포 전 확인 명령은 Bash 구문·ShellCheck를 통과했다. 도구와 로그는
-  스크래치패드 `9beb8bea-0936-4cc1-98ce-24ef4a8084ad/scratchpad/attestation-validation`의 `run-scenarios.sh`·
-  `scenarios.log`·`actionlint-attestation.log`다. Java·DB·이미지가 바뀌지 않아 Gradle·MySQL·Redis 검증과
-  이미지 빌드는 하지 않았다. 이후 원격 `main`에 반영했고 `a20146e`의
-  [원격 CI](https://github.com/ljkhyeong/baton-go/actions/runs/37253336070)는 필수 검증·의존성 제출·출처 증명
-  세 작업이 모두 성공했다. 증명 작업의 생성·배포 기준 검증 단계도 성공했고, 증명 API에서 게시 다이제스트
-  `sha256:4e240e27…`의 SLSA·CycloneDX 증명 2개를 조회했다. 기록 커밋 `6c09109`의 원격 CI도 세 작업이 모두
-  성공했다. 로컬 GHCR 인증이 필요한 배포 전 확인 명령과 Release 생성은 실행하지 않았다.
 
 ## 다음 작업
 

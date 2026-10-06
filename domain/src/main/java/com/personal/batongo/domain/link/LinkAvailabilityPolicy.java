@@ -18,17 +18,12 @@ public final class LinkAvailabilityPolicy {
             Instant expiresAt,
             Instant now
     ) {
-        switch (evaluate(revokedAt, notBefore, expiresAt, now)) {
+        Status status = evaluate(revokedAt, notBefore, expiresAt, now);
+        switch (status) {
             case ACTIVE -> { }
-            case NOT_ACTIVE -> throw new LinkUnavailableException(
-                    LinkUnavailableException.Reason.NOT_ACTIVE, "아직 사용할 수 없는 링크입니다", notBefore
-            );
-            case EXPIRED -> throw new LinkUnavailableException(
-                    LinkUnavailableException.Reason.EXPIRED, "만료된 링크입니다"
-            );
-            case REVOKED -> throw new LinkUnavailableException(
-                    LinkUnavailableException.Reason.REVOKED, "폐기된 링크입니다"
-            );
+            case NOT_ACTIVE -> throw new LinkUnavailableException(status, "아직 사용할 수 없는 링크입니다", notBefore);
+            case EXPIRED -> throw new LinkUnavailableException(status, "만료된 링크입니다", null);
+            case REVOKED -> throw new LinkUnavailableException(status, "폐기된 링크입니다", null);
         }
     }
 

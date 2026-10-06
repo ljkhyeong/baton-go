@@ -3,6 +3,7 @@ package com.personal.batongo.adapter.in.web;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.NullSource;
@@ -27,15 +28,11 @@ class RequestIdFilterTest {
         }
         MockHttpServletResponse response = new MockHttpServletResponse();
 
-        new RequestIdFilter().doFilter(
-                request,
-                response,
-                (servletRequest, servletResponse) -> { }
-        );
+        String loggedRequestId = filter(request, response);
 
         String requestId = response.getHeader("X-Request-Id");
         assertThat(UUID.fromString(requestId).toString()).isEqualTo(requestId);
-        assertThat(RequestIdFilter.requestId(request)).isEqualTo(requestId);
+        assertThat(loggedRequestId).isEqualTo(requestId);
     }
 
     @ParameterizedTest
@@ -49,13 +46,21 @@ class RequestIdFilterTest {
         request.addHeader("X-Request-Id", candidate);
         MockHttpServletResponse response = new MockHttpServletResponse();
 
+        String loggedRequestId = filter(request, response);
+
+        assertThat(response.getHeader("X-Request-Id")).isEqualTo(candidate);
+        assertThat(loggedRequestId).isEqualTo(candidate);
+    }
+
+    /** 요청 처리 중 로그·오류 응답에 쓰는 요청 ID를 반환하고, 요청이 끝나면 지워졌는지 확인한다. */
+    private static String filter(MockHttpServletRequest request, MockHttpServletResponse response) throws Exception {
+        var duringRequest = new AtomicReference<String>();
         new RequestIdFilter().doFilter(
                 request,
                 response,
-                (servletRequest, servletResponse) -> { }
+                (servletRequest, servletResponse) -> duringRequest.set(RequestIdFilter.currentRequestId())
         );
-
-        assertThat(response.getHeader("X-Request-Id")).isEqualTo(candidate);
-        assertThat(RequestIdFilter.requestId(request)).isEqualTo(candidate);
+        assertThat(RequestIdFilter.currentRequestId()).isNull();
+        return duringRequest.get();
     }
 }

@@ -15,19 +15,14 @@ import com.personal.batongo.domain.link.LinkUnavailableException;
 import com.personal.batongo.domain.link.LinkValidationException;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
-import jakarta.servlet.http.HttpServletRequest;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.IdentityHashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.TypeMismatchException;
+import org.springframework.boot.logging.StandardStackTracePrinter;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
@@ -41,7 +36,6 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
-import org.springframework.web.context.request.ServletWebRequest;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
@@ -52,11 +46,13 @@ import tools.jackson.databind.exc.PropertyBindingException;
 public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     private static final Logger LOG = LoggerFactory.getLogger(GlobalExceptionHandler.class);
-    private static final String TARGET_POLICY_VIOLATION_METRIC =
-            "baton.go.public.resolver.target.contract.violations";
-    private static final int MAX_LOGGED_CAUSE_TYPES = 8;
-    private static final int MAX_LOGGED_STACK_FRAMES = 12;
     private static final String MANAGEMENT_BEARER_CHALLENGE = "Bearer realm=\"baton-go-management\"";
+    // 예외 메시지에는 민감값이 들어갈 수 있으므로 예외 유형과 호출 위치만 한 줄로 남긴다.
+    private static final StandardStackTracePrinter UNEXPECTED_STACK_TRACE = StandardStackTracePrinter.rootLast()
+            .withFormatter(throwable -> throwable.getClass().getName())
+            .withMaximumThrowableDepth(12)
+            .withMaximumLength(8192)
+            .withLineSeparator(" ");
 
     private final Counter targetPolicyViolationCounter;
     private final Counter quotaFailureCounter;
@@ -68,7 +64,9 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         this.authenticationServiceFailureCounter = meterRegistry.counter(
                 "baton.go.management.authentication.service.failures"
         );
-        this.targetPolicyViolationCounter = meterRegistry.counter(TARGET_POLICY_VIOLATION_METRIC);
+        this.targetPolicyViolationCounter = meterRegistry.counter(
+                "baton.go.public.resolver.target.contract.violations"
+        );
         this.linkRecoveryFailureCounters = Stream.of(
                 "LINK_CREATION_REPLAY_UNAVAILABLE",
                 "LINK_CODE_REPLAY_UNAVAILABLE",
@@ -80,156 +78,74 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         ));
     }
 
-    // 관리 보안 필터의 인증 진입점과 권한 거부 처리기가 HandlerExceptionResolver로 넘긴 예외다.
-    @ExceptionHandler(AuthenticationServiceException.class)
-    public ResponseEntity<ErrorResponse> handleAuthenticationServiceFailure(
-            AuthenticationServiceException exception, HttpServletRequest request
-    ) {
-        authenticationServiceFailureCounter.increment();
-        LOG.error("관리 JWT 검증 서비스 오류 requestId={} exceptionType={}",
-                RequestIdFilter.requestId(request), exception.getClass().getName());
-        return error(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", "서버에서 요청을 처리하지 못했습니다", request);
-    }
-
-    @ExceptionHandler(AuthenticationException.class)
-    public ResponseEntity<ErrorResponse> handleManagementAuthenticationRequired(HttpServletRequest request) {
-        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .header(HttpHeaders.WWW_AUTHENTICATE, MANAGEMENT_BEARER_CHALLENGE)
-                .contentType(MediaType.APPLICATION_JSON)
-                .body(new ErrorResponse(
-                        "MANAGEMENT_AUTHENTICATION_REQUIRED",
-                        "유효한 관리 JWT가 필요합니다",
-                        RequestIdFilter.requestId(request)
-                ));
-    }
-
-    @ExceptionHandler(AccessDeniedException.class)
-    public ResponseEntity<ErrorResponse> handleManagementAuthorizationRequired(HttpServletRequest request) {
-        return error(HttpStatus.FORBIDDEN, "MANAGEMENT_AUTHORIZATION_REQUIRED", "요청한 관리 작업 권한이 필요합니다", request);
-    }
-
-    @ExceptionHandler(StoredTargetPolicyViolationException.class)
-    public ResponseEntity<ErrorResponse> handleStoredTargetPolicyViolation(
-            StoredTargetPolicyViolationException exception, HttpServletRequest request
-    ) {
-        targetPolicyViolationCounter.increment();
-        LOG.error("저장된 링크 대상 계약 위반 linkId={} requestId={}",
-                exception.linkId(), RequestIdFilter.requestId(request));
-        return handleNotFound(request);
-    }
-
-    @ExceptionHandler(LinkNotFoundException.class)
-    public ResponseEntity<ErrorResponse> handleNotFound(HttpServletRequest request) {
-        return error(HttpStatus.NOT_FOUND, "LINK_NOT_FOUND", "링크를 찾을 수 없습니다", request);
-    }
-
-    @ExceptionHandler(LinkUnavailableException.class)
-    public ResponseEntity<ErrorResponse> handleUnavailable(
-            LinkUnavailableException exception, HttpServletRequest request
-    ) {
-        return switch (exception.reason()) {
-            case NOT_ACTIVE -> error(HttpStatus.NOT_FOUND, "LINK_NOT_ACTIVE", exception.getMessage(), request);
-            case EXPIRED -> error(HttpStatus.GONE, "LINK_EXPIRED", exception.getMessage(), request);
-            case REVOKED -> error(HttpStatus.GONE, "LINK_REVOKED", exception.getMessage(), request);
+    /**
+     * 애플리케이션·도메인·보안 예외를 공통 오류 형식으로 바꾼다. Spring MVC 예외는 상위 클래스의 더 구체적인
+     * 매핑이 먼저 처리한다. 관리 보안 필터의 인증 진입점과 권한 거부 처리기도 HandlerExceptionResolver로 넘긴다.
+     */
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<ErrorResponse> handle(Exception exception) {
+        return switch (exception) {
+            case AuthenticationServiceException serviceFailure -> {
+                authenticationServiceFailureCounter.increment();
+                LOG.error("관리 JWT 검증 서비스 오류 requestId={} exceptionType={}",
+                        RequestIdFilter.currentRequestId(), serviceFailure.getClass().getName());
+                yield internalError();
+            }
+            case AuthenticationException ignored -> ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .header(HttpHeaders.WWW_AUTHENTICATE, MANAGEMENT_BEARER_CHALLENGE)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(errorBody("MANAGEMENT_AUTHENTICATION_REQUIRED", "유효한 관리 JWT가 필요합니다"));
+            case AccessDeniedException ignored -> error(HttpStatus.FORBIDDEN,
+                    "MANAGEMENT_AUTHORIZATION_REQUIRED", "요청한 관리 작업 권한이 필요합니다");
+            case StoredTargetPolicyViolationException violation -> {
+                targetPolicyViolationCounter.increment();
+                LOG.error("저장된 링크 대상 계약 위반 linkId={} requestId={}",
+                        violation.linkId(), RequestIdFilter.currentRequestId());
+                yield notFound();
+            }
+            case LinkNotFoundException ignored -> notFound();
+            case LinkUnavailableException unavailable -> switch (unavailable.status()) {
+                case NOT_ACTIVE -> error(HttpStatus.NOT_FOUND, "LINK_NOT_ACTIVE", unavailable.getMessage());
+                case EXPIRED -> error(HttpStatus.GONE, "LINK_EXPIRED", unavailable.getMessage());
+                case REVOKED -> error(HttpStatus.GONE, "LINK_REVOKED", unavailable.getMessage());
+                case ACTIVE -> unexpected(unavailable);
+            };
+            case PublicResolverRateLimitExceededException limited -> ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                    .header(HttpHeaders.RETRY_AFTER, Long.toString(limited.retryAfterSeconds()))
+                    .varyBy(HttpHeaders.ACCEPT)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(errorBody("RATE_LIMIT_EXCEEDED", "요청이 너무 많습니다. 잠시 후 다시 시도해 주세요"));
+            case PublicResolverQuotaUnavailableException quota -> {
+                quotaFailureCounter.increment();
+                yield error(HttpStatus.SERVICE_UNAVAILABLE, "RATE_LIMIT_UNAVAILABLE", quota.getMessage());
+            }
+            case LinkValidationException invalid -> error(HttpStatus.BAD_REQUEST, "INVALID_LINK", invalid.getMessage());
+            case InvalidRequestException invalid ->
+                    error(HttpStatus.BAD_REQUEST, "INVALID_REQUEST", invalid.getMessage());
+            case InvalidIdempotencyKeyException invalid ->
+                    error(HttpStatus.BAD_REQUEST, "INVALID_IDEMPOTENCY_KEY", invalid.getMessage());
+            case IdempotencyKeyConflictException conflict ->
+                    error(HttpStatus.CONFLICT, "IDEMPOTENCY_KEY_REUSED", conflict.getMessage());
+            case LinkPurgedException purged -> error(HttpStatus.GONE, "LINK_PURGED", purged.getMessage());
+            case LinkCreationReplayUnavailableException unavailable -> {
+                LOG.error("기존 링크 생성 결과 누락 linkId={} requestId={}",
+                        unavailable.linkId(), RequestIdFilter.currentRequestId());
+                yield linkRecoveryFailure("LINK_CREATION_REPLAY_UNAVAILABLE", unavailable.getMessage());
+            }
+            case LinkCodeReplayMismatchException mismatch -> {
+                logUnexpected(mismatch);
+                yield linkRecoveryFailure("LINK_CODE_REPLAY_UNAVAILABLE", mismatch.getMessage());
+            }
+            case LinkCodeKeyBindingException mismatch -> {
+                logUnexpected(mismatch);
+                yield linkRecoveryFailure("LINK_CODE_CONFIGURATION_MISMATCH", mismatch.getMessage());
+            }
+            case PublicLinkOriginReplayUnavailableException unavailable -> {
+                logUnexpected(unavailable);
+                yield linkRecoveryFailure("PUBLIC_LINK_ORIGIN_REPLAY_UNAVAILABLE", unavailable.getMessage());
+            }
+            default -> unexpected(exception);
         };
-    }
-
-    @ExceptionHandler(PublicResolverRateLimitExceededException.class)
-    public ResponseEntity<ErrorResponse> handlePublicResolverRateLimited(
-            PublicResolverRateLimitExceededException exception,
-            HttpServletRequest request
-    ) {
-        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
-                .header(HttpHeaders.RETRY_AFTER, Long.toString(exception.retryAfterSeconds()))
-                .varyBy(HttpHeaders.ACCEPT)
-                .contentType(MediaType.APPLICATION_JSON)
-                .body(new ErrorResponse(
-                        "RATE_LIMIT_EXCEEDED",
-                        "요청이 너무 많습니다. 잠시 후 다시 시도해 주세요",
-                        RequestIdFilter.requestId(request)
-                ));
-    }
-
-    @ExceptionHandler(PublicResolverQuotaUnavailableException.class)
-    public ResponseEntity<ErrorResponse> handleQuotaUnavailable(
-            PublicResolverQuotaUnavailableException exception, HttpServletRequest request) {
-        quotaFailureCounter.increment();
-        return error(HttpStatus.SERVICE_UNAVAILABLE, "RATE_LIMIT_UNAVAILABLE", exception.getMessage(), request);
-    }
-
-    @ExceptionHandler(LinkValidationException.class)
-    public ResponseEntity<ErrorResponse> handleValidation(
-            LinkValidationException exception,
-            HttpServletRequest request
-    ) {
-        return error(HttpStatus.BAD_REQUEST, "INVALID_LINK", exception.getMessage(), request);
-    }
-
-    @ExceptionHandler(InvalidRequestException.class)
-    public ResponseEntity<ErrorResponse> handleInvalidRequest(
-            InvalidRequestException exception,
-            HttpServletRequest request
-    ) {
-        return error(HttpStatus.BAD_REQUEST, "INVALID_REQUEST", exception.getMessage(), request);
-    }
-
-    @ExceptionHandler(InvalidIdempotencyKeyException.class)
-    public ResponseEntity<ErrorResponse> handleInvalidIdempotencyKey(
-            InvalidIdempotencyKeyException exception, HttpServletRequest request
-    ) {
-        return error(HttpStatus.BAD_REQUEST, "INVALID_IDEMPOTENCY_KEY", exception.getMessage(), request);
-    }
-
-    @ExceptionHandler(IdempotencyKeyConflictException.class)
-    public ResponseEntity<ErrorResponse> handleIdempotencyConflict(
-            IdempotencyKeyConflictException exception, HttpServletRequest request
-    ) {
-        return error(HttpStatus.CONFLICT, "IDEMPOTENCY_KEY_REUSED", exception.getMessage(), request);
-    }
-
-    @ExceptionHandler(LinkPurgedException.class)
-    public ResponseEntity<ErrorResponse> handlePurged(LinkPurgedException exception, HttpServletRequest request) {
-        return error(HttpStatus.GONE, "LINK_PURGED", exception.getMessage(), request);
-    }
-
-    @ExceptionHandler(LinkCreationReplayUnavailableException.class)
-    public ResponseEntity<ErrorResponse> handleLinkCreationReplayUnavailable(
-            LinkCreationReplayUnavailableException exception, HttpServletRequest request
-    ) {
-        LOG.error("기존 링크 생성 결과 누락 linkId={} requestId={}",
-                exception.linkId(), RequestIdFilter.requestId(request));
-        return linkRecoveryFailure("LINK_CREATION_REPLAY_UNAVAILABLE", exception.getMessage(), request);
-    }
-
-    @ExceptionHandler(LinkCodeReplayMismatchException.class)
-    public ResponseEntity<ErrorResponse> handleLinkCodeReplayMismatch(
-            LinkCodeReplayMismatchException exception, HttpServletRequest request
-    ) {
-        logUnexpected(exception, request);
-        return linkRecoveryFailure("LINK_CODE_REPLAY_UNAVAILABLE", exception.getMessage(), request);
-    }
-
-    @ExceptionHandler(LinkCodeKeyBindingException.class)
-    public ResponseEntity<ErrorResponse> handleLinkCodeKeyBinding(
-            LinkCodeKeyBindingException exception, HttpServletRequest request
-    ) {
-        logUnexpected(exception, request);
-        return linkRecoveryFailure("LINK_CODE_CONFIGURATION_MISMATCH", exception.getMessage(), request);
-    }
-
-    @ExceptionHandler(PublicLinkOriginReplayUnavailableException.class)
-    public ResponseEntity<ErrorResponse> handlePublicLinkOriginReplayUnavailable(
-            PublicLinkOriginReplayUnavailableException exception, HttpServletRequest request
-    ) {
-        logUnexpected(exception, request);
-        return linkRecoveryFailure("PUBLIC_LINK_ORIGIN_REPLAY_UNAVAILABLE", exception.getMessage(), request);
-    }
-
-    private ResponseEntity<ErrorResponse> linkRecoveryFailure(
-            String code, String message, HttpServletRequest request
-    ) {
-        linkRecoveryFailureCounters.get(code).increment();
-        return error(HttpStatus.INTERNAL_SERVER_ERROR, code, message, request);
     }
 
     @Override
@@ -303,9 +219,9 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     ) {
         Object responseBody = body instanceof ErrorResponse
                 ? body
-                : frameworkError(status, request);
+                : frameworkError(status);
         if (status.is5xxServerError()) {
-            logUnexpected(exception, servletRequest(request));
+            logUnexpected(exception);
         }
         HttpHeaders responseHeaders = HttpHeaders.copyOf(headers);
         responseHeaders.setContentType(MediaType.APPLICATION_JSON);
@@ -318,24 +234,26 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         );
     }
 
-    @ExceptionHandler(Exception.class)
-    public ResponseEntity<ErrorResponse> handleUnexpected(Exception exception, HttpServletRequest request) {
-        logUnexpected(exception, request);
-        return error(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR",
-                "서버에서 요청을 처리하지 못했습니다", request);
+    private ResponseEntity<ErrorResponse> notFound() {
+        return error(HttpStatus.NOT_FOUND, "LINK_NOT_FOUND", "링크를 찾을 수 없습니다");
     }
 
-    private ResponseEntity<ErrorResponse> error(
-            HttpStatus status,
-            String code,
-            String message,
-            HttpServletRequest request
-    ) {
-        return ResponseEntity.status(status).contentType(MediaType.APPLICATION_JSON).body(new ErrorResponse(
-                code,
-                message,
-                RequestIdFilter.requestId(request)
-        ));
+    private ResponseEntity<ErrorResponse> unexpected(Exception exception) {
+        logUnexpected(exception);
+        return internalError();
+    }
+
+    private ResponseEntity<ErrorResponse> internalError() {
+        return error(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", "서버에서 요청을 처리하지 못했습니다");
+    }
+
+    private ResponseEntity<ErrorResponse> linkRecoveryFailure(String code, String message) {
+        linkRecoveryFailureCounters.get(code).increment();
+        return error(HttpStatus.INTERNAL_SERVER_ERROR, code, message);
+    }
+
+    private ResponseEntity<ErrorResponse> error(HttpStatus status, String code, String message) {
+        return ResponseEntity.status(status).contentType(MediaType.APPLICATION_JSON).body(errorBody(code, message));
     }
 
     private ResponseEntity<Object> invalidRequest(
@@ -346,66 +264,28 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
             WebRequest request
     ) {
         return handleExceptionInternal(
-                exception, errorBody("INVALID_REQUEST", message, request), headers, status, request
+                exception, errorBody("INVALID_REQUEST", message), headers, status, request
         );
     }
 
-    private ErrorResponse frameworkError(HttpStatusCode status, WebRequest request) {
+    private ErrorResponse frameworkError(HttpStatusCode status) {
         return switch (status.value()) {
-            case 400 -> errorBody("INVALID_REQUEST", "요청 형식이 올바르지 않습니다", request);
-            case 404 -> errorBody("RESOURCE_NOT_FOUND", "요청한 경로를 찾을 수 없습니다", request);
-            case 405 -> errorBody("METHOD_NOT_ALLOWED", "지원하지 않는 HTTP 메서드입니다", request);
-            case 415 -> errorBody(
-                    "UNSUPPORTED_MEDIA_TYPE",
-                    "지원하지 않는 요청 본문 형식입니다",
-                    request
-            );
+            case 400 -> errorBody("INVALID_REQUEST", "요청 형식이 올바르지 않습니다");
+            case 404 -> errorBody("RESOURCE_NOT_FOUND", "요청한 경로를 찾을 수 없습니다");
+            case 405 -> errorBody("METHOD_NOT_ALLOWED", "지원하지 않는 HTTP 메서드입니다");
+            case 415 -> errorBody("UNSUPPORTED_MEDIA_TYPE", "지원하지 않는 요청 본문 형식입니다");
             default -> status.is4xxClientError()
-                    ? errorBody("INVALID_REQUEST", "요청을 처리할 수 없습니다", request)
-                    : errorBody("INTERNAL_ERROR", "서버에서 요청을 처리하지 못했습니다", request);
+                    ? errorBody("INVALID_REQUEST", "요청을 처리할 수 없습니다")
+                    : errorBody("INTERNAL_ERROR", "서버에서 요청을 처리하지 못했습니다");
         };
     }
 
-    private ErrorResponse errorBody(String code, String message, WebRequest request) {
-        return new ErrorResponse(code, message, RequestIdFilter.requestId(servletRequest(request)));
+    private ErrorResponse errorBody(String code, String message) {
+        return new ErrorResponse(code, message, RequestIdFilter.currentRequestId());
     }
 
-    private HttpServletRequest servletRequest(WebRequest request) {
-        return request instanceof ServletWebRequest servletWebRequest
-                ? servletWebRequest.getRequest()
-                : null;
-    }
-
-    private void logUnexpected(Exception exception, HttpServletRequest request) {
-        String requestId = request == null ? null : RequestIdFilter.requestId(request);
-        LOG.error(
-                "예상하지 못한 요청 처리 오류 requestId={} exceptionType={} causeTypes={} stackFrames={}",
-                requestId,
-                exception.getClass().getName(),
-                causeTypes(exception),
-                stackFrames(exception)
-        );
-    }
-
-    private List<String> causeTypes(Exception exception) {
-        Set<Throwable> visited = Collections.newSetFromMap(new IdentityHashMap<>());
-        visited.add(exception);
-        return Stream.iterate(
-                        (Throwable) exception,
-                        Objects::nonNull,
-                        Throwable::getCause
-                )
-                .skip(1)
-                .takeWhile(visited::add)
-                .limit(MAX_LOGGED_CAUSE_TYPES)
-                .map(cause -> cause.getClass().getName())
-                .toList();
-    }
-
-    private List<String> stackFrames(Exception exception) {
-        return Arrays.stream(exception.getStackTrace())
-                .limit(MAX_LOGGED_STACK_FRAMES)
-                .map(StackTraceElement::toString)
-                .toList();
+    private void logUnexpected(Exception exception) {
+        LOG.error("예상하지 못한 요청 처리 오류 requestId={} stackTrace={}", RequestIdFilter.currentRequestId(),
+                UNEXPECTED_STACK_TRACE.printStackTraceToString(exception).strip());
     }
 }

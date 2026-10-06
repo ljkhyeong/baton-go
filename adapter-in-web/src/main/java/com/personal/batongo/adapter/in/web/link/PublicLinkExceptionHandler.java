@@ -3,12 +3,7 @@ package com.personal.batongo.adapter.in.web.link;
 import com.personal.batongo.adapter.in.web.ErrorResponse;
 import com.personal.batongo.adapter.in.web.GlobalExceptionHandler;
 import com.personal.batongo.adapter.in.web.PublicLinkErrorPage;
-import com.personal.batongo.adapter.in.web.PublicResolverRateLimitExceededException;
-import com.personal.batongo.application.link.error.LinkNotFoundException;
-import com.personal.batongo.application.link.error.PublicResolverQuotaUnavailableException;
-import com.personal.batongo.application.link.error.StoredTargetPolicyViolationException;
 import com.personal.batongo.domain.link.LinkUnavailableException;
-import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -34,23 +29,14 @@ public class PublicLinkExceptionHandler {
     }
 
     @ExceptionHandler(produces = {MediaType.APPLICATION_JSON_VALUE, MediaType.ALL_VALUE})
-    public ResponseEntity<ErrorResponse> json(Exception exception, HttpServletRequest request) {
-        return switch (exception) {
-            case LinkUnavailableException unavailable -> errors.handleUnavailable(unavailable, request);
-            case PublicResolverRateLimitExceededException limited ->
-                    errors.handlePublicResolverRateLimited(limited, request);
-            case PublicResolverQuotaUnavailableException quota -> errors.handleQuotaUnavailable(quota, request);
-            case StoredTargetPolicyViolationException violation ->
-                    errors.handleStoredTargetPolicyViolation(violation, request);
-            case LinkNotFoundException ignored -> errors.handleNotFound(request);
-            default -> errors.handleUnexpected(exception, request);
-        };
+    public ResponseEntity<ErrorResponse> json(Exception exception) {
+        return errors.handle(exception);
     }
 
     @ExceptionHandler(produces = MediaType.TEXT_HTML_VALUE)
-    public ResponseEntity<String> html(Exception exception, HttpServletRequest request) {
+    public ResponseEntity<String> html(Exception exception) {
         return errorPage.render(
-                json(exception, request),
+                json(exception),
                 exception instanceof LinkUnavailableException unavailable ? unavailable.notBefore() : null
         );
     }

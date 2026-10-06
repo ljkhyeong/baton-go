@@ -1,12 +1,9 @@
 package com.personal.batongo.adapter.in.web;
 
 import java.security.Principal;
-import java.util.LinkedHashMap;
-import java.util.Map;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.slf4j.MDC;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.ObjectWriter;
 import tools.jackson.databind.SerializationFeature;
@@ -24,11 +21,11 @@ public class ManagementOperationLogger {
     }
 
     public void completed(String operation, UUID linkId, Principal principal) {
-        Map<String, Object> event = new LinkedHashMap<>();
-        event.put("operation", operation);
-        event.put("serviceId", principal.getName());
-        event.put("linkId", linkId);
-        event.put("requestId", MDC.get(RequestIdFilter.MDC_KEY));
+        var event = new Event(operation, principal.getName(), linkId, RequestIdFilter.currentRequestId());
         LOG.info("관리 작업 완료 {}", writer.writeValueAsString(event));
+    }
+
+    /** Jackson 기본 설정(SORT_CREATOR_PROPERTIES_FIRST)이 구성요소 순서를 유지하므로 RUNBOOK 예시 순서로 둔다. */
+    private record Event(String operation, String serviceId, UUID linkId, String requestId) {
     }
 }

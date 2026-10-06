@@ -23,6 +23,7 @@ import com.personal.batongo.application.link.error.LinkNotFoundException;
 import com.personal.batongo.application.link.error.StoredTargetPolicyViolationException;
 import com.personal.batongo.application.link.port.in.ResolveLinkUseCase;
 import com.personal.batongo.application.link.port.in.ResolveLinkUseCase.ResolvedLinkResult;
+import com.personal.batongo.domain.link.LinkAvailabilityPolicy.Status;
 import com.personal.batongo.domain.link.LinkUnavailableException;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.io.IOException;
@@ -144,7 +145,7 @@ class PublicLinkHttpContractTest {
     })
     @DisplayName("사용할 수 없는 공개 링크는 사유별로 정해진 오류를 반환한다")
     void returnsUnavailableContract(
-            LinkUnavailableException.Reason reason,
+            Status reason,
             int expectedStatus,
             String expectedCode
     ) throws Exception {
@@ -152,7 +153,7 @@ class PublicLinkHttpContractTest {
                 .thenThrow(new LinkUnavailableException(
                         reason,
                         "링크를 사용할 수 없습니다",
-                        reason == LinkUnavailableException.Reason.NOT_ACTIVE ? NOT_BEFORE : null
+                        reason == Status.NOT_ACTIVE ? NOT_BEFORE : null
                 ));
 
         mockMvc.perform(get("/l/VOvLShvx93kQpj8x7w2HYQ"))
@@ -192,12 +193,12 @@ class PublicLinkHttpContractTest {
     })
     @DisplayName("브라우저에는 링크 상태와 다음 행동을 한글 HTML로 안내한다")
     void rendersUnavailableLinkPage(
-            LinkUnavailableException.Reason reason, int expectedStatus,
+            Status reason, int expectedStatus,
             String message, String guidance
     ) throws Exception {
         when(useCase.resolveLink("private-link-code"))
                 .thenThrow(new LinkUnavailableException(reason, message,
-                        reason == LinkUnavailableException.Reason.NOT_ACTIVE ? NOT_BEFORE : null));
+                        reason == Status.NOT_ACTIVE ? NOT_BEFORE : null));
 
         var response = mockMvc.perform(get("/l/private-link-code")
                         .accept(MediaType.TEXT_HTML)
@@ -215,7 +216,7 @@ class PublicLinkHttpContractTest {
         assertThat(response.getContentAsString()).contains(
                         "<html lang=\"ko\">", message, guidance, "browser-error-request"
                 ).doesNotContain("private-link-code", BATON_TARGET_PATH, "<script");
-        if (reason == LinkUnavailableException.Reason.NOT_ACTIVE) {
+        if (reason == Status.NOT_ACTIVE) {
             assertThat(response.getContentAsString()).contains("<a class=\"retry\" href=\"\">다시 열기</a>");
         } else {
             assertThat(response.getContentAsString()).doesNotContain("다시 열기");
@@ -230,7 +231,7 @@ class PublicLinkHttpContractTest {
     @DisplayName("이용 시작 시각은 정밀도를 유지하고 시각이 없으면 기존 안내를 표시한다")
     void rendersStartTimeGuidance(Instant notBefore, String guidance) throws Exception {
         when(useCase.resolveLink("private-link-code"))
-                .thenThrow(new LinkUnavailableException(LinkUnavailableException.Reason.NOT_ACTIVE,
+                .thenThrow(new LinkUnavailableException(Status.NOT_ACTIVE,
                         "아직 사용할 수 없는 링크입니다", notBefore));
 
         var response = mockMvc.perform(get("/l/private-link-code").accept(MediaType.TEXT_HTML))

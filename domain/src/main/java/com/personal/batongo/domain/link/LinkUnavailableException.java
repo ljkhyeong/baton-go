@@ -1,33 +1,24 @@
 package com.personal.batongo.domain.link;
 
+import com.personal.batongo.domain.link.LinkAvailabilityPolicy.Status;
 import java.time.Instant;
 
 public class LinkUnavailableException extends RuntimeException {
 
-    private final Reason reason;
+    private final Status status;
     private final Instant notBefore;
 
-    public LinkUnavailableException(Reason reason, String message) {
-        this(reason, message, null);
-    }
-
-    public LinkUnavailableException(Reason reason, String message, Instant notBefore) {
+    public LinkUnavailableException(Status status, String message, Instant notBefore) {
         super(message);
-        this.reason = reason;
+        this.status = status;
         this.notBefore = notBefore;
     }
 
-    public Reason reason() {
-        return reason;
+    public Status status() {
+        return status;
     }
 
     public Instant notBefore() {
         return notBefore;
-    }
-
-    public enum Reason {
-        NOT_ACTIVE,
-        EXPIRED,
-        REVOKED
     }
 }

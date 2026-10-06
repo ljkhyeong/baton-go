@@ -12,6 +12,7 @@ import com.personal.batongo.adapter.in.web.WebMvcConfiguration;
 import com.personal.batongo.application.link.error.LinkNotFoundException;
 import com.personal.batongo.application.link.error.StoredTargetPolicyViolationException;
 import com.personal.batongo.application.link.port.in.ResolveLinkUseCase;
+import com.personal.batongo.domain.link.LinkAvailabilityPolicy.Status;
 import com.personal.batongo.domain.link.LinkUnavailableException;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.net.URI;
@@ -155,10 +156,10 @@ class PublicErrorResponseIntegrationTest {
 
     private static Stream<Arguments> headErrors() {
         return Stream.of(
-                Arguments.of(new LinkUnavailableException(LinkUnavailableException.Reason.NOT_ACTIVE,
+                Arguments.of(new LinkUnavailableException(Status.NOT_ACTIVE,
                         "아직 사용할 수 없는 링크입니다", Instant.parse("2026-07-29T15:30:00Z")),
                         MediaType.TEXT_HTML_VALUE, 404),
-                Arguments.of(new LinkUnavailableException(LinkUnavailableException.Reason.EXPIRED, "만료된 링크입니다"),
+                Arguments.of(new LinkUnavailableException(Status.EXPIRED, "만료된 링크입니다", null),
                         MediaType.TEXT_HTML_VALUE, 410),
                 Arguments.of(new IllegalStateException("서버 오류"), MediaType.TEXT_HTML_VALUE, 500),
                 Arguments.of(new StoredTargetPolicyViolationException(UUID.fromString(

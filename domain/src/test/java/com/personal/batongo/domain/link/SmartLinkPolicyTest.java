@@ -36,7 +36,7 @@ class SmartLinkPolicyTest {
                     revokedAt, notBefore, expiresAt, now
             ))
                     .isInstanceOfSatisfying(LinkUnavailableException.class, exception -> {
-                        assertThat(exception.reason().name()).isEqualTo(expected.name());
+                        assertThat(exception.status()).isEqualTo(expected);
                         assertThat(exception.notBefore())
                                 .isEqualTo(expected == Status.NOT_ACTIVE ? notBefore : null);
                     });

@@ -3,14 +3,12 @@ package com.personal.batongo.adapter.in.web;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-import java.util.regex.Pattern;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.http.HttpStatus;
-import org.springframework.mock.web.MockHttpServletRequest;
 
 @ExtendWith(OutputCaptureExtension.class)
 class GlobalExceptionHandlerTest {
@@ -35,12 +33,10 @@ class GlobalExceptionHandlerTest {
             );
         }
         exception.setStackTrace(stackFrames);
+        exception.addSuppressed(new IllegalArgumentException(sensitiveMessage + "-suppressed"));
 
         var registry = new SimpleMeterRegistry();
-        var response = new GlobalExceptionHandler(registry).handleUnexpected(
-                exception,
-                new MockHttpServletRequest()
-        );
+        var response = new GlobalExceptionHandler(registry).handle(exception);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
         assertThat(registry.find("baton.go.management.link.recovery.failures").counters())
@@ -59,10 +55,5 @@ class GlobalExceptionHandlerTest {
                 .doesNotContain("com.personal.batongo.SafeService12.execute12(SafeService.java:13)")
                 .doesNotContain(sensitiveMessage)
                 .doesNotContain(sensitiveCause);
-        assertThat(output.getOut().split(
-                Pattern.quote(RuntimeException.class.getName()),
-                -1
-        ))
-                .hasSize(9);
     }
 }

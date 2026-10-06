@@ -597,10 +597,11 @@ kubectl label namespace <approved-edge-or-caller-namespace> \
 DB 장애와 분산 요청 제한을 켠 경우의 Redis 상태 확인(`INFO`) 실패는 준비 상태만 503으로 바꾸며
 생존 상태에는 포함하지 않는다. Prometheus 등 나머지 Actuator 경로는 `8081`을 유지한다.
 
-애플리케이션은 Spring Boot 정상 종료를 사용한다. 종료 신호를 받으면 새 요청 수락을 멈추고
+애플리케이션은 Spring Boot 기본 정상 종료(`server.shutdown=graceful`,
+`spring.lifecycle.timeout-per-shutdown-phase=30s`)를 사용한다. 종료 신호를 받으면 새 요청 수락을 멈추고
 진행 중인 요청을 최대 30초 기다린다. Kubernetes의 `terminationGracePeriodSeconds`와 Compose의
-`stop_grace_period`는 모두 40초다. 종료 제한을 늘릴 때는 컨테이너 강제 종료 제한도 같은 값보다
-길게 유지한다.
+`stop_grace_period`는 모두 40초다. 종료 제한을 늘릴 때는 대기 시간 속성을 설정하고 컨테이너 강제 종료
+제한도 같은 값보다 길게 유지한다. Spring Boot를 올릴 때 두 기본값이 바뀌었는지 확인한다.
 
 Deployment는 롤링 업데이트 중 가용 Pod를 줄이지 않고(`maxUnavailable: 0`) 최대 한 개의 새 Pod만
 추가한다(`maxSurge: 1`). 새 Pod가 10초간 준비 상태를 유지해야 가용 상태로 인정한다. 클러스터에

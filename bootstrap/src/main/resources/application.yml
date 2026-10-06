@@ -1,8 +1,6 @@
 spring:
   application:
     name: baton-go
-  lifecycle:
-    timeout-per-shutdown-phase: 30s
   security:
     oauth2:
       resourceserver:
@@ -42,9 +40,6 @@ spring:
       repositories:
         enabled: false
 
-server:
-  shutdown: graceful
-
 management:
   health:
     redis:
@@ -58,7 +53,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,metrics,prometheus
+        include: health,prometheus
   endpoint:
     health:
       # 분산 요청 제한을 끄면 redis 상태 확인이 없으므로 준비 상태 묶음에서 빠진다.

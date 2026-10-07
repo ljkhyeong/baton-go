@@ -7,19 +7,15 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.nimbusds.jose.jwk.JWKSet;
-import com.nimbusds.jose.jwk.RSAKey;
+import com.nimbusds.jose.jwk.gen.RSAKeyGenerator;
+import com.nimbusds.jose.jwk.source.ImmutableJWKSet;
 import com.sun.net.httpserver.HttpServer;
-import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
-import java.security.KeyPair;
-import java.security.KeyPairGenerator;
-import java.security.NoSuchAlgorithmException;
-import java.security.interfaces.RSAPrivateKey;
-import java.security.interfaces.RSAPublicKey;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -48,11 +44,9 @@ import org.testcontainers.mysql.MySQLContainer;
 @TestPropertySource("mysql-it.properties")
 class ManagementJwtBootstrapIntegrationTest {
 
-    private static final String JWT_KEY_ID = "management-integration-test";
-    private static final KeyPair JWT_KEY_PAIR = jwtKeyPair();
-    private static final HttpServer JWT_SERVER = startJwtServer();
-    private static final String JWT_ISSUER =
-            "http://127.0.0.1:" + JWT_SERVER.getAddress().getPort() + "/issuer";
+    private static HttpServer jwtServer;
+    private static JwtEncoder jwtEncoder;
+    private static String jwtIssuer;
 
     @Container
     @ServiceConnection(name = "mysql")
@@ -62,17 +56,34 @@ class ManagementJwtBootstrapIntegrationTest {
     static void managementJwtProperties(DynamicPropertyRegistry registry) {
         registry.add(
                 "spring.security.oauth2.resourceserver.jwt.issuer-uri",
-                () -> JWT_ISSUER
+                () -> jwtIssuer
         );
         registry.add(
                 "spring.security.oauth2.resourceserver.jwt.jwk-set-uri",
-                () -> JWT_ISSUER + "/jwks"
+                () -> jwtIssuer + "/jwks"
         );
+    }
+
+    @BeforeAll
+    static void startJwtServer() throws Exception {
+        var jwkSet = new JWKSet(new RSAKeyGenerator(2048).keyID("management-integration-test").generate());
+        jwtEncoder = new NimbusJwtEncoder(new ImmutableJWKSet<>(jwkSet));
+        byte[] body = jwkSet.toString().getBytes(StandardCharsets.UTF_8);
+        jwtServer = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        jwtServer.createContext("/issuer/jwks", exchange -> {
+            exchange.getResponseHeaders().set(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE);
+            exchange.sendResponseHeaders(200, body.length);
+            try (var output = exchange.getResponseBody()) {
+                output.write(body);
+            }
+        });
+        jwtServer.start();
+        jwtIssuer = "http://127.0.0.1:" + jwtServer.getAddress().getPort() + "/issuer";
     }
 
     @AfterAll
     static void stopJwtServer() {
-        JWT_SERVER.stop(0);
+        jwtServer.stop(0);
     }
 
     private static final String MISSING_LINK_PATH =
@@ -99,7 +110,7 @@ class ManagementJwtBootstrapIntegrationTest {
         mockMvc.perform(get(MISSING_LINK_PATH)
                         .header(
                                 HttpHeaders.AUTHORIZATION,
-                                "Bearer " + managementJwt(JWT_ISSUER, "baton-go")
+                                "Bearer " + managementJwt(jwtIssuer, "baton-go")
                         ))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("LINK_NOT_FOUND"));
@@ -107,7 +118,7 @@ class ManagementJwtBootstrapIntegrationTest {
         mockMvc.perform(get(MISSING_LINK_PATH)
                         .header(
                                 HttpHeaders.AUTHORIZATION,
-                                "Bearer " + managementJwt(JWT_ISSUER, "another-service")
+                                "Bearer " + managementJwt(jwtIssuer, "another-service")
                         ))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code")
@@ -117,7 +128,7 @@ class ManagementJwtBootstrapIntegrationTest {
                         .header(
                                 HttpHeaders.AUTHORIZATION,
                                 "Bearer " + managementJwt(
-                                        JWT_ISSUER + "/another-issuer",
+                                        jwtIssuer + "/another-issuer",
                                         "baton-go"
                                 )
                         ))
@@ -136,52 +147,6 @@ class ManagementJwtBootstrapIntegrationTest {
                 .expiresAt(now.plusSeconds(60))
                 .claim("scope", "baton-go.links.read")
                 .build();
-        JwtEncoder encoder = NimbusJwtEncoder.withKeyPair(
-                        (RSAPublicKey) JWT_KEY_PAIR.getPublic(),
-                        (RSAPrivateKey) JWT_KEY_PAIR.getPrivate()
-                )
-                .jwkPostProcessor(key -> key.keyID(JWT_KEY_ID))
-                .build();
-        return encoder.encode(JwtEncoderParameters.from(claims)).getTokenValue();
-    }
-
-    private static KeyPair jwtKeyPair() {
-        try {
-            KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
-            generator.initialize(2048);
-            return generator.generateKeyPair();
-        } catch (NoSuchAlgorithmException exception) {
-            throw new IllegalStateException("RSA 테스트 키를 생성할 수 없습니다", exception);
-        }
-    }
-
-    private static HttpServer startJwtServer() {
-        try {
-            RSAKey publicKey = new RSAKey.Builder(
-                    (RSAPublicKey) JWT_KEY_PAIR.getPublic()
-            ).keyID(JWT_KEY_ID).build();
-            byte[] jwkSet = new JWKSet(publicKey)
-                    .toPublicJWKSet()
-                    .toString()
-                    .getBytes(StandardCharsets.UTF_8);
-            HttpServer server = HttpServer.create(
-                    new InetSocketAddress("127.0.0.1", 0),
-                    0
-            );
-            server.createContext("/issuer/jwks", exchange -> {
-                exchange.getResponseHeaders().set(
-                        HttpHeaders.CONTENT_TYPE,
-                        MediaType.APPLICATION_JSON_VALUE
-                );
-                exchange.sendResponseHeaders(200, jwkSet.length);
-                try (var response = exchange.getResponseBody()) {
-                    response.write(jwkSet);
-                }
-            });
-            server.start();
-            return server;
-        } catch (IOException exception) {
-            throw new IllegalStateException("관리 JWT 테스트 서버를 시작할 수 없습니다", exception);
-        }
+        return jwtEncoder.encode(JwtEncoderParameters.from(claims)).getTokenValue();
     }
 }

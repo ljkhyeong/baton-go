@@ -9,7 +9,6 @@ import static org.mockito.Mockito.when;
 import static org.springframework.restdocs.mockmvc.MockMvcRestDocumentation.document;
 import static org.springframework.restdocs.mockmvc.MockMvcRestDocumentation.documentationConfiguration;
 import static org.springframework.restdocs.operation.preprocess.Preprocessors.modifyHeaders;
-import static org.springframework.restdocs.operation.preprocess.Preprocessors.preprocessRequest;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -61,7 +60,6 @@ import org.springframework.http.MediaType;
 import org.springframework.http.converter.json.JacksonJsonHttpMessageConverter;
 import org.springframework.restdocs.RestDocumentationContextProvider;
 import org.springframework.restdocs.RestDocumentationExtension;
-import org.springframework.restdocs.mockmvc.RestDocumentationResultHandler;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -104,7 +102,9 @@ class LinkManagementHttpContractTest {
                 .setContentNegotiationManager(mvcConfiguration.mvcContentNegotiationManager())
                 .setMessageConverters(new JacksonJsonHttpMessageConverter(jsonMapper))
                 .addFilters(new RequestIdFilter())
-                .apply(documentationConfiguration(restDocumentation))
+                // 관리 API 예시에는 실제 토큰 대신 자리표시자 Authorization을 문서에만 넣는다.
+                .apply(documentationConfiguration(restDocumentation).operationPreprocessors()
+                        .withRequestDefaults(modifyHeaders().set(HttpHeaders.AUTHORIZATION, "Bearer <management-jwt>")))
                 .build();
     }
 
@@ -258,7 +258,7 @@ class LinkManagementHttpContractTest {
                 .andExpect(jsonPath("$.targetPath").value(BATON_TARGET_PATH))
                 .andExpect(jsonPath("$.purpose").value("NAVIGATION"))
                 .andExpect(jsonPath("$.createdAt").value("2026-07-29T10:00:00Z"))
-                .andDo(documentManagementEndpoint("links-create"));
+                .andDo(document("links-create"));
 
         assertThat(output).contains(
                 "\"operation\":\"LINK_CREATE\"",
@@ -282,7 +282,7 @@ class LinkManagementHttpContractTest {
                 ))
                 .andExpect(jsonPath("$.shortUrl")
                         .value("https://go.example/l/VOvLShvx93kQpj8x7w2HYQ"))
-                .andDo(documentManagementEndpoint("links-create-replay"));
+                .andDo(document("links-create-replay"));
 
         assertThat(output).contains("\"operation\":\"LINK_CREATE_REPLAY\"");
     }
@@ -340,7 +340,7 @@ class LinkManagementHttpContractTest {
                 .andExpect(jsonPath("$.status").value("ACTIVE"))
                 .andExpect(jsonPath("$.evaluatedAt").value(CREATED_AT.plusSeconds(60).toString()))
                 .andExpect(jsonPath("$.shortUrl").doesNotExist())
-                .andDo(documentManagementEndpoint("links-get"));
+                .andDo(document("links-get"));
 
         assertThat(output).doesNotContain("관리 작업 완료");
     }
@@ -371,7 +371,7 @@ class LinkManagementHttpContractTest {
                 .andExpect(jsonPath("$.status").value("REVOKED"))
                 .andExpect(jsonPath("$.evaluatedAt").value(firstRevokedAt.plusSeconds(60).toString()))
                 .andExpect(jsonPath("$.shortUrl").doesNotExist())
-                .andDo(documentManagementEndpoint("links-revoke"));
+                .andDo(document("links-revoke"));
 
         verify(useCase).revokeLink(LINK_ID);
         assertThat(output).contains("\"operation\":\"LINK_REVOKE\"");
@@ -568,15 +568,6 @@ class LinkManagementHttpContractTest {
 
     private CreatedLinkResult createdLink(boolean replayed) {
         return new CreatedLinkResult(linkResult(), URI.create("https://go.example/l/VOvLShvx93kQpj8x7w2HYQ"), replayed);
-    }
-
-    private static RestDocumentationResultHandler documentManagementEndpoint(
-            String identifier
-    ) {
-        return document(identifier, preprocessRequest(modifyHeaders().set(
-                HttpHeaders.AUTHORIZATION,
-                "Bearer <management-jwt>"
-        )));
     }
 
     private LinkResult linkResult() {

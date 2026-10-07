@@ -970,8 +970,8 @@ StatefulSet 삭제는 기본적으로 PVC를 보존하지만 Namespace 삭제는
 ## 9. 데이터 보존과 용량
 
 기본 설정에서는 만료·폐기된 `smart_links`와 재시도 시 기존 결과를 확인하는
-`link_creation_requests`를 자동 삭제하지 않는다. `expires_at` 인덱스가 있다는 사실은
-정리 정책이나 정리 Job이 있다는 뜻이 아니다. 임의 TTL을 추가하면 다음 계약이
+`link_creation_requests`를 자동 삭제하지 않는다. 자동 정리는 기본값이 꺼져 있으며 설정은
+[링크 보존 기간 설정](link-retention.md)을 따른다. 임의 TTL을 추가하면 다음 계약이
 함께 바뀌므로 공개 운영 전에 제품·운영·보안 담당자가 같이 결정한다.
 
 - 같은 `Idempotency-Key`로 재시도할 때 기존 단축 URL 반환과 `IDEMPOTENCY_KEY_REUSED`

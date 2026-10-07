@@ -1,6 +1,7 @@
 .git
 .gradle
 **/build
+**/src/test
 .idea
 .env*
 deploy/app.env

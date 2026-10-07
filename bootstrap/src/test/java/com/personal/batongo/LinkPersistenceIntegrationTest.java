@@ -14,6 +14,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.personal.batongo.application.link.CreationIdempotencyKey;
+import com.personal.batongo.application.link.LinkCodeHash;
 import com.personal.batongo.application.link.error.PublicLinkOriginReplayUnavailableException;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.CreateLinkCommand;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.CreatedLinkResult;
@@ -174,7 +175,7 @@ class LinkPersistenceIntegrationTest {
         smartLinkUseCase.revokeLink(revoked.id());
         UUID missingId = UUID.randomUUID();
         UUID hiddenId = UUID.randomUUID();
-        insertStoredLink(hiddenId.toString(), linkCodePort.hash(UUID.randomUUID().toString().substring(0, 22)),
+        insertStoredLink(hiddenId.toString(), LinkCodeHash.of(UUID.randomUUID().toString().substring(0, 22)),
                 "UNKNOWN", "/private-target", "UNKNOWN");
 
         mockMvc.perform(get("/api/v1/links/batch")
@@ -311,7 +312,7 @@ class LinkPersistenceIntegrationTest {
         String idempotencyKey = "cc9d17dd-d02d-4c14-842c-afbb03887fc6";
         String linkId = "93d4229a-0edf-4d85-a769-0efb7e58c179";
         String targetPath = "/room/qrst-6789-uvwx";
-        insertStoredLink(linkId, linkCodePort.issue(idempotencyKey, "default").codeHash(),
+        insertStoredLink(linkId, LinkCodeHash.of(linkCodePort.issue(idempotencyKey, "default")),
                 "ROUND", targetPath, "MEETING_ENTRY");
         insertReservation(idempotencyKey, linkId, "HTTPS://GO.EXAMPLE");
 
@@ -351,7 +352,7 @@ class LinkPersistenceIntegrationTest {
         String invalidTargetCode = "A".repeat(22);
         insertStoredLink(
                 "ae1e4899-d73f-42f6-82cf-43cc1723939f",
-                linkCodePort.hash(invalidTargetCode),
+                LinkCodeHash.of(invalidTargetCode),
                 "BATON",
                 "/teams/legacy-target",
                 "NAVIGATION"
@@ -366,7 +367,7 @@ class LinkPersistenceIntegrationTest {
         String unknownEnumCode = "B".repeat(22);
         insertStoredLink(
                 "70f147f2-b02a-4a63-bc27-bf60e44db591",
-                linkCodePort.hash(unknownEnumCode),
+                LinkCodeHash.of(unknownEnumCode),
                 "LEGACY",
                 CANONICAL_BATON_TARGET,
                 "NAVIGATION"
@@ -437,7 +438,7 @@ class LinkPersistenceIntegrationTest {
             String rawTargetPath,
             String rawPurpose
     ) throws Exception {
-        String codeHash = linkCodePort.issue(idempotencyKey, "default").codeHash();
+        String codeHash = LinkCodeHash.of(linkCodePort.issue(idempotencyKey, "default"));
         insertStoredLink(linkId, codeHash, rawTargetSystem, rawTargetPath, rawPurpose);
         insertReservation(idempotencyKey, linkId, "https://go.example");
 

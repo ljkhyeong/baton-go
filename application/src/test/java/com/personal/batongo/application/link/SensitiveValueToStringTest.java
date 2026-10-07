@@ -6,7 +6,6 @@ import com.personal.batongo.application.link.port.in.SmartLinkUseCase.CreateLink
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.CreatedLinkResult;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.LinkResult;
 import com.personal.batongo.application.link.port.in.ResolveLinkUseCase.ResolvedLinkResult;
-import com.personal.batongo.application.link.port.out.IssuedLinkCode;
 import com.personal.batongo.domain.link.LinkPurpose;
 import com.personal.batongo.domain.link.TargetSystem;
 import java.net.URI;
@@ -24,7 +23,6 @@ class SensitiveValueToStringTest {
             "/teams/8e448211-66ae-44ab-9888-c4960648c22b"
                     + "/seasons/713d9cb7-2842-4f9f-b3cc-e31d98c6238a";
     private static final String RAW_CODE = "abcdefghijklmnopqrstuv";
-    private static final String CODE_HASH = "a".repeat(64);
     private static final URI SHORT_URL = URI.create("https://go.example/l/" + RAW_CODE);
 
     @Test
@@ -54,7 +52,6 @@ class SensitiveValueToStringTest {
                         null,
                         null
                 ),
-                new IssuedLinkCode(RAW_CODE, CODE_HASH),
                 new CreatedLinkResult(
                         link,
                         SHORT_URL,
@@ -67,7 +64,6 @@ class SensitiveValueToStringTest {
         assertThat(values.toString())
                 .doesNotContain(IDEMPOTENCY_KEY)
                 .doesNotContain(RAW_CODE)
-                .doesNotContain(CODE_HASH)
                 .doesNotContain(SHORT_URL.toString())
                 .doesNotContain("go.example")
                 .doesNotContain(TARGET_PATH);

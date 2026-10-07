@@ -19,7 +19,6 @@ import com.personal.batongo.application.link.error.LinkNotFoundException;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.CreateLinkCommand;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.LinkResult;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.LinkSearchQuery;
-import com.personal.batongo.application.link.port.out.IssuedLinkCode;
 import com.personal.batongo.application.link.port.out.LinkCodeKeyGuardPort;
 import com.personal.batongo.application.link.port.out.LinkCodePort;
 import com.personal.batongo.application.link.port.out.LinkCreationReservationPort;
@@ -52,7 +51,7 @@ class SmartLinkServiceTest {
             "d3014090-bd91-4bfc-8a42-89b7f1800c32"
     );
     private static final String RAW_CODE = "abcdefghijklmnopqrstuv";
-    private static final String CODE_HASH = "b".repeat(64);
+    private static final String CODE_HASH = LinkCodeHash.of(RAW_CODE);
     private static final String BATON_PATH =
             "/teams/8e448211-66ae-44ab-9888-c4960648c22b"
                     + "/seasons/713d9cb7-2842-4f9f-b3cc-e31d98c6238a";
@@ -79,7 +78,7 @@ class SmartLinkServiceTest {
         when(linkCodePort.keyRingIdentity()).thenReturn(new LinkCodeKeyRingIdentity("default", Map.of(
                 "default", new LinkCodeDerivationIdentity("hmac-sha256-link-code-v1", "a".repeat(64))
         )));
-        when(linkCodePort.issue(anyString(), anyString())).thenReturn(new IssuedLinkCode(RAW_CODE, CODE_HASH));
+        when(linkCodePort.issue(anyString(), anyString())).thenReturn(RAW_CODE);
         when(publicLinkOriginPort.current()).thenReturn(PUBLIC_ORIGIN);
     }
 
@@ -117,8 +116,7 @@ class SmartLinkServiceTest {
     void rejectsReplayWhenCodeDerivationChanges() {
         Instant expiresAt = NOW.plusSeconds(300);
         configureReplay(expiresAt);
-        when(linkCodePort.issue(anyString(), anyString()))
-                .thenReturn(new IssuedLinkCode("differentRawCodeValue1", "d".repeat(64)));
+        when(linkCodePort.issue(anyString(), anyString())).thenReturn("differentRawCodeValue1");
 
         assertThatThrownBy(() -> service.createLink(command(expiresAt)))
                 .isExactlyInstanceOf(LinkCodeReplayMismatchException.class);

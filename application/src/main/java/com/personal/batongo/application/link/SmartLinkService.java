@@ -8,7 +8,6 @@ import com.personal.batongo.application.link.error.LinkNotFoundException;
 import com.personal.batongo.application.link.error.LinkPurgedException;
 import com.personal.batongo.application.link.error.PublicLinkOriginReplayUnavailableException;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase;
-import com.personal.batongo.application.link.port.out.IssuedLinkCode;
 import com.personal.batongo.application.link.port.out.LinkCodeKeyGuardPort;
 import com.personal.batongo.application.link.port.out.LinkCodePort;
 import com.personal.batongo.application.link.port.out.LinkCreationReservationPort;
@@ -88,17 +87,15 @@ public class SmartLinkService implements SmartLinkUseCase {
                     ? new LinkPurgedException()
                     : new IdempotencyKeyConflictException();
         }
-        IssuedLinkCode issuedCode = linkCodePort.issue(
-                command.idempotencyKey().value(), reservation.keyId()
-        );
+        String rawCode = linkCodePort.issue(command.idempotencyKey().value(), reservation.keyId());
 
         if (!reservation.owner()) {
-            return replayCreation(reservation, requestedTarget, requestHash, issuedCode);
+            return replayCreation(reservation, requestedTarget, requestHash, rawCode);
         }
 
         repository.save(new SmartLink(
                 reservation.linkId(),
-                issuedCode.codeHash(),
+                LinkCodeHash.of(rawCode),
                 requestedTarget,
                 command.notBefore(),
                 command.expiresAt(),
@@ -116,7 +113,7 @@ public class SmartLinkService implements SmartLinkUseCase {
                         now,
                         now
                 ),
-                currentOrigin.shortUrl(issuedCode.rawCode()),
+                currentOrigin.shortUrl(rawCode),
                 false
         );
     }
@@ -125,7 +122,7 @@ public class SmartLinkService implements SmartLinkUseCase {
             LinkCreationReservationPort.Reservation reservation,
             TrustedTarget requestedTarget,
             String requestHash,
-            IssuedLinkCode issuedCode
+            String rawCode
     ) {
         StoredLink existing = repository.findById(reservation.linkId())
                 .orElseThrow(() -> new LinkCreationReplayUnavailableException(
@@ -136,13 +133,13 @@ public class SmartLinkService implements SmartLinkUseCase {
         if (!requestHash.equals(storedHash)) {
             throw new IdempotencyKeyConflictException();
         }
-        if (!existing.codeHash().equals(issuedCode.codeHash())) {
+        if (!existing.codeHash().equals(LinkCodeHash.of(rawCode))) {
             throw new LinkCodeReplayMismatchException();
         }
         PublicLinkOrigin storedOrigin = requireReplayOrigin(reservation.publicOrigin());
         return new CreatedLinkResult(
                 toResult(existing, requestedTarget, existing.revokedAt(), clock.instant()),
-                storedOrigin.shortUrl(issuedCode.rawCode()),
+                storedOrigin.shortUrl(rawCode),
                 true
         );
     }

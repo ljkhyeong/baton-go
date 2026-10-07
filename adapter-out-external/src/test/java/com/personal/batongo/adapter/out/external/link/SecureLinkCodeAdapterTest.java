@@ -3,7 +3,7 @@ package com.personal.batongo.adapter.out.external.link;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.personal.batongo.application.link.error.LinkNotFoundException;
+import com.personal.batongo.application.link.LinkCodeHash;
 import com.personal.batongo.application.link.error.LinkCodeReplayMismatchException;
 import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
@@ -32,12 +32,11 @@ class SecureLinkCodeAdapterTest {
     @Test
     @DisplayName("HMAC SHA-256 v1 파생 규약은 고정 벡터와 일치한다")
     void matchesVersionOneFixedVector() {
-        var issued = adapter.issue(IDEMPOTENCY_KEY, "default");
+        String rawCode = adapter.issue(IDEMPOTENCY_KEY, "default");
 
-        assertThat(issued.rawCode()).isEqualTo("WgRX_ulMUrIGxM0IYBOpqA");
-        assertThat(issued.codeHash())
+        assertThat(rawCode).isEqualTo("WgRX_ulMUrIGxM0IYBOpqA");
+        assertThat(LinkCodeHash.of(rawCode))
                 .isEqualTo("cc1d2daca7a315a27cbccb3eac92571648228f5975376bca32da45b2f33af247");
-        assertThat(adapter.hash(issued.rawCode())).isEqualTo(issued.codeHash());
     }
 
     @Test
@@ -64,14 +63,5 @@ class SecureLinkCodeAdapterTest {
 
         assertThat(composedAdapter.keyRingIdentity().keys())
                 .isNotEqualTo(decomposedAdapter.keyRingIdentity().keys());
-    }
-
-    @Test
-    @DisplayName("22자 Base64 URL 형식이 아닌 공개 코드는 해시하지 않는다")
-    void rejectsMalformedCode() {
-        assertThatThrownBy(() -> adapter.hash("short"))
-                .isInstanceOf(LinkNotFoundException.class);
-        assertThatThrownBy(() -> adapter.hash("a".repeat(21) + "/"))
-                .isInstanceOf(LinkNotFoundException.class);
     }
 }

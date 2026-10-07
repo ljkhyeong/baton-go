@@ -6,7 +6,5 @@ public interface LinkCodePort {
 
     LinkCodeKeyRingIdentity keyRingIdentity();
 
-    IssuedLinkCode issue(String idempotencyKey, String keyId);
-
-    String hash(String rawCode);
+    String issue(String idempotencyKey, String keyId);
 }

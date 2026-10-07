@@ -3,19 +3,14 @@ package com.personal.batongo.adapter.out.external.link;
 import com.personal.batongo.application.link.LinkCodeDerivationIdentity;
 import com.personal.batongo.application.link.LinkCodeKeyRingIdentity;
 import com.personal.batongo.application.link.error.LinkCodeReplayMismatchException;
-import com.personal.batongo.application.link.error.LinkNotFoundException;
-import com.personal.batongo.application.link.port.out.IssuedLinkCode;
 import com.personal.batongo.application.link.port.out.LinkCodePort;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.HexFormat;
 import java.util.Map;
 import java.util.stream.Collectors;
-import java.util.regex.Pattern;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import org.springframework.stereotype.Component;
@@ -26,7 +21,6 @@ public class SecureLinkCodeAdapter implements LinkCodePort {
     private static final int CODE_BYTES = 16;
 
     private static final String DERIVATION_VERSION = "hmac-sha256-link-code-v1";
-    private static final Pattern RAW_CODE = Pattern.compile("[A-Za-z0-9_-]{22}");
     private static final byte[] DERIVATION_CONTEXT =
             "baton-go-link-code:v1\u0000".getBytes(StandardCharsets.US_ASCII);
     private static final byte[] FINGERPRINT_CONTEXT =
@@ -56,7 +50,7 @@ public class SecureLinkCodeAdapter implements LinkCodePort {
     }
 
     @Override
-    public IssuedLinkCode issue(String idempotencyKey, String keyId) {
+    public String issue(String idempotencyKey, String keyId) {
         String secret = keys.get(keyId);
         if (secret == null) {
             throw new LinkCodeReplayMismatchException();
@@ -66,18 +60,9 @@ public class SecureLinkCodeAdapter implements LinkCodePort {
                 DERIVATION_CONTEXT,
                 idempotencyKey.getBytes(StandardCharsets.US_ASCII)
         );
-        String rawCode = Base64.getUrlEncoder()
+        return Base64.getUrlEncoder()
                 .withoutPadding()
                 .encodeToString(Arrays.copyOf(digest, CODE_BYTES));
-        return new IssuedLinkCode(rawCode, sha256(rawCode));
-    }
-
-    @Override
-    public String hash(String rawCode) {
-        if (rawCode == null || !RAW_CODE.matcher(rawCode).matches()) {
-            throw new LinkNotFoundException();
-        }
-        return sha256(rawCode);
     }
 
     private byte[] hmac(String secret, byte[]... parts) {
@@ -91,15 +76,6 @@ public class SecureLinkCodeAdapter implements LinkCodePort {
             return mac.doFinal();
         } catch (GeneralSecurityException exception) {
             throw new IllegalStateException("HMAC-SHA-256을 사용할 수 없습니다", exception);
-        }
-    }
-
-    private String sha256(String value) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            return HexFormat.of().formatHex(digest.digest(value.getBytes(StandardCharsets.US_ASCII)));
-        } catch (NoSuchAlgorithmException exception) {
-            throw new IllegalStateException("SHA-256을 사용할 수 없습니다", exception);
         }
     }
 }

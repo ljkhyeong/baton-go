@@ -40,14 +40,13 @@ public final class StrictUtcInstantDeserializer extends StdDeserializer<Instant>
 
         String rawValue = parser.getString();
         try {
-            return Instant.from(UTC_INSTANT_FORMATTER.parse(rawValue));
+            return UTC_INSTANT_FORMATTER.parse(rawValue, Instant::from);
         } catch (DateTimeParseException ignored) {
-            // 모든 날짜·시각 형식 오류를 같은 API 오류로 반환한다.
+            return (Instant) context.handleWeirdStringValue(
+                    Instant.class,
+                    rawValue,
+                    "시각은 UTC Z 접미사가 있는 ISO-8601 문자열이어야 합니다"
+            );
         }
-        return (Instant) context.handleWeirdStringValue(
-                Instant.class,
-                rawValue,
-                "시각은 UTC Z 접미사가 있는 ISO-8601 문자열이어야 합니다"
-        );
     }
 }

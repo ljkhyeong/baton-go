@@ -25,7 +25,6 @@ import org.springframework.context.annotation.Import;
         WebMvcConfiguration.class,
         PublicResolverRateLimitInterceptor.class,
         PublicResolverRateLimiter.class,
-        PublicLinkErrorPage.class,
         SimpleMeterRegistry.class
 })
 public class PublicResolverHttpTestConfiguration {

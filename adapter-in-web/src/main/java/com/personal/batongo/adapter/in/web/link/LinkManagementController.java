@@ -16,6 +16,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.format.annotation.DateTimeFormat.ISO;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -76,18 +77,14 @@ public class LinkManagementController {
 
     @GetMapping
     public LinkSearchResponse searchLinks(
-            @RequestParam(value = "afterLinkId", required = false) UUID afterLinkId,
-            @RequestParam(value = "limit", defaultValue = "100") int limit,
-            @RequestParam(value = "targetSystem", required = false) TargetSystem targetSystem,
-            @RequestParam(value = "createdFrom", required = false)
-            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant createdFrom,
-            @RequestParam(value = "createdBefore", required = false)
-            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant createdBefore,
-            @RequestParam(value = "expiresFrom", required = false)
-            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant expiresFrom,
-            @RequestParam(value = "expiresBefore", required = false)
-            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant expiresBefore,
-            @RequestParam(value = "status", required = false) Status status
+            @RequestParam(required = false) UUID afterLinkId,
+            @RequestParam(defaultValue = "100") int limit,
+            @RequestParam(required = false) TargetSystem targetSystem,
+            @RequestParam(required = false) @DateTimeFormat(iso = ISO.DATE_TIME) Instant createdFrom,
+            @RequestParam(required = false) @DateTimeFormat(iso = ISO.DATE_TIME) Instant createdBefore,
+            @RequestParam(required = false) @DateTimeFormat(iso = ISO.DATE_TIME) Instant expiresFrom,
+            @RequestParam(required = false) @DateTimeFormat(iso = ISO.DATE_TIME) Instant expiresBefore,
+            @RequestParam(required = false) Status status
     ) {
         return LinkSearchResponse.from(smartLinkUseCase.searchLinks(
                 new LinkSearchQuery(
@@ -102,7 +99,7 @@ public class LinkManagementController {
     }
 
     @GetMapping("/batch")
-    public LinkBatchResponse getLinks(@RequestParam("linkIds") List<UUID> linkIds) {
+    public LinkBatchResponse getLinks(@RequestParam List<UUID> linkIds) {
         return LinkBatchResponse.from(smartLinkUseCase.getLinks(linkIds));
     }
 

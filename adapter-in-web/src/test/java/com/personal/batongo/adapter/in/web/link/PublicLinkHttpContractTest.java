@@ -16,7 +16,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.personal.batongo.adapter.in.web.GlobalExceptionHandler;
-import com.personal.batongo.adapter.in.web.PublicLinkErrorPage;
 import com.personal.batongo.adapter.in.web.RequestIdFilter;
 import com.personal.batongo.adapter.in.web.WebMvcConfiguration;
 import com.personal.batongo.application.link.error.LinkNotFoundException;
@@ -79,7 +78,7 @@ class PublicLinkHttpContractTest {
         mockMvc = MockMvcBuilders.standaloneSetup(controller)
                 .setControllerAdvice(
                         errors,
-                        new PublicLinkExceptionHandler(errors, new PublicLinkErrorPage())
+                        new PublicLinkExceptionHandler(errors)
                 )
                 .setContentNegotiationManager(mvcConfiguration.mvcContentNegotiationManager())
                 .setMessageConverters(

@@ -37,7 +37,6 @@ import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
-import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 import tools.jackson.databind.exc.MismatchedInputException;
 import tools.jackson.databind.exc.PropertyBindingException;
@@ -155,11 +154,8 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
             HttpStatusCode status,
             WebRequest request
     ) {
-        if (exception instanceof MethodArgumentTypeMismatchException argumentException) {
-            return invalidRequest(exception, argumentException.getName() + ": 요청 값이 올바르지 않습니다",
-                    headers, status, request);
-        }
-        return super.handleTypeMismatch(exception, headers, status, request);
+        return invalidRequest(exception, exception.getPropertyName() + ": 요청 값이 올바르지 않습니다",
+                headers, status, request);
     }
 
     @Override

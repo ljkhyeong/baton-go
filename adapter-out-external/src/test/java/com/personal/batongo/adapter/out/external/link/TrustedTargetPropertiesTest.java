@@ -9,6 +9,8 @@ import com.personal.batongo.domain.link.TrustedTargetPolicy;
 import java.net.URI;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 class TrustedTargetPropertiesTest {
 
@@ -52,33 +54,15 @@ class TrustedTargetPropertiesTest {
                 .isEqualTo(URI.create("https://baton.example/room/abcd-efgh-jkmp"));
     }
 
-    @Test
-    @DisplayName("운영 BATON·ROUND 출처가 서로 다르면 거부한다")
-    void rejectsDifferentOriginsOutsideLocalDevelopment() {
-        assertThatThrownBy(() -> new TrustedTargetProperties(
-                URI.create("https://baton.example"),
-                URI.create("https://round.example")
-        ))
-                .isInstanceOf(IllegalArgumentException.class);
-    }
-
-    @Test
-    @DisplayName("운영 대상의 HTTP 출처는 거부한다")
-    void rejectsHttpOriginsOutsideLocalDevelopment() {
-        assertThatThrownBy(() -> new TrustedTargetProperties(
-                URI.create("http://baton.example"),
-                URI.create("http://baton.example")
-        ))
-                .isInstanceOf(IllegalArgumentException.class);
-    }
-
-    @Test
-    @DisplayName("루프백과 운영 대상 URL을 섞은 설정은 거부한다")
-    void rejectsMixedLoopbackAndRemoteOrigins() {
-        assertThatThrownBy(() -> new TrustedTargetProperties(
-                URI.create("http://localhost:5173"),
-                URI.create("https://baton.example")
-        ))
+    @ParameterizedTest(name = "{index}: {0}")
+    @CsvSource({
+            "서로 다른 HTTPS 출처, https://baton.example, https://round.example",
+            "HTTP 출처, http://baton.example, http://baton.example",
+            "루프백과 운영 출처 혼합, http://localhost:5173, https://baton.example"
+    })
+    @DisplayName("운영 BATON·ROUND 기본 URL이 같은 HTTPS 출처가 아니면 거부한다")
+    void rejectsOriginsOutsideSameHttpsOrigin(String description, URI batonBaseUrl, URI roundBaseUrl) {
+        assertThatThrownBy(() -> new TrustedTargetProperties(batonBaseUrl, roundBaseUrl))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 }

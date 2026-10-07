@@ -69,11 +69,10 @@ MySQL은 Dependabot 대상이 아니다. 같은 이미지 digest를 다음 위�
 
 - `compose.yml`의 `mysql` 서비스 이미지
 - `deploy/k8s/overlays/private-server/kustomization.yaml`의 MySQL `digest`
-- `bootstrap/src/test/java/com/personal/batongo/MySqlTestImage.java`의 Testcontainers 이미지
-  (`MySqlImageContractTest`가 Compose 값과 비교한다)
 - `deploy/k8s/base/mysql-statefulset.yaml`의 기준 태그(메이저·마이너가 바뀔 때)
 
-CI의 `배포 이미지 다이제스트 계약 검증`과 `:bootstrap:mysqlTest`로 일치를 확인한다. 메이저·마이너 변경은
+Testcontainers 통합 테스트는 `compose.yml` 이미지를 직접 읽는다. CI의 `배포 이미지 다이제스트 계약 검증`으로
+Compose·오버레이 일치를, `:bootstrap:mysqlTest`로 실제 기동을 확인한다. 메이저·마이너 변경은
 `docs/RUNBOOK/kubernetes-private-server-deployment.md`의 백업·복원 절차와 기존 PVC 기동 검증을 함께 계획한다.
 
 ## 커밋

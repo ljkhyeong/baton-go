@@ -37,4 +37,4 @@
 
 - `./gradlew --no-daemon :bootstrap:mysqlTest`는 Docker가 필요하다. 일반 `test` 성공을 MySQL 검증 성공으로
   보고하지 않는다. Docker를 쓸 수 없으면 미실행 항목과 이유를 기록한다.
-- 대상 테스트를 알면 `--tests`로 좁히고, 마이그레이션 자체를 바꿨다면 `DatabaseMigrationRunnerIntegrationTest`도 포함한다.
+- 대상 테스트를 알면 `--tests`로 좁히고, 마이그레이션 자체를 바꿨다면 `DatabaseMigrationIntegrationTest`도 포함한다.

@@ -2,6 +2,7 @@ package com.personal.batongo;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.awaitility.Awaitility.await;
 
 import com.personal.batongo.adapter.out.external.ratelimit.DistributedResolverQuotaProperties;
 import com.personal.batongo.adapter.out.external.ratelimit.RedisResolverQuotaAdapter;
@@ -113,7 +114,7 @@ class DistributedResolverQuotaIntegrationTest {
             assertThat(redis.opsForValue().get(key)).isEqualTo("10");
             assertThat(redis.getExpire(key, TimeUnit.MILLISECONDS)).isBetween(1L, 30000L);
             redis.expire(key, Duration.ofMillis(1));
-            org.awaitility.Awaitility.await().atMost(Duration.ofSeconds(3)).untilAsserted(() ->
+            await().atMost(Duration.ofSeconds(3)).untilAsserted(() ->
                     assertThat(one.acquireRetryAfterSeconds()).isZero());
             redis.persist(key);
             assertThatThrownBy(one::acquireRetryAfterSeconds).isInstanceOf(PublicResolverQuotaUnavailableException.class);
@@ -126,7 +127,6 @@ class DistributedResolverQuotaIntegrationTest {
     private static LettuceConnectionFactory connectionFactory() {
         var factory = new LettuceConnectionFactory(
                 new RedisStandaloneConfiguration(REDIS.getHost(), REDIS.getMappedPort(6379)));
-        factory.afterPropertiesSet();
         factory.start();
         return factory;
     }

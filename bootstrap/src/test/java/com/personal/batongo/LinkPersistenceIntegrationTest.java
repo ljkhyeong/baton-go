@@ -15,10 +15,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.personal.batongo.application.link.CreationIdempotencyKey;
 import com.personal.batongo.application.link.error.PublicLinkOriginReplayUnavailableException;
-import com.personal.batongo.application.link.port.in.SmartLinkUseCase;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.CreateLinkCommand;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.CreatedLinkResult;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.LinkResult;
+import com.personal.batongo.application.link.port.in.SmartLinkUseCase;
 import com.personal.batongo.application.link.port.out.LinkCodePort;
 import com.personal.batongo.application.link.port.out.LinkCreationReservationPort;
 import com.personal.batongo.domain.link.LinkPurpose;
@@ -44,10 +44,10 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.convention.TestBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
-import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -56,15 +56,8 @@ import org.testcontainers.mysql.MySQLContainer;
 @Tag("mysql")
 @Testcontainers
 @AutoConfigureMockMvc
-@SpringBootTest(properties = {
-        "spring.security.oauth2.resourceserver.jwt.issuer-uri=https://identity.example",
-        "spring.security.oauth2.resourceserver.jwt.jwk-set-uri=https://identity.example/jwks",
-        "spring.security.oauth2.resourceserver.jwt.audiences=baton-go",
-        "baton-go.link-code.keys.default=test-link-code-secret-that-is-separate-and-long-enough",
-        "baton-go.public-base-url=https://go.example",
-        "baton-go.targets.baton-base-url=https://baton.example",
-        "baton-go.targets.round-base-url=https://baton.example"
-})
+@SpringBootTest
+@TestPropertySource("mysql-it.properties")
 class LinkPersistenceIntegrationTest {
 
     private static final Instant MINIMUM_SUPPORTED_TIME =
@@ -105,7 +98,7 @@ class LinkPersistenceIntegrationTest {
     private LinkCreationReservationPort reservationPort;
 
     @Autowired
-    private PlatformTransactionManager transactionManager;
+    private TransactionTemplate transactions;
 
     @Autowired
     private MockMvc mockMvc;
@@ -116,8 +109,7 @@ class LinkPersistenceIntegrationTest {
         String idempotencyKeyHash = "a".repeat(64);
         String tooLongPublicOrigin = "https://go.example/" + "a".repeat(240);
 
-        assertThatThrownBy(() -> new TransactionTemplate(transactionManager)
-                .executeWithoutResult(status -> reservationPort.reserve(
+        assertThatThrownBy(() -> transactions.executeWithoutResult(status -> reservationPort.reserve(
                         idempotencyKeyHash,
                         UUID.fromString("7f9b3635-cbd1-4936-8384-7fc42d4264e5"),
                         tooLongPublicOrigin,

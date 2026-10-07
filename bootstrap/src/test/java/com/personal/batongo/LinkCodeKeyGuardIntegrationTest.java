@@ -8,14 +8,14 @@ import static org.springframework.test.jdbc.JdbcTestUtils.deleteFromTables;
 import com.personal.batongo.application.link.CreationIdempotencyKey;
 import com.personal.batongo.application.link.LinkCodeDerivationIdentity;
 import com.personal.batongo.application.link.LinkCodeKeyRingIdentity;
-import java.util.Map;
 import com.personal.batongo.application.link.error.LinkCodeKeyBindingException;
-import com.personal.batongo.application.link.port.in.SmartLinkUseCase;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.CreateLinkCommand;
+import com.personal.batongo.application.link.port.in.SmartLinkUseCase;
 import com.personal.batongo.application.link.port.out.LinkCodeKeyGuardPort;
 import com.personal.batongo.application.link.port.out.LinkCodePort;
 import com.personal.batongo.domain.link.LinkPurpose;
 import com.personal.batongo.domain.link.TargetSystem;
+import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -35,7 +35,7 @@ import org.springframework.boot.DefaultApplicationArguments;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -43,15 +43,8 @@ import org.testcontainers.mysql.MySQLContainer;
 
 @Tag("mysql")
 @Testcontainers
-@SpringBootTest(classes = BatonGoApplication.class, properties = {
-        "spring.security.oauth2.resourceserver.jwt.issuer-uri=https://identity.example",
-        "spring.security.oauth2.resourceserver.jwt.audiences=baton-go",
-        "spring.security.oauth2.resourceserver.jwt.jwk-set-uri=https://identity.example/jwks",
-        "baton-go.link-code.keys.default=test-link-code-secret-that-is-separate-and-long-enough",
-        "baton-go.public-base-url=https://go.example",
-        "baton-go.targets.baton-base-url=https://baton.example",
-        "baton-go.targets.round-base-url=https://baton.example"
-})
+@SpringBootTest
+@TestPropertySource("mysql-it.properties")
 class LinkCodeKeyGuardIntegrationTest {
 
     private static final String CANONICAL_BATON_TARGET =
@@ -79,7 +72,7 @@ class LinkCodeKeyGuardIntegrationTest {
     private SmartLinkUseCase smartLinkUseCase;
 
     @Autowired
-    private PlatformTransactionManager transactionManager;
+    private TransactionTemplate transactions;
 
     @BeforeEach
     void resetDatabase() {
@@ -92,7 +85,7 @@ class LinkCodeKeyGuardIntegrationTest {
     void bindsEmptyDatabaseDuringStartupValidation() throws Exception {
         unbind();
 
-        startupValidator.run(new DefaultApplicationArguments(new String[0]));
+        startupValidator.run(new DefaultApplicationArguments());
 
         assertThat(storedIdentity()).isEqualTo(linkCodePort.keyRingIdentity().keys().get("default"));
     }
@@ -122,9 +115,7 @@ class LinkCodeKeyGuardIntegrationTest {
         );
         bind(different);
 
-        assertThatThrownBy(() -> startupValidator.run(
-                new DefaultApplicationArguments(new String[0])
-        ))
+        assertThatThrownBy(() -> startupValidator.run(new DefaultApplicationArguments()))
                 .isInstanceOf(LinkCodeKeyBindingException.class)
                 .hasMessageNotContaining(current.hmacFingerprint())
                 .hasMessageNotContaining(different.hmacFingerprint());
@@ -155,7 +146,7 @@ class LinkCodeKeyGuardIntegrationTest {
         jdbcTemplate.update(insertStoredData);
         unbind();
 
-        assertThatThrownBy(() -> startupValidator.run(new DefaultApplicationArguments(new String[0])))
+        assertThatThrownBy(() -> startupValidator.run(new DefaultApplicationArguments()))
                 .isInstanceOf(LinkCodeKeyBindingException.class);
 
         assertThat(countRowsInTable(jdbcTemplate, "smart_links")
@@ -181,15 +172,11 @@ class LinkCodeKeyGuardIntegrationTest {
             Future<LinkCodeDerivationIdentity> firstFuture = executor.submit(
                     () -> bindAndHoldTransaction(first, firstBound, releaseFirst)
             );
-            if (!firstBound.await(10, TimeUnit.SECONDS)) {
-                throw new IllegalStateException("첫 HMAC 키 정보 등록을 기다리지 못했습니다");
-            }
+            assertThat(firstBound.await(10, TimeUnit.SECONDS)).as("첫 HMAC 키 정보 등록").isTrue();
             Future<LinkCodeDerivationIdentity> secondFuture = executor.submit(
                     () -> bindInTransaction(second, secondStarted)
             );
-            if (!secondStarted.await(10, TimeUnit.SECONDS)) {
-                throw new IllegalStateException("두 번째 HMAC 키 정보 등록 시작을 기다리지 못했습니다");
-            }
+            assertThat(secondStarted.await(10, TimeUnit.SECONDS)).as("두 번째 HMAC 키 정보 등록 시작").isTrue();
 
             releaseFirst.countDown();
 
@@ -210,7 +197,7 @@ class LinkCodeKeyGuardIntegrationTest {
             CountDownLatch bound,
             CountDownLatch release
     ) {
-        new TransactionTemplate(transactionManager).executeWithoutResult(
+        transactions.executeWithoutResult(
                 status -> {
                     linkCodeKeyGuardPort.verifyOrBind(new LinkCodeKeyRingIdentity("default", Map.of("default", identity)));
                     bound.countDown();
@@ -236,7 +223,7 @@ class LinkCodeKeyGuardIntegrationTest {
             LinkCodeDerivationIdentity identity,
             CountDownLatch started
     ) {
-        new TransactionTemplate(transactionManager).executeWithoutResult(
+        transactions.executeWithoutResult(
                 status -> {
                     started.countDown();
                     linkCodeKeyGuardPort.verifyOrBind(new LinkCodeKeyRingIdentity("default", Map.of("default", identity)));
@@ -257,7 +244,7 @@ class LinkCodeKeyGuardIntegrationTest {
     }
 
     private void bind(LinkCodeDerivationIdentity identity) {
-        jdbcTemplate.update("DELETE FROM link_code_keys");
+        deleteFromTables(jdbcTemplate, "link_code_keys");
         jdbcTemplate.update(
                 "INSERT INTO link_code_keys (key_id, derivation_version, key_fingerprint) VALUES ('default', ?, ?)",
                 identity.version(), identity.hmacFingerprint()
@@ -265,7 +252,7 @@ class LinkCodeKeyGuardIntegrationTest {
     }
 
     private void unbind() {
-        jdbcTemplate.update("DELETE FROM link_code_keys");
+        deleteFromTables(jdbcTemplate, "link_code_keys");
     }
 
     private LinkCodeDerivationIdentity storedIdentity() {

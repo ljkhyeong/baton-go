@@ -35,6 +35,7 @@ import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -43,13 +44,8 @@ import org.testcontainers.mysql.MySQLContainer;
 @Tag("mysql")
 @Testcontainers
 @AutoConfigureMockMvc
-@SpringBootTest(properties = {
-        "spring.security.oauth2.resourceserver.jwt.audiences=baton-go",
-        "baton-go.link-code.keys.default=test-link-code-secret-that-is-separate-and-long-enough",
-        "baton-go.public-base-url=https://go.example",
-        "baton-go.targets.baton-base-url=https://baton.example",
-        "baton-go.targets.round-base-url=https://baton.example"
-})
+@SpringBootTest
+@TestPropertySource("mysql-it.properties")
 class ManagementJwtBootstrapIntegrationTest {
 
     private static final String JWT_KEY_ID = "management-integration-test";

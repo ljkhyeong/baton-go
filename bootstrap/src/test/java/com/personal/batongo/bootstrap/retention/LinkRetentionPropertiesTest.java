@@ -17,7 +17,6 @@ class LinkRetentionPropertiesTest {
             .withPropertyValues(
                     "baton-go.link-retention.enabled=true",
                     "baton-go.link-retention.period=30d",
-                    "baton-go.link-retention.batch-size=100",
                     "baton-go.link-retention.interval=60s"
             );
 

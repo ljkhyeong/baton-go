@@ -7,9 +7,9 @@ import static org.awaitility.Awaitility.await;
 import com.personal.batongo.application.link.CreationIdempotencyKey;
 import com.personal.batongo.application.link.PublicLinkOrigin;
 import com.personal.batongo.application.link.error.IdempotencyKeyConflictException;
-import com.personal.batongo.application.link.port.in.SmartLinkUseCase;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.CreateLinkCommand;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.CreatedLinkResult;
+import com.personal.batongo.application.link.port.in.SmartLinkUseCase;
 import com.personal.batongo.application.link.port.out.LinkCreationReservationPort;
 import com.personal.batongo.application.link.port.out.PublicLinkOriginPort;
 import com.personal.batongo.domain.link.LinkPurpose;
@@ -43,6 +43,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
 import org.springframework.dao.TransientDataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.TestPropertySource;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.mysql.MySQLContainer;
@@ -50,15 +51,8 @@ import org.testcontainers.mysql.MySQLContainer;
 @Tag("mysql")
 @Testcontainers
 @Import(LinkCreationConcurrencyIntegrationTest.ConcurrencyTestConfiguration.class)
-@SpringBootTest(properties = {
-        "spring.security.oauth2.resourceserver.jwt.issuer-uri=https://identity.example",
-        "spring.security.oauth2.resourceserver.jwt.jwk-set-uri=https://identity.example/jwks",
-        "spring.security.oauth2.resourceserver.jwt.audiences=baton-go",
-        "baton-go.link-code.keys.default=test-link-code-secret-that-is-separate-and-long-enough",
-        "baton-go.public-base-url=https://go.example",
-        "baton-go.targets.baton-base-url=https://baton.example",
-        "baton-go.targets.round-base-url=https://baton.example"
-})
+@SpringBootTest
+@TestPropertySource("mysql-it.properties")
 class LinkCreationConcurrencyIntegrationTest {
 
     private static final int CONCURRENCY = 8;

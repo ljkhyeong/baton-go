@@ -2,19 +2,15 @@ package com.personal.batongo.bootstrap;
 
 import com.github.dockerjava.api.model.Capability;
 import com.personal.batongo.MySqlTestImage;
-import java.io.ByteArrayInputStream;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.KeyStore;
-import java.security.cert.Certificate;
-import java.security.cert.CertificateFactory;
-import java.sql.Connection;
-import java.sql.DriverManager;
-import java.sql.SQLException;
 import java.time.Duration;
 import java.util.Map;
 import java.util.Properties;
+import org.springframework.boot.ssl.pem.PemContent;
+import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.utility.MountableFile;
@@ -56,7 +52,7 @@ final class DeploymentMySqlFixture extends GenericContainer<DeploymentMySqlFixtu
         ));
         withExposedPorts(MYSQL_PORT);
         withCopyFileToContainer(
-                MountableFile.forHostPath(repositoryFile(RUNTIME_INIT_SCRIPT), 0555),
+                MountableFile.forHostPath(MySqlTestImage.repositoryFile(RUNTIME_INIT_SCRIPT), 0555),
                 "/docker-entrypoint-initdb.d/10-create-runtime-user.sh"
         );
         withCopyFileToContainer(
@@ -95,12 +91,7 @@ final class DeploymentMySqlFixture extends GenericContainer<DeploymentMySqlFixtu
         if (certificateRead.getExitCode() != 0) {
             throw new IllegalStateException("배포 MySQL 테스트 CA를 읽지 못했습니다");
         }
-        byte[] certificatePem = certificateRead.getStdout().getBytes(StandardCharsets.US_ASCII);
-        CertificateFactory certificateFactory = CertificateFactory.getInstance("X.509");
-        Certificate certificate;
-        try (ByteArrayInputStream inputStream = new ByteArrayInputStream(certificatePem)) {
-            certificate = certificateFactory.generateCertificate(inputStream);
-        }
+        var certificate = PemContent.of(certificateRead.getStdout()).getCertificates().getFirst();
 
         KeyStore keyStore = KeyStore.getInstance("PKCS12");
         char[] password = TRUSTSTORE_PASSWORD.toCharArray();
@@ -122,29 +113,14 @@ final class DeploymentMySqlFixture extends GenericContainer<DeploymentMySqlFixtu
                 + "&serverTimezone=UTC";
     }
 
-    Connection connectAsRuntime(String jdbcUrl) throws SQLException {
-        return connect(jdbcUrl, RUNTIME_USERNAME, RUNTIME_PASSWORD);
-    }
-
-    private static Path repositoryFile(String relativePath) {
-        String repositoryRoot = System.getProperty("batonGo.repositoryRoot");
-        if (repositoryRoot == null || repositoryRoot.isBlank()) {
-            throw new IllegalStateException("BATON GO repository root test 설정이 없습니다");
-        }
-        return Path.of(repositoryRoot).resolve(relativePath);
-    }
-
-    private static Connection connect(String jdbcUrl, String username, String password)
-            throws SQLException {
+    /** 실행 계정으로 연결마다 새로 접속하는 JdbcClient를 만든다. 비밀번호는 URL에 넣지 않는다. */
+    JdbcClient runtimeJdbcClient(String jdbcUrl) {
         Properties properties = new Properties();
-        properties.setProperty("user", username);
-        properties.setProperty("password", password);
+        properties.setProperty("user", RUNTIME_USERNAME);
+        properties.setProperty("password", RUNTIME_PASSWORD);
         properties.setProperty("connectTimeout", "3000");
         properties.setProperty("socketTimeout", "30000");
-        properties.setProperty(
-                "trustCertificateKeyStorePassword",
-                TRUSTSTORE_PASSWORD
-        );
-        return DriverManager.getConnection(jdbcUrl, properties);
+        properties.setProperty("trustCertificateKeyStorePassword", TRUSTSTORE_PASSWORD);
+        return JdbcClient.create(new DriverManagerDataSource(jdbcUrl, properties));
     }
 }

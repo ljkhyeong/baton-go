@@ -17,9 +17,9 @@ import com.personal.batongo.application.link.error.LinkCodeKeyBindingException;
 import com.personal.batongo.application.link.error.LinkNotFoundException;
 import com.personal.batongo.application.link.error.LinkPurgedException;
 import com.personal.batongo.application.link.port.in.ResolveLinkUseCase;
-import com.personal.batongo.application.link.port.in.SmartLinkUseCase;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.CreateLinkCommand;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.CreatedLinkResult;
+import com.personal.batongo.application.link.port.in.SmartLinkUseCase;
 import com.personal.batongo.application.link.port.out.LinkCodeKeyGuardPort;
 import com.personal.batongo.application.link.port.out.LinkCreationReservationPort;
 import com.personal.batongo.application.link.port.out.LinkRetentionPort;
@@ -30,7 +30,6 @@ import com.personal.batongo.domain.link.TargetSystem;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.Map;
 import java.util.UUID;
@@ -47,7 +46,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -57,15 +56,10 @@ import org.testcontainers.mysql.MySQLContainer;
 @Tag("mysql")
 @Testcontainers
 @SpringBootTest(properties = {
-        "spring.security.oauth2.resourceserver.jwt.issuer-uri=https://identity.example",
-        "spring.security.oauth2.resourceserver.jwt.jwk-set-uri=https://identity.example/jwks",
-        "spring.security.oauth2.resourceserver.jwt.audiences=baton-go",
         "baton-go.link-code.keys.default=test-default-key-with-at-least-thirty-two-characters",
-        "baton-go.link-code.keys.k202609=test-current-key-with-at-least-thirty-two-characters",
-        "baton-go.public-base-url=https://go.example",
-        "baton-go.targets.baton-base-url=https://baton.example",
-        "baton-go.targets.round-base-url=https://baton.example"
+        "baton-go.link-code.keys.k202609=test-current-key-with-at-least-thirty-two-characters"
 })
+@TestPropertySource("mysql-it.properties")
 class LinkLifecycleIntegrationTest {
 
     private static final String DEFAULT_KEY = "test-default-key-with-at-least-thirty-two-characters";
@@ -85,7 +79,7 @@ class LinkLifecycleIntegrationTest {
     @Autowired private LinkCodeKeyGuardPort guardPort;
     @Autowired private PublicLinkOriginPort publicOrigin;
     @Autowired private Clock clock;
-    @Autowired private PlatformTransactionManager transactionManager;
+    @Autowired private TransactionTemplate transactions;
     @Autowired private JdbcTemplate jdbc;
 
     @BeforeEach
@@ -137,8 +131,7 @@ class LinkLifecycleIntegrationTest {
         var expired = create(expiredCommand);
         create(command(EXPIRED));
         var revoked = create(command(null));
-        jdbc.update("UPDATE smart_links SET revoked_at = ? WHERE id = UUID_TO_BIN(?)",
-                LocalDateTime.ofInstant(EXPIRED, ZoneOffset.UTC), revoked.link().id().toString());
+        repository.revoke(revoked.link().id(), EXPIRED);
         var active = create(command(null));
 
         assertThat(purge(EXPIRED.minusNanos(1000), 100)).isZero();
@@ -189,7 +182,7 @@ class LinkLifecycleIntegrationTest {
         var held = new CountDownLatch(1);
         var release = new CountDownLatch(1);
         try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
-            var replay = executor.submit(() -> new TransactionTemplate(transactionManager).execute(status -> {
+            var replay = executor.submit(() -> transactions.execute(status -> {
                 jdbc.queryForObject("""
                         SELECT BIN_TO_UUID(link_id) FROM link_creation_requests
                         WHERE idempotency_key_hash = ? FOR SHARE
@@ -236,7 +229,7 @@ class LinkLifecycleIntegrationTest {
     private <T> T withKeys(LinkCodeProperties properties, Clock serviceClock, Function<SmartLinkService, T> operation) {
         var codes = new SecureLinkCodeAdapter(properties);
         var service = new SmartLinkService(repository, reservations, codes, guardPort, publicOrigin, serviceClock);
-        return new TransactionTemplate(transactionManager).execute(status -> {
+        return transactions.execute(status -> {
             guardPort.verifyOrBind(codes.keyRingIdentity());
             return operation.apply(service);
         });
@@ -245,7 +238,7 @@ class LinkLifecycleIntegrationTest {
     private int purge(Instant cutoff, int batchSize) {
         Duration period = Duration.ofDays(30);
         var service = new LinkRetentionService(retention, Clock.fixed(cutoff.plus(period), ZoneOffset.UTC));
-        return new TransactionTemplate(transactionManager).execute(status -> service.purge(period, batchSize));
+        return transactions.execute(status -> service.purge(period, batchSize));
     }
 
     private static CreateLinkCommand command(Instant expiresAt) {

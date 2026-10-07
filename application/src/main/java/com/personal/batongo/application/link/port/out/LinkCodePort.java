@@ -9,6 +9,4 @@ public interface LinkCodePort {
     IssuedLinkCode issue(String idempotencyKey, String keyId);
 
     String hash(String rawCode);
-
-    String hashIdempotencyKey(String idempotencyKey);
 }

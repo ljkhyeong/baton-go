@@ -145,7 +145,8 @@ docker compose --env-file .env ps
 
 `MYSQL_ROOT_HOST=localhost`는 새 MySQL 데이터 디렉터리를 초기화할 때만 적용된다.
 첫 운영 배포 전인 2026-10-05에 마이그레이션을 V1 하나로 다시 만들었으므로 그 이전에 만든 로컬
-`baton_go_mysql_data` 볼륨은 Flyway 검증에 실패한다. 보존할 데이터가 없다면 볼륨을 지우고 다시 시작한다.
+`baton_go_mysql_data` 볼륨은 Flyway 검증에 실패한다. V2는 정리 전 생성 예약이 남은 볼륨에는 적용되지 않는다.
+보존할 데이터가 없다면 볼륨을 지우고 다시 시작한다.
 
 ```bash
 docker compose --env-file .env down -v

@@ -10,7 +10,6 @@ import com.personal.batongo.application.link.error.IdempotencyKeyConflictExcepti
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.CreateLinkCommand;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.CreatedLinkResult;
-import com.personal.batongo.application.link.port.out.LinkCodePort;
 import com.personal.batongo.application.link.port.out.LinkCreationReservationPort;
 import com.personal.batongo.application.link.port.out.PublicLinkOriginPort;
 import com.personal.batongo.domain.link.LinkPurpose;
@@ -79,9 +78,6 @@ class LinkCreationConcurrencyIntegrationTest {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
-
-    @Autowired
-    private LinkCodePort linkCodePort;
 
     @Autowired
     private ControllableReservationPort controllableReservationPort;
@@ -165,7 +161,7 @@ class LinkCreationConcurrencyIntegrationTest {
                         WHERE idempotency_key_hash = ?
                         """,
                 String.class,
-                linkCodePort.hashIdempotencyKey(idempotencyKey)
+                new CreationIdempotencyKey(idempotencyKey).hash()
         );
         URI expectedShortUrl = URI.create(
                 storedOrigin + first.shortUrl().getRawPath()
@@ -369,6 +365,7 @@ class LinkCreationConcurrencyIntegrationTest {
                 UUID proposedLinkId,
                 String publicOrigin,
                 String keyId,
+                String requestHash,
                 Instant createdAt
         ) {
             allEntered.countDown();
@@ -377,6 +374,7 @@ class LinkCreationConcurrencyIntegrationTest {
                     proposedLinkId,
                     publicOrigin,
                     keyId,
+                    requestHash,
                     createdAt
             );
             if (reservation.owner() && firstOwnerHandled.compareAndSet(false, true)) {

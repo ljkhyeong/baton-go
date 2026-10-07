@@ -15,7 +15,8 @@ final class CreationRequestAdmissionPolicy {
     /** MySQL DATETIME(6)에 그대로 저장되는 시각만 받아 재시도 비교가 저장값과 어긋나지 않게 한다. */
     static void requireStorableTimes(Instant notBefore, Instant expiresAt) {
         if (!isStorable(notBefore) || !isStorable(expiresAt)) {
-            throw InvalidRequestException.creationTime();
+            throw new InvalidRequestException("notBefore와 expiresAt은 " + MINIMUM + " 이상 " + MAXIMUM
+                    + " 이하의 마이크로초 단위여야 합니다");
         }
     }
 

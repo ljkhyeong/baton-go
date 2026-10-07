@@ -21,7 +21,6 @@ import com.personal.batongo.application.link.port.in.SmartLinkUseCase;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.CreateLinkCommand;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.CreatedLinkResult;
 import com.personal.batongo.application.link.port.out.LinkCodeKeyGuardPort;
-import com.personal.batongo.application.link.port.out.LinkCodePort;
 import com.personal.batongo.application.link.port.out.LinkCreationReservationPort;
 import com.personal.batongo.application.link.port.out.LinkRetentionPort;
 import com.personal.batongo.application.link.port.out.PublicLinkOriginPort;
@@ -84,7 +83,6 @@ class LinkLifecycleIntegrationTest {
     @Autowired private SmartLinkRepository repository;
     @Autowired private LinkCreationReservationPort reservations;
     @Autowired private LinkCodeKeyGuardPort guardPort;
-    @Autowired private LinkCodePort linkCodes;
     @Autowired private PublicLinkOriginPort publicOrigin;
     @Autowired private Clock clock;
     @Autowired private PlatformTransactionManager transactionManager;
@@ -175,7 +173,7 @@ class LinkLifecycleIntegrationTest {
             assertThatThrownBy(() -> purge(EXPIRED, 100)).isInstanceOf(DataAccessException.class);
             assertThat(countRowsInTable(jdbc, "smart_links")).isEqualTo(2);
             assertThat(countRowsInTableWhere(jdbc, "link_creation_requests",
-                    "purged_at IS NULL AND request_hash IS NULL AND public_origin IS NOT NULL")).isEqualTo(2);
+                    "purged_at IS NULL AND public_origin IS NOT NULL")).isEqualTo(2);
         } finally {
             dropTables(jdbc, "retention_delete_blocker");
         }
@@ -194,7 +192,7 @@ class LinkLifecycleIntegrationTest {
                 jdbc.queryForObject("""
                         SELECT BIN_TO_UUID(link_id) FROM link_creation_requests
                         WHERE idempotency_key_hash = ? FOR SHARE
-                        """, String.class, linkCodes.hashIdempotencyKey(command.idempotencyKey().value()));
+                        """, String.class, command.idempotencyKey().hash());
                 held.countDown();
                 try {
                     if (!release.await(10, TimeUnit.SECONDS)) throw new IllegalStateException("재생 해제 대기 초과");

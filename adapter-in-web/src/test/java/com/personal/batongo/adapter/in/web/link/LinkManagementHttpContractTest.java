@@ -319,7 +319,7 @@ class LinkManagementHttpContractTest {
                 Arguments.of(new PublicLinkOriginReplayUnavailableException(), 500,
                         "PUBLIC_LINK_ORIGIN_REPLAY_UNAVAILABLE"),
                 Arguments.of(new LinkCodeKeyBindingException(), 500, "LINK_CODE_CONFIGURATION_MISMATCH"),
-                Arguments.of(InvalidRequestException.creationTime(), 400, "INVALID_REQUEST"),
+                Arguments.of(new InvalidRequestException("시각 범위 오류"), 400, "INVALID_REQUEST"),
                 Arguments.of(new LinkValidationException("검증 실패"), 400, "INVALID_LINK"),
                 Arguments.of(new IdempotencyKeyConflictException(), 409, "IDEMPOTENCY_KEY_REUSED"),
                 Arguments.of(new LinkPurgedException(), 410, "LINK_PURGED")

@@ -53,7 +53,6 @@ class SmartLinkServiceTest {
     );
     private static final String RAW_CODE = "abcdefghijklmnopqrstuv";
     private static final String CODE_HASH = "b".repeat(64);
-    private static final String IDEMPOTENCY_HASH = "c".repeat(64);
     private static final String BATON_PATH =
             "/teams/8e448211-66ae-44ab-9888-c4960648c22b"
                     + "/seasons/713d9cb7-2842-4f9f-b3cc-e31d98c6238a";
@@ -403,8 +402,9 @@ class SmartLinkServiceTest {
 
     private void configureReplay(Instant expiresAt) {
         when(reservationPort.reserve(
-                eq(IDEMPOTENCY_HASH),
+                eq(IDEMPOTENCY_KEY.hash()),
                 any(UUID.class),
+                anyString(),
                 anyString(),
                 anyString(),
                 any(Instant.class)
@@ -451,7 +451,5 @@ class SmartLinkServiceTest {
         when(configuredLinkCodePort.issue(anyString(), anyString()))
                 .thenReturn(new IssuedLinkCode(rawCode, codeHash));
         when(configuredLinkCodePort.hash(anyString())).thenReturn(codeHash);
-        when(configuredLinkCodePort.hashIdempotencyKey(anyString()))
-                .thenReturn(IDEMPOTENCY_HASH);
     }
 }

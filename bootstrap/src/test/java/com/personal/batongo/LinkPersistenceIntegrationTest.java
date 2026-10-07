@@ -122,6 +122,7 @@ class LinkPersistenceIntegrationTest {
                         UUID.fromString("7f9b3635-cbd1-4936-8384-7fc42d4264e5"),
                         tooLongPublicOrigin,
                         "default",
+                        "b".repeat(64),
                         FAR_FUTURE_NOW
                 )))
                 .isInstanceOf(DataIntegrityViolationException.class);
@@ -144,7 +145,7 @@ class LinkPersistenceIntegrationTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
                 .andExpect(jsonPath("$.message").value("targetSystem: 요청 값이 올바르지 않습니다"));
-        assertThat(reservationCount(linkCodePort.hashIdempotencyKey(idempotencyKey))).isZero();
+        assertThat(reservationCount(new CreationIdempotencyKey(idempotencyKey).hash())).isZero();
 
         String createdBody = mockMvc.perform(post("/api/v1/links")
                         .with(linkCreateJwt())
@@ -419,10 +420,11 @@ class LinkPersistenceIntegrationTest {
                             link_id,
                             public_origin,
                             key_id,
+                            request_hash,
                             created_at
-                        ) VALUES (?, UUID_TO_BIN(?), ?, 'default', UTC_TIMESTAMP(6))
+                        ) VALUES (?, UUID_TO_BIN(?), ?, 'default', REPEAT('e', 64), UTC_TIMESTAMP(6))
                         """,
-                linkCodePort.hashIdempotencyKey(idempotencyKey),
+                new CreationIdempotencyKey(idempotencyKey).hash(),
                 linkId,
                 publicOrigin
         );

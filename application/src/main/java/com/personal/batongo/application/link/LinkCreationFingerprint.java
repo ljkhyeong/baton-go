@@ -15,14 +15,17 @@ final class LinkCreationFingerprint {
 
     static String of(String targetSystem, String purpose, String targetPath,
                      Instant notBefore, Instant expiresAt) {
-        String canonical = Stream.of("v1", targetSystem, purpose, targetPath,
+        return sha256(Stream.of("v1", targetSystem, purpose, targetPath,
                         notBefore == null ? null : notBefore.toString(),
                         expiresAt == null ? null : expiresAt.toString())
                 .map(value -> value == null ? "-1:" : value.length() + ":" + value)
-                .collect(Collectors.joining());
+                .collect(Collectors.joining()));
+    }
+
+    static String sha256(String value) {
         try {
             return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
-                    .digest(canonical.getBytes(StandardCharsets.UTF_8)));
+                    .digest(value.getBytes(StandardCharsets.UTF_8)));
         } catch (NoSuchAlgorithmException exception) {
             throw new IllegalStateException("SHA-256을 사용할 수 없습니다", exception);
         }

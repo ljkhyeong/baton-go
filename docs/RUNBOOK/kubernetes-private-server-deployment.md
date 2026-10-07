@@ -914,7 +914,9 @@ DB 비밀번호 회전은 단일 계정의 이전/새 비밀번호 전환 구간
 셸 기록, 프로세스 인자와 작업 로그에 남기지 않는다.
 
 애플리케이션 되돌리기는 이전 변경 불가 이미지와 그 배포가 기대한 설정·스키마 호환성을
-확인한 뒤 수행한다.
+확인한 뒤 수행한다. V2(`store_request_hash_on_reservation`)부터 생성 예약의 `request_hash`가 필수라
+V1까지만 아는 이미지는 새 링크를 만들 수 없다. V2는 정리 전 생성 예약이 있는 DB에는 적용할 수 없으며,
+첫 운영 배포 전 보존 데이터가 없는 DB를 전제로 한다.
 
 ```bash
 kubectl -n baton-go rollout history deployment/baton-go

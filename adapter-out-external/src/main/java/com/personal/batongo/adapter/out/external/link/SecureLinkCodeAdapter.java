@@ -33,17 +33,14 @@ public class SecureLinkCodeAdapter implements LinkCodePort {
             "baton-go-link-code-key-fingerprint:v1\u0000"
                     .getBytes(StandardCharsets.US_ASCII);
 
-    private final Map<String, byte[]> secrets;
+    private final Map<String, String> keys;
     private final LinkCodeKeyRingIdentity keyRingIdentity;
 
     public SecureLinkCodeAdapter(LinkCodeProperties properties) {
-        this.secrets = properties.keys().entrySet().stream().collect(Collectors.toUnmodifiableMap(
-                Map.Entry::getKey,
-                entry -> entry.getValue().getBytes(StandardCharsets.UTF_8)
-        ));
+        this.keys = properties.keys();
         this.keyRingIdentity = new LinkCodeKeyRingIdentity(
                 properties.activeKeyId(),
-                secrets.entrySet().stream().collect(Collectors.toUnmodifiableMap(
+                keys.entrySet().stream().collect(Collectors.toUnmodifiableMap(
                         Map.Entry::getKey,
                         entry -> new LinkCodeDerivationIdentity(
                                 DERIVATION_VERSION,
@@ -60,7 +57,7 @@ public class SecureLinkCodeAdapter implements LinkCodePort {
 
     @Override
     public IssuedLinkCode issue(String idempotencyKey, String keyId) {
-        byte[] secret = secrets.get(keyId);
+        String secret = keys.get(keyId);
         if (secret == null) {
             throw new LinkCodeReplayMismatchException();
         }
@@ -83,15 +80,11 @@ public class SecureLinkCodeAdapter implements LinkCodePort {
         return sha256(rawCode);
     }
 
-    @Override
-    public String hashIdempotencyKey(String idempotencyKey) {
-        return sha256(idempotencyKey);
-    }
-
-    private byte[] hmac(byte[] secret, byte[]... parts) {
+    private byte[] hmac(String secret, byte[]... parts) {
         try {
             Mac mac = Mac.getInstance("HmacSHA256");
-            mac.init(new SecretKeySpec(secret, "HmacSHA256"));
+            // 비밀값은 정규화·공백 제거 없이 UTF-8 바이트 그대로 쓴다.
+            mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
             for (byte[] part : parts) {
                 mac.update(part);
             }

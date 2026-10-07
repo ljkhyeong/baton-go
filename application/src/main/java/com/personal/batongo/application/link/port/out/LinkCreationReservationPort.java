@@ -10,6 +10,7 @@ public interface LinkCreationReservationPort {
             UUID proposedLinkId,
             String publicOrigin,
             String keyId,
+            String requestHash,
             Instant createdAt
     );
 

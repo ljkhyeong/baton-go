@@ -16,6 +16,11 @@ public record CreationIdempotencyKey(String value) {
         }
     }
 
+    /** DB에는 키 원문 대신 이 SHA-256 해시만 저장한다. */
+    public String hash() {
+        return LinkCreationFingerprint.sha256(value);
+    }
+
     @Override
     public String toString() {
         return "CreationIdempotencyKey[redacted]";

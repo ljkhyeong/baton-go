@@ -2,24 +2,7 @@ package com.personal.batongo.application.link.error;
 
 public final class InvalidRequestException extends RuntimeException {
 
-    private InvalidRequestException(String message) {
+    public InvalidRequestException(String message) {
         super(message);
-    }
-
-    public static InvalidRequestException creationTime() {
-        return new InvalidRequestException(
-                "notBefore와 expiresAt은 1582-10-15T00:00:00Z 이상 "
-                        + "9999-12-31T23:59:59.999999Z 이하의 마이크로초 단위여야 합니다"
-        );
-    }
-
-    public static InvalidRequestException linkSearch() {
-        return new InvalidRequestException(
-                "limit은 1~500이고 생성·만료 기간의 끝은 시작보다 뒤여야 합니다"
-        );
-    }
-
-    public static InvalidRequestException linkBatch() {
-        return new InvalidRequestException("linkIds는 빈 값 없이 1~100개 지정해야 합니다");
     }
 }

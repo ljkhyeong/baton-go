@@ -144,9 +144,10 @@ class LinkCodeKeyGuardIntegrationTest {
                     'ROUND', '/room/abcd-efgh-jkmn', 'MEETING_ENTRY', UTC_TIMESTAMP(6))
             """,
             """
-            INSERT INTO link_creation_requests (idempotency_key_hash, link_id, public_origin, key_id, created_at)
-            VALUES (REPEAT('d', 64), UUID_TO_BIN('9752e1df-8f49-480c-87b4-e871b28ee0c4'),
-                    'https://go.example', 'default', UTC_TIMESTAMP(6))
+            INSERT INTO link_creation_requests (
+                idempotency_key_hash, link_id, public_origin, key_id, request_hash, created_at
+            ) VALUES (REPEAT('d', 64), UUID_TO_BIN('9752e1df-8f49-480c-87b4-e871b28ee0c4'),
+                    'https://go.example', 'default', REPEAT('e', 64), UTC_TIMESTAMP(6))
             """
     })
     @DisplayName("링크나 생성 예약 중 하나만 있어도 키 정보가 없으면 키를 자동 등록하지 않는다")

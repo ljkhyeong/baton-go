@@ -62,7 +62,7 @@ public class SmartLinkService implements SmartLinkUseCase {
     @Transactional
     public CreatedLinkResult createLink(CreateLinkCommand command) {
         CreationRequestAdmissionPolicy.requireStorableTimes(command.notBefore(), command.expiresAt());
-        String idempotencyKeyHash = linkCodePort.hashIdempotencyKey(command.idempotencyKey().value());
+        String idempotencyKeyHash = command.idempotencyKey().hash();
         TrustedTarget requestedTarget = TrustedTargetPolicy.requireAllowed(
                 command.targetSystem(), command.purpose(), command.targetPath()
         );
@@ -79,6 +79,7 @@ public class SmartLinkService implements SmartLinkUseCase {
                 UUID.randomUUID(),
                 currentOrigin.serialized(),
                 keyRing.activeKeyId(),
+                requestHash,
                 now
         );
         if (reservation.purgedAt() != null) {
@@ -159,7 +160,7 @@ public class SmartLinkService implements SmartLinkUseCase {
     public LinkResult getLink(UUID linkId) {
         StoredLink storedLink = repository.findById(linkId)
                 .orElseThrow(LinkNotFoundException::new);
-        TrustedTarget target = requireManagedTrustedTarget(storedLink);
+        TrustedTarget target = storedLink.trustedTarget().orElseThrow(LinkNotFoundException::new);
         return toResult(storedLink, target, storedLink.revokedAt(), clock.instant());
     }
 
@@ -167,7 +168,7 @@ public class SmartLinkService implements SmartLinkUseCase {
     public LinkBatchResult getLinks(List<UUID> linkIds) {
         if (linkIds == null || linkIds.isEmpty() || linkIds.size() > 100
                 || linkIds.stream().anyMatch(Objects::isNull)) {
-            throw InvalidRequestException.linkBatch();
+            throw new InvalidRequestException("linkIds는 빈 값 없이 1~100개 지정해야 합니다");
         }
         List<UUID> uniqueIds = linkIds.stream().distinct().toList();
         List<StoredLink> stored = repository.findByIds(uniqueIds);
@@ -189,7 +190,8 @@ public class SmartLinkService implements SmartLinkUseCase {
         if (limit < 1 || limit > MAX_SEARCH_LIMIT
                 || !isOrderedRange(query.createdFrom(), query.createdBefore())
                 || !isOrderedRange(query.expiresFrom(), query.expiresBefore())) {
-            throw InvalidRequestException.linkSearch();
+            throw new InvalidRequestException(
+                    "limit은 1~" + MAX_SEARCH_LIMIT + "이고 생성·만료 기간의 끝은 시작보다 뒤여야 합니다");
         }
         // 다음 행 확인용으로 한 건을 더 읽는다. 반환할 항목이 없어도 마지막으로 검사한 행 다음부터 이어서 조회한다.
         List<StoredLink> scanned = repository.scanAfter(query.afterLinkId(), limit + 1);
@@ -213,7 +215,7 @@ public class SmartLinkService implements SmartLinkUseCase {
     public RevokedLinkResult revokeLink(UUID linkId) {
         StoredLink storedLink = repository.findByIdForUpdate(linkId)
                 .orElseThrow(LinkNotFoundException::new);
-        TrustedTarget target = requireManagedTrustedTarget(storedLink);
+        TrustedTarget target = storedLink.trustedTarget().orElseThrow(LinkNotFoundException::new);
         Instant now = clock.instant();
         if (storedLink.revokedAt() != null) {
             return new RevokedLinkResult(toResult(storedLink, target, storedLink.revokedAt(), now), true);
@@ -231,10 +233,6 @@ public class SmartLinkService implements SmartLinkUseCase {
     private static boolean isInRange(Instant value, Instant from, Instant before) {
         return (from == null || (value != null && !value.isBefore(from)))
                 && (before == null || (value != null && value.isBefore(before)));
-    }
-
-    private TrustedTarget requireManagedTrustedTarget(StoredLink storedLink) {
-        return storedLink.trustedTarget().orElseThrow(LinkNotFoundException::new);
     }
 
     private LinkResult toResult(

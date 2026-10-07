@@ -4,6 +4,7 @@ import com.personal.batongo.application.link.LinkCodeDerivationIdentity;
 import com.personal.batongo.application.link.LinkCodeKeyRingIdentity;
 import com.personal.batongo.application.link.error.LinkCodeKeyBindingException;
 import com.personal.batongo.application.link.port.out.LinkCodeKeyGuardPort;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -56,17 +57,9 @@ public class LinkCodeKeyGuardPersistenceAdapter implements LinkCodeKeyGuardPort 
     private static boolean sharesRegisteredKey(
             LinkCodeKeyRingIdentity ring, Map<String, LinkCodeDerivationIdentity> stored
     ) {
-        boolean matched = false;
-        for (var entry : ring.keys().entrySet()) {
-            LinkCodeDerivationIdentity existing = stored.get(entry.getKey());
-            if (existing != null) {
-                if (!existing.equals(entry.getValue())) {
-                    return false;
-                }
-                matched = true;
-            }
-        }
-        return matched;
+        var shared = new HashMap<>(ring.keys());
+        shared.keySet().retainAll(stored.keySet());
+        return !shared.isEmpty() && stored.entrySet().containsAll(shared.entrySet());
     }
 
     private Map<String, LinkCodeDerivationIdentity> readKeys(String lockingClause) {

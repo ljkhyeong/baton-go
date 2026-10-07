@@ -25,18 +25,19 @@ public class LinkCreationReservationPersistenceAdapter implements LinkCreationRe
             UUID proposedLinkId,
             String publicOrigin,
             String keyId,
+            String requestHash,
             Instant createdAt
     ) {
         try {
             jdbcClient.sql("""
                             INSERT INTO link_creation_requests (
-                                idempotency_key_hash, link_id, public_origin, key_id, created_at
-                            ) VALUES (?, UUID_TO_BIN(?), ?, ?, ?)
+                                idempotency_key_hash, link_id, public_origin, key_id, request_hash, created_at
+                            ) VALUES (?, UUID_TO_BIN(?), ?, ?, ?, ?)
                             """)
-                    .params(idempotencyKeyHash, proposedLinkId.toString(), publicOrigin, keyId,
+                    .params(idempotencyKeyHash, proposedLinkId.toString(), publicOrigin, keyId, requestHash,
                             UtcDateTimes.write(createdAt))
                     .update();
-            return new Reservation(proposedLinkId, publicOrigin, keyId, null, null, true);
+            return new Reservation(proposedLinkId, publicOrigin, keyId, null, requestHash, true);
         } catch (DuplicateKeyException exception) {
             return jdbcClient.sql("""
                             SELECT BIN_TO_UUID(link_id) AS link_id, public_origin, key_id,

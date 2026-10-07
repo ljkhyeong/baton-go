@@ -25,10 +25,7 @@ import org.springframework.test.web.servlet.client.RestTestClient.ResponseSpec;
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = {
                 "baton-go.public-resolver-rate-limit.capacity=1",
-                "baton-go.public-resolver-rate-limit.window=15s",
-                "spring.security.oauth2.resourceserver.jwt.issuer-uri=https://identity.example",
-                "spring.security.oauth2.resourceserver.jwt.audiences=baton-go",
-                "spring.security.oauth2.resourceserver.jwt.jwk-set-uri=http://127.0.0.1:1/jwks"
+                "baton-go.public-resolver-rate-limit.window=15s"
         }
 )
 @AutoConfigureRestTestClient

@@ -42,7 +42,6 @@ import com.personal.batongo.domain.link.LinkValidationException;
 import com.personal.batongo.domain.link.TargetSystem;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.net.URI;
-import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -59,7 +58,6 @@ import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
-import org.springframework.http.converter.StringHttpMessageConverter;
 import org.springframework.http.converter.json.JacksonJsonHttpMessageConverter;
 import org.springframework.restdocs.RestDocumentationContextProvider;
 import org.springframework.restdocs.RestDocumentationExtension;
@@ -104,10 +102,7 @@ class LinkManagementHttpContractTest {
                 .defaultRequest(get("/").principal(() -> "baton-service"))
                 .setControllerAdvice(errors)
                 .setContentNegotiationManager(mvcConfiguration.mvcContentNegotiationManager())
-                .setMessageConverters(
-                        new StringHttpMessageConverter(StandardCharsets.UTF_8),
-                        new JacksonJsonHttpMessageConverter(jsonMapper)
-                )
+                .setMessageConverters(new JacksonJsonHttpMessageConverter(jsonMapper))
                 .addFilters(new RequestIdFilter())
                 .apply(documentationConfiguration(restDocumentation))
                 .build();

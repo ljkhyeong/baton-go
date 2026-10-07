@@ -37,11 +37,7 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
-@WebMvcTest(properties = {
-        "spring.security.oauth2.resourceserver.jwt.issuer-uri=https://identity.example",
-        "spring.security.oauth2.resourceserver.jwt.audiences=baton-go",
-        "baton-go.management-jwk.read-timeout=200ms"
-})
+@WebMvcTest(properties = "baton-go.management-jwk.read-timeout=200ms")
 @ContextConfiguration(classes = ManagementApiSecurityConfiguration.class)
 @Import({GlobalExceptionHandler.class, RequestIdFilter.class, SimpleMeterRegistry.class})
 @ExtendWith(OutputCaptureExtension.class)

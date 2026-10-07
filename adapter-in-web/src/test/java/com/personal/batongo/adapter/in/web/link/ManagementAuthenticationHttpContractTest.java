@@ -39,10 +39,7 @@ import java.net.URI;
 import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -77,15 +74,10 @@ import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.context.WebApplicationContext;
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
-import org.springframework.web.util.UriTemplate;
+import org.springframework.web.util.UriComponentsBuilder;
 
 @ExtendWith({RestDocumentationExtension.class, OutputCaptureExtension.class})
-@WebMvcTest(
-        properties = {
-                "spring.security.oauth2.resourceserver.jwt.issuer-uri=https://identity.example",
-                "spring.security.oauth2.resourceserver.jwt.audiences=baton-go"
-        }
-)
+@WebMvcTest
 @ContextConfiguration(classes = ManagementAuthenticationHttpContractTest.WebControllerScan.class)
 @Import({
         ManagementApiSecurityConfiguration.class,
@@ -109,6 +101,7 @@ class ManagementAuthenticationHttpContractTest {
     }
 
     private static final String MANAGEMENT_JWT = "test-management-jwt";
+    private static final String LINK_ID = "83a430c4-5c5d-4eb4-a815-7a5ba1fd4aae";
     private static final String BEARER_CHALLENGE =
             "Bearer realm=\"baton-go-management\"";
     private static final String IDEMPOTENCY_KEY = "8e448211-66ae-44ab-9888-c4960648c22b";
@@ -194,7 +187,6 @@ class ManagementAuthenticationHttpContractTest {
     }
 
     private static Stream<Arguments> managementWritesWithUnsupportedResponseTypes() {
-        String linkId = "83a430c4-5c5d-4eb4-a815-7a5ba1fd4aae";
         return Stream.of(
                 Arguments.of(
                         "링크 생성의 XML 응답 요청",
@@ -207,7 +199,7 @@ class ManagementAuthenticationHttpContractTest {
                 ),
                 Arguments.of(
                         "링크 폐기의 HTML 응답 요청",
-                        put("/api/v1/links/{linkId}/revocation", linkId)
+                        put("/api/v1/links/{linkId}/revocation", LINK_ID)
                                 .accept(MediaType.TEXT_HTML),
                         "baton-go.links.revoke"
                 )
@@ -275,7 +267,6 @@ class ManagementAuthenticationHttpContractTest {
     }
 
     private static Stream<Arguments> managementRequestsWithWrongScope() {
-        String linkId = "83a430c4-5c5d-4eb4-a815-7a5ba1fd4aae";
         return Stream.of(
                 Arguments.of(
                         "조회 권한으로 링크 생성을 요청한다",
@@ -284,22 +275,22 @@ class ManagementAuthenticationHttpContractTest {
                 ),
                 Arguments.of(
                         "생성 권한으로 링크 조회를 요청한다",
-                        get("/api/v1/links/{linkId}", linkId),
+                        get("/api/v1/links/{linkId}", LINK_ID),
                         "baton-go.links.create"
                 ),
                 Arguments.of(
                         "조회 권한으로 링크 폐기를 요청한다",
-                        put("/api/v1/links/{linkId}/revocation", linkId),
+                        put("/api/v1/links/{linkId}/revocation", LINK_ID),
                         "baton-go.links.read"
                 ),
                 Arguments.of(
                         "생성 권한으로 링크 HEAD 조회를 요청한다",
-                        head("/api/v1/links/{linkId}", linkId),
+                        head("/api/v1/links/{linkId}", LINK_ID),
                         "baton-go.links.create"
                 ),
                 Arguments.of(
                         "폐기 권한으로 링크 HEAD 조회를 요청한다",
-                        head("/api/v1/links/{linkId}", linkId),
+                        head("/api/v1/links/{linkId}", LINK_ID),
                         "baton-go.links.revoke"
                 )
         );
@@ -355,20 +346,10 @@ class ManagementAuthenticationHttpContractTest {
 
         assertThat(routes).isNotEmpty();
         for (ManagementRoute route : routes) {
-            UriTemplate uriTemplate = new UriTemplate(route.path());
-            Map<String, String> variables = uriTemplate.getVariableNames().stream()
-                    .collect(Collectors.toMap(
-                            Function.identity(),
-                            ignored -> "83a430c4-5c5d-4eb4-a815-7a5ba1fd4aae"
-                    ));
-
-            mockMvc.perform(request(
-                            route.method(),
-                            uriTemplate.expand(variables)
-                    ).header(
-                            HttpHeaders.AUTHORIZATION,
-                            "Bearer " + MANAGEMENT_JWT
-                    ))
+            URI uri = UriComponentsBuilder.fromUriString(route.path()).build()
+                    .expand(ignored -> LINK_ID).toUri();
+            mockMvc.perform(request(route.method(), uri)
+                            .header(HttpHeaders.AUTHORIZATION, "Bearer " + MANAGEMENT_JWT))
                     .andExpect(status().isForbidden());
         }
 
@@ -423,7 +404,7 @@ class ManagementAuthenticationHttpContractTest {
 
     private LinkResult link() {
         return new LinkResult(
-                UUID.fromString("83a430c4-5c5d-4eb4-a815-7a5ba1fd4aae"),
+                UUID.fromString(LINK_ID),
                 TargetSystem.BATON,
                 BATON_TARGET_PATH,
                 LinkPurpose.NAVIGATION,

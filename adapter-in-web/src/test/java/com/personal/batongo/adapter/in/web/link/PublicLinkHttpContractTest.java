@@ -27,7 +27,6 @@ import com.personal.batongo.domain.link.LinkUnavailableException;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.io.IOException;
 import java.net.URI;
-import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
@@ -42,8 +41,6 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
-import org.springframework.http.converter.StringHttpMessageConverter;
-import org.springframework.http.converter.json.JacksonJsonHttpMessageConverter;
 import org.springframework.restdocs.RestDocumentationContextProvider;
 import org.springframework.restdocs.RestDocumentationExtension;
 import org.springframework.test.web.servlet.MockMvc;
@@ -81,10 +78,6 @@ class PublicLinkHttpContractTest {
                         new PublicLinkExceptionHandler(errors)
                 )
                 .setContentNegotiationManager(mvcConfiguration.mvcContentNegotiationManager())
-                .setMessageConverters(
-                        new StringHttpMessageConverter(StandardCharsets.UTF_8),
-                        new JacksonJsonHttpMessageConverter()
-                )
                 .addFilters(new RequestIdFilter())
                 .apply(documentationConfiguration(restDocumentation))
                 .build();

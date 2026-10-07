@@ -10,7 +10,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.nimbusds.jose.jwk.JWKSet;
-import com.nimbusds.jose.jwk.RSAKey;
+import com.nimbusds.jose.jwk.gen.RSAKeyGenerator;
+import com.nimbusds.jose.jwk.source.ImmutableJWKSet;
 import com.personal.batongo.adapter.in.web.GlobalExceptionHandler;
 import com.personal.batongo.adapter.in.web.ManagementApiSecurityConfiguration;
 import com.personal.batongo.adapter.in.web.ManagementOperationLogger;
@@ -24,9 +25,6 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
-import java.security.KeyPairGenerator;
-import java.security.interfaces.RSAPrivateKey;
-import java.security.interfaces.RSAPublicKey;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -80,15 +78,9 @@ class ManagementJwtExpiryHttpTest {
 
     @BeforeAll
     static void startJwkServer() throws Exception {
-        var generator = KeyPairGenerator.getInstance("RSA");
-        generator.initialize(2048);
-        var keyPair = generator.generateKeyPair();
-        var publicKey = (RSAPublicKey) keyPair.getPublic();
-        jwtEncoder = NimbusJwtEncoder.withKeyPair(publicKey, (RSAPrivateKey) keyPair.getPrivate())
-                .jwkPostProcessor(key -> key.keyID("expiry-test-key"))
-                .build();
-        byte[] body = new JWKSet(new RSAKey.Builder(publicKey).keyID("expiry-test-key").build())
-                .toString().getBytes(StandardCharsets.UTF_8);
+        var jwkSet = new JWKSet(new RSAKeyGenerator(2048).keyID("expiry-test-key").generate());
+        jwtEncoder = new NimbusJwtEncoder(new ImmutableJWKSet<>(jwkSet));
+        byte[] body = jwkSet.toString().getBytes(StandardCharsets.UTF_8);
         jwkServer = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         jwkServer.createContext("/jwks", exchange -> {
             exchange.getResponseHeaders().set(HttpHeaders.CONTENT_TYPE, "application/json");

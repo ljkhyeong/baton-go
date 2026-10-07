@@ -14,7 +14,7 @@ BATON과 ROUND가 링크를 원격 생성할 때 서버는 저장을 완료했�
 - `POST /api/v1/links`는 링크 생성 요청마다 소문자 정규 UUID `Idempotency-Key`를 요구한다.
   UUID 버전은 `1..5`, 변형은 RFC 변형만 허용하며 대문자나 nil UUID를 정규화하지
   않고 `400 INVALID_IDEMPOTENCY_KEY`로 거부한다.
-- 관리 JWT 발급 키와 별개인 `BATON_GO_LINK_CODE_SECRET`을 사용한다.
+- 관리 JWT 발급 키와 별개인 링크 코드 키(`BATONGO_LINKCODE_KEYS_*`)를 사용한다.
 - 공개 코드는
   `first16(HMAC-SHA-256(secret, "baton-go-link-code:v1\0" + idempotencyKey))`로 파생한다.
 - DB에는 공개 코드와 멱등성 키의 SHA-256 해시만 저장한다.

@@ -39,7 +39,8 @@
   재정의로 처리한다. 공개 링크 오류는 같은 advice 안의 JSON·HTML 처리기 두 개로 협상한다.
   예상하지 못한 오류 로그는 Boot `StandardStackTracePrinter`로 예외 유형·호출 위치만 한 줄에 남기며,
   요청 ID는 MDC에서 읽는다.
-- `BATON_GO_LINK_CODE_SECRET` 단일 비밀값의 키 ID는 `default`다. 키 교체 시 `BATONGO_LINKCODE_KEYS_DEFAULT`로 옮긴다.
+- 기본 링크 코드 키는 `BATONGO_LINKCODE_KEYS_DEFAULT`(키 ID `default`)이며 키 교체는 같은 형식으로 키 ID를 추가한다.
+  로컬 무시 파일 `deploy/app.env`의 옛 `BATON_GO_LINK_CODE_SECRET` 이름은 사용자가 직접 바꿔야 한다.
 - `go.b4ton.com` 운영 예시와 Cloudflare DNS API 인증서 갱신·Discord·Slack 웹훅 알림의 선택 설정을
   추가했다. [외부 API 연동 절차](docs/RUNBOOK/external-api-integrations.md)를 따르며
   서버 설치, 실제 토큰 연결, DNS 변경, 인증서 발급과 메시지 전송은 실행하지 않았다.
@@ -238,7 +239,7 @@
    보존과 PVC 경보·증설 기준을 함께 결정한다. 정리 구현은 준비되어 있으며 이 결정 전에는
    자동 정리를 활성화하지 않는다.
 8. 플랫폼 백업 정책에 RPO·RTO·주기·보존 기간·담당자·실패 경보·결과 보관 위치를 명시하고,
-   DB와 같은 버전의 `BATON_GO_LINK_CODE_SECRET`을 한 복구 단위로 사용한 격리 복원,
+   DB와 같은 버전의 `baton-go-link-code-key-ring` 키 묶음을 한 복구 단위로 사용한 격리 복원,
    장애 대응과 이미지 되돌리기 훈련을 완료한다.
 9. HMAC 비밀값 유출 시 Secret만 바꾸지 말고 링크 생성과 공개 경로를 먼저 차단한다.
    기존 링크 폐기·재발급과 키 목록 전환을 함께 수행하는 복구 절차를 정하고 훈련한다.

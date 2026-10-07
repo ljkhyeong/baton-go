@@ -15,13 +15,13 @@ class SecureLinkCodeAdapterTest {
     private static final String IDEMPOTENCY_KEY = "8e448211-66ae-44ab-9888-c4960648c22b";
 
     private final SecureLinkCodeAdapter adapter =
-            new SecureLinkCodeAdapter(new LinkCodeProperties(SECRET, "default", Map.of()));
+            new SecureLinkCodeAdapter(new LinkCodeProperties("default", Map.of("default", SECRET)));
 
     @Test
     @DisplayName("현재 발급 키를 바꿔도 기존 키로 만든 코드는 유지한다")
     void replaysWithStoredKeyVersionAfterRotation() {
         var rotated = new SecureLinkCodeAdapter(new LinkCodeProperties(
-                SECRET, "k202609", Map.of("k202609", "new-test-key-that-is-at-least-thirty-two-characters")
+                "k202609", Map.of("default", SECRET, "k202609", "new-test-key-that-is-at-least-thirty-two-characters")
         ));
         assertThat(rotated.issue(IDEMPOTENCY_KEY, "default")).isEqualTo(adapter.issue(IDEMPOTENCY_KEY, "default"));
         assertThat(rotated.issue(IDEMPOTENCY_KEY, "k202609")).isNotEqualTo(adapter.issue(IDEMPOTENCY_KEY, "default"));
@@ -57,8 +57,10 @@ class SecureLinkCodeAdapterTest {
         String composed = "é".repeat(32);
         String decomposed = "e\u0301".repeat(32);
 
-        var composedAdapter = new SecureLinkCodeAdapter(new LinkCodeProperties(composed, "default", Map.of()));
-        var decomposedAdapter = new SecureLinkCodeAdapter(new LinkCodeProperties(decomposed, "default", Map.of()));
+        var composedAdapter = new SecureLinkCodeAdapter(
+                new LinkCodeProperties("default", Map.of("default", composed)));
+        var decomposedAdapter = new SecureLinkCodeAdapter(
+                new LinkCodeProperties("default", Map.of("default", decomposed)));
 
         assertThat(composedAdapter.keyRingIdentity().keys())
                 .isNotEqualTo(decomposedAdapter.keyRingIdentity().keys());

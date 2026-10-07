@@ -40,7 +40,7 @@ BATON MySQL을 공유하면 초기 인프라 수는 줄지만 백업, 장애, �
   보관한다. Kubernetes Secret RBAC는 키 단위가 아니므로 수명주기·권한이 다른 자격 증명을
   한 객체에 합치지 않는다. 애플리케이션은 클라이언트 URL과 런타임 Secret, 마이그레이션 Job은 클라이언트
   URL과 마이그레이션 Secret, MySQL은 런타임·마이그레이션·초기 설정 Secret의 필요한 키만 참조한다.
-  링크 코드 HMAC 비밀값은 `baton-go-link-code-secret`에 별도로 보관한다. 관리 API는
+  링크 코드 HMAC 키 묶음은 `baton-go-link-code-key-ring`에 별도로 보관한다. 관리 API는
   ADR-0010의 발급자 서명 JWT를 검증하므로 공유 관리 토큰 Secret을 두지 않는다.
 - PKCS12 신뢰 저장소에는 공개 CA 인증서만 넣고 비밀번호는 자격 증명이 아닌 고정 무결성
   호환값 `baton-go-public-ca-v1`을 사용한다. Hikari DEBUG가 임의 드라이버 속성을 출력할

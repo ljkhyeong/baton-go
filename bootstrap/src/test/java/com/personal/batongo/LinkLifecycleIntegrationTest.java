@@ -60,7 +60,7 @@ import org.testcontainers.mysql.MySQLContainer;
         "spring.security.oauth2.resourceserver.jwt.issuer-uri=https://identity.example",
         "spring.security.oauth2.resourceserver.jwt.jwk-set-uri=https://identity.example/jwks",
         "spring.security.oauth2.resourceserver.jwt.audiences=baton-go",
-        "baton-go.link-code.secret=test-default-key-with-at-least-thirty-two-characters",
+        "baton-go.link-code.keys.default=test-default-key-with-at-least-thirty-two-characters",
         "baton-go.link-code.keys.k202609=test-current-key-with-at-least-thirty-two-characters",
         "baton-go.public-base-url=https://go.example",
         "baton-go.targets.baton-base-url=https://baton.example",
@@ -99,7 +99,7 @@ class LinkLifecycleIntegrationTest {
         var oldCommand = command(null);
         var oldLink = links.createLink(oldCommand);
         var currentCommand = command(null);
-        var properties = new LinkCodeProperties(DEFAULT_KEY, "k202609", Map.of("k202609", CURRENT));
+        var properties = new LinkCodeProperties("k202609", Map.of("default", DEFAULT_KEY, "k202609", CURRENT));
 
         var oldReplay = withKeys(properties, clock, service -> service.createLink(oldCommand));
         var currentLink = withKeys(properties, clock, service -> service.createLink(currentCommand));
@@ -117,14 +117,15 @@ class LinkLifecycleIntegrationTest {
     @Test
     @DisplayName("키 ID의 비밀값 변경과 기존 결과 반환에 필요한 키 제거는 키 등록 검사에서 거부한다")
     void rejectsChangedOrMissingRequiredKey() {
-        withKeys(new LinkCodeProperties(DEFAULT_KEY, "k202609", Map.of("k202609", CURRENT)), clock,
+        withKeys(new LinkCodeProperties("k202609", Map.of("default", DEFAULT_KEY, "k202609", CURRENT)), clock,
                 service -> service.createLink(command(null)));
 
-        assertThatThrownBy(() -> withKeys(new LinkCodeProperties(DEFAULT_KEY, "default", Map.of()), clock,
+        assertThatThrownBy(() -> withKeys(new LinkCodeProperties("default", Map.of("default", DEFAULT_KEY)), clock,
                 service -> null))
                 .isInstanceOf(LinkCodeKeyBindingException.class);
         assertThatThrownBy(() -> withKeys(new LinkCodeProperties(
-                DEFAULT_KEY, "k202609", Map.of("k202609", "different-key-with-at-least-thirty-two-characters")
+                "k202609",
+                Map.of("default", DEFAULT_KEY, "k202609", "different-key-with-at-least-thirty-two-characters")
         ), clock, service -> null)).isInstanceOf(LinkCodeKeyBindingException.class);
         assertThat(countRowsInTable(jdbc, "smart_links")).isEqualTo(1);
     }
@@ -220,14 +221,15 @@ class LinkLifecycleIntegrationTest {
         create(command);
         assertThat(purge(EXPIRED, 100)).isEqualTo(1);
 
-        assertThatThrownBy(() -> withKeys(new LinkCodeProperties(null, "k202609", Map.of("k202609", CURRENT)),
+        assertThatThrownBy(() -> withKeys(new LinkCodeProperties("k202609", Map.of("k202609", CURRENT)),
                 clock, service -> service.createLink(command)))
                 .isInstanceOf(LinkPurgedException.class);
         assertThat(countRowsInTable(jdbc, "smart_links")).isZero();
     }
 
     private CreatedLinkResult create(CreateLinkCommand command) {
-        return withKeys(new LinkCodeProperties(DEFAULT_KEY, "default", Map.of()), Clock.fixed(CREATED, ZoneOffset.UTC),
+        return withKeys(new LinkCodeProperties("default", Map.of("default", DEFAULT_KEY)),
+                Clock.fixed(CREATED, ZoneOffset.UTC),
                 service -> service.createLink(command));
     }
 

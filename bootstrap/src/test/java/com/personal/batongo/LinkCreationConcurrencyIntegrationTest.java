@@ -54,7 +54,7 @@ import org.testcontainers.mysql.MySQLContainer;
         "spring.security.oauth2.resourceserver.jwt.issuer-uri=https://identity.example",
         "spring.security.oauth2.resourceserver.jwt.jwk-set-uri=https://identity.example/jwks",
         "spring.security.oauth2.resourceserver.jwt.audiences=baton-go",
-        "baton-go.link-code.secret=test-link-code-secret-that-is-separate-and-long-enough",
+        "baton-go.link-code.keys.default=test-link-code-secret-that-is-separate-and-long-enough",
         "baton-go.public-base-url=https://go.example",
         "baton-go.targets.baton-base-url=https://baton.example",
         "baton-go.targets.round-base-url=https://baton.example"

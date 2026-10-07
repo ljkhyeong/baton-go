@@ -280,7 +280,7 @@ jobs:
           BATON_GO_MANAGEMENT_JWT_ISSUER_URI: http://127.0.0.1:1/issuer
           BATON_GO_MANAGEMENT_JWT_AUDIENCE: baton-go
           SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://127.0.0.1:1/issuer/jwks
-          BATON_GO_LINK_CODE_SECRET: ci-runtime-link-code-secret-000000000000
+          BATONGO_LINKCODE_KEYS_DEFAULT: ci-runtime-link-code-secret-000000000000
           BATON_GO_DB_PASSWORD: ci-runtime-db-password
           BATON_GO_DB_ROOT_PASSWORD: ci-runtime-root-password
           BATON_GO_PUBLIC_RESOLVER_RATE_LIMIT_CAPACITY: "4"

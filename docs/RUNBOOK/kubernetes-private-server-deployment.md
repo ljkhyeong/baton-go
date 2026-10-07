@@ -11,7 +11,7 @@
 | `StatefulSet/baton-go-mysql` | GO 전용 `baton_go` 데이터베이스 | 헤드리스 `ClusterIP:3306` |
 | `PVC/data-baton-go-mysql-0` | GO MySQL 데이터 디렉터리 | `ReadWriteOnce`, 10Gi |
 | `ConfigMap/baton-go-database-identity` | 변경 불가 런타임·마이그레이션 사용자 이름 | 애플리케이션·Job·MySQL이 참조 |
-| `Secret/baton-go-link-code-secret` | 링크 HMAC 비밀값 | 애플리케이션 Pod만 참조 |
+| `Secret/baton-go-link-code-key-ring` | 링크 HMAC 키 묶음(필수) | 애플리케이션 Pod만 참조 |
 | `Secret/baton-go-database-client-config` | 비밀 쿼리가 없는 TLS JDBC URL | 애플리케이션·마이그레이션 Job만 참조 |
 | `Secret/baton-go-database-runtime-credentials` | DML 런타임 비밀번호 | 애플리케이션·MySQL만 참조 |
 | `Secret/baton-go-database-migration-credentials` | DDL 마이그레이션 비밀번호 | 마이그레이션 Job·MySQL 초기화만 참조 |
@@ -219,8 +219,9 @@ kubectl -n baton-go exec pod/baton-go-mysql-0 -- sh -ec \
 비밀값 관리자 또는 External Secrets controller를 사용한다면 다음 이름과 키로 Secret을 생성한다.
 
 ```text
-baton-go-link-code-secret
-  BATON_GO_LINK_CODE_SECRET
+baton-go-link-code-key-ring
+  BATONGO_LINKCODE_KEYS_DEFAULT
+  BATONGO_LINKCODE_ACTIVEKEYID, BATONGO_LINKCODE_KEYS_<ID> (키 교체 때만)
 
 baton-go-database-client-config
   BATON_GO_DB_URL
@@ -324,8 +325,8 @@ Secret 읽기 권한이 없어도 Pod나 워크로드 템플릿을
 실행하지 않는다.
 
 ```bash
-kubectl -n baton-go create secret generic baton-go-link-code-secret \
-  --from-env-file=/secure/path/baton-go-link-code-secret.env \
+kubectl -n baton-go create secret generic baton-go-link-code-key-ring \
+  --from-env-file=/secure/path/baton-go-link-code-key-ring.env \
   --dry-run=client -o yaml | kubectl apply -f -
 
 kubectl -n baton-go create secret generic baton-go-database-client-config \
@@ -368,7 +369,7 @@ kubectl -n baton-go create secret generic baton-go-registry \
 다음 출력은 키 이름과 바이트 수만 보여 주며 실제 값은 출력하지 않는다.
 
 ```bash
-kubectl -n baton-go describe secret baton-go-link-code-secret
+kubectl -n baton-go describe secret baton-go-link-code-key-ring
 kubectl -n baton-go describe secret baton-go-database-client-config
 kubectl -n baton-go describe secret baton-go-database-runtime-credentials
 kubectl -n baton-go describe secret baton-go-database-migration-credentials
@@ -434,7 +435,7 @@ PVC에는 사용자 분리 초기화 스크립트도 다시 실행되지 않는�
 
 일회성 Job이 Flyway 스키마를 만든 뒤 장기 실행 애플리케이션은 DML 사용자로 접속한다.
 신규 빈 DB는 애플리케이션 시작 시 현재 HMAC 키 정보를 자동 등록한다. 이후에는 DB와
-`BATON_GO_LINK_CODE_SECRET`을 항상 같은 시점의 복구 단위로
+`baton-go-link-code-key-ring` Secret(키 묶음 전체)을 항상 같은 시점의 복구 단위로
 보존한다. HMAC 키 교체는 [키 교체 절차](link-code-key-rotation.md)의 키 ID 추가·선배포·전환 순서를 따른다.
 
 ### 부분 초기화 실패 복구
@@ -937,7 +938,7 @@ Flyway 마이그레이션은 자동으로 역적용되지 않는다. DB 스키�
 각 백업 기록은 최소한 다음을 하나의 식별 가능한 복구 세트로 묶는다.
 
 - MySQL 인식 논리/물리 백업 또는 일관성이 검증된 볼륨 스냅샷
-- 그 시점의 `BATON_GO_LINK_CODE_SECRET` 비밀값 관리자 버전
+- 그 시점의 `baton-go-link-code-key-ring` Secret(키 묶음 전체) 비밀값 관리자 버전
 - 애플리케이션 배포 이미지 다이제스트와 Flyway 스키마 버전
 - DB 클라이언트 설정, 런타임, 마이그레이션과 초기 설정 자격 증명의 비밀값 관리자 버전
 - MySQL 서버 인증서·CA와 클라이언트 신뢰 저장소 버전

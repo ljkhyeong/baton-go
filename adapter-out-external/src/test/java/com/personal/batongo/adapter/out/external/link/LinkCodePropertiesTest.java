@@ -3,6 +3,7 @@ package com.personal.batongo.adapter.out.external.link;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.util.Collections;
 import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -12,7 +13,6 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.boot.context.properties.bind.Bindable;
 import org.springframework.boot.context.properties.bind.Binder;
 import org.springframework.boot.context.properties.source.ConfigurationPropertySources;
-import org.springframework.boot.context.properties.source.MapConfigurationPropertySource;
 import org.springframework.core.env.SystemEnvironmentPropertySource;
 
 class LinkCodePropertiesTest {
@@ -32,23 +32,23 @@ class LinkCodePropertiesTest {
     }
 
     @Test
-    @DisplayName("단일 비밀값만 설정하면 default 키 ID의 현재 발급 키로 바인딩한다")
-    void bindsSingleSecretAsDefaultKey() {
+    @DisplayName("기본 키 환경 변수만 설정하면 default 키 ID를 현재 발급 키로 바인딩한다")
+    void bindsDefaultKeyAsActiveKey() {
         String secret = "test-secret-with-at-least-thirty-two-characters";
-        var source = new MapConfigurationPropertySource(Map.of("baton-go.link-code.secret", secret));
-        var properties = new Binder(source)
+        var source = new SystemEnvironmentPropertySource("systemEnvironment", Map.of(
+                "BATONGO_LINKCODE_KEYS_DEFAULT", secret
+        ));
+        var properties = new Binder(ConfigurationPropertySources.from(source))
                 .bind("baton-go.link-code", Bindable.of(LinkCodeProperties.class)).get();
         assertThat(properties.activeKeyId()).isEqualTo("default");
         assertThat(properties.keys()).containsExactly(Map.entry("default", secret));
     }
 
     @Test
-    @DisplayName("현재 발급 키가 없거나 기본 키를 두 곳에 설정하면 거부한다")
-    void rejectsMissingActiveKeyAndDuplicateDefaultConfiguration() {
+    @DisplayName("현재 발급 키 ID의 비밀값이 없으면 거부한다")
+    void rejectsMissingActiveKey() {
         String secret = "test-secret-that-is-at-least-thirty-two-characters";
-        assertThatThrownBy(() -> new LinkCodeProperties(secret, "missing", Map.of()))
-                .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> new LinkCodeProperties(secret, "default", Map.of("default", secret)))
+        assertThatThrownBy(() -> new LinkCodeProperties("missing", Map.of("default", secret)))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
@@ -57,7 +57,7 @@ class LinkCodePropertiesTest {
     @ValueSource(strings = {"", "too-short"})
     @DisplayName("링크 코드 파생 비밀은 32자 이상이어야 한다")
     void rejectsMissingOrShortSecret(String invalidSecret) {
-        assertThatThrownBy(() -> new LinkCodeProperties(invalidSecret, "default", Map.of()))
+        assertThatThrownBy(() -> new LinkCodeProperties("default", Collections.singletonMap("default", invalidSecret)))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
@@ -66,7 +66,7 @@ class LinkCodePropertiesTest {
     void redactsSecretFromStringRepresentation() {
         String secret = "link-code-secret-that-must-never-be-logged";
 
-        assertThat(new LinkCodeProperties(secret, "default", Map.of()).toString())
+        assertThat(new LinkCodeProperties("default", Map.of("default", secret)).toString())
                 .doesNotContain(secret);
     }
 
@@ -75,6 +75,7 @@ class LinkCodePropertiesTest {
     void preservesSecretSyntax() {
         String secret = " ".repeat(31) + "\n";
 
-        assertThat(new LinkCodeProperties(secret, "default", Map.of()).keys().get("default")).isEqualTo(secret);
+        assertThat(new LinkCodeProperties("default", Map.of("default", secret)).keys())
+                .containsEntry("default", secret);
     }
 }

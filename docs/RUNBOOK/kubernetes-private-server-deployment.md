@@ -776,7 +776,8 @@ kubectl -n baton-go rollout status deployment/baton-go --timeout=10m
 위 삭제는 `Complete`인 마이그레이션 Job 객체만 대상으로 하며 StatefulSet, PVC, Namespace와
 Secret에는 사용하지 않는다. Job이 아직 실행 중이면 중단하지 말고 원인을 확인한다. 한 번의
 Kustomize 적용은 Job과 Deployment 순서를 보장하지 않으므로 모든 Flyway 변경은 구 애플리케이션과
-구 스키마에 호환되는 확장 단계여야 한다. Job `Complete` 확인 뒤 새 애플리케이션을 검증하고,
+구 스키마에 호환되는 확장 단계여야 한다. 첫 운영 배포 전에 추가한 V2만 예외이며 조건은 아래
+되돌리기 문단에 적는다. Job `Complete` 확인 뒤 새 애플리케이션을 검증하고,
 열/테이블 제거 같은 축소 단계는 모든 구 Pod와 읽기 프로세스가 사라진 후 별도 배포에서
 수행한다. 애플리케이션이 마이그레이션보다 먼저 시작해 스키마 검증에 실패하는 짧은 구간은
 재시작으로 복구되지만, 이를 파괴적 마이그레이션 허용 근거로 사용하지 않는다.
@@ -786,8 +787,9 @@ Kustomize 적용은 Job과 Deployment 순서를 보장하지 않으므로 모든
 MySQL 8.4의 InnoDB DDL은 **각 문장 단위**로 전체 적용 또는 롤백되는 원자적 DDL이다.
 하지만 여러 DDL이 든 Flyway SQL 파일 전체가 하나의 트랜잭션은 아니다. 기준선 V1은 세
 `CREATE TABLE` 문장이므로 일부 테이블만 만들어진 상태가 가능하고, 마지막 문장 커밋 뒤 Flyway
-성공 이력 기록 전에 프로세스가 종료될 수도 있다. 이후 버전을 추가하면 그 버전의 부분 적용 상태와
-판별 조회를 이 절에 함께 적는다.
+성공 이력 기록 전에 프로세스가 종료될 수도 있다. V2는 `ALTER TABLE` 한 문장이라 일부만 적용된
+상태는 없지만, 같은 방식으로 ALTER 커밋 뒤 이력이 빠질 수 있다. 이후 버전을 추가하면 그 버전의
+부분 적용 상태와 판별 조회를 이 절에 함께 적는다.
 
 Job이 `Failed`이거나 결과가 불명확하면 다음 순서를 지킨다.
 
@@ -847,12 +849,32 @@ Job이 `Failed`이거나 결과가 불명확하면 다음 순서를 지킨다.
    FROM information_schema.tables
    WHERE table_schema = DATABASE()
      AND table_name IN ('smart_links', 'link_creation_requests', 'link_code_keys');
+
+   SELECT constraint_name
+   FROM information_schema.check_constraints
+   WHERE constraint_schema = DATABASE()
+     AND constraint_name IN ('ck_link_creation_requests_purge_state',
+                             'ck_link_creation_requests_origin_until_purge');
+
+   SELECT is_nullable
+   FROM information_schema.columns
+   WHERE table_schema = DATABASE()
+     AND table_name = 'link_creation_requests'
+     AND column_name = 'request_hash';
    ```
 
 4. V1 성공 이력이 없으면 기준선 생성 중 실패다. 첫 배포의 빈 DB이므로 만들어진 테이블의 행 수가
    모두 0인지 `COUNT(*)`로 확인한다. 행이 없으면 일관된 백업을 남긴 뒤 승인된 관리 채널에서 만들어진
    V1 테이블과 실패 이력을 정리하고 변경하지 않은 V1을 다시 실행한다. 행이 있으면 테이블을
    지우지 않고 데이터를 보존하는 별도 DBA 복구 계획을 사용한다.
+
+   V1은 성공했고 V2 성공 이력이 없으면 V2 중 실패다. 3단계 조회에서
+   `ck_link_creation_requests_purge_state`가 남아 있고 `request_hash`가 `YES`이면 ALTER가 적용되지
+   않았다. 로그에서 원인을 확인하고, 정리 전 예약(`purged_at IS NULL`) 때문에 실패했다면 V2를 적용할
+   수 없는 DB이므로 행을 지우거나 V2를 고치지 않고 별도 DBA 복구 계획을 사용한다.
+   `ck_link_creation_requests_origin_until_purge`가 있고 `request_hash`가 `NO`이면 ALTER는 커밋됐고
+   이력만 빠졌다. 이때 다시 실행하면 이미 지운 제약 때문에 실패하므로 마이그레이션 전 백업으로
+   복원한 뒤 변경하지 않은 V2를 다시 실행한다.
 
 5. `flyway_schema_history.success=1`인데 실제 컬럼 정의가 기대와 다르면 적용된
    마이그레이션을 수정하지 않고 백업 복원 또는 다음 버전의 마이그레이션으로

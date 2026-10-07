@@ -31,9 +31,11 @@
 - 폐기를 처리한 서버의 시계가 생성 시각보다 늦으면 500 대신 폐기 시각을 생성 시각으로 맞춘다.
 - Spring Boot 4.1.1이 관리하는 Tomcat·Jackson은 루트 `build.gradle`의 해석 규칙으로 보안 수정본인 Tomcat 11.0.26·
   Jackson 3.1.7을 쓴다. 이 버전을 포함한 Boot 패치가 나오면 Boot를 올리고 규칙을 지운다.
-- 영속성은 JPA 없이 Spring `JdbcClient`로만 처리한다. 첫 운영 배포 전이라 마이그레이션을 최종 스키마의
-  단일 V1으로 다시 만들었고 `link_code_key_guard` 보호 행과 `version` 열이 없다. 그 이전에 만든 로컬
-  MySQL 볼륨은 [README 안내](README.md#로컬-실행)에 따라 다시 만든다.
+- 영속성은 JPA 없이 Spring `JdbcClient`로만 처리한다. 첫 운영 배포 전이라 기준선 V1을 다시 만들었고
+  `link_code_key_guard` 보호 행과 `version` 열이 없다. V2는 생성 예약 때 `request_hash`를 필수로 저장한다.
+  정리 전 예약이 남은 DB에는 V2를 적용할 수 없고 V1까지만 아는 이미지로 되돌리면 새 링크를 만들 수 없다.
+  이전에 만든 로컬 MySQL 볼륨은 [README 안내](README.md#로컬-실행)에 따라 다시 만들고, 운영 조건은
+  [되돌리기·마이그레이션 실패 복구](docs/RUNBOOK/kubernetes-private-server-deployment.md#7-업데이트와-되돌리기)를 따른다.
 - 관리 보안 필터의 401·403·인증 서비스 500은 `HandlerExceptionResolver`를 거쳐 `GlobalExceptionHandler`가
   응답한다. 프로젝트 예외는 처리기 하나의 예외 유형 switch로, Spring MVC 예외는 `ResponseEntityExceptionHandler`
   재정의로 처리한다. 공개 링크 오류는 같은 advice 안의 JSON·HTML 처리기 두 개로 협상한다.

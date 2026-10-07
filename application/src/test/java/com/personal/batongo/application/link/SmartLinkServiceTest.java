@@ -57,11 +57,6 @@ class SmartLinkServiceTest {
             "/teams/8e448211-66ae-44ab-9888-c4960648c22b"
                     + "/seasons/713d9cb7-2842-4f9f-b3cc-e31d98c6238a";
     private static final String ROUND_PATH = "/room/abcd-efgh-jkmn";
-    private static final LinkCodeDerivationIdentity DERIVATION_IDENTITY =
-            new LinkCodeDerivationIdentity(
-                    "hmac-sha256-link-code-v1",
-                    "a".repeat(64)
-            );
     private static final CreationIdempotencyKey IDEMPOTENCY_KEY =
             new CreationIdempotencyKey(
                     "8e448211-66ae-44ab-9888-c4960648c22b"
@@ -77,11 +72,14 @@ class SmartLinkServiceTest {
     private final LinkCodePort linkCodePort = mock(LinkCodePort.class);
     private final LinkCodeKeyGuardPort keyGuardPort = mock(LinkCodeKeyGuardPort.class);
     private final PublicLinkOriginPort publicLinkOriginPort = mock(PublicLinkOriginPort.class);
-    private final SmartLinkService service = service(linkCodePort, Clock.fixed(NOW, ZoneOffset.UTC));
+    private final SmartLinkService service = service(Clock.fixed(NOW, ZoneOffset.UTC));
 
     @BeforeEach
     void setUp() {
-        stubLinkCodePort(linkCodePort, RAW_CODE, CODE_HASH);
+        when(linkCodePort.keyRingIdentity()).thenReturn(new LinkCodeKeyRingIdentity("default", Map.of(
+                "default", new LinkCodeDerivationIdentity("hmac-sha256-link-code-v1", "a".repeat(64))
+        )));
+        when(linkCodePort.issue(anyString(), anyString())).thenReturn(new IssuedLinkCode(RAW_CODE, CODE_HASH));
         when(publicLinkOriginPort.current()).thenReturn(PUBLIC_ORIGIN);
     }
 
@@ -119,11 +117,10 @@ class SmartLinkServiceTest {
     void rejectsReplayWhenCodeDerivationChanges() {
         Instant expiresAt = NOW.plusSeconds(300);
         configureReplay(expiresAt);
-        LinkCodePort changedLinkCodePort = mock(LinkCodePort.class);
-        stubLinkCodePort(changedLinkCodePort, "differentRawCodeValue1", "d".repeat(64));
+        when(linkCodePort.issue(anyString(), anyString()))
+                .thenReturn(new IssuedLinkCode("differentRawCodeValue1", "d".repeat(64)));
 
-        assertThatThrownBy(() -> service(changedLinkCodePort, Clock.fixed(NOW, ZoneOffset.UTC))
-                .createLink(command(expiresAt)))
+        assertThatThrownBy(() -> service.createLink(command(expiresAt)))
                 .isExactlyInstanceOf(LinkCodeReplayMismatchException.class);
     }
 
@@ -160,7 +157,7 @@ class SmartLinkServiceTest {
         Instant expiresAt = NOW.plusSeconds(60);
         configureReplay(expiresAt);
 
-        var replay = service(linkCodePort, Clock.fixed(NOW.plusSeconds(120), ZoneOffset.UTC))
+        var replay = service(Clock.fixed(NOW.plusSeconds(120), ZoneOffset.UTC))
                 .createLink(command(expiresAt));
 
         assertThat(replay.replayed()).isTrue();
@@ -217,7 +214,7 @@ class SmartLinkServiceTest {
             return Optional.of(ACTIVE_LINK);
         });
 
-        var result = service(linkCodePort, clock).getLink(LINK_ID);
+        var result = service(clock).getLink(LINK_ID);
 
         assertThat(result.status()).isEqualTo(Status.EXPIRED);
         assertThat(result.evaluatedAt()).isEqualTo(ACTIVE_LINK.expiresAt());
@@ -254,7 +251,7 @@ class SmartLinkServiceTest {
         Clock clock = mock(Clock.class);
         when(clock.instant()).thenReturn(NOW, NOW.plusSeconds(1));
 
-        var result = service(linkCodePort, clock).getLinks(
+        var result = service(clock).getLinks(
                 List.of(expired.id(), missingId, active.id(), expired.id(), hidden.id())
         );
 
@@ -310,7 +307,7 @@ class SmartLinkServiceTest {
                 storedLink(6, "BATON", BATON_PATH, from, NOW)
         ));
 
-        var result = service(linkCodePort, clock).searchLinks(new LinkSearchQuery(
+        var result = service(clock).searchLinks(new LinkSearchQuery(
                 null, 100, TargetSystem.BATON, from, NOW, null, null, Status.ACTIVE
         ));
 
@@ -429,27 +426,14 @@ class SmartLinkServiceTest {
         );
     }
 
-    private SmartLinkService service(LinkCodePort configuredLinkCodePort, Clock clock) {
+    private SmartLinkService service(Clock clock) {
         return new SmartLinkService(
                 repository,
                 reservationPort,
-                configuredLinkCodePort,
+                linkCodePort,
                 keyGuardPort,
                 publicLinkOriginPort,
                 clock
         );
-    }
-
-    private void stubLinkCodePort(
-            LinkCodePort configuredLinkCodePort,
-            String rawCode,
-            String codeHash
-    ) {
-        when(configuredLinkCodePort.keyRingIdentity()).thenReturn(
-                new LinkCodeKeyRingIdentity("default", Map.of("default", DERIVATION_IDENTITY))
-        );
-        when(configuredLinkCodePort.issue(anyString(), anyString()))
-                .thenReturn(new IssuedLinkCode(rawCode, codeHash));
-        when(configuredLinkCodePort.hash(anyString())).thenReturn(codeHash);
     }
 }

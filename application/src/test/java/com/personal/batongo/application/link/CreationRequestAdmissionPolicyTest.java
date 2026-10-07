@@ -7,6 +7,8 @@ import com.personal.batongo.application.link.error.InvalidRequestException;
 import java.time.Instant;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 class CreationRequestAdmissionPolicyTest {
 
@@ -22,21 +24,15 @@ class CreationRequestAdmissionPolicyTest {
         )).doesNotThrowAnyException();
     }
 
-    @Test
-    @DisplayName("마이크로초보다 정밀한 시각은 절삭하지 않고 거부한다")
-    void rejectsSubMicrosecondTime() {
-        assertThatThrownBy(() -> CreationRequestAdmissionPolicy.requireStorableTimes(
-                null,
-                Instant.parse("2026-08-08T01:02:03.123456789Z")
-        )).isInstanceOf(InvalidRequestException.class);
-    }
-
-    @Test
-    @DisplayName("MySQL 저장 범위를 벗어난 시각은 거부한다")
-    void rejectsOutOfRangeTime() {
-        assertThatThrownBy(() -> CreationRequestAdmissionPolicy.requireStorableTimes(
-                null,
-                MAXIMUM_SUPPORTED_TIME.plusNanos(1_000)
-        )).isInstanceOf(InvalidRequestException.class);
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "2026-08-08T01:02:03.123456789Z",
+            "1582-10-14T23:59:59.999999Z",
+            "+10000-01-01T00:00:00Z"
+    })
+    @DisplayName("마이크로초보다 정밀하거나 MySQL 저장 범위를 벗어난 시각은 절삭하지 않고 거부한다")
+    void rejectsUnstorableTime(Instant value) {
+        assertThatThrownBy(() -> CreationRequestAdmissionPolicy.requireStorableTimes(null, value))
+                .isInstanceOf(InvalidRequestException.class);
     }
 }

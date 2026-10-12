@@ -67,7 +67,8 @@ HTTP 상태와 `code`를 기준으로 처리한다.
 - 지원하지 않는 요청 본문 형식: `415 UNSUPPORTED_MEDIA_TYPE`
 - 단축 링크 요청 한도 초과: `429 RATE_LIMIT_EXCEEDED`
 - Redis 분산 요청 제한 장애: `503 RATE_LIMIT_UNAVAILABLE`
-- 허용되지 않은 대상 시스템·목적·위치 식별자 조합: `400 INVALID_LINK`
+- 허용되지 않은 대상 시스템·목적·위치 식별자 조합, `notBefore`보다 뒤가 아닌 `expiresAt`: `400 INVALID_LINK`
+- 생성 예약이 없는 요청의 `expiresAt`이 생성 처리 시각보다 뒤가 아님: `400 EXPIRES_AT_ALREADY_PASSED`
 - 예상하지 못한 오류: `500 INTERNAL_ERROR`
 
 관리 인증 `401` 응답에는
@@ -159,6 +160,10 @@ Idempotency-Key: 8e448211-66ae-44ab-9888-c4960648c22b
   자리 중 하나라도 0이 아니면 서버가 반올림하거나 절삭하지 않고 링크 생성 예약 전에
   `400 INVALID_REQUEST`로 거부한다.
 - 호출자는 재시도할 때 두 시각을 포함해 최초 요청과 같은 값을 사용한다.
+- `expiresAt`은 `notBefore`보다 뒤여야 하며 위반하면 `400 INVALID_LINK`다. 같은 키의 생성 예약이 없고
+  `expiresAt`이 생성 처리 시각보다 뒤가 아니면 링크와 예약을 저장하지 않고 `400 EXPIRES_AT_ALREADY_PASSED`로
+  거부한다. 예약이 있으면 만료 뒤의 재시도도 기존 결과를 반환하므로 이 오류는 해당 키로 만든 링크가
+  없다는 뜻이다. 다만 서버 간 시계 차이 안에서는 늦게 도착한 최초 요청이 곧 만료될 링크를 만들 수 있다.
 
 최초 생성 응답 `201`, 동일 요청 재시도 응답 `200`:
 

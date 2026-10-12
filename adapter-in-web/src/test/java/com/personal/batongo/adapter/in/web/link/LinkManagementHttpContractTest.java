@@ -35,6 +35,7 @@ import com.personal.batongo.application.link.port.in.SmartLinkUseCase.LinkResult
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.LinkBatchResult;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.LinkSearchQuery;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.LinkSearchResult;
+import com.personal.batongo.domain.link.ExpiresAtAlreadyPassedException;
 import com.personal.batongo.domain.link.LinkAvailabilityPolicy.Status;
 import com.personal.batongo.domain.link.LinkPurpose;
 import com.personal.batongo.domain.link.LinkValidationException;
@@ -321,6 +322,7 @@ class LinkManagementHttpContractTest {
                 Arguments.of(new LinkCodeKeyBindingException(), 500, "LINK_CODE_CONFIGURATION_MISMATCH"),
                 Arguments.of(new InvalidRequestException("시각 범위 오류"), 400, "INVALID_REQUEST"),
                 Arguments.of(new LinkValidationException("검증 실패"), 400, "INVALID_LINK"),
+                Arguments.of(new ExpiresAtAlreadyPassedException(), 400, "EXPIRES_AT_ALREADY_PASSED"),
                 Arguments.of(new IdempotencyKeyConflictException(), 409, "IDEMPOTENCY_KEY_REUSED"),
                 Arguments.of(new LinkPurgedException(), 410, "LINK_PURGED")
         );

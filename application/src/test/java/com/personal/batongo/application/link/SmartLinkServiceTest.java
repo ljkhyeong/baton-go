@@ -25,6 +25,7 @@ import com.personal.batongo.application.link.port.out.LinkCreationReservationPor
 import com.personal.batongo.application.link.port.out.PublicLinkOriginPort;
 import com.personal.batongo.application.link.port.out.SmartLinkRepository;
 import com.personal.batongo.application.link.port.out.SmartLinkRepository.StoredLink;
+import com.personal.batongo.domain.link.ExpiresAtAlreadyPassedException;
 import com.personal.batongo.domain.link.LinkPurpose;
 import com.personal.batongo.domain.link.LinkAvailabilityPolicy.Status;
 import com.personal.batongo.domain.link.LinkValidationException;
@@ -162,6 +163,29 @@ class SmartLinkServiceTest {
         assertThat(replay.link().id()).isEqualTo(LINK_ID);
         assertThat(replay.shortUrl())
                 .isEqualTo(URI.create("https://go.example/l/" + RAW_CODE));
+    }
+
+    @Test
+    @DisplayName("기존 예약이 없는 요청의 만료 시각이 이미 지났으면 링크를 저장하지 않고 별도 오류로 거부한다")
+    void rejectsPassedExpiryForNewReservation() {
+        when(reservationPort.reserve(
+                eq(IDEMPOTENCY_KEY.hash()),
+                any(UUID.class),
+                anyString(),
+                anyString(),
+                anyString(),
+                any(Instant.class)
+        )).thenAnswer(invocation -> new LinkCreationReservationPort.Reservation(
+                invocation.getArgument(1),
+                PUBLIC_ORIGIN.serialized(),
+                "default", null, invocation.getArgument(4),
+                true
+        ));
+
+        assertThatThrownBy(() -> service.createLink(command(NOW)))
+                .isExactlyInstanceOf(ExpiresAtAlreadyPassedException.class);
+
+        verify(repository, never()).save(any());
     }
 
     @Test

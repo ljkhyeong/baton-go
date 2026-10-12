@@ -11,6 +11,7 @@ import com.personal.batongo.application.link.error.LinkPurgedException;
 import com.personal.batongo.application.link.error.PublicResolverQuotaUnavailableException;
 import com.personal.batongo.application.link.error.PublicLinkOriginReplayUnavailableException;
 import com.personal.batongo.application.link.error.StoredTargetPolicyViolationException;
+import com.personal.batongo.domain.link.ExpiresAtAlreadyPassedException;
 import com.personal.batongo.domain.link.LinkUnavailableException;
 import com.personal.batongo.domain.link.LinkValidationException;
 import io.micrometer.core.instrument.Counter;
@@ -118,6 +119,9 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                 quotaFailureCounter.increment();
                 yield error(HttpStatus.SERVICE_UNAVAILABLE, "RATE_LIMIT_UNAVAILABLE", quota.getMessage());
             }
+            // 새 예약에서만 판정하므로 호출자가 이전 결과를 몰라도 링크가 없음을 확정할 수 있게 구분한다.
+            case ExpiresAtAlreadyPassedException passed ->
+                    error(HttpStatus.BAD_REQUEST, "EXPIRES_AT_ALREADY_PASSED", passed.getMessage());
             case LinkValidationException invalid -> error(HttpStatus.BAD_REQUEST, "INVALID_LINK", invalid.getMessage());
             case InvalidRequestException invalid ->
                     error(HttpStatus.BAD_REQUEST, "INVALID_REQUEST", invalid.getMessage());

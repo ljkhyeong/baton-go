@@ -60,14 +60,16 @@ class SmartLinkPolicyTest {
     }
 
     @Test
-    @DisplayName("만료 시각은 생성과 활성 시작 시각보다 뒤여야 한다")
+    @DisplayName("만료 시각은 생성과 활성 시작 시각보다 뒤여야 하며 이미 지난 만료 시각을 먼저 구분한다")
     void rejectsInvalidTimeRange() {
         assertThatThrownBy(() -> link(null, CREATED_AT))
-                .isInstanceOf(LinkValidationException.class);
+                .isExactlyInstanceOf(ExpiresAtAlreadyPassedException.class);
+        assertThatThrownBy(() -> link(CREATED_AT.plusSeconds(120), CREATED_AT))
+                .isExactlyInstanceOf(ExpiresAtAlreadyPassedException.class);
         assertThatThrownBy(() -> link(
                 CREATED_AT.plusSeconds(120),
                 CREATED_AT.plusSeconds(60)
-        )).isInstanceOf(LinkValidationException.class);
+        )).isExactlyInstanceOf(LinkValidationException.class);
     }
 
     private SmartLink link(Instant notBefore, Instant expiresAt) {

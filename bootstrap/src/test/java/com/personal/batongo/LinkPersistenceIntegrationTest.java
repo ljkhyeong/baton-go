@@ -208,6 +208,25 @@ class LinkPersistenceIntegrationTest {
     }
 
     @Test
+    @DisplayName("만료 시각이 이미 지난 새 생성 요청은 예약을 남기지 않고 별도 오류 코드로 거부한다")
+    void rejectsPassedExpiryWithoutLeavingReservation() throws Exception {
+        String idempotencyKey = "0b9f1f8e-3c1d-4f6a-9e2b-5d7c8a9b0c1d";
+
+        mockMvc.perform(post("/api/v1/links")
+                        .with(linkCreateJwt())
+                        .header("Idempotency-Key", idempotencyKey)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"targetSystem": "ROUND", "targetPath": "/room/abcd-efgh-jkmn",
+                                 "purpose": "MEETING_ENTRY", "expiresAt": "%s"}
+                                """.formatted(FAR_FUTURE_NOW)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("EXPIRES_AT_ALREADY_PASSED"));
+
+        assertThat(reservationCount(new CreationIdempotencyKey(idempotencyKey).hash())).isZero();
+    }
+
+    @Test
     @DisplayName("Flyway 스키마와 JDBC 저장소는 2040년 링크의 생성·재시도·폐기 시각을 마이크로초까지 보존한다")
     void persistsCreationReplayAndRevocationAfterTimestampLimit() {
         CreateLinkCommand command = new CreateLinkCommand(

@@ -324,12 +324,13 @@ TURN 자격 증명도 해당 참여 허가의 `exp`보다 늦게 만료될 수 �
 | --- | --- |
 | 최초 생성 `201`·동일 요청 재시도 `200` | `ACTIVE`; 취소 삭제 표식이 있으면 공개하지 않고 즉시 폐기 |
 | `400 EXPIRES_AT_ALREADY_PASSED` | `CREATE_REJECTED/NO_LINK`; 이전 결과와 관계없이 링크가 없음을 확정한다. 링크가 계속 필요하면 새 키와 새 만료 시각으로 요청 |
-| 이전 불확실한 결과가 없는 확정적 `400`·`401` | `CREATE_REJECTED/NO_LINK`; 호출자·인증 오류를 고치되 취소는 완료 가능 |
-| 시간 초과·연결 실패·그 밖의 일시적 `5xx` | `CREATE_UNKNOWN`; 링크가 존재할 수 있으므로 같은 키와 요청 내용으로 재시도 |
+| 이전 불확실한 결과가 없는 확정적 `400`·`401`·`403`과 경로·메서드·형식 오류 `404`·`405`·`406`·`415` | `CREATE_REJECTED/NO_LINK`; 호출자·인증 오류를 고치되 취소는 완료 가능 |
+| 시간 초과·연결 실패·`500 INTERNAL_ERROR` 등 이 표에 없는 `5xx` | `CREATE_UNKNOWN`; 링크가 존재할 수 있으므로 같은 키와 요청 내용으로 재시도 |
 | `409 IDEMPOTENCY_KEY_REUSED` | `CREATE_CONFLICT`; 다른 요청 내용의 링크를 임의 폐기하지 않고 운영자 조사 |
-| `LINK_CODE_REPLAY_UNAVAILABLE`·`LINK_CODE_CONFIGURATION_MISMATCH` | `RECOVERY_REQUIRED`; 설정 복구 뒤 같은 키로 존재 여부와 `linkId`를 확인 |
+| `410 LINK_PURGED` | `PURGED`; 만료·폐기된 뒤 보존 기간이 지나 정리된 링크. 같은 키로 다시 생성하지 않고 취소는 완료 가능 |
+| `LINK_CODE_REPLAY_UNAVAILABLE`·`LINK_CODE_CONFIGURATION_MISMATCH`·`LINK_CREATION_REPLAY_UNAVAILABLE`·`PUBLIC_LINK_ORIGIN_REPLAY_UNAVAILABLE` | `RECOVERY_REQUIRED`; 자동 재시도하지 않고 GO 복구 뒤 같은 키로 존재 여부와 `linkId`를 확인 |
 
-한 번이라도 `CREATE_UNKNOWN`이 된 요청에는 뒤의 `400`·`401`만으로 `NO_LINK`를 선언하지
+한 번이라도 `CREATE_UNKNOWN`이 된 요청에는 뒤의 `400`·`401`·`403`만으로 `NO_LINK`를 선언하지
 않는다. 자격 증명·배포 차이를 복구한 뒤 같은 요청을 재시도하거나 운영 점검으로 링크가 없음을 확인한다.
 예외는 `400 EXPIRES_AT_ALREADY_PASSED`다. GO는 같은 키의 생성 예약이 없을 때만 이 오류를 반환하고,
 예약이 있으면 만료 뒤에도 기존 결과를 돌려주므로 응답을 잃은 사이 만료 시각이 지나도 링크 없음을 확정할 수 있다.
@@ -337,11 +338,13 @@ TURN 자격 증명도 해당 참여 허가의 `exp`보다 늦게 만료될 수 �
 원본 리소스가 삭제·종료·권한 회수되면 호출자는 아웃박스나 동등한 재시도 가능한 방식으로
 GO 폐기를 요청한다. 폐기가 지연되는 동안에도 BATON 또는 ROUND의 최종 권한 검사가 접근을
 막아야 한다. 대상 변경은 기존 링크를 수정하지 않고 새 요청으로 생성한 뒤 이전 링크를
-폐기한다.
+폐기한다. 폐기의 `200`은 완료다. `404 LINK_NOT_FOUND`는 링크가 없거나 정리·숨김 처리되어 열 수 있는
+링크가 없다는 뜻이므로 완료로 처리한다. `401`·`403`은 자격 증명·scope를 고친 뒤, 시간 초과와 `5xx`는
+같은 요청을 재시도한다.
 
 생성 결과를 받기 전에 원본이 취소되면 호출자는 요청에 `CANCEL_REQUESTED` 삭제 표식을
 남긴다. `CREATE_UNKNOWN`은 같은 키로 생성 요청을 재시도해 `linkId`를 확인한 즉시
-폐기를 요청한다. 단축 URL은 노출하지 않는다. 확정적 `CREATE_REJECTED/NO_LINK`는 폐기 없이 취소를
+폐기를 요청한다. 단축 URL은 노출하지 않는다. 확정적 `CREATE_REJECTED/NO_LINK`와 `PURGED`는 폐기 없이 취소를
 완료한다. `CREATE_CONFLICT`와 `RECOVERY_REQUIRED`는 운영자가 원래 요청 내용과 존재 여부를
 확정할 때까지 취소를 완료하지 않는다. 생성과 폐기 아웃박스는 같은 링크 생성 요청의 처리 순서를 보장한다.
 

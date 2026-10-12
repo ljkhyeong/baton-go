@@ -21,6 +21,10 @@
   누를 때만 같은 주소를 다시 요청한다. 만료·폐기·없는 링크에는 표시하지 않으며,
   기존 JSON·HEAD 응답과 요청 제한·보안 헤더를 유지한다.
   활성 전 화면에는 저장된 시작 시각을 한국 시간으로 표시한다. 실제 활성 판정은 UTC 기준을 유지한다.
+- `/l` 아래에서 코드 한 구간이 아닌 경로(빈 코드·끝 슬래시·추가 경로 구간)는 DB 조회 없이 없는 링크 화면과
+  `404 LINK_NOT_FOUND`로 응답하며 요청 제한 허용량을 쓰지 않는다. 429 화면 제목은 전체 한도임을 반영해
+  "지금은 접속이 많아 링크를 열 수 없습니다."로 안내하고 JSON 메시지는 유지한다. HTTP 방화벽이 거부한
+  공개·관리 요청은 Boot 기본 오류 화면 대신 공통 JSON `400 INVALID_REQUEST`로 응답한다.
 - 관리 링크 목록에 `expiresFrom`·`expiresBefore`를 추가했다. `status=ACTIVE`와 함께 지정하면
   곧 만료될 링크를 찾을 수 있다. 시작 시각은 포함하고 끝 시각과 무기한 링크는 제외한다.
   기존 생성 기간·대상·상태 필터, 조회 한도와 빈 페이지의 다음 커서는 유지한다.
@@ -96,6 +100,9 @@
   `LINK_REVOKE_REPLAY`로 구분한다. HTTP 응답과 폐기 시각 보존 동작은 바뀌지 않았다.
 - 관리 JWT는 공백이 아닌 `sub`를 서비스 식별자로 요구한다. 누락·빈 문자열·공백 문자열은
   관리 작업 전에 `401 MANAGEMENT_AUTHENTICATION_REQUIRED`로 거부한다.
+- 생성 예약이 없는 요청의 `expiresAt`이 이미 지났으면 `400 EXPIRES_AT_ALREADY_PASSED`로 거부한다. 응답을 잃은
+  호출자는 만료 뒤에도 이 코드로 링크 없음을 확정한다. PRD-0003 호출자 결과 분류에 이 코드와 `403`·
+  `410 LINK_PURGED`·자동 재시도하지 않는 복구 오류, 폐기 응답의 완료·재시도 기준을 추가했다.
 - 링크 생성 예약은 일반 `INSERT`를 사용하며 Spring이 변환한 중복 키 오류만 기존 예약 조회로
   처리한다. 다른 MySQL 저장 오류는 성공이나 재시도로 바꾸지 않는다.
 - 멱등 예약의 공개 출처는 정리 전까지 DB 검사 제약으로 항상 저장된다. 저장값이 정규 출처 형식이 아닐 때만
@@ -119,10 +126,46 @@
   GO 연동·카카오톡 공유·QR 기능을 반영했으며 BATON 메인 병합과 실제 전송·스캔 검증은 남아 있다.
 - 완료 내역과 이전 검증의 리비전·명령·로그는
   [구현·검증 기록](docs/HISTORY/2026-09-08-implementation-verification.md),
-  [2026-10-05 검증 기록](docs/HISTORY/2026-10-05-verification-history.md)과
-  [2026-10-06 검증 기록](docs/HISTORY/2026-10-06-verification-history.md)에 보관한다.
+  [2026-10-05 검증 기록](docs/HISTORY/2026-10-05-verification-history.md),
+  [2026-10-06 검증 기록](docs/HISTORY/2026-10-06-verification-history.md)과
+  [2026-10-12 검증 기록](docs/HISTORY/2026-10-12-verification-history.md)에 보관한다.
 
 ## 최근 검증
+
+- 기능 보완은 미커밋 변경이 없는 `main`의 `f7459e1`에서 시작해 `87ffcd3`·`554826f`·`b92a096`·`724e54a`·`cb6a299`·
+  `a030ea2`·`2f86c74`에 저장했다. 호출 서비스·운영자·최종 사용자 관점의 읽기 전용 검토 세 건으로 후보를 모으고,
+  코드·테스트로 사실을 확인한 항목만 적용했다. 주요 내용은 다음과 같다.
+  - 생성 예약이 없는 요청의 이미 지난 `expiresAt`을 `INVALID_LINK`에서 분리해 `400 EXPIRES_AT_ALREADY_PASSED`로
+    응답한다. 대상 계약 검사는 예약 조회보다 먼저 실행돼 배포 사이 정책 차이로도 `INVALID_LINK`가 날 수 있어,
+    `CREATE_UNKNOWN` 중 만료 시각이 지난 호출자가 링크 없음을 확정할 방법이 없었다. MySQL 테스트로 예약이 남지
+    않는 것을 확인했다.
+  - PRD-0003 호출자 결과 분류에 `403`, 경로·형식 오류, `410 LINK_PURGED`(`PURGED`), 자동 재시도하지 않는
+    `LINK_CREATION_REPLAY_UNAVAILABLE`·`PUBLIC_LINK_ORIGIN_REPLAY_UNAVAILABLE`과 폐기 응답의 완료·재시도 기준을 추가했다.
+  - `/l`·`/l/`·끝 슬래시·추가 경로 구간 요청이 브라우저에 JSON `RESOURCE_NOT_FOUND`를 보이던 것을 없는 링크 화면과
+    `404 LINK_NOT_FOUND`로 바꿨다. 대체 매핑을 지운 변이에서 새 테스트 4건이 모두 실패하는 것을 확인했다.
+  - 429 화면 제목을 "지금은 접속이 많아 링크를 열 수 없습니다."로 바꿨다. JSON 메시지는 유지한다.
+  - HTTP 방화벽 거부(세미콜론 등)가 Boot 기본 오류 화면이나 경로를 되풀이하는 JSON으로 나가던 것을 공통 JSON
+    `400 INVALID_REQUEST`로 바꿨다. 수정 전 같은 테스트가 `text/html` 응답으로 실패하는 것을 확인했다.
+  - 계약 위반 경보가 삭제된 정리 절차를 안내하던 문구를 정책 회귀·개별 데이터 대응으로 바꾸고, CI 운영 이미지
+    검증에 분산 제한 장애 카운터 확인을 추가했다. 분산 제한 카운터 키 이상의 복구 절차와 ADR-0012 지표 설명도 고쳤다.
+  - HTML 계약 테스트는 실제 Chromium 계열 `Accept`로 품질 값 협상을 확인한다.
+
+  적용하지 않은 후보는 다음과 같다.
+  - 복구 오류 로그의 `linkId`·키 ID 보강: 예외 세 곳과 코드 발급 어댑터 경로를 함께 바꿔야 해 진단 이점보다 복잡도가 크다.
+  - 429의 로컬·분산 제한 구분 지표: 분산 제한이 기본 중지라 활성화를 검증할 때 함께 정한다.
+  - 공개 실패 요청별 로그: 요청 번호 추적에는 도움이 되지만 링크별 접근 기록이 되어 최소 기록 원칙과 함께 결정해야 한다.
+  - 종료 링크 재접속 시간 분포 지표: 보존 기간 결정(다음 작업 7)과 함께 정한다.
+  - 생성 취소 전용 API, 숨긴 링크의 폐기 시각 기록, 일시적 DB 오류의 `503` 분리: 계약·ADR 변경이 필요하다.
+  - 로봇 차단 헤더, 시작 시각 소수초 생략: 효과가 작거나 PRD의 정밀도 요구와 다르다.
+
+  운영 코드 6개 파일에서 4줄을 지우고 41줄을 더했다. 전체로는 22개 파일에서 23줄을 지우고 180줄을 더했다.
+  Java 21에서 `./gradlew --no-daemon build :adapter-in-web:apiContractDocs :bootstrap:mysqlTest :bootstrap:redisTest`를
+  통과했다. 도메인 72·애플리케이션 44·웹 127·외부 21·bootstrap 29·MySQL 29·Redis 3개에 실패·제외가 없고 REST Docs
+  조각은 84개다. `docker build`와 CI 운영 이미지 기동 단계의 로컬 실행, promtool 규칙 검사·테스트가 통과했다. 문서 링크
+  검사는 41개 파일에서 문제 0건이고 보안 불변식 검토에서 위반은 없었다. 로그는 세션 스크래치패드
+  (`f602be4c-…/scratchpad`)의 `full-verify.log`·`smoke-run.log`·`docker-build.log`다. 이전 검증 항목 4개는
+  [2026-10-12 검증 기록](docs/HISTORY/2026-10-12-verification-history.md)으로 옮겼다. 실제 클러스터 적용과 원격 CI는
+  확인하지 않았고 원격 반영은 하지 않았다.
 
 - 6차 정리는 미커밋 변경이 없는 `main`의 `df44c22`에서 시작해 `1c6c4c9`·`e91d271`·`1814e53`·`0e4b3fb`·
   `f3e8760`·`fca438e`·`8801c08`·`36389fa`·`4209fd9`·`5d7d1d8`에 저장했다. 5차 결과를 기준으로 감사 워크플로를
@@ -199,54 +242,6 @@
   `smoke-run.log`·`docker-build.log`·`commit-check-*.log`·`audit-final.json`이다. 이전 검증 항목 5개는
   [2026-10-06 검증 기록](docs/HISTORY/2026-10-06-verification-history.md)으로 옮겼다. 원격 반영은 하지 않았다.
 
-- 의존성 보안 갱신은 미커밋 변경이 없는 `main`의 `3b07f2d`에서 시작해 `6135d99`와 문서 커밋에 저장했다. 푸시 때 확인한
-  Dependabot 경고 10건은 Tomcat `tomcat-embed-core` 11.0.24(치명 3, GHSA-gcx9-497g-6cp6 등)와 Jackson
-  `jackson-core`·`jackson-databind` 3.1.5(높음 5·보통 2)였다. 최신 안정 Boot가 4.1.1이라 BOM 갱신으로 해결할 수 없어
-  `enforcedPlatform` 위에 `eachDependency` 규칙을 두고 `org.apache.tomcat.embed`를 11.0.26, `tools.jackson*`을 3.1.7로
-  바꿨다. 검증 메타데이터에 새 버전 7개를 추가하고, 원래 파일을 치운 `--dry-run` 결과와 대조해 쓰이지 않는 Tomcat
-  11.0.24 항목 3개를 지웠다. Jackson 3.1.5는 Spring Boot Gradle 플러그인 빌드 경로에서 계속 쓰여 남겼다.
-  Java 21에서 결과 디렉터리를 비운 뒤 `./gradlew --no-daemon --refresh-dependencies build :adapter-in-web:apiContractDocs
-  :bootstrap:mysqlTest :bootstrap:redisTest`를 통과했다. 도메인 72·애플리케이션 41·웹 120·외부 20·bootstrap 29·
-  MySQL 29·Redis 3개에 실패·제외가 없고 REST Docs 조각은 84개다. `docker build --no-cache`가 성공했고 실행 jar에
-  Tomcat 11.0.26·Jackson 3.1.7만 들어 있음을 확인했다. CI 운영 이미지 기동 단계도 같은 스크립트로 로컬 실행해 통과했다.
-  경고 종료는 원격 CI의 의존성 제출 뒤 GitHub에서 확인한다. 원격 반영은 하지 않았다.
-- Redis 설정 보안 보완은 미커밋 변경이 없는 `main`의 `6a4ad30`에서 시작해 `67117a6`과 문서 커밋에 저장했다.
-  4차 정리의 `spring.data.redis.url`은 Spring Boot가 형식 오류 때 URL 전체를 시작 실패 메시지에 출력하고 자격 증명도
-  URL에서만 읽는 것을 Boot 4.1.1 클래스에서 확인했다. 그래서 URL과 `BATON_GO_REDIS_URI`를 없애고 주소·TLS·DB 번호는
-  `SPRING_DATA_REDIS_HOST`·`PORT`·`SSL_ENABLED`·`DATABASE`, 자격 증명은 Kubernetes Secret의
-  `SPRING_DATA_REDIS_USERNAME`·`PASSWORD`로 주입한다. Compose의 기본 주소 우회도 함께 없앴고, 쓰지 않는 Spring Data
-  Redis 저장소 스캔을 껐다. Java 21에서 `./gradlew --no-daemon :bootstrap:test :bootstrap:redisTest :bootstrap:mysqlTest`를
-  통과했다. bootstrap 29·Redis 3·MySQL 29개에 실패·제외가 없고 시작 로그의 저장소 스캔이 사라졌다. `kubectl kustomize`로
-  운영 오버레이의 Secret 참조를, `docker compose config`로 빈 값의 기본값 적용을 확인했다. `docker build`와 CI 운영
-  이미지 기동 단계를 같은 스크립트로 로컬 실행해 통과했다. kubeconform은 로컬에 없어 원격 CI에서 확인한다.
-  원격 반영은 하지 않았다.
-- 4차 정리는 미커밋 변경이 없는 `main`의 `ee5fb6e`에서 시작해 `3b42af5`·`cab0abd`와 문서 커밋에 저장했다.
-  분산 요청 제한이 직접 만들던 Lettuce 클라이언트·연결 빈과 `PING` 상태 확인을 지우고 Spring Boot
-  `spring.data.redis` 자동 구성, `StringRedisTemplate`·`RedisScript`, 기본 `redis` 상태 확인으로 바꿨다. 끊긴 연결의
-  명령을 쌓지 않는 옵션은 `LettuceClientOptionsBuilderCustomizer`로 유지했다. 기존 환경 변수 이름은 그대로 쓴다.
-  Spring Boot가 빈 Redis URL을 시작 단계에서 거부하는 것을 임시 테스트로 확인해 Compose는 형식이 맞는 기본 주소를
-  넘긴다. Redis 연결은 첫 사용 때 맺으므로 연결 실패는 시작 대신 `/readyz`·시작 탐침 실패로 드러나며, 운영 ACL에는
-  `INFO`·`EVALSHA`가 필요하다. 테스트에서만 쓰던 `TrustedTargetPolicy.isAllowed`도 합쳤다. 운영 코드 120줄을 지우고
-  45줄을 더했으며 Spring Data Redis 의존성 검증 항목 14개를 추가했다. 링크 코드 키의 Bean Validation 전환은 실패
-  메시지에 거부한 비밀값이 찍혀 하지 않았다. Java 21에서 결과 디렉터리를 비운 뒤 `./gradlew --no-daemon build
-  :bootstrap:mysqlTest :bootstrap:redisTest`를 통과했다. 도메인 72·애플리케이션 41·웹 120·외부 20·bootstrap 29·
-  MySQL 29·Redis 3개에 실패·제외가 없다. `docker build`와 CI 운영 이미지 기동 단계를 같은 스크립트로 로컬 실행해
-  분산 제한을 끈 기본 구성의 준비 상태와 공개 오류 응답을 확인했다. 로그는 스크래치패드의 `smoke/run.log`다.
-  원격 반영은 하지 않았다.
-- 테스트·인계 정리는 미커밋 변경이 없는 `main`의 `41348ab`에서 시작해 `0da197b`와 문서 커밋에 저장했다.
-  읽기 전용 검토 두 건의 후보 중 다른 테스트가 같은 분기를 확인하는 테스트를 지우거나 매개변수 테스트로 합쳤다.
-  생성 실패 오류 매핑과 복구 실패 카운터는 HTTP 테스트 하나로 모았고, 같은 설정의 키 교체·보존 정리 MySQL
-  테스트는 `LinkLifecycleIntegrationTest`로 합쳐 컨테이너·컨텍스트 기동을 하나 줄였다. 키 확인 테스트는
-  `smart_links`만 있는 경우를 따로 확인하도록 고쳤다. 테스트 19개 파일에서 820줄을 지우고 352줄을 더했으며
-  운영 코드는 바꾸지 않았다. HANDOFF의 이전 검증 항목은
-  [2026-10-05 검증 기록](docs/HISTORY/2026-10-05-verification-history.md)으로 옮기고 원격 반영 여부와 공개 출처
-  복구 설명을 현재 사실에 맞췄다. Java 21에서 결과 디렉터리를 비운 뒤 `./gradlew --no-daemon test`,
-  `:bootstrap:mysqlTest`, `:adapter-in-web:apiContractDocs`, `build -x test`를 통과했다. 도메인 72·애플리케이션 41·
-  웹 120·외부 24·bootstrap 31·MySQL 29개에 실패·제외가 없고 REST Docs 조각은 84개다. 문서 링크 검사는 39개 파일에서
-  문제 0건이다. JWK 테스트 서버·실제 서버 요청 헬퍼 공용화는 줄어드는 양이 작고 JWK 캐시 순서에 기대게 돼 하지
-  않았다. Redis 테스트·운영 코드·이미지가 바뀌지 않아 Redis 통합 검증과 이미지 빌드는 하지 않았다.
-  원격 반영은 하지 않았다.
-
 ## 다음 작업
 
 1. 실제 릴리스 이미지에서 BATON·ROUND 인증, 공개 HTTPS와 외부 coturn을 연결한다.
@@ -259,7 +254,8 @@
    BATON 연동 브랜치의 GO 검증 고정 커밋은 원격 `main`의 `bf93dc3`이다. 이후 GO에서 과거 형식 멱등성 키와
    대상 계약 운영 API를 제거하고 마이그레이션 기준선을 다시 만들었으며 V2를 추가하고
    기본 키 변수를 `BATONGO_LINKCODE_KEYS_DEFAULT`로 바꿨다. 고정 커밋을 올릴 때 새 GO DB와 바뀐 변수로
-   BATON의 GO 계약 검증을 다시 실행한다. BATON Actions의
+   BATON의 GO 계약 검증을 다시 실행한다. BATON 아웃박스 결과 분류에는 PRD-0003에 추가한
+   `EXPIRES_AT_ALREADY_PASSED`·`PURGED`·자동 재시도하지 않는 복구 오류와 폐기 응답 기준을 반영한다. BATON Actions의
    `BATON_GO_CONTRACT_READ_TOKEN` 등록을 확인한 뒤 GitHub 품질 게이트를 실행한다.
    실제 서비스 JWT와 HTTPS 환경에서 생성 응답 유실 후 취소·폐기까지 재시도되는지 확인한다.
    상태 확인 장애 경보와 링크 생성·폐기·상태 일괄 조회도 검증한다.
@@ -286,6 +282,13 @@
 9. HMAC 비밀값 유출 시 Secret만 바꾸지 말고 링크 생성과 공개 경로를 먼저 차단한다.
    기존 링크 폐기·재발급과 키 목록 전환을 함께 수행하는 복구 절차를 정하고 훈련한다.
    평상시 키 교체도 [운영 절차](docs/RUNBOOK/link-code-key-rotation.md)에 따라 배포·전환·복원을 검증한다.
+10. 준비 상태 탐침에 DB·Redis를 계속 포함할지 결정한다. 지금은 공유 DB·Redis 장애 때 모든 Pod가 서비스
+    엔드포인트에서 빠져 GO의 한글 오류 화면 대신 Ingress 오류가 나간다. Redis 장애 중에도 관리 폐기를 쓸 수 있다는
+    ADR-0013·분산 제한 RUNBOOK 설명과도 어긋난다. 의존성 확인을 시작 탐침에만 두거나 Ingress 한글 오류 화면을
+    준비하는 방안 중 하나를 고르고 탐침·경보·문서를 함께 고친다.
+11. 다음 제안의 도입 여부를 정한다. 계약 위반으로 숨긴 링크의 폐기 요청도 `revoked_at`을 남겨 정책이 바뀌어도
+    다시 열리지 않게 하기, 생성 결과를 모르는 취소를 링크 생성 없이 끝내는 취소 전용 API, 공개 실패 요청의
+    요청 번호·오류 코드·링크 ID 로그, 종료 링크 재접속 시간 분포 지표(다음 작업 7의 근거 자료)다.
 
 운영·복구 절차는
 [비공개 Kubernetes 배포 절차](docs/RUNBOOK/kubernetes-private-server-deployment.md)와

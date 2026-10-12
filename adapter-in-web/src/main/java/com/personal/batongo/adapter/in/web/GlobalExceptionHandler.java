@@ -33,6 +33,7 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.AuthenticationServiceException;
 import org.springframework.security.core.AuthenticationException;
+import org.springframework.security.web.firewall.RequestRejectedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -97,6 +98,9 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                     .body(errorBody("MANAGEMENT_AUTHENTICATION_REQUIRED", "유효한 관리 JWT가 필요합니다"));
             case AccessDeniedException ignored -> error(HttpStatus.FORBIDDEN,
                     "MANAGEMENT_AUTHORIZATION_REQUIRED", "요청한 관리 작업 권한이 필요합니다");
+            // 방화벽 거부 사유에는 경로 조각·헤더 값 같은 요청 값이 들어갈 수 있어 응답과 로그에 남기지 않는다.
+            case RequestRejectedException ignored ->
+                    error(HttpStatus.BAD_REQUEST, "INVALID_REQUEST", "요청 형식이 올바르지 않습니다");
             case StoredTargetPolicyViolationException violation -> {
                 targetPolicyViolationCounter.increment();
                 LOG.error("저장된 링크 대상 계약 위반 linkId={} requestId={}",

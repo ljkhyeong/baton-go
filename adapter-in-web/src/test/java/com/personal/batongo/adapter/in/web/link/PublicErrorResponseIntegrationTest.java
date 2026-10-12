@@ -130,6 +130,19 @@ class PublicErrorResponseIntegrationTest {
         verifyNoInteractions(useCase);
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"/l/" + PUBLIC_CODE + ";x", "/api/v1/links;x"})
+    @DisplayName("HTTP 방화벽이 거부한 공개·관리 경로도 경로를 되풀이하지 않는 공통 JSON 400으로 응답한다")
+    void rejectsFirewallBlockedPathWithCommonError(String path) {
+        send(HttpMethod.GET, path, PublicLinkHttpContractTest.BROWSER_ACCEPT)
+                .expectStatus().isBadRequest()
+                .expectHeader().valueEquals(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                .expectBody(ErrorResponse.class)
+                .isEqualTo(new ErrorResponse("INVALID_REQUEST", "요청 형식이 올바르지 않습니다", REQUEST_ID));
+
+        verifyNoInteractions(useCase);
+    }
+
     @Test
     @DisplayName("실제 HTTP 서버의 관리 인증 오류 HEAD는 JSON 형식과 인증 안내를 유지하고 본문을 보내지 않는다")
     void returnsHeaderOnlyManagementAuthenticationError() {

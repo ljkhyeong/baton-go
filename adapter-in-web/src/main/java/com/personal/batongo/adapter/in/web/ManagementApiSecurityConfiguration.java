@@ -11,6 +11,7 @@ import org.springframework.security.config.Customizer;
 import org.springframework.security.config.ObjectPostProcessor;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.annotation.web.configuration.WebSecurityCustomizer;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.oauth2.core.OAuth2TokenValidator;
@@ -53,6 +54,15 @@ public class ManagementApiSecurityConfiguration {
     @Bean
     OAuth2TokenValidator<Jwt> managementJwtSubjectValidator() {
         return new JwtClaimValidator<String>("sub", StringUtils::hasText);
+    }
+
+    @Bean
+    WebSecurityCustomizer requestRejectedResponse(
+            @Qualifier("handlerExceptionResolver") HandlerExceptionResolver exceptionResolver
+    ) {
+        // HTTP 방화벽은 관리 경로뿐 아니라 공개 경로에도 적용되므로 거부 응답도 공통 오류 형식으로 보낸다.
+        return web -> web.requestRejectedHandler((request, response, exception) ->
+                exceptionResolver.resolveException(request, response, null, exception));
     }
 
     @Bean

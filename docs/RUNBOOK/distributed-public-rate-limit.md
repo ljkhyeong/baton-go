@@ -33,6 +33,12 @@ Secret의 `SPRING_DATA_REDIS_USERNAME`·`SPRING_DATA_REDIS_PASSWORD`를 읽는�
 `BatonGoDistributedResolverQuotaFailure` 경보로 연결·TLS·ACL·Redis 상태를 확인한다. 복구 후
 준비 상태와 카운터 허용량 안에서 공개 조회가 다시 진행되는지 검사한다.
 
+준비 상태가 정상인데 분산 제한 장애 경보가 계속되면 카운터 키를 확인한다. GO는 만료 시간이 없거나
+정수가 아닌 카운터, 문자열이 아닌 키를 고치지 않고 `503`으로 닫는다. 운영 자격 증명으로
+`baton-go:public-resolver:quota:v1`의 `TYPE`·`GET`·`PTTL`을 조회해 문자열이 아니거나 값이 정수가 아니거나
+`PTTL`이 `-1`이면 키를 삭제한다. 다음 요청부터 새 구간으로 집계한다. 애플리케이션 ACL에 `DEL` 등 키 변경
+권한을 추가하지 않는다.
+
 배포 검증에서는 서로 다른 두 Pod로 보낸 요청의 합계가 분산 한도를 넘지 않는지 확인하고,
 초과 요청의 `429`·`Retry-After`, Redis 차단 시 `503`, 관리 폐기 계속 사용을 확인한다.
 Ingress의 `/api/v1` 비공개 분리와 `/l/{code}` 로그 마스킹은 별도로 검증한다.

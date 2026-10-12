@@ -1,5 +1,6 @@
 package com.personal.batongo.adapter.in.web.link;
 
+import com.personal.batongo.application.link.error.LinkNotFoundException;
 import com.personal.batongo.application.link.port.in.ResolveLinkUseCase;
 import com.personal.batongo.application.link.port.in.ResolveLinkUseCase.ResolvedLinkResult;
 import org.springframework.http.HttpStatus;
@@ -23,5 +24,11 @@ public class LinkResolverController {
         return ResponseEntity.status(HttpStatus.FOUND)
                 .location(result.destination())
                 .build();
+    }
+
+    /** 빈 코드·끝 슬래시·추가 경로 구간처럼 코드 하나가 아닌 공개 경로도 DB 조회 없이 없는 링크로 안내한다. */
+    @GetMapping({"/l", "/l/**"})
+    public void rejectMalformedLinkPath() {
+        throw new LinkNotFoundException();
     }
 }

@@ -1,6 +1,7 @@
 package com.personal.batongo.adapter.in.web.link;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.personal.batongo.adapter.in.web.ErrorResponse;
@@ -104,6 +105,29 @@ class PublicErrorResponseIntegrationTest {
                         MediaType.TEXT_HTML_VALUE.equals(accept) ? HTML_UTF8 : MediaType.APPLICATION_JSON_VALUE)
                 .expectHeader().doesNotExist(HttpHeaders.LOCATION)
                 .expectBody().isEmpty();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"/l", "/l/", "/l/" + PUBLIC_CODE + "/", "/l/extra/segment"})
+    @DisplayName("코드 하나가 아닌 공개 경로는 링크를 조회하지 않고 없는 링크와 같은 화면·JSON·HEAD 응답을 반환한다")
+    void treatsMalformedLinkPathAsMissingLink(String path) {
+        send(HttpMethod.GET, path, PublicLinkHttpContractTest.BROWSER_ACCEPT)
+                .expectStatus().isNotFound()
+                .expectHeader().valueEquals(HttpHeaders.CONTENT_TYPE, HTML_UTF8)
+                .expectBody(String.class).value(body -> assertThat(body)
+                        .contains("<html lang=\"ko\">", "링크를 찾을 수 없습니다", "<code>" + REQUEST_ID + "</code>")
+                        .doesNotContain(PUBLIC_CODE, "다시 열기"));
+        send(HttpMethod.GET, path, MediaType.ALL_VALUE)
+                .expectStatus().isNotFound()
+                .expectHeader().valueEquals(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                .expectBody(ErrorResponse.class)
+                .isEqualTo(new ErrorResponse("LINK_NOT_FOUND", "링크를 찾을 수 없습니다", REQUEST_ID));
+        send(HttpMethod.HEAD, path, PublicLinkHttpContractTest.BROWSER_ACCEPT)
+                .expectStatus().isNotFound()
+                .expectHeader().valueEquals(HttpHeaders.CONTENT_TYPE, HTML_UTF8)
+                .expectBody().isEmpty();
+
+        verifyNoInteractions(useCase);
     }
 
     @Test

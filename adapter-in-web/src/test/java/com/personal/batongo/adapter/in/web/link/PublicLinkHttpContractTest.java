@@ -59,6 +59,9 @@ class PublicLinkHttpContractTest {
     private static final String TARGET_POLICY_VIOLATION_METRIC =
             "baton.go.public.resolver.target.contract.violations";
     private static final String PUBLIC_NOT_FOUND_REQUEST_ID = "public-not-found-contract";
+    // Chromium 계열 브라우저가 문서 이동에 보내는 값이다. JSON 처리기의 */*와도 맞으므로 품질 값 협상을 함께 확인한다.
+    static final String BROWSER_ACCEPT = "text/html,application/xhtml+xml,application/xml;q=0.9,"
+            + "image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7";
 
     private ResolveLinkUseCase useCase;
     private SimpleMeterRegistry meterRegistry;
@@ -189,7 +192,7 @@ class PublicLinkHttpContractTest {
                         reason == Status.NOT_ACTIVE ? NOT_BEFORE : null));
 
         var response = mockMvc.perform(get("/l/private-link-code")
-                        .accept(MediaType.TEXT_HTML)
+                        .header(HttpHeaders.ACCEPT, BROWSER_ACCEPT)
                         .header("X-Request-Id", "browser-error-request"))
                 .andExpect(status().is(expectedStatus))
                 .andExpect(content().contentTypeCompatibleWith(MediaType.TEXT_HTML))

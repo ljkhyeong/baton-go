@@ -151,7 +151,7 @@ groups:
           severity: critical
         annotations:
           summary: BATON GO 저장 대상 계약 위반
-          description: 공개 링크 해석 중 저장된 대상 계약 위반이 발생했습니다. 허용된 linkId·requestId로 로그를 확인하고 대상 계약 정리 절차를 따르세요.
+          description: 공개 링크 해석 중 저장된 대상 계약 위반이 발생해 해당 링크를 404로 숨겼습니다. 로그의 linkId·requestId로 원인을 확인하세요. 배포 직후 여러 건이면 대상 정책 회귀로 보고 이전 이미지로 되돌리고, 개별 링크면 DB 변경 이력을 조사한 뒤 링크를 만든 서비스에 재발급을 요청하세요.
 
       - alert: BatonGoLinkRetentionFailure
         expr: |

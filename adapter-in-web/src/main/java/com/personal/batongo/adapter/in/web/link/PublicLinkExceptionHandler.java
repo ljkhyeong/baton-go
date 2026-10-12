@@ -56,9 +56,12 @@ public class PublicLinkExceptionHandler {
         ResponseEntity<ErrorResponse> error = json(exception);
         Instant notBefore = exception instanceof LinkUnavailableException unavailable ? unavailable.notBefore() : null;
         ErrorResponse body = error.getBody();
-        String title = "RATE_LIMIT_UNAVAILABLE".equals(body.code())
-                ? "지금은 링크를 열 수 없습니다."
-                : body.message();
+        String title = switch (body.code()) {
+            // 요청 제한은 모든 사용자의 요청을 합산하므로 화면에서는 이용자의 요청이 많았다고 안내하지 않는다.
+            case "RATE_LIMIT_EXCEEDED" -> "지금은 접속이 많아 링크를 열 수 없습니다.";
+            case "RATE_LIMIT_UNAVAILABLE" -> "지금은 링크를 열 수 없습니다.";
+            default -> body.message();
+        };
         String guidance = switch (body.code()) {
             case "LINK_NOT_ACTIVE" -> notBefore == null
                     ? "링크를 보낸 사람에게 이용 가능한 시간을 확인해 주세요."

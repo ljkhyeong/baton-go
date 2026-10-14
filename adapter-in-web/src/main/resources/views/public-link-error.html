@@ -29,7 +29,7 @@
             word-break: keep-all;
         }
         main {
-            width: min(54rem, calc(100vw - 2.5rem));
+            width: min(54rem, 100%%);
             display: grid;
             grid-template-columns: 9rem 1fr;
             background: var(--surface);
@@ -73,7 +73,7 @@
 </head>
 <body>
 <main>
-    <div class="brand" aria-label="BATON GO"><span>BATON</span><strong>GO</strong></div>
+    <div class="brand"><span>BATON</span><strong>GO</strong></div>
     <section class="message" aria-labelledby="error-title">
         <p class="label">링크 안내</p>
         <h1 id="error-title">%1$s</h1>

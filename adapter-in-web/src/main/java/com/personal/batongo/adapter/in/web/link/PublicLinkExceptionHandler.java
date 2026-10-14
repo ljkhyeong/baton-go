@@ -42,6 +42,7 @@ public class PublicLinkExceptionHandler {
 
     public PublicLinkExceptionHandler(GlobalExceptionHandler errors) throws IOException {
         this.errors = errors;
+        // 템플릿은 String.formatted로 채우므로 CSS 등의 문자 %는 %%로 적는다.
         this.template = new ClassPathResource("views/public-link-error.html")
                 .getContentAsString(StandardCharsets.UTF_8);
     }

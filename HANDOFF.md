@@ -102,7 +102,7 @@
 - 관리 JWT는 공백이 아닌 `sub`를 서비스 식별자로 요구한다. 누락·빈 문자열·공백 문자열은
   관리 작업 전에 `401 MANAGEMENT_AUTHENTICATION_REQUIRED`로 거부한다.
 - 계약을 위반해 숨긴 저장 대상의 폐기 요청도 행 잠금 안에서 최초 폐기 시각을 기록하고 없는 링크와 같은 404로
-  응답한다. 완료 이력 대신 계약 위반 지표와 `linkId`·`requestId` 로그를 남긴다.
+  응답한다. 일반 폐기와 같은 완료 이력(`serviceId` 포함)과 계약 위반 지표·로그를 남긴다.
 - 공개 조회가 만료·폐기 링크에 410을 반환하면 종료 후 지난 시간을 `baton_go_public_resolver_retired_link_age_seconds`
   (1·7·30·90·180·365일 구간, `status` 태그만)에 기록한다. 보존 기간 결정용이며 경보는 없다.
 - 생성 예약이 없는 요청의 `expiresAt`이 이미 지났으면 `400 EXPIRES_AT_ALREADY_PASSED`로 거부한다. 응답을 잃은
@@ -134,10 +134,40 @@
 - 완료 내역과 이전 검증의 리비전·명령·로그는
   [구현·검증 기록](docs/HISTORY/2026-09-08-implementation-verification.md),
   [2026-10-05 검증 기록](docs/HISTORY/2026-10-05-verification-history.md),
-  [2026-10-06 검증 기록](docs/HISTORY/2026-10-06-verification-history.md)과
-  [2026-10-12 검증 기록](docs/HISTORY/2026-10-12-verification-history.md)에 보관한다.
+  [2026-10-06 검증 기록](docs/HISTORY/2026-10-06-verification-history.md),
+  [2026-10-12 검증 기록](docs/HISTORY/2026-10-12-verification-history.md)과
+  [2026-10-14 검증 기록](docs/HISTORY/2026-10-14-verification-history.md)에 보관한다.
 
 ## 최근 검증
+
+- 기능 보완 3차는 미커밋 변경이 없는 `main`의 `c6ee6f9`에서 시작해 `1a27065`·`7a81ea8`·`eea5ee5`·`52c83b6`에
+  저장했다. 지난 회차의 결정 항목을 권장안대로 처리하고, 세션 전체 변경(`f7459e1..HEAD`)을 별도 검토로 다시 봤다.
+  - DB도 준비 상태에서 빼고 시작 상태(`/startupz`)에서만 확인한다. 준비 상태는 Boot 기본 `readinessState`만
+    본다. 실행 중 DB 장애에도 Pod가 서비스에 남아 GO가 공개 `500` 안내 화면과 공통 오류를 반환한다. 시작 상태를
+    `baton_go_startup_health_up` 게이지(Spring Boot 문서의 상태 확인 지표 연결 방식)로 내보내, `/readyz` 503 비율을
+    보던 `BatonGoReadinessFailed`를 트래픽과 무관한 `BatonGoDependencyUnavailable`로 바꿨다. 웹훅 검증 도구·CI
+    라우팅 검사·런북 예시의 표본 경보 이름도 바꿨다.
+  - 검토에서 확인한 4건을 고쳤다. 숨긴 링크의 폐기가 예외 경로로 끝나 `serviceId`가 담긴 완료 이력 없이
+    커밋되던 것을 일반 폐기와 같은 이력을 남기고 404로 숨기도록 바꿨다(`noRollbackFor` 제거). Docker 상태 확인은
+    `/startupz`로 바꿔 Compose의 `--wait`와 컨테이너 상태에 DB·Redis 연결을 반영한다. 분산 제한 카운터 판별 조건과
+    만료 시각 오류 판정 순서를 문서에 바로잡았다. 검토에서 런타임 코드 결함은 나오지 않았다.
+  - 결정 항목 중 생성 취소 전용 API는 현재의 같은 키 재시도 뒤 폐기 흐름으로 동작하는 데 비해 계약과 ADR이 늘어
+    도입하지 않는다. BATON 아웃박스에서 취소 때 만든 임시 링크가 운영 문제를 일으키면 다시 검토한다. 공개 실패
+    요청별 로그는 링크별 접근 기록이 되어 최소 기록 원칙과 맞지 않아 도입하지 않는다. 지원 요청에서 요청 번호
+    조회가 반복해서 필요해지면 개인정보 검토와 함께 다시 정한다. 일시적 DB 오류의 `503` 분리는 예외 계열이 여러
+    갈래라 오분류 위험에 비해 이득이 작아 하지 않았다.
+
+  운영 코드 6개 파일에서 12줄을 지우고 52줄을 더했다(Dockerfile 포함). 전체로는 22개 파일에서 100줄을 지우고
+  163줄을 더했다. Java 21에서 `./gradlew --no-daemon build :adapter-in-web:apiContractDocs :bootstrap:mysqlTest
+  :bootstrap:redisTest`를 통과했다. 도메인 73·애플리케이션 45·웹 128·외부 21·bootstrap 29·MySQL 30·Redis 3개에
+  실패·제외가 없고 REST Docs 조각은 84개다. `docker build`(상태 확인 `/startupz`)와 CI 운영 이미지 기동 단계의 로컬
+  실행이 통과했다. 같은 이미지에서 MySQL을 멈추면 `/readyz` 200·`/startupz` 503·지표 0·공개 링크 `500` 안내 화면,
+  재시작하면 모두 정상으로 돌아오는 것을 확인했다. promtool 규칙 검사·테스트, 웹훅 전달 검증(외부 전송 없음),
+  `kubectl kustomize` 렌더링, 문서 링크 검사(42개 파일)가 통과했다. kubeconform은 로컬에 없어 원격 CI에서 확인한다.
+  로그는 세션 스크래치패드(`f602be4c-…/scratchpad`)의 `full-verify-r3.log`·`smoke-run-r6.log`·
+  `db-outage-check-r6.log`·`webhook-verify.log`다. 이전 검증 항목 2개는
+  [2026-10-14 검증 기록](docs/HISTORY/2026-10-14-verification-history.md)으로 옮겼다. 실제 클러스터 적용과 원격
+  CI는 확인하지 않았고 원격 반영은 하지 않았다.
 
 - 기능 보완 2차는 미커밋 변경이 없는 `main`의 `3eb9eb4`에서 시작해 `5c9aff1`·`61d9d00`·`075c614`·`949b7d4`에
   저장했다. 지난 회차에 결정 대상으로 남긴 항목 중 근거가 분명한 것을 적용했다.
@@ -202,81 +232,6 @@
   [2026-10-12 검증 기록](docs/HISTORY/2026-10-12-verification-history.md)으로 옮겼다. 실제 클러스터 적용과 원격 CI는
   확인하지 않았고 원격 반영은 하지 않았다.
 
-- 6차 정리는 미커밋 변경이 없는 `main`의 `df44c22`에서 시작해 `1c6c4c9`·`e91d271`·`1814e53`·`0e4b3fb`·
-  `f3e8760`·`fca438e`·`8801c08`·`36389fa`·`4209fd9`·`5d7d1d8`에 저장했다. 5차 결과를 기준으로 감사 워크플로를
-  다시 돌려 후보 38건을 찾았고, 후보마다 실현성·동작·보안운영 반박 검증 3개를 거쳤다. 3관점을 모두 통과한 32건을
-  적용했다. 이어서 남은 후보를 찾는 감사를 한 회차 더 돌려 후보 5건 중 반박 검증 2개를 모두 통과한 4건을 적용했다.
-  주요 내용은 다음과 같다.
-  - 생성 예약 때 `request_hash`를 저장하는 V2를 추가해 정리 단계가 대상 원문을 다시 읽지 않는다. 보존 정리 포트는
-    링크 ID만 다룬다. 정리 전 예약이 남은 로컬 MySQL 볼륨에는 V2를 적용할 수 없으므로 다시 만든다.
-  - 기본 링크 코드 키를 `BATONGO_LINKCODE_KEYS_DEFAULT` 하나로 통일하고 `BATON_GO_LINK_CODE_SECRET` 경로를 지웠다.
-    키 교체 오버레이는 Compose `!reset`(2.24.4 이상)을, Kubernetes는 필수 키 묶음 Secret을 쓴다.
-  - 비밀값이 필요 없는 해시를 `LinkCodePort`에서 뺐다. 멱등성 키는 `CreationIdempotencyKey#hash()`, 공개 코드는
-    `LinkCodeHash.of`가 맡고 `IssuedLinkCode`와 어댑터의 SHA-256 중복을 지웠다. 저장 `code_hash` 값은 고정 벡터로
-    같음을 확인했다.
-  - `PublicLinkErrorPage`를 `PublicLinkExceptionHandler`에 합치고 `InvalidRequestException` 팩터리를 생성자 하나로 줄였다.
-  - 웹·MySQL 테스트의 반복 속성을 테스트 속성 파일로 모으고 JDBC·PEM·RSA 키·URI 확장을 `DriverManagerDataSource`·
-    `JdbcClient`·`PemContent`·`RSAKeyGenerator`·MockMvc URI 변수로 바꿨다. MySQL 테스트 이미지는 `compose.yml`에서 읽는다.
-  - REST Docs 관리 예시는 문서 전처리 기본값으로 Authorization 자리표시자를 넣어 일괄 조회·검색 예시 4개에도 헤더가 보인다.
-  - Dockerfile은 모듈 디렉터리를 복사하고 JDK 기본값과 같은 `java.io.tmpdir` 지정을 지웠다. 예시·overlay·CI의 기본값과 같은
-    선택 설정 줄을 지웠다.
-
-  적용하지 않은 후보는 다음과 같다.
-  - MySQL JWT 시작 통합 테스트 흡수: 슬라이스 테스트가 실제 시작 구성의 검증 범위를 대신하지 못한다.
-  - Compose 환경 변수의 값 없는 전달: 빈 값 입력의 동작 차이를 확정하지 못했다.
-  - `deploy/app.env.example` 삭제: 사용자가 요청한 산출물이고 로컬 복사 절차가 참조한다.
-  - external 테스트 의존성 통합: 이전에 정한 최소 의존 결정을 되돌린다.
-  - Redis 자격 증명 `envFrom` 축약: Secret의 모든 키가 주입돼 허용 목록이 약해진다.
-  - 생성 재시도 동일성을 예약 `request_hash` 비교 하나로 통일: 운영 코드 순감이 작고 저장 링크 변조 거부 검증이 약해진다.
-
-  운영 코드 27개 파일에서 287줄을 지우고 175줄을 더했다. 전체로는 80개 파일에서 1,004줄을 지우고 608줄을 더했다.
-  Java 21에서 `./gradlew --no-daemon build :adapter-in-web:apiContractDocs :bootstrap:mysqlTest :bootstrap:redisTest`를
-  통과했다. 도메인 72·애플리케이션 43·웹 120·외부 21·bootstrap 29·MySQL 28·Redis 3개에 실패·제외가 없고 REST Docs 조각은
-  84개다. MySQL 수는 `MySqlImageContractTest` 삭제로 1개 줄었다. `docker build`와 CI 운영 이미지 기동 단계의 로컬 실행이
-  통과했고, 마이그레이션 전용 실행에서 V2가 적용됐다. `docker compose config`(기본·키 교체 오버레이)와 `kubectl kustomize`
-  렌더링이 통과했고 실제 클러스터 적용은 하지 않았다. 문서 링크 검사는 문제 0건이다. `mysql:8.4.11`에서 RUNBOOK의 V2 판별
-  조회가 미적용·적용 상태를 구분하고, 정리 전 예약 때문에 실패한 V2가 V1 상태를 그대로 남기는 것을 확인했다. 2차 결과의
-  5관점 diff 검토와 지적별 반박 검증에서 문서 누락 2건만 확정돼 `36389fa`로 고쳤고, 추가 감사 적용분의 diff 검토에서는
-  결함이 없었다. 로그와 감사 결과는 세션 스크래치패드의 `full-verify-r3.log`·`smoke-run-r3.log`·`docker-build-r3.log`·
-  `audit-round2.json`·`audit-round3.json`이다. 로컬 무시 파일 `deploy/app.env`의 키 이름은 바꾸지 않았다. 원격 반영은 하지
-  않았다.
-
-- 5차 정리는 미커밋 변경이 없는 `main`의 `971f5b3`에서 시작해 `888fe7b`·`8195880`·`4edb104`·`f0c9f85`·`17fa541`에
-  저장했다. JDK·Spring 표준 API로 대체할 직접 구현과 불필요 코드를 감사 워크플로로 찾았다. 모듈·관점별 탐색 7개와
-  완전성 비평이 후보 36건을 냈고, 후보마다 실현성·동작·보안운영 반박 검증 3개를 거쳤다. 통과한 후보를 적용했으며
-  주요 내용은 다음과 같다.
-  - 예외별 처리기 16개를 예외 유형 switch 하나로 합쳤다.
-  - 원인·스택 직접 수집을 Boot `StandardStackTracePrinter`로 바꾸고 요청 ID를 MDC 하나에서 읽는다.
-  - 요청 제한 인터셉터는 `includeHttpMethods(GET, HEAD)`로 자기 등록하고 0/Retry-After 초를 반환한다.
-  - Bearer 실패 처리기를 진입점 메서드 참조로 바꿨다.
-  - `LinkCodeKeyGuard`·`StoredLinkScan`·`DatabaseMigrationRunner`·`PublicResolverWebMvcConfiguration`을 지웠다.
-    시작 키 검사는 Boot `TransactionTemplate` 안에서 실행한다.
-  - 재시도 동일성은 `LinkCreationFingerprint` 하나로 판정한다.
-  - 단일 조회의 읽기 전용 트랜잭션을 없앴다.
-  - 보존 정리는 주입한 `JdbcClient`로 링크별 실행하고, 예약 재조회는 `single()`을 쓴다.
-  - `LinkCodeProperties` 기본값을 `@DefaultValue`로 옮기고 `CreationIdempotencyKey`·키 식별 record를 단순화했다.
-  - 게이지를 `MeterRegistry#gauge`로 등록하고 중복 Boot 의존성 선언과 Boot 기본값 설정을 지웠다.
-  - `/actuator/metrics` 노출을 지웠다.
-  - 실제 서버·DB 테스트를 `RestTestClient`·`JdbcTestUtils`·`@TestBean`으로 바꿨다.
-
-  적용하지 않은 후보는 다음과 같다.
-  - `application.yml`의 `baton-go` 환경 변수 매핑 제거: 빈 값이 `@DefaultValue`로 대체돼 시작 거부 계약이 깨진다.
-  - 단일 `BATON_GO_LINK_CODE_SECRET` 경로 제거: Compose 오버레이와 Kubernetes Secret 구성을 함께 바꿔야 해 보류했다.
-  - 대상 허용 테스트 통합: 메서드 이름이 사실과 달라지고 줄이 길어진다.
-
-  운영 코드 27개 파일에서 662줄을 지우고 304줄을 더했다. 전체로는 55개 파일에서 1,120줄을 지우고 620줄을 더했다.
-  Java 21에서 `./gradlew --no-daemon build :adapter-in-web:apiContractDocs :bootstrap:mysqlTest :bootstrap:redisTest`를
-  통과했다. 도메인 72·애플리케이션 41·웹 120·외부 22·bootstrap 29·MySQL 29·Redis 3개에 실패·제외가 없고 REST Docs
-  조각은 84개다. `docker build`가 성공했고 CI 운영 이미지 기동 단계도 같은 스크립트로 로컬 실행해 통과했다. 이 단계는
-  공개 오류·429·지표 0 노출과 마이그레이션 전용 실행을 확인한다. 중간 커밋 3개는 별도 작업 트리에서 `test`와
-  `:bootstrap:compileTestJava`를 통과했다. 요청 제한 메서드 필터를 지운 변이에서는 새 OPTIONS 단언이 실패해
-  회귀를 잡는 것을 확인했다. 의존성 선언 변경 전후의 런타임 클래스패스가 같고, 검증 메타데이터 변경은 없다.
-  문서 링크 검사는 40개 파일에서 문제 0건이다. 계약·보안·트랜잭션·테스트·문서 관점의 diff 검토와 지적별 반박
-  검증에서 확정 결함은 없었다. 남은 차이는 `RestTestClient` 전환으로 실제 서버 테스트의 요청별 5초 제한이
-  없어진 것이다. 로그와 감사 결과는 세션 스크래치패드(`46e02272-…/scratchpad`)의 `full-verify.log`·
-  `smoke-run.log`·`docker-build.log`·`commit-check-*.log`·`audit-final.json`이다. 이전 검증 항목 5개는
-  [2026-10-06 검증 기록](docs/HISTORY/2026-10-06-verification-history.md)으로 옮겼다. 원격 반영은 하지 않았다.
-
 ## 다음 작업
 
 1. 실제 릴리스 이미지에서 BATON·ROUND 인증, 공개 HTTPS와 외부 coturn을 연결한다.
@@ -302,7 +257,8 @@
    PVC·Secret의 생성·교체·복구·삭제를 검증한다. 현재 ingress 전용 NetworkPolicy에 더해 환경별 DNS·MySQL
    egress 허용 목록과 기본 차단 정책을 정하고 실제 CNI의 허용·차단 결과를 기록한다.
    `restricted` 정책 강제 적용 전에는 고정 MySQL 이미지로 신규·복원·현재 PVC의 기동,
-   TLS·초기화·마이그레이션을 검증한다.
+   TLS·초기화·마이그레이션을 검증한다. MySQL을 멈춘 동안 GO Pod가 서비스에 남아 공개 링크에 `500` 안내 화면을
+   반환하고 `BatonGoDependencyUnavailable`이 발생하는지, 새 Pod가 `/startupz`를 통과하지 못하는지도 확인한다.
 5. 첫 릴리스 태그에서 보관 워크플로의 증명 재검증을 실행한다. 배포 전 확인 명령으로 승인한
    다이제스트만 배포되는지 검증하고 결과를 배포 기록에 남긴다.
 6. Prometheus 수집, 경보 규칙, 알림 경로와 담당자를 연결하고 마이그레이션 실패,
@@ -318,11 +274,6 @@
 9. HMAC 비밀값 유출 시 Secret만 바꾸지 말고 링크 생성과 공개 경로를 먼저 차단한다.
    기존 링크 폐기·재발급과 키 목록 전환을 함께 수행하는 복구 절차를 정하고 훈련한다.
    평상시 키 교체도 [운영 절차](docs/RUNBOOK/link-code-key-rotation.md)에 따라 배포·전환·복원을 검증한다.
-10. DB 장애 때의 공개 오류 화면을 정한다. Redis는 시작 탐침으로 옮겼지만 DB는 준비 상태에 남아 있어 공유 DB
-    장애 때 모든 Pod가 서비스 엔드포인트에서 빠지고 GO의 한글 안내 화면 대신 Ingress 오류가 나간다. DB도 시작
-    탐침으로 옮겨 GO가 `500` 안내 화면을 보이게 할지, 공개 Ingress에 한글 오류 화면을 둘지 고르고 경보를 함께 정한다.
-11. 다음 제안의 도입 여부를 정한다. 생성 결과를 모르는 취소를 링크 생성 없이 끝내는 취소 전용 API, 공개 실패
-    요청의 요청 번호·오류 코드·링크 ID 로그다.
 
 운영·복구 절차는
 [비공개 Kubernetes 배포 절차](docs/RUNBOOK/kubernetes-private-server-deployment.md)와

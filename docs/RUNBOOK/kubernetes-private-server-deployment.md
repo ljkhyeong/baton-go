@@ -595,10 +595,12 @@ kubectl label namespace <approved-edge-or-caller-namespace> \
 주 HTTP 포트에도 등록하고, 시작 탐침용 `startup` 상태 묶음은 `/startupz`로 등록한다. Kubernetes 탐침의
 포트 이름은 `http`(`8080`)이며 시작 탐침은 `/startupz`, 준비 탐침은 `/readyz`, 생존 탐침은 `/livez`를
 호출한다. Docker 상태 확인은 `8080/readyz`를 사용한다. 주 HTTP 포트 장애를 관리 포트의 정상 응답이
-가리지 않게 하기 위한 설정이다. DB 장애는 준비·시작 상태를 503으로 바꾼다. 분산 요청 제한을 켠 경우의
-Redis 상태 확인(`INFO`) 실패는 시작 상태만 503으로 바꾸므로 연결하지 못한 새 Pod는 트래픽을 받지 않고,
-실행 중인 Pod는 서비스에 남아 공개 링크에만 `503`을 반환하며 관리 API를 계속 처리한다. 생존 상태에는 두
-의존성을 포함하지 않는다. Prometheus 등 나머지 Actuator 경로는 `8081`을 유지한다.
+가리지 않게 하기 위한 설정이다. DB 장애와 분산 요청 제한을 켠 경우의 Redis 상태 확인(`INFO`) 실패는 시작
+상태만 503으로 바꾸므로 연결하지 못한 새 Pod는 트래픽을 받지 않는다. 실행 중인 Pod는 서비스에 남아 DB 장애에는
+공개 링크의 `500` 안내 화면과 관리 API의 공통 오류를, Redis 장애에는 공개 링크에만 `503`을 반환하며 관리 API를
+계속 처리한다. 준비·생존 상태에는 두 의존성을 포함하지 않는다. 시작 상태는 `8081/actuator/prometheus`의
+`baton_go_startup_health_up`으로도 수집해 `BatonGoDependencyUnavailable` 경보에 쓴다. Prometheus 등 나머지
+Actuator 경로는 `8081`을 유지한다.
 
 애플리케이션은 Spring Boot 기본 정상 종료(`server.shutdown=graceful`,
 `spring.lifecycle.timeout-per-shutdown-phase=30s`)를 사용한다. 종료 신호를 받으면 새 요청 수락을 멈추고
@@ -677,7 +679,7 @@ Pod 자동 발견 설정과 Namespace 범위 조회 권한이 있다. 수집 실
 - `Job/baton-go-database-migration` 실패·시간 초과
 - 애플리케이션·MySQL Pod `NotReady`, 재시작과 배포 상태 이상
 - HTTP 5xx 오류율과 단축 링크 접속의 429 응답 지속 증가
-- DB 연결을 포함한 readiness 실패(`BatonGoReadinessFailed`)와 분산 요청 제한 Redis 장애
+- DB·Redis 의존성 연결 실패(`BatonGoDependencyUnavailable`)와 분산 요청 제한 Redis 장애
   (`BatonGoDistributedResolverQuotaFailure`)
 - `baton.go.public.resolver.target.contract.violations` 증가
 - 링크 자동 정리 실패와 실행 완료 신호 정체

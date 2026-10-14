@@ -294,7 +294,7 @@ Slack 전달은 추가하지 않는다. 기존 GO 장애 알림의 Slack 경로�
    ```bash
    amtool check-config /etc/alertmanager/alertmanager.yml
    amtool config routes test --config.file=/etc/alertmanager/alertmanager.yml \
-     --verify.receivers=discord-go job=baton-go alertname=BatonGoReadinessFailed
+     --verify.receivers=discord-go job=baton-go alertname=BatonGoDependencyUnavailable
    ```
 
 Alertmanager가 같은 경보를 묶고 반복 알림 간격과 장애 해제 알림을 처리한다.
@@ -321,7 +321,7 @@ GO 경보·그룹화·반복 간격을 사용하고 발생·해제 알림을 모
    ```bash
    amtool check-config /etc/alertmanager/alertmanager.yml
    amtool config routes test --config.file=/etc/alertmanager/alertmanager.yml \
-     --verify.receivers=slack-go job=baton-go alertname=BatonGoReadinessFailed
+     --verify.receivers=slack-go job=baton-go alertname=BatonGoDependencyUnavailable
    ```
 
 수신 채널·앱 이름·아이콘은 Slack 웹훅을 만들 때 정해진다. YAML의 `channel`로 바꿀 수 없으므로

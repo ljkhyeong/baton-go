@@ -1,10 +1,12 @@
 package com.personal.batongo.bootstrap;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
 import com.personal.batongo.adapter.in.web.GlobalExceptionHandler;
 import com.personal.batongo.adapter.in.web.ManagementApiSecurityConfiguration;
 import com.personal.batongo.adapter.in.web.RequestIdFilter;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.Answers;
@@ -34,7 +36,8 @@ class HealthGroupConfigurationTest {
 
     @Configuration(proxyBeanMethods = false)
     @EnableAutoConfiguration(exclude = DataSourceAutoConfiguration.class)
-    @Import({ManagementApiSecurityConfiguration.class, GlobalExceptionHandler.class, RequestIdFilter.class})
+    @Import({ManagementApiSecurityConfiguration.class, GlobalExceptionHandler.class, RequestIdFilter.class,
+            StartupHealthMetrics.class})
     static class WebConfiguration {
     }
 
@@ -47,25 +50,29 @@ class HealthGroupConfigurationTest {
     @Autowired
     private RestTestClient client;
 
+    @Autowired
+    private MeterRegistry meterRegistry;
+
     @Test
-    @DisplayName("주 HTTP 포트의 준비 상태는 DB 장애에만, 시작 상태는 DB와 Redis 장애에 실패하고 생존 상태는 유지한다")
-    void probesOnMainPortSeparateStartupDependenciesFromReadiness() {
+    @DisplayName("DB나 Redis 장애는 주 HTTP 포트의 시작 상태와 그 지표만 실패시키고 준비·생존 상태는 유지한다")
+    void probesOnMainPortCheckDependenciesOnlyAtStartup() {
         when(databaseHealth.health()).thenReturn(Health.up().build());
         when(redisHealth.health()).thenReturn(Health.up().build());
-        assertStatuses(200, 200, 200);
+        assertStartupFailure(false);
 
         when(databaseHealth.health()).thenReturn(Health.down().build());
-        assertStatuses(503, 503, 200);
+        assertStartupFailure(true);
 
         when(databaseHealth.health()).thenReturn(Health.up().build());
         when(redisHealth.health()).thenReturn(Health.down().build());
-        assertStatuses(503, 200, 200);
+        assertStartupFailure(true);
     }
 
-    private void assertStatuses(int startup, int readiness, int liveness) {
-        assertStatus("/startupz", startup);
-        assertStatus("/readyz", readiness);
-        assertStatus("/livez", liveness);
+    private void assertStartupFailure(boolean failed) {
+        assertStatus("/startupz", failed ? 503 : 200);
+        assertThat(meterRegistry.get("baton.go.startup.health.up").gauge().value()).isEqualTo(failed ? 0 : 1);
+        assertStatus("/readyz", 200);
+        assertStatus("/livez", 200);
     }
 
     private void assertStatus(String path, int expectedStatus) {

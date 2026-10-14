@@ -88,11 +88,11 @@ def exercise(output):
         with lock:
             return [item for item in receipts if item["channel"] == "healthchecks"]
 
-    def send(port, *, resolved=False, job="baton-go", name="BatonGoReadinessFailed"):
+    def send(port, *, resolved=False, job="baton-go", name="BatonGoDependencyUnavailable"):
         now = datetime.now(timezone.utc)
         alert = {
             "labels": {"job": job, "alertname": name, "private_label": PRIVATE_MARKER},
-            "annotations": {"summary": "GO 준비 상태 확인 실패", "description": PRIVATE_MARKER},
+            "annotations": {"summary": "GO 의존성 연결 실패", "description": PRIVATE_MARKER},
             "startsAt": (now - timedelta(minutes=1)).isoformat(),
             "endsAt": (now + timedelta(seconds=-1 if resolved else 300)).isoformat(),
             "generatorURL": "https://private.example/" + PRIVATE_MARKER,
@@ -143,7 +143,7 @@ def exercise(output):
             message = body["attachments"][0] if item["channel"] == "slack" else body["embeds"][0]
             assert "BATON GO" in message["title"]
             text = message["text"] if item["channel"] == "slack" else message["description"]
-            assert "GO 준비 상태 확인 실패" in text
+            assert "GO 의존성 연결 실패" in text
         report = {
             "result": "passed",
             "channels": list(CHANNELS),

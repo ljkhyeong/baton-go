@@ -163,7 +163,7 @@ jobs:
             config="/rules/alertmanager-${channel}.example.yml"
             "${amtool[@]}" check-config "$config"
             "${amtool[@]}" config routes test --config.file="$config" \
-              --verify.receivers="${channel}-go" job=baton-go alertname=BatonGoReadinessFailed
+              --verify.receivers="${channel}-go" job=baton-go alertname=BatonGoDependencyUnavailable
             "${amtool[@]}" config routes test --config.file="$config" \
               --verify.receivers="${channel}-go" job=baton-go-tls alertname=BatonGoCertificateExpiringSoon
             "${amtool[@]}" config routes test --config.file="$config" \
@@ -188,7 +188,7 @@ jobs:
             --verify.receivers=healthchecks-go \
             job=baton-go-monitoring alertname=BatonGoMonitoringHeartbeat
           "${amtool[@]}" config routes test --config.file="$config" \
-            --verify.receivers=unmatched job=baton-go alertname=BatonGoReadinessFailed
+            --verify.receivers=unmatched job=baton-go alertname=BatonGoDependencyUnavailable
           "${amtool[@]}" config routes test --config.file="$config" \
             --verify.receivers=unmatched job=another-service alertname=BatonGoMonitoringHeartbeat
           "${amtool[@]}" config routes test --config.file="$config" \
@@ -373,6 +373,7 @@ jobs:
           grep -Eq '^baton_go_public_resolver_target_contract_violations_total 0(\.0)?$' "$metrics_file"
           grep -Eq '^baton_go_management_authentication_service_failures_total 0(\.0)?$' "$metrics_file"
           grep -Eq '^baton_go_public_resolver_quota_failures_total 0(\.0)?$' "$metrics_file"
+          grep -Eq '^baton_go_startup_health_up 1(\.0)?$' "$metrics_file"
           for recovery_code in \
             LINK_CREATION_REPLAY_UNAVAILABLE \
             LINK_CODE_REPLAY_UNAVAILABLE \

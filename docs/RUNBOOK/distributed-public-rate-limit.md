@@ -31,8 +31,9 @@ Secret의 `SPRING_DATA_REDIS_USERNAME`·`SPRING_DATA_REDIS_PASSWORD`를 읽는�
 시작 탐침의 `/startupz`는 Spring Boot Redis 상태 확인(`INFO`) 실패를 `503`으로 반환하므로 연결하지 못한
 새 Pod는 트래픽을 받지 않는다. 준비 상태 `/readyz`와 생존 상태 `/livez`에는 Redis를 넣지 않아 실행 중
 Redis 장애에도 Pod가 서비스에 남고 관리 폐기를 계속 처리한다. `BatonGoDistributedResolverQuotaFailure`
-경보로 연결·TLS·ACL·Redis 상태를 확인한다. 공개 요청이 없으면 이 경보도 발생하지 않으므로 Redis 플랫폼의
-연결·메모리 경보를 함께 둔다. 복구 후 카운터 허용량 안에서 공개 조회가 다시 진행되는지 검사한다.
+경보로 연결·TLS·ACL·Redis 상태를 확인한다. 공개 요청이 없을 때의 연결 실패는 시작 상태 지표를 쓰는
+`BatonGoDependencyUnavailable`이 감지하며, Redis 플랫폼의 메모리·고가용성 경보는 따로 둔다. 복구 후 카운터
+허용량 안에서 공개 조회가 다시 진행되는지 검사한다.
 
 준비 상태가 정상인데 분산 제한 장애 경보가 계속되면 카운터 키를 확인한다. GO는 만료 시간이 없거나
 정수가 아닌 카운터, 문자열이 아닌 키를 고치지 않고 `503`으로 닫는다. 운영 자격 증명으로

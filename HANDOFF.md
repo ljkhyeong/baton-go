@@ -117,12 +117,12 @@
 - 종료 링크 자동 정리 실행 간격은 최소 1초다. 빈 값과 `0s`는 설정 바인딩 단계에서 거부한다.
 - 자동 정리를 켜면 Pod별 실행 완료 시각과 설정 간격을 지표로 제공한다. 완료 신호가 실행 간격의
   3배(최소 3분)를 넘긴 상태로 2분 지속되면 정체 경보가 발생한다.
-- 준비 상태(`/readyz`)는 DB를, 시작 상태(`/startupz`)는 DB와 활성화한 분산 요청 제한 Redis를 확인한다.
-  Redis는 Spring Boot 자동 구성과 기본 상태 확인(`INFO`)을 사용한다. 실행 중 Redis 장애는 공개 링크만 503으로
-  막고 Pod를 서비스에서 빼지 않으며, 연결하지 못한 새 Pod는 시작 탐침을 통과하지 못한다.
-  `/livez`는 의존성을 보지 않는다.
-- `BatonGoReadinessFailed`는 Pod별 `/readyz` 요청이 최근 2분간 12건 이상이고 503 비율이
-  50%를 넘는 상태가 2분 지속되면 발생한다.
+- 시작 상태(`/startupz`)만 DB와 활성화한 분산 요청 제한 Redis를 확인한다. 준비 상태(`/readyz`)는 Spring Boot
+  기본 `readinessState`만 보고 `/livez`도 의존성을 보지 않는다. 연결하지 못한 새 Pod는 시작 탐침을 통과하지
+  못하고, 실행 중 DB·Redis 장애에는 Pod가 서비스에 남아 GO가 공개 안내 화면과 공통 오류를 직접 반환한다.
+  Redis는 Spring Boot 자동 구성과 기본 상태 확인(`INFO`)을 사용한다.
+- `BatonGoDependencyUnavailable`은 Pod별 `baton_go_startup_health_up`(수집할 때마다 시작 상태 묶음을 평가)이
+  0인 상태가 2분 지속되면 발생해 트래픽이 없어도 DB·Redis 장애를 알린다.
 - 애플리케이션은 Spring Boot 기본 정상 종료로 종료 신호를 받으면 새 요청 수락을 멈추고 진행 중인 요청을
   최대 30초 기다린다. Kubernetes와 Compose의 강제 종료 제한은 40초다.
 - 관리 포트 8081은 상태 확인과 `/actuator/prometheus`만 노출한다.

@@ -2,8 +2,10 @@ package com.personal.batongo.domain.link;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowableOfType;
 
 import com.personal.batongo.domain.link.LinkAvailabilityPolicy.Status;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
 import java.util.stream.Stream;
@@ -57,6 +59,21 @@ class SmartLinkPolicyTest {
                 Arguments.of(CREATED_AT, notBefore, expiresAt, CREATED_AT, Status.REVOKED),
                 Arguments.of(CREATED_AT, notBefore, expiresAt, expiresAt, Status.REVOKED)
         );
+    }
+
+    @Test
+    @DisplayName("만료·폐기 링크는 종료 후 지난 시간을 알리고 앞선 시계가 기록한 폐기 시각은 0으로 본다")
+    void reportsTimeSinceRetirement() {
+        Instant expiresAt = CREATED_AT.plusSeconds(120);
+
+        assertThat(retiredFor(null, expiresAt, expiresAt.plusSeconds(30))).isEqualTo(Duration.ofSeconds(30));
+        assertThat(retiredFor(CREATED_AT, expiresAt, CREATED_AT.plusSeconds(45))).isEqualTo(Duration.ofSeconds(45));
+        assertThat(retiredFor(CREATED_AT.plusSeconds(5), null, CREATED_AT)).isEqualTo(Duration.ZERO);
+    }
+
+    private static Duration retiredFor(Instant revokedAt, Instant expiresAt, Instant now) {
+        return catchThrowableOfType(LinkUnavailableException.class,
+                () -> LinkAvailabilityPolicy.requireResolvableAt(revokedAt, null, expiresAt, now)).retiredFor();
     }
 
     @Test

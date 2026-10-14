@@ -11,6 +11,7 @@ import com.personal.batongo.application.link.error.StoredTargetPolicyViolationEx
 import com.personal.batongo.application.link.port.in.ResolveLinkUseCase;
 import com.personal.batongo.domain.link.LinkAvailabilityPolicy.Status;
 import com.personal.batongo.domain.link.LinkUnavailableException;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
 import java.util.stream.Stream;
@@ -156,9 +157,9 @@ class PublicErrorResponseIntegrationTest {
     private static Stream<Arguments> headErrors() {
         return Stream.of(
                 Arguments.of(new LinkUnavailableException(Status.NOT_ACTIVE,
-                        "아직 사용할 수 없는 링크입니다", Instant.parse("2026-07-29T15:30:00Z")),
+                        "아직 사용할 수 없는 링크입니다", Instant.parse("2026-07-29T15:30:00Z"), null),
                         MediaType.TEXT_HTML_VALUE, 404),
-                Arguments.of(new LinkUnavailableException(Status.EXPIRED, "만료된 링크입니다", null),
+                Arguments.of(new LinkUnavailableException(Status.EXPIRED, "만료된 링크입니다", null, Duration.ofDays(1)),
                         MediaType.TEXT_HTML_VALUE, 410),
                 Arguments.of(new IllegalStateException("서버 오류"), MediaType.TEXT_HTML_VALUE, 500),
                 Arguments.of(new StoredTargetPolicyViolationException(UUID.fromString(

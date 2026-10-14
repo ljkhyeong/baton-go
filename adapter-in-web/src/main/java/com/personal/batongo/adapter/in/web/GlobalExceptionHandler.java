@@ -12,10 +12,14 @@ import com.personal.batongo.application.link.error.PublicResolverQuotaUnavailabl
 import com.personal.batongo.application.link.error.PublicLinkOriginReplayUnavailableException;
 import com.personal.batongo.application.link.error.StoredTargetPolicyViolationException;
 import com.personal.batongo.domain.link.ExpiresAtAlreadyPassedException;
+import com.personal.batongo.domain.link.LinkAvailabilityPolicy.Status;
 import com.personal.batongo.domain.link.LinkUnavailableException;
 import com.personal.batongo.domain.link.LinkValidationException;
 import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.MeterRegistry;
+import java.time.Duration;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
@@ -59,6 +63,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     private final Counter quotaFailureCounter;
     private final Counter authenticationServiceFailureCounter;
     private final Map<String, Counter> linkRecoveryFailureCounters;
+    private final Map<Status, DistributionSummary> retiredLinkAges;
 
     public GlobalExceptionHandler(MeterRegistry meterRegistry) {
         this.quotaFailureCounter = meterRegistry.counter("baton.go.public.resolver.quota.failures");
@@ -76,6 +81,16 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         ).collect(Collectors.toUnmodifiableMap(
                 code -> code,
                 code -> meterRegistry.counter("baton.go.management.link.recovery.failures", "code", code)
+        ));
+        // 보존 기간 결정용으로 종료 링크를 다시 연 시점의 분포만 남기고 링크·사용자는 구분하지 않는다.
+        this.retiredLinkAges = Stream.of(Status.EXPIRED, Status.REVOKED).collect(Collectors.toUnmodifiableMap(
+                status -> status,
+                status -> DistributionSummary.builder("baton.go.public.resolver.retired.link.age")
+                        .baseUnit("seconds")
+                        .tag("status", status.name().toLowerCase(Locale.ROOT))
+                        .serviceLevelObjectives(Stream.of(1, 7, 30, 90, 180, 365)
+                                .mapToDouble(days -> Duration.ofDays(days).toSeconds()).toArray())
+                        .register(meterRegistry)
         ));
     }
 
@@ -110,8 +125,8 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
             case LinkNotFoundException ignored -> notFound();
             case LinkUnavailableException unavailable -> switch (unavailable.status()) {
                 case NOT_ACTIVE -> error(HttpStatus.NOT_FOUND, "LINK_NOT_ACTIVE", unavailable.getMessage());
-                case EXPIRED -> error(HttpStatus.GONE, "LINK_EXPIRED", unavailable.getMessage());
-                case REVOKED -> error(HttpStatus.GONE, "LINK_REVOKED", unavailable.getMessage());
+                case EXPIRED -> retired(unavailable, "LINK_EXPIRED");
+                case REVOKED -> retired(unavailable, "LINK_REVOKED");
                 case ACTIVE -> unexpected(unavailable);
             };
             case PublicResolverRateLimitExceededException limited -> ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
@@ -236,6 +251,11 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                 status,
                 request
         );
+    }
+
+    private ResponseEntity<ErrorResponse> retired(LinkUnavailableException unavailable, String code) {
+        retiredLinkAges.get(unavailable.status()).record(unavailable.retiredFor().toSeconds());
+        return error(HttpStatus.GONE, code, unavailable.getMessage());
     }
 
     private ResponseEntity<ErrorResponse> notFound() {

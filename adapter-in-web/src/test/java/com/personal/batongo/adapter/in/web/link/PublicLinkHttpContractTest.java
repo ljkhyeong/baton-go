@@ -27,6 +27,7 @@ import com.personal.batongo.domain.link.LinkUnavailableException;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.io.IOException;
 import java.net.URI;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
@@ -52,6 +53,8 @@ class PublicLinkHttpContractTest {
 
     private static final UUID LINK_ID = UUID.fromString("83a430c4-5c5d-4eb4-a815-7a5ba1fd4aae");
     private static final Instant NOT_BEFORE = Instant.parse("2026-07-29T15:30:00Z");
+    private static final Duration RETIRED_FOR = Duration.ofDays(8);
+    private static final String RETIRED_LINK_AGE_METRIC = "baton.go.public.resolver.retired.link.age";
     private static final String BATON_TARGET_PATH =
             "/teams/8e448211-66ae-44ab-9888-c4960648c22b"
                     + "/seasons/713d9cb7-2842-4f9f-b3cc-e31d98c6238a";
@@ -134,18 +137,14 @@ class PublicLinkHttpContractTest {
             "EXPIRED, 410, LINK_EXPIRED",
             "REVOKED, 410, LINK_REVOKED"
     })
-    @DisplayName("사용할 수 없는 공개 링크는 사유별로 정해진 오류를 반환한다")
+    @DisplayName("사용할 수 없는 공개 링크는 사유별 오류를 반환하고 만료·폐기만 종료 후 지난 시간을 집계한다")
     void returnsUnavailableContract(
             Status reason,
             int expectedStatus,
             String expectedCode
     ) throws Exception {
         when(useCase.resolveLink("VOvLShvx93kQpj8x7w2HYQ"))
-                .thenThrow(new LinkUnavailableException(
-                        reason,
-                        "링크를 사용할 수 없습니다",
-                        reason == Status.NOT_ACTIVE ? NOT_BEFORE : null
-                ));
+                .thenThrow(unavailable(reason, "링크를 사용할 수 없습니다"));
 
         mockMvc.perform(get("/l/VOvLShvx93kQpj8x7w2HYQ"))
                 .andExpect(status().is(expectedStatus))
@@ -153,6 +152,14 @@ class PublicLinkHttpContractTest {
                 .andExpect(jsonPath("$.message").value("링크를 사용할 수 없습니다"))
                 .andExpect(jsonPath("$.notBefore").doesNotExist())
                 .andExpect(jsonPath("$.requestId").isNotEmpty());
+
+        assertThat(meterRegistry.find(RETIRED_LINK_AGE_METRIC).summaries())
+                .hasSize(2)
+                .allSatisfy(summary -> {
+                    boolean recorded = reason.name().equalsIgnoreCase(summary.getId().getTag("status"));
+                    assertThat(summary.count()).isEqualTo(recorded ? 1 : 0);
+                    assertThat(summary.totalAmount()).isEqualTo(recorded ? RETIRED_FOR.toSeconds() : 0.0);
+                });
     }
 
     @ParameterizedTest
@@ -188,8 +195,7 @@ class PublicLinkHttpContractTest {
             String message, String guidance
     ) throws Exception {
         when(useCase.resolveLink("private-link-code"))
-                .thenThrow(new LinkUnavailableException(reason, message,
-                        reason == Status.NOT_ACTIVE ? NOT_BEFORE : null));
+                .thenThrow(unavailable(reason, message));
 
         var response = mockMvc.perform(get("/l/private-link-code")
                         .header(HttpHeaders.ACCEPT, BROWSER_ACCEPT)
@@ -223,7 +229,7 @@ class PublicLinkHttpContractTest {
     void rendersStartTimeGuidance(Instant notBefore, String guidance) throws Exception {
         when(useCase.resolveLink("private-link-code"))
                 .thenThrow(new LinkUnavailableException(Status.NOT_ACTIVE,
-                        "아직 사용할 수 없는 링크입니다", notBefore));
+                        "아직 사용할 수 없는 링크입니다", notBefore, null));
 
         var response = mockMvc.perform(get("/l/private-link-code").accept(MediaType.TEXT_HTML))
                 .andExpect(status().isNotFound())
@@ -281,6 +287,12 @@ class PublicLinkHttpContractTest {
                     .andExpect(jsonPath("$.requestId").value(PUBLIC_NOT_FOUND_REQUEST_ID));
         }
         return result.andReturn().getResponse().getContentAsString();
+    }
+
+    private static LinkUnavailableException unavailable(Status reason, String message) {
+        return reason == Status.NOT_ACTIVE
+                ? new LinkUnavailableException(reason, message, NOT_BEFORE, null)
+                : new LinkUnavailableException(reason, message, null, RETIRED_FOR);
     }
 
     private double storedTargetPolicyViolationCount() {

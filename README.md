@@ -181,8 +181,9 @@ Actuator는 표시한 모니터링 네임스페이스와 클라이언트 Pod 조
 NetworkPolicy 집행과 kubelet 탐침 동작을 비공개 클러스터에서 검증한다.
 
 기본 애플리케이션 포트는 `8080`, Actuator 관리 포트는 `8081`이다.
-Spring의 추가 상태 확인 경로를 사용해 Kubernetes 생존 탐침은 `8080/livez`, 준비 탐침과 Docker 상태
-확인은 `8080/readyz`, 시작 탐침은 `8080/startupz`를 호출한다. 관리 포트만 정상인 상태를 정상 서비스로
+Spring의 추가 상태 확인 경로를 사용해 Kubernetes 생존 탐침은 `8080/livez`, 준비 탐침은 `8080/readyz`,
+시작 탐침과 Docker 상태 확인은 `8080/startupz`를 호출한다. Docker 상태 확인은 트래픽을 끊지 않으므로 의존성을
+계속 확인해 Compose의 `--wait`와 컨테이너 상태에 DB·Redis 연결을 반영한다. 관리 포트만 정상인 상태를 정상 서비스로
 판단하지 않는다. DB와 활성화한 분산 요청 제한 Redis의 연결 상태는 시작 상태에만 포함해 연결하지 못한 새 Pod는
 트래픽을 받지 않는다. 실행 중 의존성 장애에는 Pod를 서비스에서 빼지 않으므로 GO가 직접 한글 안내 화면과 공통
 오류를 반환하고, Redis 장애 중에는 관리 API를 계속 사용할 수 있다. 시작 상태는 `baton_go_startup_health_up`

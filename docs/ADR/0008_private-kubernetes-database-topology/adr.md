@@ -62,10 +62,11 @@ BATON MySQL을 공유하면 초기 인프라 수는 줄지만 백업, 장애, �
 - 생존·준비 탐침은 Spring Boot의 `management.endpoint.health.probes.add-additional-paths`
   설정으로 주 HTTP 포트 `8080`의 `/livez`·`/readyz`를 사용한다. 주 포트가 요청을 처리하지
   못할 때 별도 관리 포트만 정상이라는 이유로 Pod를 정상으로 판단하지 않도록 한다.
-  Kubernetes 준비 탐침과 Docker 상태 확인은 `/readyz`, 생존 탐침은 `/livez`, 시작 탐침은
-  `startup` 상태 묶음의 `/startupz`를 사용한다. DB와 활성화한 분산 요청 제한 Redis는 시작 상태에만 포함하며
-  세 경로는 Ingress에 노출하지 않는다. 모든 Pod가 같은 DB·Redis를 쓰므로 준비 상태에 넣으면 실행 중 장애 때
-  전체 Pod가 서비스에서 빠져 GO의 안내 화면 대신 Ingress 오류가 나가고 Redis 장애 때는 관리 API까지 막힌다.
+  Kubernetes 준비 탐침은 `/readyz`, 생존 탐침은 `/livez`, 시작 탐침과 Docker 상태 확인은
+  `startup` 상태 묶음의 `/startupz`를 사용한다. Docker 상태 확인은 트래픽을 끊지 않으므로 의존성을 계속 본다.
+  DB와 활성화한 분산 요청 제한 Redis는 시작 상태에만 포함하며 세 경로는 Ingress에 노출하지 않는다.
+  모든 Pod가 같은 DB·Redis를 쓰므로 준비 상태에 넣으면 실행 중 장애 때 전체 Pod가 서비스에서 빠져 GO의 안내
+  화면 대신 Ingress 오류가 나가고 Redis 장애 때는 관리 API까지 막힌다.
   트래픽이 없어도 장애를 경보하도록 시작 상태를 `baton_go_startup_health_up` 지표로 내보낸다.
 - 애플리케이션 수신 NetworkPolicy는 `8080`을 명시적으로 승인한 Namespace에만 허용한다.
   `8081`은 승인한 Namespace 안에서 actuator-client label을 가진 Pod에만 허용한다. kubelet의

@@ -594,7 +594,8 @@ kubectl label namespace <approved-edge-or-caller-namespace> \
 `management.endpoint.health.probes.add-additional-paths=true`로 Spring Boot의 상태 확인 경로를
 주 HTTP 포트에도 등록하고, 시작 탐침용 `startup` 상태 묶음은 `/startupz`로 등록한다. Kubernetes 탐침의
 포트 이름은 `http`(`8080`)이며 시작 탐침은 `/startupz`, 준비 탐침은 `/readyz`, 생존 탐침은 `/livez`를
-호출한다. Docker 상태 확인은 `8080/readyz`를 사용한다. 주 HTTP 포트 장애를 관리 포트의 정상 응답이
+호출한다. Docker 상태 확인은 트래픽을 끊지 않으므로 Compose의 시작 대기와 컨테이너 상태에 의존성을 반영하도록
+`8080/startupz`를 사용한다. 주 HTTP 포트 장애를 관리 포트의 정상 응답이
 가리지 않게 하기 위한 설정이다. DB 장애와 분산 요청 제한을 켠 경우의 Redis 상태 확인(`INFO`) 실패는 시작
 상태만 503으로 바꾸므로 연결하지 못한 새 Pod는 트래픽을 받지 않는다. 실행 중인 Pod는 서비스에 남아 DB 장애에는
 공개 링크의 `500` 안내 화면과 관리 API의 공통 오류를, Redis 장애에는 공개 링크에만 `503`을 반환하며 관리 API를

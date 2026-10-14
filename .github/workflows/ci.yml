@@ -320,6 +320,8 @@ jobs:
             http://127.0.0.1:8080/livez
           docker exec "$app_container" wget -q -T 2 -O /dev/null \
             http://127.0.0.1:8080/readyz
+          docker exec "$app_container" wget -q -T 2 -O /dev/null \
+            http://127.0.0.1:8080/startupz
           http_address="$("${compose[@]}" port app 8080)"
           monitor=deploy/uptime/hetrixtools-go.example.json
           monitor_target="$(jq --exit-status --raw-output '.Target' "$monitor")"

@@ -34,7 +34,7 @@ groups:
           severity: critical
         annotations:
           summary: BATON GO 준비 상태 실패
-          description: 2분간 {{ $labels.instance }} Pod의 준비 상태 503 비율이 50%를 넘었습니다. DB와 분산 요청 제한 Redis 연결, 최근 배포를 확인하세요.
+          description: 2분간 {{ $labels.instance }} Pod의 준비 상태 503 비율이 50%를 넘었습니다. DB 연결과 최근 배포를 확인하세요.
 
       - alert: BatonGoPublicResolverLatency
         expr: |
@@ -87,12 +87,12 @@ groups:
       - alert: BatonGoHttpServerErrors
         expr: |
           (
-            sum by (job) (rate(http_server_requests_seconds_count{job="baton-go",status=~"5..",uri!~"/actuator.*|/livez|/readyz"}[5m]))
+            sum by (job) (rate(http_server_requests_seconds_count{job="baton-go",status=~"5..",uri!~"/actuator.*|/livez|/readyz|/startupz"}[5m]))
             /
-            sum by (job) (rate(http_server_requests_seconds_count{job="baton-go",status!="429",uri!~"/actuator.*|/livez|/readyz"}[5m]))
+            sum by (job) (rate(http_server_requests_seconds_count{job="baton-go",status!="429",uri!~"/actuator.*|/livez|/readyz|/startupz"}[5m]))
           ) > 0.05
           and
-          sum by (job) (increase(http_server_requests_seconds_count{job="baton-go",status=~"5..",uri!~"/actuator.*|/livez|/readyz"}[5m])) >= 5
+          sum by (job) (increase(http_server_requests_seconds_count{job="baton-go",status=~"5..",uri!~"/actuator.*|/livez|/readyz|/startupz"}[5m])) >= 5
         for: 5m
         labels:
           severity: critical

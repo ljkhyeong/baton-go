@@ -28,7 +28,7 @@ tests:
               severity: critical
             exp_annotations:
               summary: BATON GO 준비 상태 실패
-              description: 2분간 unready Pod의 준비 상태 503 비율이 50%를 넘었습니다. DB와 분산 요청 제한 Redis 연결, 최근 배포를 확인하세요.
+              description: 2분간 unready Pod의 준비 상태 503 비율이 50%를 넘었습니다. DB 연결과 최근 배포를 확인하세요.
       - eval_time: 7m
         alertname: BatonGoReadinessFailed
         exp_alerts: []
@@ -91,6 +91,8 @@ tests:
       - series: 'http_server_requests_seconds_count{job="baton-go",method="GET",status="503",uri="/readyz"}'
         values: '0+100x10'
       - series: 'http_server_requests_seconds_count{job="baton-go",method="GET",status="503",uri="/livez"}'
+        values: '0+100x10'
+      - series: 'http_server_requests_seconds_count{job="baton-go",method="GET",status="503",uri="/startupz"}'
         values: '0+100x10'
       - series: 'http_server_requests_seconds_count{job="other",method="GET",status="500",uri="/l/{code}"}'
         values: '0+100x10'

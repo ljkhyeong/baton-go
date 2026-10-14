@@ -90,7 +90,7 @@ spec:
                 - ALL
           startupProbe:
             httpGet:
-              path: /readyz
+              path: /startupz
               port: http
             timeoutSeconds: 3
             failureThreshold: 30

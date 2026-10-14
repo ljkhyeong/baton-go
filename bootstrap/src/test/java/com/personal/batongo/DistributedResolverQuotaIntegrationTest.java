@@ -59,7 +59,7 @@ class DistributedResolverQuotaIntegrationTest {
     static class QuotaConfiguration { }
 
     @Test
-    @DisplayName("분산 제한은 기본 중지하며 활성화하면 Redis 요청 제한과 준비 상태 확인을 함께 켠다")
+    @DisplayName("분산 제한은 기본 중지하며 활성화하면 Redis 요청 제한과 시작 상태 확인을 함께 켠다")
     void assemblesOnlyWhenEnabled() {
         runner.run(context -> assertThat(context).hasNotFailed()
                 .doesNotHaveBean(PublicResolverQuotaPort.class)
@@ -74,7 +74,7 @@ class DistributedResolverQuotaIntegrationTest {
     }
 
     @Test
-    @DisplayName("분산 제한 Redis에 연결하지 못하면 공개 요청 제한과 준비 상태가 대기 시간 안에 장애로 응답한다")
+    @DisplayName("분산 제한 Redis에 연결하지 못하면 공개 요청 제한과 시작 상태가 대기 시간 안에 장애로 응답한다")
     void reportsUnreachableRedisAsUnavailable() {
         runner.withPropertyValues("baton-go.distributed-resolver-quota.enabled=true",
                         "spring.data.redis.host=127.0.0.1", "spring.data.redis.port=1")

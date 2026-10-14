@@ -48,21 +48,24 @@ class HealthGroupConfigurationTest {
     private RestTestClient client;
 
     @Test
-    @DisplayName("주 HTTP 포트의 상태 확인은 DB나 Redis 장애 때 준비 상태만 실패한다")
-    void probesOnMainPortIncludeDependenciesOnlyInReadiness() {
+    @DisplayName("주 HTTP 포트의 준비 상태는 DB 장애에만, 시작 상태는 DB와 Redis 장애에 실패하고 생존 상태는 유지한다")
+    void probesOnMainPortSeparateStartupDependenciesFromReadiness() {
         when(databaseHealth.health()).thenReturn(Health.up().build());
         when(redisHealth.health()).thenReturn(Health.up().build());
-        assertStatus("/readyz", 200);
-        assertStatus("/livez", 200);
+        assertStatuses(200, 200, 200);
 
         when(databaseHealth.health()).thenReturn(Health.down().build());
-        assertStatus("/readyz", 503);
-        assertStatus("/livez", 200);
+        assertStatuses(503, 503, 200);
 
         when(databaseHealth.health()).thenReturn(Health.up().build());
         when(redisHealth.health()).thenReturn(Health.down().build());
-        assertStatus("/readyz", 503);
-        assertStatus("/livez", 200);
+        assertStatuses(503, 200, 200);
+    }
+
+    private void assertStatuses(int startup, int readiness, int liveness) {
+        assertStatus("/startupz", startup);
+        assertStatus("/readyz", readiness);
+        assertStatus("/livez", liveness);
     }
 
     private void assertStatus(String path, int expectedStatus) {

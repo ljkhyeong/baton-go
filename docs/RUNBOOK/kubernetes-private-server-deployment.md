@@ -562,7 +562,7 @@ Job이 `Complete`가 될 때까지 유지한다. 완료된 Job을 삭제하고 �
 
 - 공개: `GET·HEAD /l/{code}`
 - 비공개 관리: `/api/v1` Prefix 경로 집합
-- 내부 상태 확인: `/livez`, `/readyz`
+- 내부 상태 확인: `/livez`, `/readyz`, `/startupz`
 
 Ingress 컨트롤러, 호스트 이름, TLS 발급 방식과 요청 제한 제품이 정해지지 않았으므로
 저장소는 Ingress를 만들지 않는다. 환경별 외부 프록시는 다음을 강제해야 한다.
@@ -589,14 +589,16 @@ kubectl label namespace <approved-edge-or-caller-namespace> \
    마스킹한다.
 4. 관리 JWT, Authorization, `Idempotency-Key`, 대상 경로와 전체 단축 URL을
    외부 프록시·APM 로그에 기록하지 않는다.
-5. Actuator `8081`과 주 포트의 `/livez`·`/readyz`는 공개/비공개 Ingress에 연결하지 않는다.
+5. Actuator `8081`과 주 포트의 `/livez`·`/readyz`·`/startupz`는 공개/비공개 Ingress에 연결하지 않는다.
 
 `management.endpoint.health.probes.add-additional-paths=true`로 Spring Boot의 상태 확인 경로를
-주 HTTP 포트에도 등록한다. Kubernetes 탐침의 포트 이름은 `http`(`8080`)이며 시작·준비
-탐침은 `/readyz`, 생존 탐침은 `/livez`를 호출한다. Docker 상태 확인도 `8080/readyz`를
-사용한다. 주 HTTP 포트 장애를 관리 포트의 정상 응답이 가리지 않게 하기 위한 설정이다.
-DB 장애와 분산 요청 제한을 켠 경우의 Redis 상태 확인(`INFO`) 실패는 준비 상태만 503으로 바꾸며
-생존 상태에는 포함하지 않는다. Prometheus 등 나머지 Actuator 경로는 `8081`을 유지한다.
+주 HTTP 포트에도 등록하고, 시작 탐침용 `startup` 상태 묶음은 `/startupz`로 등록한다. Kubernetes 탐침의
+포트 이름은 `http`(`8080`)이며 시작 탐침은 `/startupz`, 준비 탐침은 `/readyz`, 생존 탐침은 `/livez`를
+호출한다. Docker 상태 확인은 `8080/readyz`를 사용한다. 주 HTTP 포트 장애를 관리 포트의 정상 응답이
+가리지 않게 하기 위한 설정이다. DB 장애는 준비·시작 상태를 503으로 바꾼다. 분산 요청 제한을 켠 경우의
+Redis 상태 확인(`INFO`) 실패는 시작 상태만 503으로 바꾸므로 연결하지 못한 새 Pod는 트래픽을 받지 않고,
+실행 중인 Pod는 서비스에 남아 공개 링크에만 `503`을 반환하며 관리 API를 계속 처리한다. 생존 상태에는 두
+의존성을 포함하지 않는다. Prometheus 등 나머지 Actuator 경로는 `8081`을 유지한다.
 
 애플리케이션은 Spring Boot 기본 정상 종료(`server.shutdown=graceful`,
 `spring.lifecycle.timeout-per-shutdown-phase=30s`)를 사용한다. 종료 신호를 받으면 새 요청 수락을 멈추고
@@ -629,6 +631,7 @@ Kubernetes NetworkPolicy 모델에서는 일반적으로 Pod가 실행 중인 �
 
 ```bash
 kubectl -n baton-go port-forward deployment/baton-go 18080:8080
+curl --fail --silent http://127.0.0.1:18080/startupz
 curl --fail --silent http://127.0.0.1:18080/readyz
 curl --fail --silent http://127.0.0.1:18080/livez
 ```
@@ -674,7 +677,8 @@ Pod 자동 발견 설정과 Namespace 범위 조회 권한이 있다. 수집 실
 - `Job/baton-go-database-migration` 실패·시간 초과
 - 애플리케이션·MySQL Pod `NotReady`, 재시작과 배포 상태 이상
 - HTTP 5xx 오류율과 단축 링크 접속의 429 응답 지속 증가
-- DB와 활성화한 분산 요청 제한 Redis를 포함한 readiness 실패(`BatonGoReadinessFailed`)
+- DB 연결을 포함한 readiness 실패(`BatonGoReadinessFailed`)와 분산 요청 제한 Redis 장애
+  (`BatonGoDistributedResolverQuotaFailure`)
 - `baton.go.public.resolver.target.contract.violations` 증가
 - 링크 자동 정리 실패와 실행 완료 신호 정체
 - PVC 사용률·증가 추세·확장 실패

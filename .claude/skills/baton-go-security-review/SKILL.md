@@ -58,7 +58,7 @@ ROUND 참여 허가, 세션 ID, DB 비밀번호, 웹훅 URL.
 
 ### 6. 배포·공급망
 
-- Actuator는 `8081`에만 있고, `/livez`·`/readyz`는 Ingress에 노출되지 않는가. 공개 Ingress는 `/l`, 비공개는 `/api/v1`만 받는가.
+- Actuator는 `8081`에만 있고, `/livez`·`/readyz`·`/startupz`는 Ingress에 노출되지 않는가. 공개 Ingress는 `/l`, 비공개는 `/api/v1`만 받는가.
 - 런타임 DB 계정은 DML 전용이고 TLS `VERIFY_IDENTITY`를 유지하는가. DDL 자격 증명은 마이그레이션 Job에만 있는가.
 - 비밀값·환경별 주소는 환경 변수·Secret으로 주입되고 저장소 파일에 실제 값이 없는가.
 - 액션은 커밋 SHA, 이미지는 digest로 고정되고 Gradle 검증 메타데이터가 유지되는가.

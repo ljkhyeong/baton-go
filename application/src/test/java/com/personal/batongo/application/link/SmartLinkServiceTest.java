@@ -16,6 +16,7 @@ import com.personal.batongo.application.link.error.InvalidRequestException;
 import com.personal.batongo.application.link.error.LinkCodeReplayMismatchException;
 import com.personal.batongo.application.link.error.LinkCreationReplayUnavailableException;
 import com.personal.batongo.application.link.error.LinkNotFoundException;
+import com.personal.batongo.application.link.error.StoredTargetPolicyViolationException;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.CreateLinkCommand;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.LinkResult;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.LinkSearchQuery;
@@ -224,6 +225,20 @@ class SmartLinkServiceTest {
         assertThat(result.link().status()).isEqualTo(Status.REVOKED);
         assertThat(result.link().evaluatedAt()).isEqualTo(NOW);
         verify(repository, never()).revoke(any(), any());
+    }
+
+    @Test
+    @DisplayName("계약을 위반한 저장 대상도 최초 폐기 시각을 기록하고 없는 링크로 숨긴다")
+    void recordsRevocationOfHiddenStoredTarget() {
+        when(repository.findByIdForUpdate(LINK_ID)).thenReturn(Optional.of(
+                storedLink(LINK_ID, "UNKNOWN", BATON_PATH, NOW.minusSeconds(60), null, null)
+        ));
+
+        assertThatThrownBy(() -> service.revokeLink(LINK_ID))
+                .isInstanceOfSatisfying(StoredTargetPolicyViolationException.class,
+                        exception -> assertThat(exception.linkId()).isEqualTo(LINK_ID));
+
+        verify(repository).revoke(LINK_ID, NOW);
     }
 
     @Test

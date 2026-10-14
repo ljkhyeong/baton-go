@@ -8,6 +8,7 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.head;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -224,6 +225,27 @@ class LinkPersistenceIntegrationTest {
                 .andExpect(jsonPath("$.code").value("EXPIRES_AT_ALREADY_PASSED"));
 
         assertThat(reservationCount(new CreationIdempotencyKey(idempotencyKey).hash())).isZero();
+    }
+
+    @Test
+    @DisplayName("계약을 위반한 저장 대상의 폐기 요청은 없는 링크로 응답하면서 폐기 시각을 커밋한다")
+    void commitsRevocationOfHiddenStoredTarget() throws Exception {
+        UUID hiddenId = UUID.randomUUID();
+        insertStoredLink(hiddenId.toString(), LinkCodeHash.of("hiddenRevocationCode01"),
+                "UNKNOWN", "/private-target", "UNKNOWN");
+
+        mockMvc.perform(put("/api/v1/links/{linkId}/revocation", hiddenId)
+                        .with(jwt().authorities(new SimpleGrantedAuthority("SCOPE_baton-go.links.revoke"))))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("LINK_NOT_FOUND"))
+                .andExpect(content().string(not(containsString("/private-target"))));
+
+        LocalDateTime revokedAt = jdbcTemplate.queryForObject(
+                "SELECT revoked_at FROM smart_links WHERE id = UUID_TO_BIN(?)",
+                LocalDateTime.class,
+                hiddenId.toString()
+        );
+        assertThat(revokedAt.toInstant(ZoneOffset.UTC)).isEqualTo(FAR_FUTURE_NOW);
     }
 
     @Test

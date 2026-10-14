@@ -2,6 +2,7 @@ package com.personal.batongo.adapter.in.web.link;
 
 import com.personal.batongo.adapter.in.web.ManagementOperationLogger;
 import com.personal.batongo.application.link.CreationIdempotencyKey;
+import com.personal.batongo.application.link.error.StoredTargetPolicyViolationException;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.CreateLinkCommand;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.CreatedLinkResult;
@@ -108,9 +109,13 @@ public class LinkManagementController {
         RevokedLinkResult result = smartLinkUseCase.revokeLink(linkId);
         operationLogger.completed(
                 result.alreadyRevoked() ? "LINK_REVOKE_REPLAY" : "LINK_REVOKE",
-                result.link().id(),
+                linkId,
                 principal
         );
+        if (result.hidden()) {
+            // 폐기를 기록한 뒤에도 계약을 위반한 저장 대상은 없는 링크로 숨긴다.
+            throw new StoredTargetPolicyViolationException(linkId);
+        }
         return LinkResponse.from(result.link());
     }
 }

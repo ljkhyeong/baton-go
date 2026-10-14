@@ -78,10 +78,15 @@ public interface SmartLinkUseCase {
         }
     }
 
+    /** 계약을 위반해 숨긴 저장 대상이면 폐기 시각만 기록하고 {@code link}는 null이다. */
     record RevokedLinkResult(
             LinkResult link,
             boolean alreadyRevoked
     ) {
+
+        public boolean hidden() {
+            return link == null;
+        }
     }
 
     record LinkResult(

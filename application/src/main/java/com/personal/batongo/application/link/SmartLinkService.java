@@ -7,7 +7,6 @@ import com.personal.batongo.application.link.error.LinkCreationReplayUnavailable
 import com.personal.batongo.application.link.error.LinkNotFoundException;
 import com.personal.batongo.application.link.error.LinkPurgedException;
 import com.personal.batongo.application.link.error.PublicLinkOriginReplayUnavailableException;
-import com.personal.batongo.application.link.error.StoredTargetPolicyViolationException;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase;
 import com.personal.batongo.application.link.port.out.LinkCodeKeyGuardPort;
 import com.personal.batongo.application.link.port.out.LinkCodePort;
@@ -209,7 +208,7 @@ public class SmartLinkService implements SmartLinkUseCase {
     }
 
     @Override
-    @Transactional(noRollbackFor = StoredTargetPolicyViolationException.class)
+    @Transactional
     public RevokedLinkResult revokeLink(UUID linkId) {
         StoredLink storedLink = repository.findByIdForUpdate(linkId)
                 .orElseThrow(LinkNotFoundException::new);
@@ -221,10 +220,10 @@ public class SmartLinkService implements SmartLinkUseCase {
         if (!alreadyRevoked) {
             repository.revoke(storedLink.id(), revokedAt);
         }
-        // 계약을 위반한 저장 대상도 폐기 시각을 남겨 정책이 바뀌어도 다시 열리지 않게 하고, 응답은 없는 링크로 숨긴다.
-        TrustedTarget target = storedLink.trustedTarget()
-                .orElseThrow(() -> new StoredTargetPolicyViolationException(storedLink.id()));
-        return new RevokedLinkResult(toResult(storedLink, target, revokedAt, now), alreadyRevoked);
+        // 계약을 위반한 저장 대상도 폐기 시각을 남겨 정책이 바뀌어도 다시 열리지 않게 하고 내용은 반환하지 않는다.
+        return new RevokedLinkResult(storedLink.trustedTarget()
+                .map(target -> toResult(storedLink, target, revokedAt, now))
+                .orElse(null), alreadyRevoked);
     }
 
     private static boolean isOrderedRange(Instant from, Instant before) {

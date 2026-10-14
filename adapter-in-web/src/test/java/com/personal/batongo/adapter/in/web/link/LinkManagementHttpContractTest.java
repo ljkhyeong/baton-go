@@ -394,6 +394,20 @@ class LinkManagementHttpContractTest {
     }
 
     @Test
+    @DisplayName("계약을 위반해 숨긴 링크의 폐기는 완료 이력과 계약 위반 지표를 남기고 없는 링크로 응답한다")
+    void recordsHiddenRevocationAndRespondsNotFound(CapturedOutput output) throws Exception {
+        when(useCase.revokeLink(LINK_ID)).thenReturn(new SmartLinkUseCase.RevokedLinkResult(null, false));
+
+        mockMvc.perform(put("/api/v1/links/{linkId}/revocation", LINK_ID))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("LINK_NOT_FOUND"));
+
+        assertThat(output).contains("\"operation\":\"LINK_REVOKE\"", "저장된 링크 대상 계약 위반 linkId=" + LINK_ID);
+        assertThat(meterRegistry.get("baton.go.public.resolver.target.contract.violations").counter().count())
+                .isEqualTo(1);
+    }
+
+    @Test
     @DisplayName("링크 생성 요청에 소문자 표준 UUID 멱등성 키가 없으면 400으로 응답한다")
     void requiresIdempotencyKey() throws Exception {
         mockMvc.perform(post("/api/v1/links")

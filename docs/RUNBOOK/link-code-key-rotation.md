@@ -44,7 +44,7 @@ docker compose --env-file .env -f compose.yml -f compose.key-ring.yml up -d app
 
 첫 지표 수집 전 오류와 Pod 기동 실패는 시작 로그·Pod 경보로 확인한다. 실행 중 기존 URL 복원 오류는
 `BatonGoManagementLinkRecoveryFailure`와 요청 ID를 사용한다. 유출 사고에서 키 교체만으로
-이전 링크가 무효화된다고 판단하지 않는다. 원래 링크의 폐기·재발급과 대상 서비스 권한
-검증을 함께 수행한다.
+이전 링크가 무효화된다고 판단하지 않는다. 유출이 확인되거나 의심되면
+[키 유출 대응 절차](link-code-key-compromise.md)에 따라 차단·전환·폐기·재발급을 함께 수행한다.
 
 실제 환경의 Secret 교체와 복원 훈련을 완료하기 전에는 운영 키 교체가 완료되었다고 기록하지 않는다.

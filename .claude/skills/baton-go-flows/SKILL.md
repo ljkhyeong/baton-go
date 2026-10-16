@@ -24,7 +24,7 @@ description: BATON GO의 링크 생성·재시도·폐기·공개 조회, 관리
 | 코드 형식·해시 저장·공개 조회 | `docs/ADR/0002_link-security/adr.md` |
 | 대상 경로·BATON·ROUND 연동 | `docs/PRD/0003_cross-service-link-contract/spec.md`, `docs/ADR/0005_trusted-target-locator/adr.md` |
 | 관리 인증·scope·작업 이력 | `docs/ADR/0010_management-jwt-authentication/adr.md`, `docs/RUNBOOK/management-operation-history.md` |
-| HMAC 키 묶음·교체 | `docs/ADR/0011_link-code-key-ring/adr.md`, `docs/RUNBOOK/link-code-key-rotation.md` |
+| HMAC 키 묶음·교체·유출 | `docs/ADR/0011_link-code-key-ring/adr.md`, `docs/RUNBOOK/link-code-key-rotation.md`, `docs/RUNBOOK/link-code-key-compromise.md` |
 | 종료 링크 정리 | `docs/ADR/0012_link-retention/adr.md`, `docs/RUNBOOK/link-retention.md` |
 | 공개 조회 요청 제한·Redis | `docs/ADR/0013_distributed-public-resolver-quota/adr.md`, `docs/RUNBOOK/distributed-public-rate-limit.md` |
 | MySQL 시각 저장·스키마 | `docs/ADR/0007_mysql-instant-storage/adr.md`, [DB 마이그레이션 점검](references/db-migration.md) |

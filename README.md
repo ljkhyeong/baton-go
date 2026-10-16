@@ -321,3 +321,4 @@ curl -i http://localhost:8080/api/v1/links \
 - [관리 작업 이력 조회와 보존](docs/RUNBOOK/management-operation-history.md)
 - [종료 링크 보존 기간 설정](docs/RUNBOOK/link-retention.md)
 - [HMAC 키 교체](docs/RUNBOOK/link-code-key-rotation.md)
+- [링크 코드 키 유출 대응](docs/RUNBOOK/link-code-key-compromise.md)

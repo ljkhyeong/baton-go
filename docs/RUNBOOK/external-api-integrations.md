@@ -76,6 +76,7 @@ python3 tools/verify-webhooks.py --output /tmp/baton-go-webhooks
 | 감시 시스템 중단 알림 | Prometheus·Alertmanager → Healthchecks.io → Slack | 1분 주기 신호와 전용 웹훅 설정 추가. 실제 계정 연결은 남아 있다. |
 | 도구·이미지 갱신 | GitHub Dependabot | GitHub Actions와 Java 21 기반 이미지의 업데이트를 주 1회 확인. 각각 한 PR로 묶는다. |
 | Java 라이브러리 취약점 알림 | Trivy → GitHub 의존성 API → Dependabot alerts | 알림 기능 활성화. `main` CI 성공 후 이미지의 Java 패키지 목록을 제출하는 설정 추가. |
+| 비밀값 유출 감지 | GitHub secret scanning·push protection | 공개 저장소라 무료다. 2026-10-16 조회 기준 꺼져 있어 저장소 관리자가 [설정](#비밀값-유출-감지)을 켠다. |
 | 운영 이미지 보관 | GitHub Actions → GHCR | `main`의 검증을 통과한 이미지를 재빌드 없이 게시하고 배포 다이제스트를 기록하는 설정 추가. |
 | 릴리스 검사 자료 보관 | GitHub Releases API | 기존 태그와 같은 커밋의 CI 자료를 받아 Release 초안에 첨부하는 워크플로 추가. |
 | 릴리스 변경 방지 | GitHub Immutable Releases | 저장소 설정 활성화·조회 완료. 이후 발행본의 첨부 파일과 태그 변경을 차단한다. |
@@ -107,19 +108,21 @@ k3s 상태 경보는 [컨테이너·배포 실패 알림](prometheus-alerts.md#�
 
 ## 추가 검토 결과
 
-2026-09-12에 아래 후보를 GO 계약과 비교했다. 현재 요구와 추가 요금 없는 조건에서는 도입하지 않는다.
+2026-09-12에 아래 후보를 GO 계약과 비교했고, Dependency Review는 저장소를 공개한 뒤 2026-10-16에 다시
+검토했다. 현재 요구와 추가 요금 없는 조건에서는 도입하지 않는다.
 
 | 후보 | 적용하지 않은 이유 |
 | --- | --- |
 | [Cloudflare Workers KV로 링크 저장·조회](https://developers.cloudflare.com/kv/concepts/how-kv-works/) | 변경 전파에 60초 이상 걸릴 수 있어 폐기 직후 이전 대상으로 연결될 수 있다. 현재 DB 조회를 대체하지 않는다. |
 | [Cloudflare Rate Limiting으로 요청 제한 대체](https://developers.cloudflare.com/waf/rate-limiting-rules/request-rate/) | 일부 같은 지역을 제외하면 데이터센터끼리 카운터를 공유하지 않는다. GO의 인스턴스·전체 Pod 요청량 제한을 대체하지 못한다. |
 | [Cloudflare Turnstile로 봇 차단](https://developers.cloudflare.com/turnstile/get-started/) | 브라우저 위젯과 서버 검증이 필요하다. GO의 공개 `GET·HEAD` 접속과 서비스 JWT 인증에 추가하면 별도 검증 흐름이 생긴다. |
-| [GitHub Dependency Review](https://docs.github.com/en/code-security/concepts/supply-chain-security/dependency-review) | 비공개 저장소 사용에는 유료 보안 기능이 필요하다. 기존 Trivy 검사와 Dependabot alerts를 유지한다. |
+| [GitHub Dependency Review](https://docs.github.com/en/code-security/concepts/supply-chain-security/dependency-review) | 공개 저장소라 무료지만 PR에서 비교할 대상이 워크플로의 액션뿐이다. 변경 대부분은 `main`에 직접 반영하고, Java 패키지는 `main` CI 성공 뒤에만 의존성 그래프에 제출한다. 기존 Trivy 검사·Dependabot alerts와 Dependabot PR 검토를 유지한다. |
 
 GO의 폐기·접속·요청 제한 기준은 [API 계약](../PRD/0002_api-contract/spec.md)을 따른다.
 이 표의 제외 판단은 제공자의 제약을 현재 GO 계약에 적용한 결과다.
 새 요구나 제공 조건이 바뀌면 해당 항목만 다시 검토한다. Cloudflare 요청 제한은 실제 공격 트래픽에
 대한 추가 차단이 필요할 때, Turnstile은 BATON에 공개 입력 폼이 생길 때 해당 서비스에서 검토한다.
+Dependency Review는 Java 의존성을 PR로 바꾸고 PR 빌드에서도 의존성을 제출하게 되면 다시 검토한다.
 
 운영 계정·Slack 채널 연결과 실제 수신 확인은 사용자가 진행한다. 코드·환경변수 예시·로컬 검증은
 위 [코드·연동 준비](#코드연동-준비)를 따른다.
@@ -390,6 +393,34 @@ Java 패키지가 없는 결과는 CI에서 거부해 빈 목록으로 기존 �
 근거: [GitHub 무료 기능 범위](https://docs.github.com/en/code-security/getting-started/github-security-features#available-for-all-github-plans),
 [의존성 제출 API](https://docs.github.com/en/rest/dependency-graph/dependency-submission),
 [Trivy 표준 변환](https://github.com/aquasecurity/trivy/blob/v0.72.0/pkg/report/github/github.go).
+
+## 비밀값 유출 감지
+
+공개 저장소는 GitHub의 secret scanning 경고와 저장소 push protection을 추가 요금 없이 쓸 수 있다.
+2026-10-16 저장소 설정 조회에서 두 기능은 꺼져 있었다. 개인 계정의 push protection은 기본으로 켜져 있지만
+그 계정의 push에만 적용된다. 저장소 기능을 켜야 모든 기여자의 push를 막고 기존 이력까지 검사한다.
+
+저장소 보안 설정이므로 관리자가 직접 켠다. 관리자 계정에서 다음을 실행하고 두 항목이 `enabled`인지 확인한다.
+
+```bash
+gh api --method PATCH repos/ljkhyeong/baton-go \
+  -f 'security_and_analysis[secret_scanning][status]=enabled' \
+  -f 'security_and_analysis[secret_scanning_push_protection][status]=enabled'
+gh api repos/ljkhyeong/baton-go --jq .security_and_analysis
+```
+
+켜면 GitHub가 기존 커밋 이력도 검사하고 결과를 저장소의 보안 탭에 표시한다. 기본 경고는
+[지원 형식](https://docs.github.com/en/code-security/reference/secret-security/supported-secret-scanning-patterns)처럼
+제공자가 형식을 정한 비밀값을 대상으로 한다. 형식이 없는 HMAC 비밀값·DB 비밀번호가 감지된다고 가정하지 않고
+환경 변수 주입, Git·로그 제외 규칙과 커밋 전 diff 검토를 유지한다. 예시 파일의 웹훅 주소는 `REPLACE_ME`
+자리표시자다.
+
+경고가 오면 해당 비밀값을 먼저 폐기·교체한 뒤 경고를 닫고, 기록에는 비밀값을 남기지 않는다. 링크 코드 키는
+[키 유출 대응 절차](link-code-key-compromise.md)를 따른다. push protection이 막은 값은 실제 비밀값이 아님을
+확인한 경우에만 사유를 골라 우회한다.
+
+근거: [GitHub 보안 기능 범위](https://docs.github.com/en/code-security/getting-started/github-security-features),
+[push protection](https://docs.github.com/en/code-security/concepts/secret-security/push-protection).
 
 ## GitHub CI 결과를 Slack으로 받기
 

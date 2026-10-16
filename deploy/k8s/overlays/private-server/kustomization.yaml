@@ -16,7 +16,7 @@ images:
     newName: registry.invalid/baton-go
     digest: sha256:REPLACE_ME_WITH_IMMUTABLE_RELEASE_DIGEST
   - name: mysql
-    digest: sha256:b3b90af2a6552ae30c266fdb7d5dd55f3afb72404bb78d37fe8a23eb857fd3fb
+    digest: sha256:24989179f58856db763f418010c1169fecc944e3ec1ea7e921572d83eb070f70
 
 patches:
   - path: app-private-registry-patch.yaml

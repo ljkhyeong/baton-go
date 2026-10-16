@@ -47,6 +47,7 @@
   예상하지 못한 오류 로그는 Boot `StandardStackTracePrinter`로 예외 유형·호출 위치만 한 줄에 남기며,
   요청 ID는 MDC에서 읽는다.
 - 기본 링크 코드 키는 `BATONGO_LINKCODE_KEYS_DEFAULT`(키 ID `default`)이며 키 교체는 같은 형식으로 키 ID를 추가한다.
+  유출 대응은 [키 유출 대응 절차](docs/RUNBOOK/link-code-key-compromise.md)를 따르며, ADR-0004의 대응 절은 결정 당시 기록이다.
   로컬 무시 파일 `deploy/app.env`의 옛 `BATON_GO_LINK_CODE_SECRET` 이름은 사용자가 직접 바꿔야 한다.
 - `go.b4ton.com` 운영 예시와 Cloudflare DNS API 인증서 갱신·Discord·Slack 웹훅 알림의 선택 설정을
   추가했다. [외부 API 연동 절차](docs/RUNBOOK/external-api-integrations.md)를 따르며
@@ -128,9 +129,12 @@
 - 관리 포트 8081은 상태 확인과 `/actuator/prometheus`만 노출한다.
 - 롤링 업데이트는 가용 Pod를 줄이지 않고 새 Pod 한 개만 추가한다. 새 Pod는 준비 상태를 10초간
   유지한 뒤 가용 상태로 인정한다.
-- BATON 연동 작업 공간은 `/private/tmp/baton-go-integration-20260905`, 브랜치는
-  `codex/go-link-integration-20260905`다. 최근 확인 리비전은 `90557822`, 코드 기준은 `bc888b15`다.
+- BATON 연동 브랜치는 BATON 저장소(`/Users/lim/devProject/personal/manager`)의
+  `codex/go-link-integration-20260905`다. 2026-10-16 기준 브랜치 끝은 GO 상태 일괄 조회 전환까지 담은 `b6b50a41`이며
+  이전 기록의 확인 리비전 `90557822`와 코드 기준 `bc888b15`를 포함한다.
   GO 연동·카카오톡 공유·QR 기능을 반영했으며 BATON 메인 병합과 실제 전송·스캔 검증은 남아 있다.
+  2026-10-16 기준 임시 작업 공간 `/private/tmp/baton-go-integration-20260905`는 지워졌고, BATON 최신 통합 브랜치
+  `codex/integration-20261014`에는 이 브랜치가 아직 병합되지 않았다.
 - 완료 내역과 이전 검증의 리비전·명령·로그는
   [구현·검증 기록](docs/HISTORY/2026-09-08-implementation-verification.md),
   [2026-10-05 검증 기록](docs/HISTORY/2026-10-05-verification-history.md),
@@ -139,6 +143,22 @@
   [2026-10-14 검증 기록](docs/HISTORY/2026-10-14-verification-history.md)에 보관한다.
 
 ## 최근 검증
+
+- 남은 작업 정리는 미커밋 변경이 없는 `main`의 `e887d21`에서 시작해 `4d42a5e`에 저장했다. 다음 작업 중 저장소 안에서
+  할 수 있는 9번의 절차 작성을 진행했다.
+  - 사고 대응이 가리키던 ADR-0004 유출 대응 절은 없앤 단일 비밀값 변수·`guard-tool`과 도입 전 키 묶음을 전제로 해
+    현재 구조와 맞지 않았다. [키 유출 대응 절차](docs/RUNBOOK/link-code-key-compromise.md)에 영향 판단(멱등성 키
+    원문 노출 여부, UUID v4 여부), 차단, 발급 키 전환, 유출 키 링크 조회·폐기·새 키 재발급, 재개, 유출 키 제거
+    조건과 훈련을 정하고 README·키 교체·배포 런북·ADR-0004·0011·프로젝트 스킬에서 연결했다.
+  - 문서의 두 SQL을 `mysql:8.4.11`에 V1·V2만 적용한 스키마와 시험 행(유출 키 미폐기·폐기, 새 키, 정리된 예약)으로
+    실행해 키별 집계와 폐기 대상 한 건만 나오는 것을 확인했다. bash 예시는 `bash -n`으로 문법을 확인했다.
+  - BATON 쪽 2번은 이 세션에서 진행하지 않았다. BATON 저장소에 다른 작업 트리가 여럿 있고 최신 통합 브랜치에
+    GO 연동 브랜치가 병합되지 않아, 이번 GO 계약 변경을 BATON 아웃박스에 반영하는 일은 BATON 저장소에서 따로
+    진행한다. 1·3·4·6·8번은 실제 클러스터·계정, 5번은 원격 `main`과 릴리스 결정, 7번은 운영 트래픽의 재접속 시간
+    분포가 필요하다.
+
+  코드·설정 변경이 없어 Gradle·이미지 검증은 반복하지 않았고 `e887d21`의 결과를 그대로 쓴다. 문서 링크 검사는
+  43개 파일에서 문제 0건이다. 원격 반영은 하지 않았다.
 
 - 기능 보완 3차는 미커밋 변경이 없는 `main`의 `c6ee6f9`에서 시작해 `1a27065`·`7a81ea8`·`eea5ee5`·`52c83b6`에
   저장했다. 지난 회차의 결정 항목을 권장안대로 처리하고, 세션 전체 변경(`f7459e1..HEAD`)을 별도 검토로 다시 봤다.
@@ -271,9 +291,10 @@
 8. 플랫폼 백업 정책에 RPO·RTO·주기·보존 기간·담당자·실패 경보·결과 보관 위치를 명시하고,
    DB와 같은 버전의 `baton-go-link-code-key-ring` 키 묶음을 한 복구 단위로 사용한 격리 복원,
    장애 대응과 이미지 되돌리기 훈련을 완료한다.
-9. HMAC 비밀값 유출 시 Secret만 바꾸지 말고 링크 생성과 공개 경로를 먼저 차단한다.
-   기존 링크 폐기·재발급과 키 목록 전환을 함께 수행하는 복구 절차를 정하고 훈련한다.
-   평상시 키 교체도 [운영 절차](docs/RUNBOOK/link-code-key-rotation.md)에 따라 배포·전환·복원을 검증한다.
+9. HMAC 비밀값 유출 대응은 [키 유출 대응 절차](docs/RUNBOOK/link-code-key-compromise.md)로 정했다. 운영 데이터가
+   없는 격리 환경에서 절차를 훈련하고 차단부터 재개까지 시간, 동일 요청 재시도가 폐기된 링크를 돌려주는지와
+   시작 검사가 유출 키 제거를 막는지를 배포 검증 기록에 남긴다. 평상시 키 교체도
+   [운영 절차](docs/RUNBOOK/link-code-key-rotation.md)에 따라 배포·전환·복원을 검증한다.
 
 운영·복구 절차는
 [비공개 Kubernetes 배포 절차](docs/RUNBOOK/kubernetes-private-server-deployment.md)와

@@ -34,7 +34,7 @@
   공개 조회·관리 API에서 계약 위반 저장 대상을 404로 숨기는 방어와 재시도 저장값 누락 오류는 유지한다.
 - 폐기를 처리한 서버의 시계가 생성 시각보다 늦으면 500 대신 폐기 시각을 생성 시각으로 맞춘다.
 - Spring Boot 4.1.1이 관리하는 Tomcat·Jackson은 루트 `build.gradle`의 해석 규칙으로 보안 수정본인 Tomcat 11.0.26·
-  Jackson 3.1.7을 쓴다. 이 버전을 포함한 Boot 패치가 나오면 Boot를 올리고 규칙을 지운다. 2026-10-14 기준 최신
+  Jackson 3.1.7을 쓴다. 이 버전을 포함한 Boot 패치가 나오면 Boot를 올리고 규칙을 지운다. 2026-10-16 기준 최신
   안정 Boot는 4.1.1이고, GitHub Dependabot 경고 10건은 모두 `fixed`이며 두 고정 버전에 OSV 기준 알려진 취약점이 없다.
 - 영속성은 JPA 없이 Spring `JdbcClient`로만 처리한다. 첫 운영 배포 전이라 기준선 V1을 다시 만들었고
   `link_code_key_guard` 보호 행과 `version` 열이 없다. V2는 생성 예약 때 `request_hash`를 필수로 저장한다.
@@ -61,7 +61,8 @@
 - Dependabot의 CI 액션·Java 21 기반 이미지 업데이트 제안 설정과 GitHub 공식 Slack 앱의 CI 구독 절차를 추가했다.
   Java 이미지는 사용하지 않는 빌드 인자를 제거하고 Dockerfile의 `FROM`에 직접 고정했다.
   Java 메이저 업데이트와 MySQL 이미지는 자동 제안에서 제외한다.
-  원격 `main`에 반영했으며 실제 채널 연결은 남아 있다.
+  원격 `main`에 반영했으며 실제 채널 연결은 남아 있다. 2026-10-16에 액션 6건(`ljkhyeong/baton-go#6`)과
+  Temurin `21.0.12.1+1`(`ljkhyeong/baton-go#4`) 제안을 검토해 병합했다.
 - GitHub 저장소의 Dependabot alerts를 활성화하고 조회로 확인했다. 자동 수정 PR은 중지 상태다.
   기존 Trivy 결과의 Java 패키지 목록을 `main` CI 성공 후 의존성 API로 제출하는 설정을 추가했다.
   `8ab710f`의 원격 CI에서 Java 목록 제출 단계가 성공했다.
@@ -143,6 +144,32 @@
   [2026-10-14 검증 기록](docs/HISTORY/2026-10-14-verification-history.md)에 보관한다.
 
 ## 최근 검증
+
+- 원격 반영 확인과 의존성 제안 처리는 미커밋 변경이 없는 `main`의 `97241e5`에서 시작해 Dependabot 병합
+  `effe7f7`·`4e2da51`과 `fc77b43`에 저장했다.
+  - 사용자 승인으로 `f7459e1..97241e5`를 원격 `main`에 반영했다. push CI
+    [38874692945](https://github.com/ljkhyeong/baton-go/actions/runs/38874692945)에서 필수 검증·Java 의존성 알림
+    연동·게시 이미지 출처 증명이 모두 성공했다. 로컬에 없어 남겼던 kubeconform strict schema 검증도 통과했다.
+  - 액션 6건(`ljkhyeong/baton-go#6`)은 checkout v6.1.0→v7.0.1, setup-java v5.7.0→v6.0.1, setup-gradle
+    v6.3.0→v6.4.0, setup-kubectl v5.1.0→v5.2.0, upload-artifact v7.0.1→v7.0.2, download-artifact v8.0.1→v8.0.2다.
+    고정 SHA 6개가 태그와 일치한다. checkout v7의 포크 PR 체크아웃 차단은 `pull_request_target`·`workflow_run`에만
+    적용되고, 사용하는 입력과 기본값, node24 실행 환경은 그대로다. setup-java v6에서 새로 켜지는 기본값은 Java
+    문제 표시기뿐이며 JDK 캐시는 `cache`를 지정할 때만 동작한다.
+  - Temurin(`ljkhyeong/baton-go#4`)은 빌드·실행 단계가 함께 `21.0.12+8`→`21.0.12.1+1`로 바뀌고 digest가 현재
+    `21-jdk-alpine`·`21-jre-alpine` 태그와 일치한다. PR CI는 이전 기준 `f7459e1`에서 돌았으므로 `/startupz` 상태
+    확인을 넣은 현재 `main`에 적용해 `docker build`와 CI 운영 이미지 기동 단계를 로컬에서 다시 통과시켰다.
+  - 사용자 승인으로 두 PR을 merge commit으로 병합했다. 병합 후 `main` CI
+    [38876120475](https://github.com/ljkhyeong/baton-go/actions/runs/38876120475)에서 세 작업이 모두 성공했고,
+    새 Java 문제 표시기·Gradle 버전 상태 주석은 나오지 않았다. 먼저 병합한 `effe7f7`의 실행은 같은 동시 실행
+    그룹이라 취소됐다.
+  - `setup-gradle`·`setup-kubectl`의 메이저 태그 주석(`# v6`·`# v5`)은 상위 태그가 옮겨지면 고정 SHA와 대조할 수
+    없어 같은 커밋의 `v6.4.0`·`v5.2.0`으로 바꿨다(`fc77b43`).
+  - Dependabot 경고는 10건 모두 `fixed`이고 최신 안정 Boot는 4.1.1이다. Tomcat 11.0.27이 나왔지만 고정한
+    11.0.26·Jackson 3.1.7에 OSV 기준 알려진 취약점이 없어 해석 규칙을 그대로 둔다.
+
+  Java·SQL 변경이 없어 로컬 Gradle·통합 검증은 반복하지 않고 원격 CI 결과를 쓴다. 로그는 세션 스크래치패드
+  (`f602be4c-…/scratchpad`)의 `docker-build-pr4.log`·`smoke-pr4.log`다. `fc77b43`과 이 기록 커밋은 함께 push했으며
+  그 CI 결과는 이 기록에 넣지 않았다. 두 릴리스 워크플로의 액션 변경은 실행 기회가 없어 다음 작업 5로 남겼다.
 
 - 남은 작업 정리는 미커밋 변경이 없는 `main`의 `e887d21`에서 시작해 `4d42a5e`에 저장했다. 다음 작업 중 저장소 안에서
   할 수 있는 9번의 절차 작성을 진행했다.
@@ -280,7 +307,8 @@
    TLS·초기화·마이그레이션을 검증한다. MySQL을 멈춘 동안 GO Pod가 서비스에 남아 공개 링크에 `500` 안내 화면을
    반환하고 `BatonGoDependencyUnavailable`이 발생하는지, 새 Pod가 `/startupz`를 통과하지 못하는지도 확인한다.
 5. 첫 릴리스 태그에서 보관 워크플로의 증명 재검증을 실행한다. 배포 전 확인 명령으로 승인한
-   다이제스트만 배포되는지 검증하고 결과를 배포 기록에 남긴다.
+   다이제스트만 배포되는지 검증하고 결과를 배포 기록에 남긴다. 두 릴리스 워크플로는 PR·push CI에서 실행되지
+   않으므로 `ljkhyeong/baton-go#6`에서 올린 checkout v7.0.1·upload-artifact v7.0.2도 이때 함께 확인한다.
 6. Prometheus 수집, 경보 규칙, 알림 경로와 담당자를 연결하고 마이그레이션 실패,
    Pod 비정상, 5xx·429, DB 준비 상태, 저장 대상 계약 위반, PVC 용량과 백업 실패 경보의
    시험 결과를 기록한다.

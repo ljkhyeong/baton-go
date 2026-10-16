@@ -53,8 +53,9 @@
   추가했다. [외부 API 연동 절차](docs/RUNBOOK/external-api-integrations.md)를 따르며
   서버 설치, 실제 토큰 연결, DNS 변경, 인증서 발급과 메시지 전송은 실행하지 않았다.
 - [추가 연동 검토](docs/RUNBOOK/external-api-integrations.md#추가-검토-결과)에서 Workers KV의 링크 저장,
-  Cloudflare 요청 제한 대체·Turnstile, GitHub Dependency Review는 현재 계약·비용 조건상 제외했다.
-  제외 이유와 재검토 조건을 기록했다. 계정·채널 연결과 실제 수신 확인은 사용자가 진행한다.
+  Cloudflare 요청 제한 대체·Turnstile은 현재 계약·비용 조건상 제외했다. GitHub Dependency Review는 저장소
+  공개로 무료가 됐지만 PR에서 비교할 대상이 액션뿐이라 제외를 유지한다. 제외 이유와 재검토 조건을 기록했다.
+  계정·채널 연결과 실제 수신 확인은 사용자가 진행한다.
 - Cloudflare의 무료 [인증서 발급 알림](docs/RUNBOOK/external-api-integrations.md#cloudflare-인증서-발급-알림)
   설정·확인·해제 절차를 추가했다. 애플리케이션 코드나 주기 실행은 추가하지 않았다.
   계정 연결이 없어 실제 활성화·수신자 등록·이메일 수신은 확인하지 않았다.
@@ -62,7 +63,10 @@
   Java 이미지는 사용하지 않는 빌드 인자를 제거하고 Dockerfile의 `FROM`에 직접 고정했다.
   Java 메이저 업데이트와 MySQL 이미지는 자동 제안에서 제외한다.
   원격 `main`에 반영했으며 실제 채널 연결은 남아 있다. 2026-10-16에 액션 6건(`ljkhyeong/baton-go#6`)과
-  Temurin `21.0.12.1+1`(`ljkhyeong/baton-go#4`) 제안을 검토해 병합했다.
+  Temurin `21.0.12.1+1`(`ljkhyeong/baton-go#4`) 제안을 검토해 병합했다. MySQL은 같은 8.4.11의 2026-10-12
+  재빌드 digest로 직접 올렸다.
+- 공개 저장소의 secret scanning·push protection은 2026-10-16 조회 기준 꺼져 있다. 저장소 보안 설정이라
+  관리자가 [비밀값 유출 감지](docs/RUNBOOK/external-api-integrations.md#비밀값-유출-감지) 절차로 켠다.
 - GitHub 저장소의 Dependabot alerts를 활성화하고 조회로 확인했다. 자동 수정 PR은 중지 상태다.
   기존 Trivy 결과의 Java 패키지 목록을 `main` CI 성공 후 의존성 API로 제출하는 설정을 추가했다.
   `8ab710f`의 원격 CI에서 Java 목록 제출 단계가 성공했다.
@@ -144,6 +148,30 @@
   [2026-10-14 검증 기록](docs/HISTORY/2026-10-14-verification-history.md)에 보관한다.
 
 ## 최근 검증
+
+- 남은 항목 재점검은 미커밋 변경이 없는 `main`의 `c5acd71`에서 시작해 `06c8419`·`42b0744`에 저장했다.
+  - MySQL 8.4.11 태그가 2026-10-12에 다시 빌드되어 고정 digest(2026-07-27 빌드)와 달라졌다. CI와 같은 Trivy
+    0.72.0으로 linux/amd64 두 빌드를 비교해 OS 패키지 취약점 82건(HIGH 43·MEDIUM 39, openssl·curl·libevent·
+    sqlite·libxml2 등)이 해소되고 새로 생긴 항목이 없음을 확인했다. Compose와 비공개 서버 오버레이의 digest를
+    함께 바꿨다. 남은 CRITICAL 1건은 공식 이미지의 `gosu`에 든 Go 표준 라이브러리라 상위 이미지 갱신을 기다린다.
+  - 버전이 같아 데이터 형식 변경은 없다. 이전 빌드로 초기화하고 시험 행을 넣은 볼륨을 새 빌드가 열어 같은 행과
+    `CHECK TABLE` OK를 반환했고 오류 로그는 없었다. 운영 DB가 아직 없어 백업·복원 검증 대상은 없다. 배포 뒤의
+    digest 변경은 [배포 절차](docs/RUNBOOK/kubernetes-private-server-deployment.md)대로 DB 업그레이드로 다룬다.
+  - Dependency Review의 제외 근거였던 비공개 저장소 비용이 저장소 공개로 맞지 않게 됐다. 의존성 그래프는
+    Maven 102개(`main` CI 제출)와 액션 7개로 PR에서 비교할 대상이 액션뿐이라, 제외를 유지하고 근거와 재검토
+    조건을 고쳤다. 같은 조회에서 공개 저장소에 무료인 secret scanning·push protection이 꺼져 있어 관리자용
+    설정·확인·경고 대응 절차를 추가했다. 저장소 보안 설정은 바꾸지 않았다.
+  - 열린 PR·이슈와 열린 Dependabot 경고는 없다. 소스의 TODO·FIXME와 Gradle 구성 경고가 없고, 일회용 init
+    스크립트로 `-Xlint:all`을 켠 컴파일에서도 사용 중단 API 경고 없이 try-with-resources 범위용 변수 경고 2건만
+    나왔다. 검사 도구 이미지(Trivy 0.76.0·Prometheus 3.15.0·Alertmanager 0.34.1·kubeconform 0.8.0)와 Gradle
+    9.8.1은 새 버전이 있지만 제품 이미지에 들어가지 않고 CI가 정상이라 올리지 않았다.
+
+  Java 21에서 `./gradlew --no-daemon :bootstrap:mysqlTest`를 통과했다. MySQL 30개에 실패·제외가 없고 테스트
+  기록에서 새 digest 이미지 사용을 확인했다. CI의 배포 이미지 다이제스트 계약 검증 단계를 로컬에서 실행해
+  통과했고 문서 링크 검사는 문제 0건이다. Java·Redis 변경이 없어 일반 빌드와 Redis 통합 검증은 반복하지 않았다.
+  로그는 세션 스크래치패드(`f602be4c-…/scratchpad`)의 `trivy-mysql/`·`mysql-datadir-check.log`·
+  `mysql-test-r7.log`·`xlint-compile.log`다. `06c8419`·`42b0744`와 이 기록 커밋은 사용자 승인으로 함께
+  push했으며 그 CI 결과는 이 기록에 넣지 않았다.
 
 - 원격 반영 확인과 의존성 제안 처리는 미커밋 변경이 없는 `main`의 `97241e5`에서 시작해 Dependabot 병합
   `effe7f7`·`4e2da51`과 `fc77b43`에 저장했다.
@@ -323,6 +351,8 @@
    없는 격리 환경에서 절차를 훈련하고 차단부터 재개까지 시간, 동일 요청 재시도가 폐기된 링크를 돌려주는지와
    시작 검사가 유출 키 제거를 막는지를 배포 검증 기록에 남긴다. 평상시 키 교체도
    [운영 절차](docs/RUNBOOK/link-code-key-rotation.md)에 따라 배포·전환·복원을 검증한다.
+10. 저장소 관리자가 [비밀값 유출 감지](docs/RUNBOOK/external-api-integrations.md#비밀값-유출-감지) 절차로
+    secret scanning·push protection을 켜고, 기존 이력 검사 결과와 경고 대응을 확인한다.
 
 운영·복구 절차는
 [비공개 Kubernetes 배포 절차](docs/RUNBOOK/kubernetes-private-server-deployment.md)와

@@ -74,7 +74,7 @@ kubectl cluster-info
 
 ## 2. 비밀값 제외 설정과 이미지 고정
 
-`deploy/k8s/overlays/private-server/app-config.properties`에서 다섯 `REPLACE_ME` 값을 실제
+`deploy/k8s/overlays/private-server/app-config.properties`에서 두 `REPLACE_ME` 값을 실제
 출처로 바꾼다.
 
 - `BATON_GO_PUBLIC_BASE_URL`: 사용자에게 반환할 단축 URL의 HTTPS 출처
@@ -90,7 +90,7 @@ JWK Set 주소를 명시하면 애플리케이션 시작이 discovery 서버 가
 `iss` 검증은 유지된다.
 
 운영 BATON·ROUND 출처는 스킴·호스트·포트까지 같아야 한다. 경로·쿼리·프래그먼트와
-사용자 정보를 넣지 않는다. 운영 기능 두 설정값은 평상시에 모두 `false`로 둔다.
+사용자 정보를 넣지 않는다.
 `SPRING_FLYWAY_ENABLED=false`는 장기 실행 애플리케이션에서 변경하지 않는다. Flyway는 아래의
 일회성 마이그레이션 Job만 실행한다.
 
@@ -100,7 +100,7 @@ JWK Set 주소를 명시하면 애플리케이션 시작이 discovery 서버 가
 마이그레이션 Job은 같은 `name@sha256:digest`를 사용하며 태그 배포는 허용하지 않는다.
 GHCR을 사용하면 [이미지 게시 절차](image-security-reports.md#ghcr-자동-게시와-배포-참조)에 따라
 `ghcr.io/ljkhyeong/baton-go`와 해당 실행의 게시 다이제스트를 사용한다.
-오버레이는 선택한 공식 MySQL 8.4.11 다중 아키텍처 이미지도 digest로 고정하며, 변경은
+오버레이는 선택한 공식 MySQL 8.4.13 다중 아키텍처 이미지도 digest로 고정하며, 변경은
 백업·복원 검증을 포함한 별도 DB 업그레이드로 다룬다.
 
 릴리스마다 애플리케이션 이미지 다이제스트와 함께 SBOM, 취약점 검사 결과,
@@ -112,7 +112,7 @@ GHCR을 사용하면 [이미지 게시 절차](image-security-reports.md#ghcr-�
 
 비공개 레지스트리를 사용하는 기본 오버레이는 `imagePullSecret` 이름
 `baton-go-registry`를 참조한다. 노드 수준 레지스트리 인증이나 미리 적재한 이미지를 쓰는
-환경만 `app-private-registry-patch.yaml` 적용을 제거한다.
+환경만 `app-private-registry-patch.yaml`과 `migration-private-registry-patch.yaml` 적용을 제거한다.
 
 렌더링 결과에는 Secret 객체나 값, 인증서와 신뢰 저장소가 들어가지 않는다. `base`는 외부
 Secret의 이름과 키만 참조하므로 3절에 따라 Secret을 먼저 생성해야 실제 Pod가
@@ -387,7 +387,8 @@ MySQL Pod에만, 클라이언트 신뢰 저장소는 애플리케이션과 마�
 변경 내용을 검토한 뒤 선언적으로 적용한다.
 
 ```bash
-kubectl diff -k deploy/k8s/overlays/private-server
+# kubectl diff는 차이가 있으면 1로 끝나므로 2 이상의 오류일 때만 멈춘다.
+kubectl diff -k deploy/k8s/overlays/private-server || test "$?" -eq 1
 kubectl apply -k deploy/k8s/overlays/private-server
 kubectl -n baton-go rollout status statefulset/baton-go-mysql --timeout=10m
 kubectl -n baton-go patch job baton-go-database-migration \
@@ -400,8 +401,9 @@ kubectl -n baton-go rollout status deployment/baton-go --timeout=10m
 Kubernetes는 애플리케이션, 마이그레이션 Job과 MySQL의 생성 순서를 보장하지 않는다. 마이그레이션
 Job은 `suspend=true`, `backoffLimit=0`, `restartPolicy=Never`로 생성한다. MySQL StatefulSet의
 준비 상태를 확인한 운영자가 Job을 한 번만 시작하며 DB 연결 실패와 Flyway DDL 실패를 같은 자동
-재시도로 처리하지 않는다. 애플리케이션은 마이그레이션 전 스키마 검증에 실패하면 Pod 재시작
-정책으로 재시도하고 준비 상태가 성공하기 전에는 Service 엔드포인트가 되지 않는다. Job이
+재시도로 처리하지 않는다. 애플리케이션은 기동 때 스키마를 검증하지 않는다. 빈 DB에서는 시작 시 키 등록
+검사가 실패해 Pod 재시작 정책으로 재시도하고, 준비 상태가 성공하기 전에는 Service 엔드포인트가 되지
+않는다. 이전 스키마가 있는 DB에서는 새 Pod가 준비 상태가 될 수 있다. Job이
 `Complete`가 되지 않으면 애플리케이션 배포를 성공으로 판단하지 말고 Job Pod의 종료 원인과
 MySQL TLS·자격 증명을 먼저 확인한다. DDL이 시작된 가능성이
 있거나 실패 위치가 불명확하면 Job을 바로 삭제·재생성하지 않고
@@ -590,6 +592,8 @@ kubectl label namespace <approved-edge-or-caller-namespace> \
 4. 관리 JWT, Authorization, `Idempotency-Key`, 대상 경로와 전체 단축 URL을
    외부 프록시·APM 로그에 기록하지 않는다.
 5. Actuator `8081`과 주 포트의 `/livez`·`/readyz`·`/startupz`는 공개/비공개 Ingress에 연결하지 않는다.
+6. 공개 외부 프록시는 `/l`에 `GET`·`HEAD`만 전달하고 요청 본문 크기를 제한한다. 애플리케이션은 폼·multipart
+   본문을 파싱하지 않지만 크기 제한은 프록시에서 맡는다.
 
 `management.endpoint.health.probes.add-additional-paths=true`로 Spring Boot의 상태 확인 경로를
 주 HTTP 포트에도 등록하고, 시작 탐침용 `startup` 상태 묶음은 `/startupz`로 등록한다. Kubernetes 탐침의
@@ -713,7 +717,6 @@ kubectl -n baton-go get events --sort-by=.lastTimestamp
   JDBC URL 전체는 검증 기록에 남기지 않는다.
 - 승인하지 않은 Namespace에서 애플리케이션 `8080`, 일반 Pod에서 Actuator `8081`, 애플리케이션과
   마이그레이션 label이 아닌 Pod에서 MySQL `3306` 연결이 실패한다.
-- 평상시 운영 기능 두 설정값은 `false`다.
 
 그 다음 비공개 관리 경로에서 새 정규 UUID로 링크를 생성한다. 같은 요청의 재시도, 리다이렉트와
 폐기를 검증한다. 실제 관리 JWT, `Idempotency-Key`, 공개 코드,
@@ -782,12 +785,13 @@ kubectl -n baton-go rollout status deployment/baton-go --timeout=10m
 
 위 삭제는 `Complete`인 마이그레이션 Job 객체만 대상으로 하며 StatefulSet, PVC, Namespace와
 Secret에는 사용하지 않는다. Job이 아직 실행 중이면 중단하지 말고 원인을 확인한다. 한 번의
-Kustomize 적용은 Job과 Deployment 순서를 보장하지 않으므로 모든 Flyway 변경은 구 애플리케이션과
-구 스키마에 호환되는 확장 단계여야 한다. 첫 운영 배포 전에 추가한 V2만 예외이며 조건은 아래
+위 절차는 `kubectl apply`에서 새 이미지 롤아웃을 시작한 뒤 Job을 실행하고, 애플리케이션은 기동 때 스키마를
+검증하지 않는다. 따라서 새 Pod는 Job이 끝나기 전에 구 스키마로 준비 상태가 될 수 있다. 모든 Flyway 변경은
+구 애플리케이션과 구 스키마에 호환되는 확장 단계여야 하고, 새 열을 쓰는 코드는 그 열을 추가한 마이그레이션이
+배포된 다음 릴리스에 넣는다. 첫 운영 배포 전에 추가한 V2만 예외이며 조건은 아래
 되돌리기 문단에 적는다. Job `Complete` 확인 뒤 새 애플리케이션을 검증하고,
 열/테이블 제거 같은 축소 단계는 모든 구 Pod와 읽기 프로세스가 사라진 후 별도 배포에서
-수행한다. 애플리케이션이 마이그레이션보다 먼저 시작해 스키마 검증에 실패하는 짧은 구간은
-재시작으로 복구되지만, 이를 파괴적 마이그레이션 허용 근거로 사용하지 않는다.
+수행한다.
 
 ### 마이그레이션 Job 실패 복구
 
@@ -905,10 +909,11 @@ Secret을 환경 변수로 주입한 실행 중 Pod는 Secret 객체가 바뀌�
   장애 응답의 공통 오류 본문·`requestId`와 로그를 확인하고, 발급자의 가용성 및 Pod의
   JWK HTTPS 접근을 점검한다. 공개 `/l` 링크 접속은 계속 처리되는지 함께 확인한다.
 - DB 런타임 비밀번호: 백업과 유지 보수 시간을 확보하고 승인된 MySQL 관리 채널에서
-  `baton_go` 계정을 새 비밀번호로 바꾼 뒤 런타임 Secret을 같은 값으로 갱신한다. 이어서
-  `kubectl -n baton-go rollout restart statefulset/baton-go-mysql`과 배포 상태를 먼저
-  완료하고, `kubectl -n baton-go rollout restart deployment/baton-go`와 준비 상태 검증을
-  수행한다. probe도 DB 비밀번호를 사용하므로 StatefulSet 재시작을 생략하지 않는다.
+  `baton_go` 계정을 새 비밀번호로 바꾼 뒤 런타임 Secret을 같은 값으로 갱신한다. readiness probe가 시작 때
+  받은 이전 비밀번호를 쓰므로 Pod가 곧 준비 상태에서 빠지고, 기본 `OrderedReady` 정책의
+  `rollout restart statefulset`은 준비되지 않은 Pod에 막힌다. `kubectl -n baton-go delete pod baton-go-mysql-0`로
+  Pod를 다시 만들고 `kubectl -n baton-go wait --for=condition=ready pod/baton-go-mysql-0 --timeout=10m`로
+  준비 상태를 확인한 뒤 `kubectl -n baton-go rollout restart deployment/baton-go`와 준비 상태 검증을 수행한다.
 - DB 마이그레이션 비밀번호: 실행 중인 Job이 없는 유지 보수 시간에 `baton_go_migrator`
   계정을 먼저 변경하고 마이그레이션 Secret을 갱신한다. 다음 마이그레이션 Job의 성공으로 새 값을
   검증한다. 일반 애플리케이션은 이 Secret을 참조하지 않는다.
@@ -1006,7 +1011,6 @@ StatefulSet 삭제는 기본적으로 PVC를 보존하지만 Namespace 삭제는
   보장 기간
 - 만료·폐기 후 `410 LINK_EXPIRED`·`410 LINK_REVOKED`를 유지할 기간과
   삭제 후 `404` 전환 허용 여부. [재접속 시간 분포](link-retention.md#보존-기간-결정-자료)로 영향을 추정한다.
-- 링크와 생성 예약을 함께 삭제할지, 자동 삭제 표시와 요청 비교 정보를 남길지 결정
 - 중단 후 재시작·동시 생성·백업 동안의 일관성
 - 법정·감사·사고 조사 보존 기간과 백업에서의 최종 제거 시점
 - 실제 행 증가율과 백업 크기를 기준으로 한 PVC 사용률·증가 추세 경보,

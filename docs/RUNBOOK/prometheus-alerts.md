@@ -3,7 +3,7 @@
 ## 적용 범위
 
 [경보 규칙](../../deploy/prometheus/baton-go-alerts.yml)은 기존 Actuator·Micrometer 지표로
-Pod 준비 상태 지속 실패, 공개·관리 응답 지연, 전체·관리 API 5xx, 관리 JWT 검증 서비스 장애,
+시작 상태의 DB·Redis 연결 실패, 공개·관리 응답 지연, 전체·관리 API 5xx, 관리 JWT 검증 서비스 장애,
 관리 링크 복구 오류, 단축 링크 요청 제한, 저장 대상 계약 위반과 링크 정리 실행 정체를 감지한다.
 규칙 추가만으로 수집기나 Alertmanager가 배포되지는 않는다. 실제 운영 수집기 연결,
 알림 경로·수신자 설정과 경보 발생 테스트는 [배포 문서의 수집·경보 확인 절차](kubernetes-private-server-deployment.md#수집과-경보-확인-사항)를 따른다.
@@ -193,8 +193,8 @@ YAML 규칙을 기준으로 하며, 표와 테스트도 같은 변경에서 갱�
   링크 ID·요청 ID·대상 경로·멱등성 키·공개 코드는 지표 label에 넣지 않는다.
   `requestId`로 기존 오류 로그를 찾고 해당 오류의 복구를 완료한 뒤 같은 요청으로 확인한다.
 - 현재 버전의 429는 MVC가 `/l/{code}`를 매핑한 뒤 인터셉터가 차단하므로 같은 경로 패턴으로
-  기록된다. 기존 필터 버전과 함께 배포하는 동안 `uri="UNKNOWN"` 시계열을 놓치지 않도록
-  경보 선택 조건은 `uri`로 제한하지 않는다. Ingress에서 차단된 요청은 애플리케이션에
+  기록된다. 매핑 전 경로에서 나온 429도 놓치지 않도록 경보 선택 조건은 `uri`로 제한하지 않는다.
+  Ingress에서 차단된 요청은 애플리케이션에
   도달하지 않으므로 Ingress 지표로 별도 감시한다.
 - 계약 위반은 `baton_go_public_resolver_target_contract_violations_total`로 수집한다.
   애플리케이션 시작 시 0으로 등록하여 오류 발생 전 기준값을 수집할 수 있게 한다.
@@ -221,9 +221,9 @@ YAML 규칙을 기준으로 하며, 표와 테스트도 같은 변경에서 갱�
 | `code` | 확인할 내용 |
 | --- | --- |
 | `LINK_CREATION_REPLAY_UNAVAILABLE` | 생성 예약이 가리키는 링크의 누락과 DB 복원·수동 변경 이력을 확인한다. 예약을 삭제하거나 새 링크로 대체하기 전에 저장 일관성을 복구한다. |
-| `LINK_CODE_REPLAY_UNAVAILABLE` | 현재 파생 코드와 저장 코드 해시가 일치하지 않는다. 생성 당시 HMAC 비밀값·파생 버전과 데이터 이력을 확인하고 [키 정보 등록 절차](../ADR/0004_link-code-key-binding/adr.md)를 따른다. |
+| `LINK_CODE_REPLAY_UNAVAILABLE` | 예약의 키 ID가 현재 키 묶음에 없거나 현재 파생 코드와 저장 코드 해시가 일치하지 않는다. 생성 당시 HMAC 비밀값·파생 버전과 데이터 이력을 확인하고 [키 교체 결정](../ADR/0011_link-code-key-ring/adr.md)과 [키 교체 절차](link-code-key-rotation.md)를 따른다. |
 | `LINK_CODE_CONFIGURATION_MISMATCH` | 현재 HMAC 설정이 DB에 등록된 키 정보(`link_code_keys`)와 일치하는지 확인한다. 비밀값이나 등록 키 정보를 임의로 덮어쓰지 않고 [키 교체 결정](../ADR/0011_link-code-key-ring/adr.md)을 따른다. |
-| `PUBLIC_LINK_ORIGIN_REPLAY_UNAVAILABLE` | 최초 생성 예약의 공개 출처가 없거나 표준 URL 형식이 아니다. 현재 출처를 추정 입력하지 않고 [공개 출처 보존 결정](../ADR/0009_idempotent-public-origin-replay/adr.md)에 따라 최초 출처를 복구한다. |
+| `PUBLIC_LINK_ORIGIN_REPLAY_UNAVAILABLE` | 최초 생성 예약의 공개 출처가 표준 URL 형식이 아니다. 현재 출처를 추정 입력하지 않고 [공개 출처 보존 결정](../ADR/0009_idempotent-public-origin-replay/adr.md)에 따라 최초 출처를 복구한다. |
 
 이 카운터는 HTTP 요청 처리 중 발생한 오류만 집계한다. 시작 단계의 키 정보 등록 실패로 프로세스가
 종료된 경우는 Pod·기동 실패 경보와 시작 로그로 확인한다. JWT 인증 장애와 일반 `500`,

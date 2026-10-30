@@ -61,7 +61,7 @@ PR 닫기는 원격 상태를 바꾸므로 승인 없이 하지 않는다. 병�
 3. README 기준대로 `./gradlew --no-daemon --refresh-dependencies build`, `docker build --tag baton-go:local .`,
    `./gradlew --no-daemon :bootstrap:mysqlTest :bootstrap:redisTest`를 실행한다.
 4. Spring Boot·Spring Security 마이너 이상 변경은 릴리스 노트의 기본 동작 변경(오류 처리, 변환기, JWT 검증, Actuator 노출)을
-   기존 계약 테스트와 대조한다. HANDOFF에 남긴 Spring 기본 동작 의존(예: `InstantFormatter`)도 확인한다.
+   기존 계약 테스트와 대조한다. `docs/HISTORY/2026-10-05-verification-history.md`에 남긴 Spring 기본 동작 의존(예: `InstantFormatter`)도 확인한다.
 
 ### MySQL 이미지
 

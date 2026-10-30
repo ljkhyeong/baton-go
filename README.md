@@ -124,14 +124,15 @@ HMAC 키가 등록되지 않은 DB에서는 서버 시작을 거부한다. DB �
 백틱을 실행해 자격 증명 값을 바꾸거나 명령으로 실행할 수 있다.
 
 호스트에서 Gradle로 애플리케이션을 실행할 때는 MySQL만 Compose로 먼저 실행하고,
-애플리케이션에 필요한 `BATON_GO_*` 값은 비밀값 관리자의 프로세스 주입이나 IDE 실행
+`.env.example`의 값(`BATON_GO_*`, `BATONGO_LINKCODE_KEYS_DEFAULT`,
+`SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI`)은 비밀값 관리자의 프로세스 주입이나 IDE 실행
 구성으로 Gradle 프로세스 환경에 직접 주입한다. Compose용 `.env`를 셸에서
 `source`하거나 다른 dotenv 구문 분석기로 재해석하지 않는다.
 
 ```bash
 docker compose --env-file .env up -d mysql
 
-# 이 명령을 실행하는 프로세스 환경에는 비밀값 관리자나 IDE가 BATON_GO_* 값을 주입한다.
+# 이 명령을 실행하는 프로세스 환경에는 비밀값 관리자나 IDE가 위 값을 주입한다.
 ./gradlew :bootstrap:bootRun
 ```
 
@@ -301,7 +302,7 @@ curl -i http://localhost:8080/api/v1/links \
 - [마이크로서비스 분리 결정](docs/ADR/0001_microservice-boundary/adr.md)
 - [링크 보안 모델](docs/ADR/0002_link-security/adr.md)
 - [멱등한 링크 생성](docs/ADR/0003_idempotent-link-creation/adr.md)
-- [링크 코드 HMAC 키 정보 등록](docs/ADR/0004_link-code-key-binding/adr.md)
+- [링크 코드 HMAC 키 정보 등록](docs/ADR/0004_link-code-key-binding/adr.md) (ADR-0011로 대체)
 - [링크 대상을 정해진 서비스 경로로 제한](docs/ADR/0005_trusted-target-locator/adr.md)
 - [계약 전 대상 정리(폐기)](docs/ADR/0006_target-contract-remediation/adr.md)
 - [MySQL 절대 시각 저장 형식](docs/ADR/0007_mysql-instant-storage/adr.md)
@@ -322,3 +323,6 @@ curl -i http://localhost:8080/api/v1/links \
 - [종료 링크 보존 기간 설정](docs/RUNBOOK/link-retention.md)
 - [HMAC 키 교체](docs/RUNBOOK/link-code-key-rotation.md)
 - [링크 코드 키 유출 대응](docs/RUNBOOK/link-code-key-compromise.md)
+- [공개 링크 분산 요청 제한](docs/RUNBOOK/distributed-public-rate-limit.md)
+- [외부 접속 감시 연결](docs/RUNBOOK/external-availability-monitoring.md)
+- [개발 검증 절차](docs/RUNBOOK/development-verification.md)

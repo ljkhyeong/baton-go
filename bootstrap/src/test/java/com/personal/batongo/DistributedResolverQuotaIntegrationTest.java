@@ -124,6 +124,24 @@ class DistributedResolverQuotaIntegrationTest {
         }
     }
 
+    @Test
+    @DisplayName("창의 남은 시간이 1초보다 짧아도 초과 요청은 1초 이상의 재시도 대기로 거부한다")
+    void roundsSubSecondWaitUp() {
+        LettuceConnectionFactory connection = connectionFactory();
+        try {
+            var redis = new StringRedisTemplate(connection);
+            redis.delete(redis.keys("*"));
+            var adapter = new RedisResolverQuotaAdapter(
+                    redis, new DistributedResolverQuotaProperties(true, 1, Duration.ofMillis(800))
+            );
+
+            assertThat(adapter.acquireRetryAfterSeconds()).isZero();
+            assertThat(adapter.acquireRetryAfterSeconds()).isEqualTo(1);
+        } finally {
+            connection.destroy();
+        }
+    }
+
     private static LettuceConnectionFactory connectionFactory() {
         var factory = new LettuceConnectionFactory(
                 new RedisStandaloneConfiguration(REDIS.getHost(), REDIS.getMappedPort(6379)));

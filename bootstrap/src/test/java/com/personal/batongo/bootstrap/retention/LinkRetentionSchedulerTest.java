@@ -13,8 +13,16 @@ import java.time.Duration;
 import java.time.Instant;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
 class LinkRetentionSchedulerTest {
+
+    @Test
+    @DisplayName("자동 정리는 명시적으로 켜지 않으면 스케줄러를 등록하지 않는다")
+    void isNotRegisteredUnlessEnabled() {
+        new ApplicationContextRunner().withUserConfiguration(LinkRetentionScheduler.class)
+                .run(context -> assertThat(context).hasNotFailed().doesNotHaveBean(LinkRetentionScheduler.class));
+    }
 
     @Test
     @DisplayName("자동 정리 실행 완료 시각은 성공과 실패 뒤 모두 갱신한다")

@@ -127,6 +127,21 @@ class LinkCodeKeyGuardIntegrationTest {
         assertThat(countRowsInTable(jdbcTemplate, "link_creation_requests")).isZero();
     }
 
+    @Test
+    @DisplayName("등록된 키를 하나도 포함하지 않은 키 묶음은 시작 검증에서 거부하고 등록하지 않는다")
+    void rejectsKeyRingWithoutRegisteredKey() {
+        LinkCodeDerivationIdentity current = linkCodePort.keyRingIdentity().keys().get("default");
+        var unrelated = new LinkCodeKeyRingIdentity("other", Map.of(
+                "other", new LinkCodeDerivationIdentity(current.version(), "c".repeat(64))
+        ));
+
+        assertThatThrownBy(() -> transactions.executeWithoutResult(
+                status -> linkCodeKeyGuardPort.verifyOrBind(unrelated)
+        )).isInstanceOf(LinkCodeKeyBindingException.class);
+
+        assertThat(countRowsInTable(jdbcTemplate, "link_code_keys")).isEqualTo(1);
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {
             """

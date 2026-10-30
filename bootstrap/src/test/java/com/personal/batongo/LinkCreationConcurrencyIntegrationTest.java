@@ -9,6 +9,7 @@ import com.personal.batongo.application.link.PublicLinkOrigin;
 import com.personal.batongo.application.link.error.IdempotencyKeyConflictException;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.CreateLinkCommand;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.CreatedLinkResult;
+import com.personal.batongo.application.link.port.in.SmartLinkUseCase.RevokedLinkResult;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase;
 import com.personal.batongo.application.link.port.out.LinkCreationReservationPort;
 import com.personal.batongo.application.link.port.out.PublicLinkOriginPort;
@@ -28,6 +29,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
@@ -44,6 +46,7 @@ import org.springframework.context.annotation.Primary;
 import org.springframework.dao.TransientDataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.TestPropertySource;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.mysql.MySQLContainer;
@@ -72,6 +75,9 @@ class LinkCreationConcurrencyIntegrationTest {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    private TransactionTemplate transactions;
 
     @Autowired
     private ControllableReservationPort controllableReservationPort;
@@ -169,6 +175,37 @@ class LinkCreationConcurrencyIntegrationTest {
         assertThat(List.of(first, second))
                 .filteredOn(result -> !result.replayed())
                 .hasSize(1);
+    }
+
+    @Test
+    @DisplayName("동시 폐기는 행 잠금으로 직렬화되어 뒤 요청이 최초 폐기 시각을 덮어쓰지 않는다")
+    void serializesConcurrentRevocation() throws Exception {
+        var link = smartLinkUseCase.createLink(
+                roundCommand("cf4ac4ab-7b47-4d3f-92c3-6f3a4cf4a7d0", "/room/hjkm-npqr-stuv")
+        ).link();
+        CountDownLatch firstRevoked = new CountDownLatch(1);
+        CountDownLatch releaseFirst = new CountDownLatch(1);
+        executor = Executors.newFixedThreadPool(2);
+
+        Future<RevokedLinkResult> first = executor.submit(() -> transactions.execute(status -> {
+            RevokedLinkResult result = smartLinkUseCase.revokeLink(link.id());
+            firstRevoked.countDown();
+            try {
+                assertThat(releaseFirst.await(20, TimeUnit.SECONDS)).isTrue();
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException(exception);
+            }
+            return result;
+        }));
+        assertThat(firstRevoked.await(20, TimeUnit.SECONDS)).isTrue();
+        Future<RevokedLinkResult> second = executor.submit(() -> smartLinkUseCase.revokeLink(link.id()));
+        assertThatThrownBy(() -> second.get(500, TimeUnit.MILLISECONDS)).isInstanceOf(TimeoutException.class);
+        releaseFirst.countDown();
+
+        assertThat(first.get(20, TimeUnit.SECONDS).alreadyRevoked()).isFalse();
+        assertThat(second.get(20, TimeUnit.SECONDS).alreadyRevoked()).isTrue();
+        assertThat(second.get().link().revokedAt()).isEqualTo(first.get().link().revokedAt());
     }
 
     @Test

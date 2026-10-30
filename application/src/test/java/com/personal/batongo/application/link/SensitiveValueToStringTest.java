@@ -6,8 +6,12 @@ import com.personal.batongo.application.link.port.in.SmartLinkUseCase.CreateLink
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.CreatedLinkResult;
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase.LinkResult;
 import com.personal.batongo.application.link.port.in.ResolveLinkUseCase.ResolvedLinkResult;
+import com.personal.batongo.application.link.port.out.LinkCreationReservationPort.Reservation;
+import com.personal.batongo.application.link.port.out.SmartLinkRepository.StoredLink;
 import com.personal.batongo.domain.link.LinkPurpose;
+import com.personal.batongo.domain.link.SmartLink;
 import com.personal.batongo.domain.link.TargetSystem;
+import com.personal.batongo.domain.link.TrustedTargetPolicy;
 import java.net.URI;
 import java.time.Instant;
 import java.util.List;
@@ -58,7 +62,17 @@ class SensitiveValueToStringTest {
                         false
                 ),
                 link,
-                new ResolvedLinkResult(URI.create("https://baton.example" + TARGET_PATH))
+                new ResolvedLinkResult(URI.create("https://baton.example" + TARGET_PATH)),
+                new StoredLink(
+                        link.id(), "c".repeat(64), "BATON", TARGET_PATH, "NAVIGATION",
+                        null, null, null, link.createdAt()
+                ),
+                new Reservation(link.id(), "https://go.example", "default", null, "d".repeat(64), true),
+                new SmartLink(
+                        link.id(), "c".repeat(64),
+                        TrustedTargetPolicy.requireAllowed(TargetSystem.BATON, LinkPurpose.NAVIGATION, TARGET_PATH),
+                        null, null, link.createdAt()
+                )
         );
 
         assertThat(values.toString())
@@ -66,6 +80,8 @@ class SensitiveValueToStringTest {
                 .doesNotContain(RAW_CODE)
                 .doesNotContain(SHORT_URL.toString())
                 .doesNotContain("go.example")
-                .doesNotContain(TARGET_PATH);
+                .doesNotContain(TARGET_PATH)
+                .doesNotContain("c".repeat(64))
+                .doesNotContain("d".repeat(64));
     }
 }

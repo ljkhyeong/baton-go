@@ -93,7 +93,7 @@ class TrustedTargetPolicyTest {
 
     @ParameterizedTest(name = "{index}: {0}")
     @MethodSource({"nonCanonicalPathShapes", "crossedTargetCombinations", "resourceOpenTargets"})
-    @DisplayName("경로의 공백·끝 슬래시·추가 구간, 정의되지 않은 조합과 예약된 RESOURCE_OPEN 목적을 거부한다")
+    @DisplayName("경로의 공백·끝 슬래시·추가 구간·쿼리·프래그먼트·절대 주소, 정의되지 않은 조합과 예약된 RESOURCE_OPEN 목적을 거부한다")
     void rejectsUndefinedTargets(
             String description,
             TargetSystem targetSystem,
@@ -150,6 +150,16 @@ class TrustedTargetPolicyTest {
                         LinkPurpose.NAVIGATION,
                         BATON_PATH + "/resources/123"
                 ),
+                Arguments.of("BATON 쿼리", TargetSystem.BATON, LinkPurpose.NAVIGATION, BATON_PATH + "?key=value"),
+                Arguments.of("BATON 프래그먼트", TargetSystem.BATON, LinkPurpose.NAVIGATION, BATON_PATH + "#key"),
+                Arguments.of("BATON 이중 슬래시", TargetSystem.BATON, LinkPurpose.NAVIGATION, "/" + BATON_PATH),
+                Arguments.of(
+                        "BATON 절대 주소",
+                        TargetSystem.BATON,
+                        LinkPurpose.NAVIGATION,
+                        "https://other.example" + BATON_PATH
+                ),
+                Arguments.of("ROUND 쿼리", TargetSystem.ROUND, LinkPurpose.MEETING_ENTRY, ROUND_PATH + "?key=value"),
                 Arguments.of("ROUND 앞 공백", TargetSystem.ROUND, LinkPurpose.MEETING_ENTRY, " " + ROUND_PATH),
                 Arguments.of("ROUND 뒤 공백", TargetSystem.ROUND, LinkPurpose.MEETING_ENTRY, ROUND_PATH + " "),
                 Arguments.of("ROUND 끝 슬래시", TargetSystem.ROUND, LinkPurpose.MEETING_ENTRY, ROUND_PATH + "/"),

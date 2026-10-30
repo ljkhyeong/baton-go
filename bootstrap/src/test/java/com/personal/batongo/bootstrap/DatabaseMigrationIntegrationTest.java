@@ -1,10 +1,13 @@
 package com.personal.batongo.bootstrap;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.personal.batongo.BatonGoApplication;
 import java.nio.file.Path;
+import java.util.Arrays;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
@@ -52,6 +55,17 @@ class DatabaseMigrationIntegrationTest {
                         LIMIT 1
                         """).query(String.class).single())
                 .isEqualTo(LATEST_MIGRATION_VERSION);
+    }
+
+    @Test
+    @DisplayName("마이그레이션 전용 실행은 일반 연결의 5초 제한 없이 오래 걸리는 문장을 끝까지 기다린다")
+    void waitsForStatementLongerThanRuntimeSocketTimeout() {
+        String[] arguments = Stream.concat(
+                Arrays.stream(MYSQL.migrationArguments(MYSQL.verifiedJdbcUrl(trustedCaStore))),
+                Stream.of("--spring.flyway.init-sqls=SELECT SLEEP(6)")
+        ).toArray(String[]::new);
+
+        assertThatCode(() -> BatonGoApplication.main(arguments)).doesNotThrowAnyException();
     }
 
     @Test

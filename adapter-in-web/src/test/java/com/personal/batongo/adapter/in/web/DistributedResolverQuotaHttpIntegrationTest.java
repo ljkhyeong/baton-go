@@ -7,6 +7,7 @@ import static org.mockito.Mockito.when;
 import com.personal.batongo.application.link.error.PublicResolverQuotaUnavailableException;
 import com.personal.batongo.application.link.port.in.ResolveLinkUseCase;
 import com.personal.batongo.application.link.port.out.PublicResolverQuotaPort;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -31,6 +32,7 @@ class DistributedResolverQuotaHttpIntegrationTest {
     @MockitoBean private ResolveLinkUseCase useCase;
     @MockitoBean private PublicResolverQuotaPort quota;
     @Autowired private RestTestClient client;
+    @Autowired private MeterRegistry meterRegistry;
 
     @Test
     @DisplayName("분산 제한의 429와 장애 503은 공개 JSON·HTML에 표시하고 링크 조회를 실행하지 않는다")
@@ -55,5 +57,6 @@ class DistributedResolverQuotaHttpIntegrationTest {
                 .expectStatus().isEqualTo(503)
                 .expectBody().isEmpty();
         verifyNoInteractions(useCase);
+        assertThat(meterRegistry.get("baton.go.public.resolver.quota.failures").counter().count()).isEqualTo(3);
     }
 }

@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import com.personal.batongo.application.link.error.LinkNotFoundException;
@@ -14,7 +15,9 @@ import com.personal.batongo.application.link.error.StoredTargetPolicyViolationEx
 import com.personal.batongo.application.link.port.out.SmartLinkRepository;
 import com.personal.batongo.application.link.port.out.SmartLinkRepository.StoredLink;
 import com.personal.batongo.application.link.port.out.TargetUrlPort;
+import com.personal.batongo.domain.link.LinkAvailabilityPolicy.Status;
 import com.personal.batongo.domain.link.LinkPurpose;
+import com.personal.batongo.domain.link.LinkUnavailableException;
 import com.personal.batongo.domain.link.TargetSystem;
 import java.net.URI;
 import java.time.Clock;
@@ -61,6 +64,59 @@ class LinkResolutionServiceTest {
     }
 
     @Test
+    @DisplayName("공개 접속은 링크를 조회만 하고 저장 상태를 바꾸지 않는다")
+    void resolvingDoesNotChangeStoredState() {
+        when(repository.findByCodeHash(CODE_HASH)).thenReturn(Optional.of(storedLink(null, null, null)));
+        when(targetUrlPort.resolve(any())).thenReturn(URI.create("https://baton.example" + BATON_PATH));
+
+        service.resolveLink(RAW_CODE);
+
+        verify(repository).findByCodeHash(CODE_HASH);
+        verifyNoMoreInteractions(repository);
+    }
+
+    @Test
+    @DisplayName("활성 시작 전 링크는 대상 URL을 만들지 않고 시작 시각과 함께 거부한다")
+    void rejectsLinkBeforeActivation() {
+        Instant notBefore = NOW.plusSeconds(1);
+        when(repository.findByCodeHash(CODE_HASH)).thenReturn(Optional.of(storedLink(notBefore, null, null)));
+
+        assertThatThrownBy(() -> service.resolveLink(RAW_CODE))
+                .isInstanceOfSatisfying(LinkUnavailableException.class, exception -> {
+                    assertThat(exception.status()).isEqualTo(Status.NOT_ACTIVE);
+                    assertThat(exception.notBefore()).isEqualTo(notBefore);
+                });
+
+        verifyNoInteractions(targetUrlPort);
+    }
+
+    @Test
+    @DisplayName("만료 시각에 도달한 링크는 대상 URL을 만들지 않고 거부한다")
+    void rejectsLinkAtExpiry() {
+        when(repository.findByCodeHash(CODE_HASH)).thenReturn(Optional.of(storedLink(null, NOW, null)));
+
+        assertThatThrownBy(() -> service.resolveLink(RAW_CODE))
+                .isInstanceOfSatisfying(LinkUnavailableException.class, exception ->
+                        assertThat(exception.status()).isEqualTo(Status.EXPIRED));
+
+        verifyNoInteractions(targetUrlPort);
+    }
+
+    @Test
+    @DisplayName("폐기된 링크는 만료 전이어도 대상 URL을 만들지 않고 거부한다")
+    void rejectsRevokedLinkBeforeExpiry() {
+        when(repository.findByCodeHash(CODE_HASH)).thenReturn(Optional.of(
+                storedLink(null, NOW.plusSeconds(60), NOW.minusSeconds(1))
+        ));
+
+        assertThatThrownBy(() -> service.resolveLink(RAW_CODE))
+                .isInstanceOfSatisfying(LinkUnavailableException.class, exception ->
+                        assertThat(exception.status()).isEqualTo(Status.REVOKED));
+
+        verifyNoInteractions(targetUrlPort);
+    }
+
+    @Test
     @DisplayName("저장 대상이 규칙을 위반하면 활성·만료 확인 전에 거부한다")
     void hidesKnownStoredPolicyViolationBeforeLifecycleCheck() {
         when(repository.findByCodeHash(CODE_HASH)).thenReturn(Optional.of(new StoredLink(
@@ -94,5 +150,12 @@ class LinkResolutionServiceTest {
                 .isExactlyInstanceOf(LinkNotFoundException.class);
 
         verifyNoInteractions(repository, targetUrlPort);
+    }
+
+    private static StoredLink storedLink(Instant notBefore, Instant expiresAt, Instant revokedAt) {
+        return new StoredLink(
+                LINK_ID, CODE_HASH, TargetSystem.BATON.name(), BATON_PATH, LinkPurpose.NAVIGATION.name(),
+                notBefore, expiresAt, revokedAt, NOW.minusSeconds(60)
+        );
     }
 }

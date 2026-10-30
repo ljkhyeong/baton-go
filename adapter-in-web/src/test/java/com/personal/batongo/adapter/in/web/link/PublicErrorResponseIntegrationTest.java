@@ -75,8 +75,9 @@ class PublicErrorResponseIntegrationTest {
 
         if (MediaType.TEXT_HTML_VALUE.equals(accept)) {
             response.expectHeader().valueEquals(HttpHeaders.CONTENT_TYPE, HTML_UTF8)
-                    .expectHeader().value("Content-Security-Policy",
-                            csp -> assertThat(csp).contains("default-src 'none'"))
+                    .expectHeader().valueEquals("Content-Security-Policy",
+                            "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; "
+                                    + "frame-ancestors 'none'; form-action 'none'")
                     .expectHeader().value(HttpHeaders.VARY, vary -> assertThat(vary).isEqualTo(HttpHeaders.ACCEPT))
                     .expectBody(String.class).value(body -> assertThat(body).contains(
                             "<html lang=\"ko\">", "잠시 후 다시 열어 주세요", "<code>" + REQUEST_ID + "</code>",

@@ -292,6 +292,21 @@ class ManagementAuthenticationHttpContractTest {
                         "폐기 권한으로 링크 HEAD 조회를 요청한다",
                         head("/api/v1/links/{linkId}", LINK_ID),
                         "baton-go.links.revoke"
+                ),
+                Arguments.of(
+                        "폐기 권한으로 링크 생성을 요청한다",
+                        post("/api/v1/links"),
+                        "baton-go.links.revoke"
+                ),
+                Arguments.of(
+                        "폐기 권한으로 링크 조회를 요청한다",
+                        get("/api/v1/links/{linkId}", LINK_ID),
+                        "baton-go.links.revoke"
+                ),
+                Arguments.of(
+                        "생성 권한으로 링크 폐기를 요청한다",
+                        put("/api/v1/links/{linkId}/revocation", LINK_ID),
+                        "baton-go.links.create"
                 )
         );
     }

@@ -6,6 +6,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.personal.batongo.bootstrap.ManagementJwtConfigurationValidator;
+import com.personal.batongo.bootstrap.PublicDeploymentTopologyValidator;
 import com.nimbusds.jose.jwk.JWKSet;
 import com.nimbusds.jose.jwk.gen.RSAKeyGenerator;
 import com.nimbusds.jose.jwk.source.ImmutableJWKSet;
@@ -23,6 +25,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.context.ApplicationContext;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.security.oauth2.jwt.JwtClaimsSet;
@@ -62,6 +65,16 @@ class ManagementJwtBootstrapIntegrationTest {
                 "spring.security.oauth2.resourceserver.jwt.jwk-set-uri",
                 () -> jwtIssuer + "/jwks"
         );
+    }
+
+    @Autowired
+    private ApplicationContext context;
+
+    @Test
+    @DisplayName("전체 애플리케이션은 관리 JWT와 공개 배포 구성의 시작 검증을 등록한다")
+    void registersStartupValidators() {
+        assertThat(context.getBeansOfType(ManagementJwtConfigurationValidator.class)).hasSize(1);
+        assertThat(context.getBeansOfType(PublicDeploymentTopologyValidator.class)).hasSize(1);
     }
 
     @BeforeAll

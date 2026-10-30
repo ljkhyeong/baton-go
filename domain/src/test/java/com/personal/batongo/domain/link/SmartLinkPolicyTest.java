@@ -87,6 +87,10 @@ class SmartLinkPolicyTest {
                 CREATED_AT.plusSeconds(120),
                 CREATED_AT.plusSeconds(60)
         )).isExactlyInstanceOf(LinkValidationException.class);
+        assertThatThrownBy(() -> link(
+                CREATED_AT.plusSeconds(60),
+                CREATED_AT.plusSeconds(60)
+        )).isExactlyInstanceOf(LinkValidationException.class);
     }
 
     private SmartLink link(Instant notBefore, Instant expiresAt) {

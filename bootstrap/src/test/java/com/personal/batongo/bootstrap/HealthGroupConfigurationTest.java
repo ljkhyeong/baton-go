@@ -7,6 +7,7 @@ import com.personal.batongo.adapter.in.web.GlobalExceptionHandler;
 import com.personal.batongo.adapter.in.web.ManagementApiSecurityConfiguration;
 import com.personal.batongo.adapter.in.web.RequestIdFilter;
 import io.micrometer.core.instrument.MeterRegistry;
+import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.Answers;
@@ -17,6 +18,7 @@ import org.springframework.boot.health.contributor.HealthIndicator;
 import org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration;
 import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureRestTestClient;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.web.server.LocalManagementPort;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.annotation.DirtiesContext;
@@ -53,6 +55,9 @@ class HealthGroupConfigurationTest {
     @Autowired
     private MeterRegistry meterRegistry;
 
+    @LocalManagementPort
+    private int managementPort;
+
     @Test
     @DisplayName("DB나 Redis 장애는 주 HTTP 포트의 시작 상태와 그 지표만 실패시키고 준비·생존 상태는 유지한다")
     void probesOnMainPortCheckDependenciesOnlyAtStartup() {
@@ -66,6 +71,20 @@ class HealthGroupConfigurationTest {
         when(databaseHealth.health()).thenReturn(Health.up().build());
         when(redisHealth.health()).thenReturn(Health.down().build());
         assertStartupFailure(true);
+    }
+
+    @Test
+    @DisplayName("관리 포트는 상태와 지표만 노출하고 환경·빈·힙 덤프 엔드포인트는 열지 않는다")
+    void exposesOnlyHealthAndMetricsOnManagementPort() {
+        String actuator = "http://localhost:" + managementPort + "/actuator/";
+        when(databaseHealth.health()).thenReturn(Health.up().build());
+        when(redisHealth.health()).thenReturn(Health.up().build());
+
+        client.get().uri(actuator + "health").exchange().expectStatus().isOk();
+        client.get().uri(actuator + "prometheus").exchange().expectStatus().isOk();
+        for (String endpoint : List.of("env", "beans", "configprops", "heapdump", "loggers", "threaddump")) {
+            client.get().uri(actuator + endpoint).exchange().expectStatus().isNotFound();
+        }
     }
 
     private void assertStartupFailure(boolean failed) {

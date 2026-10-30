@@ -34,5 +34,7 @@ class CreationRequestAdmissionPolicyTest {
     void rejectsUnstorableTime(Instant value) {
         assertThatThrownBy(() -> CreationRequestAdmissionPolicy.requireStorableTimes(null, value))
                 .isInstanceOf(InvalidRequestException.class);
+        assertThatThrownBy(() -> CreationRequestAdmissionPolicy.requireStorableTimes(value, null))
+                .isInstanceOf(InvalidRequestException.class);
     }
 }

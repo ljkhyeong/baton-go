@@ -270,6 +270,63 @@ class LinkManagementHttpContractTest {
     }
 
     @Test
+    @DisplayName("생성·조회 응답은 시작·만료·폐기·생성 시각을 각 항목에 그대로 반환한다")
+    void mapsEveryLinkTimeToItsOwnField() throws Exception {
+        Instant notBefore = Instant.parse("2026-07-29T11:00:00Z");
+        Instant expiresAt = Instant.parse("2026-07-30T10:00:00Z");
+        Instant revokedAt = Instant.parse("2026-07-29T12:00:00Z");
+        var link = new LinkResult(
+                LINK_ID, TargetSystem.BATON, BATON_TARGET_PATH, LinkPurpose.NAVIGATION,
+                notBefore, expiresAt, revokedAt, CREATED_AT, Instant.parse("2026-07-29T13:00:00Z")
+        );
+        when(useCase.getLink(LINK_ID)).thenReturn(link);
+        when(useCase.createLink(any())).thenReturn(new CreatedLinkResult(
+                link, URI.create("https://go.example/l/VOvLShvx93kQpj8x7w2HYQ"), false
+        ));
+
+        mockMvc.perform(get("/api/v1/links/{linkId}", LINK_ID))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.notBefore").value(notBefore.toString()))
+                .andExpect(jsonPath("$.expiresAt").value(expiresAt.toString()))
+                .andExpect(jsonPath("$.revokedAt").value(revokedAt.toString()))
+                .andExpect(jsonPath("$.createdAt").value(CREATED_AT.toString()))
+                .andExpect(jsonPath("$.evaluatedAt").value("2026-07-29T13:00:00Z"));
+        mockMvc.perform(createLinkRequest("2026-07-30T10:00:00Z"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.notBefore").value(notBefore.toString()))
+                .andExpect(jsonPath("$.expiresAt").value(expiresAt.toString()))
+                .andExpect(jsonPath("$.revokedAt").value(revokedAt.toString()))
+                .andExpect(jsonPath("$.createdAt").value(CREATED_AT.toString()));
+    }
+
+    @Test
+    @DisplayName("빈 관리 검색 조건은 생략한 것과 같게 처리한다")
+    void treatsBlankSearchConditionsAsOmitted() throws Exception {
+        when(useCase.searchLinks(any())).thenReturn(new LinkSearchResult(List.of(), null, false, CREATED_AT));
+
+        mockMvc.perform(get("/api/v1/links")
+                        .param("status", "")
+                        .param("afterLinkId", "")
+                        .param("expiresBefore", ""))
+                .andExpect(status().isOk());
+
+        verify(useCase).searchLinks(new LinkSearchQuery(null, 100, null, null, null, null, null, null));
+    }
+
+    @Test
+    @DisplayName("필수 항목이 없는 생성 요청은 문제 항목을 안내하고 서비스 호출 전에 거부한다")
+    void rejectsMissingRequiredFieldBeforeService() throws Exception {
+        mockMvc.perform(post("/api/v1/links")
+                        .header("Idempotency-Key", IDEMPOTENCY_KEY)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+
+        verifyNoInteractions(useCase);
+    }
+
+    @Test
     @DisplayName("같은 링크 생성 요청의 재시도는 동일한 단축 URL과 200으로 응답한다")
     void replaysLinkCreationContract(CapturedOutput output) throws Exception {
         when(useCase.createLink(any())).thenReturn(createdLink(true));

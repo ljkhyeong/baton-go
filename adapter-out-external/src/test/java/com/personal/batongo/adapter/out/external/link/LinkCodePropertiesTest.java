@@ -54,10 +54,19 @@ class LinkCodePropertiesTest {
 
     @ParameterizedTest
     @NullSource
-    @ValueSource(strings = {"", "too-short"})
+    @ValueSource(strings = {"", "too-short", "thirty-one-characters-secret-00"})
     @DisplayName("링크 코드 파생 비밀은 32자 이상이어야 한다")
     void rejectsMissingOrShortSecret(String invalidSecret) {
         assertThatThrownBy(() -> new LinkCodeProperties("default", Collections.singletonMap("default", invalidSecret)))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"Default", "1key", "key-1", "k123456789012345678901234567890123"})
+    @DisplayName("키 ID는 소문자로 시작하는 32자 이내의 영문 소문자·숫자만 허용한다")
+    void rejectsInvalidKeyId(String keyId) {
+        String secret = "test-secret-that-is-at-least-thirty-two-characters";
+        assertThatThrownBy(() -> new LinkCodeProperties(keyId, Map.of(keyId, secret)))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 

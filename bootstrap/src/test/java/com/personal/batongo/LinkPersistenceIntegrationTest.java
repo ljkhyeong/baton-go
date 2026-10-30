@@ -13,6 +13,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.jdbc.JdbcTestUtils.countRowsInTable;
 
 import com.personal.batongo.application.link.CreationIdempotencyKey;
 import com.personal.batongo.application.link.LinkCodeHash;
@@ -23,6 +24,8 @@ import com.personal.batongo.application.link.port.in.SmartLinkUseCase.LinkResult
 import com.personal.batongo.application.link.port.in.SmartLinkUseCase;
 import com.personal.batongo.application.link.port.out.LinkCodePort;
 import com.personal.batongo.application.link.port.out.LinkCreationReservationPort;
+import com.personal.batongo.application.link.port.out.SmartLinkRepository;
+import com.personal.batongo.application.link.port.out.SmartLinkRepository.StoredLink;
 import com.personal.batongo.domain.link.LinkPurpose;
 import com.personal.batongo.domain.link.TargetSystem;
 import java.sql.ResultSet;
@@ -31,6 +34,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
@@ -100,6 +104,9 @@ class LinkPersistenceIntegrationTest {
     private LinkCreationReservationPort reservationPort;
 
     @Autowired
+    private SmartLinkRepository repository;
+
+    @Autowired
     private TransactionTemplate transactions;
 
     @Autowired
@@ -160,6 +167,81 @@ class LinkPersistenceIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(header().string("Idempotency-Replayed", "true"))
                 .andExpect(content().json(createdBody));
+    }
+
+    @Test
+    @DisplayName("운영 JSON 설정은 요청 본문의 정의되지 않은 항목을 거부하고 예약을 남기지 않는다")
+    void rejectsUndefinedRequestFieldWithConfiguredSpringJsonMapper() throws Exception {
+        String idempotencyKey = "5e3d0f5a-8a55-4b4c-9d2e-0f6c2f1a7b11";
+
+        mockMvc.perform(post("/api/v1/links")
+                        .with(linkCreateJwt())
+                        .header("Idempotency-Key", idempotencyKey)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"targetSystem": "ROUND", "targetPath": "/room/abcd-efgh-jkmn",
+                                 "purpose": "MEETING_ENTRY", "undefined": true}
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+
+        assertThat(reservationCount(new CreationIdempotencyKey(idempotencyKey).hash())).isZero();
+    }
+
+    @Test
+    @DisplayName("저장된 링크의 공개 조회는 활성 시작 전·활성·만료·폐기 상태별로 응답한다")
+    void resolvesStoredLinkByLifecycleState() throws Exception {
+        CreatedLinkResult notActive = createRoundLink(FAR_FUTURE_NOW.plusSeconds(1), null);
+        CreatedLinkResult active = createRoundLink(FAR_FUTURE_NOW, null);
+        CreatedLinkResult expired = createRoundLink(null, FAR_FUTURE_NOW.plusSeconds(60));
+        jdbcTemplate.update(
+                """
+                        UPDATE smart_links
+                        SET expires_at = created_at, created_at = DATE_SUB(created_at, INTERVAL 1 HOUR)
+                        WHERE id = UUID_TO_BIN(?)
+                        """,
+                expired.link().id().toString()
+        );
+        CreatedLinkResult revoked = createRoundLink(null, null);
+        smartLinkUseCase.revokeLink(revoked.link().id());
+
+        mockMvc.perform(get(notActive.shortUrl().getPath()))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("LINK_NOT_ACTIVE"));
+        mockMvc.perform(get(active.shortUrl().getPath()))
+                .andExpect(status().isFound())
+                .andExpect(header().string(HttpHeaders.LOCATION, "https://baton.example/room/abcd-efgh-jkmn"));
+        mockMvc.perform(get(expired.shortUrl().getPath()))
+                .andExpect(status().isGone())
+                .andExpect(header().doesNotExist(HttpHeaders.LOCATION))
+                .andExpect(jsonPath("$.code").value("LINK_EXPIRED"));
+        mockMvc.perform(get(revoked.shortUrl().getPath()))
+                .andExpect(status().isGone())
+                .andExpect(header().doesNotExist(HttpHeaders.LOCATION))
+                .andExpect(jsonPath("$.code").value("LINK_REVOKED"));
+    }
+
+    @Test
+    @DisplayName("관리 목록 저장소는 기본 키 순서로 이어 읽고 페이지마다 요청한 행만 읽는다")
+    void scansLinksInPrimaryKeyOrderReadingOnlyRequestedRows() {
+        for (int index = 0; index < 200; index++) {
+            insertStoredLink(UUID.randomUUID().toString(), LinkCodeHash.of("%022d".formatted(index)),
+                    "ROUND", "/room/abcd-efgh-jkmn", "MEETING_ENTRY");
+        }
+
+        List<UUID> scanned = new ArrayList<>();
+        List<StoredLink> page = repository.scanAfter(null, 50);
+        while (!page.isEmpty()) {
+            page.forEach(link -> scanned.add(link.id()));
+            page = repository.scanAfter(page.getLast().id(), 50);
+        }
+
+        assertThat(scanned).hasSize(countRowsInTable(jdbcTemplate, "smart_links")).doesNotHaveDuplicates();
+        assertThat(scanned).extracting(UUID::toString).isSorted();
+        assertThat(MySqlRowReads.during(jdbcTemplate, transactions, () -> repository.scanAfter(null, 5)))
+                .isLessThan(50);
+        assertThat(MySqlRowReads.during(jdbcTemplate, transactions, () -> repository.scanAfter(scanned.get(10), 5)))
+                .isLessThan(50);
     }
 
     @Test
@@ -350,21 +432,21 @@ class LinkPersistenceIntegrationTest {
     @Test
     @DisplayName("정규 형식이 아닌 저장 공개 출처는 현재 설정으로 대체하지 않는다")
     void rejectsStoredPublicOriginOutsideCanonicalForm() {
-        String idempotencyKey = "cc9d17dd-d02d-4c14-842c-afbb03887fc6";
-        String linkId = "93d4229a-0edf-4d85-a769-0efb7e58c179";
-        String targetPath = "/room/qrst-6789-uvwx";
-        insertStoredLink(linkId, LinkCodeHash.of(linkCodePort.issue(idempotencyKey, "default")),
-                "ROUND", targetPath, "MEETING_ENTRY");
-        insertReservation(idempotencyKey, linkId, "HTTPS://GO.EXAMPLE");
-
-        assertThatThrownBy(() -> smartLinkUseCase.createLink(new CreateLinkCommand(
-                new CreationIdempotencyKey(idempotencyKey),
+        var command = new CreateLinkCommand(
+                new CreationIdempotencyKey("cc9d17dd-d02d-4c14-842c-afbb03887fc6"),
                 TargetSystem.ROUND,
-                targetPath,
+                "/room/qrst-6789-uvwx",
                 LinkPurpose.MEETING_ENTRY,
                 null,
                 null
-        )))
+        );
+        UUID linkId = smartLinkUseCase.createLink(command).link().id();
+        jdbcTemplate.update(
+                "UPDATE link_creation_requests SET public_origin = 'HTTPS://GO.EXAMPLE' WHERE link_id = UUID_TO_BIN(?)",
+                linkId.toString()
+        );
+
+        assertThatThrownBy(() -> smartLinkUseCase.createLink(command))
                 .isInstanceOf(PublicLinkOriginReplayUnavailableException.class);
     }
 
@@ -372,14 +454,12 @@ class LinkPersistenceIntegrationTest {
     @DisplayName("알 수 없거나 공백인 열거형의 재시도는 원문을 숨기고 충돌로 거부한다")
     void rejectsUnsafeStoredReplayEnumsWithoutHydrationOrExposure() throws Exception {
         assertUnsafeStoredReplayIsRejected(
-                "c1478a51-2c84-451f-8291-4f3fb563ac20",
                 "83aa4b8b-49ae-487c-9250-a193828ff8d1",
                 "BATON_LEGACY",
                 CANONICAL_BATON_TARGET,
                 "NAVIGATION"
         );
         assertUnsafeStoredReplayIsRejected(
-                "de283961-52f7-4612-a6ef-d94ba3b36f39",
                 "66c06fb7-69c6-4bd9-a396-a49cf8450a65",
                 "BATON",
                 CANONICAL_BATON_TARGET,
@@ -420,6 +500,13 @@ class LinkPersistenceIntegrationTest {
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON));
         // HEAD의 빈 본문은 실제 HTTP 서버를 사용하는 PublicErrorResponseIntegrationTest에서 확인한다.
     }
+    private CreatedLinkResult createRoundLink(Instant notBefore, Instant expiresAt) {
+        return smartLinkUseCase.createLink(new CreateLinkCommand(
+                new CreationIdempotencyKey(UUID.randomUUID().toString()),
+                TargetSystem.ROUND, "/room/abcd-efgh-jkmn", LinkPurpose.MEETING_ENTRY, notBefore, expiresAt
+        ));
+    }
+
     private void insertStoredLink(
             String linkId,
             String codeHash,
@@ -446,24 +533,6 @@ class LinkPersistenceIntegrationTest {
         );
     }
 
-    private void insertReservation(String idempotencyKey, String linkId, String publicOrigin) {
-        jdbcTemplate.update(
-                """
-                        INSERT INTO link_creation_requests (
-                            idempotency_key_hash,
-                            link_id,
-                            public_origin,
-                            key_id,
-                            request_hash,
-                            created_at
-                        ) VALUES (?, UUID_TO_BIN(?), ?, 'default', REPEAT('e', 64), UTC_TIMESTAMP(6))
-                        """,
-                new CreationIdempotencyKey(idempotencyKey).hash(),
-                linkId,
-                publicOrigin
-        );
-    }
-
     private long reservationCount(String idempotencyKeyHash) {
         return jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM link_creation_requests WHERE idempotency_key_hash = ?",
@@ -473,15 +542,20 @@ class LinkPersistenceIntegrationTest {
     }
 
     private void assertUnsafeStoredReplayIsRejected(
-            String linkId,
             String idempotencyKey,
             String rawTargetSystem,
             String rawTargetPath,
             String rawPurpose
     ) throws Exception {
+        UUID linkId = smartLinkUseCase.createLink(new CreateLinkCommand(
+                new CreationIdempotencyKey(idempotencyKey),
+                TargetSystem.BATON, CANONICAL_BATON_TARGET, LinkPurpose.NAVIGATION, null, null
+        )).link().id();
         String codeHash = LinkCodeHash.of(linkCodePort.issue(idempotencyKey, "default"));
-        insertStoredLink(linkId, codeHash, rawTargetSystem, rawTargetPath, rawPurpose);
-        insertReservation(idempotencyKey, linkId, "https://go.example");
+        jdbcTemplate.update(
+                "UPDATE smart_links SET target_system = ?, target_path = ?, purpose = ? WHERE id = UUID_TO_BIN(?)",
+                rawTargetSystem, rawTargetPath, rawPurpose, linkId.toString()
+        );
 
         String responseBody = mockMvc.perform(post("/api/v1/links")
                         .with(linkCreateJwt())

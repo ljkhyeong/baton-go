@@ -20,9 +20,10 @@ public class LinkRetentionPersistenceAdapter implements LinkRetentionPort {
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
     public List<UUID> lockRetiredLinks(Instant cutoff, int batchSize) {
+        // 예약을 먼저 읽는 계획은 종료 링크가 많을 때 정렬 인덱스를 못 써 LIMIT 전에 전체 행을 읽고 잠그므로 순서를 고정한다.
         return jdbc.sql("""
                         SELECT BIN_TO_UUID(s.id) AS id
-                        FROM smart_links s JOIN link_creation_requests r ON r.link_id = s.id
+                        FROM smart_links s STRAIGHT_JOIN link_creation_requests r ON r.link_id = s.id
                         WHERE s.retired_at <= ? AND r.purged_at IS NULL
                         ORDER BY s.retired_at, s.id
                         LIMIT ? FOR UPDATE SKIP LOCKED

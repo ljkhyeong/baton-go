@@ -77,7 +77,8 @@ public class SmartLinkPersistenceAdapter implements SmartLinkRepository {
     public List<StoredLink> scanAfter(UUID afterLinkId, int limit) {
         var query = jdbcClient.sql(SELECT_LINK
                 + (afterLinkId == null ? "" : "WHERE id > UUID_TO_BIN(?) ")
-                + "ORDER BY id LIMIT ?");
+                // 표를 붙이지 않은 id는 SELECT의 BIN_TO_UUID 별칭이라 기본 키 대신 커서 뒤 전체 행을 정렬한다.
+                + "ORDER BY smart_links.id LIMIT ?");
         if (afterLinkId != null) {
             query.param(afterLinkId.toString());
         }

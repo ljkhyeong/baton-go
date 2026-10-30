@@ -151,6 +151,31 @@ class LinkLifecycleIntegrationTest {
     }
 
     @Test
+    @DisplayName("종료 링크가 대부분이어도 정리 대상은 묶음 크기만큼만 읽어 잠근다")
+    void locksOnlyBatchOfRetiredLinks() {
+        jdbc.update("""
+                INSERT INTO smart_links (id, code_hash, target_system, target_path, purpose, expires_at, created_at)
+                WITH RECURSIVE seq(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM seq WHERE n < 900)
+                SELECT UNHEX(MD5(n)), SHA2(n, 256), 'ROUND', '/room/abcd-efgh-jkmn', 'MEETING_ENTRY',
+                       TIMESTAMP('2026-01-02'), TIMESTAMP('2026-01-01')
+                FROM seq
+                """);
+        jdbc.update("""
+                INSERT INTO link_creation_requests (
+                    idempotency_key_hash, link_id, public_origin, key_id, request_hash, created_at
+                )
+                WITH RECURSIVE seq(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM seq WHERE n < 900)
+                SELECT SHA2(CONCAT('key', n), 256), UNHEX(MD5(n)), 'https://go.example', 'default',
+                       SHA2(CONCAT('request', n), 256), TIMESTAMP('2026-01-01')
+                FROM seq
+                """);
+        jdbc.execute("ANALYZE TABLE smart_links, link_creation_requests");
+
+        assertThat(MySqlRowReads.during(jdbc, transactions, () -> retention.lockRetiredLinks(EXPIRED, 5)))
+                .isLessThan(100);
+    }
+
+    @Test
     @DisplayName("묶음 삭제 중 실패하면 앞서 삭제한 링크와 모든 예약 변경을 되돌린다")
     void rollsBackEntireBatchWhenDeleteFails() {
         create(command(EXPIRED.minusSeconds(1)));

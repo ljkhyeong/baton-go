@@ -4,7 +4,7 @@ rule_files:
 evaluation_interval: 30s
 
 tests:
-  - name: 준비 실패가 5분 지속될 때 알리고 복구 후 해제하며 삭제 중인 Pod와 마이그레이션 Pod는 제외한다
+  - name: 준비 실패가 5분 지속될 때 알리고 복구 후 해제하며 삭제 중·종료된 Pod와 마이그레이션 Pod는 제외한다
     interval: 30s
     input_series:
       - series: 'kube_pod_status_ready{job="baton-go-kubernetes",namespace="baton-go",pod="baton-go-7b984d9d64-fz5kq",condition="true"}'
@@ -17,6 +17,10 @@ tests:
         values: '1x11'
       - series: 'kube_pod_status_ready{job="baton-go-kubernetes",namespace="baton-go",pod="baton-go-database-migration-abcde",condition="true"}'
         values: '0x11'
+      - series: 'kube_pod_status_ready{job="baton-go-kubernetes",namespace="baton-go",pod="baton-go-7b984d9d64-evict",condition="true"}'
+        values: '0x11'
+      - series: 'kube_pod_status_phase{job="baton-go-kubernetes",namespace="baton-go",pod="baton-go-7b984d9d64-evict",phase="Failed"}'
+        values: '1x11'
     alert_rule_test:
       - eval_time: 4m30s
         alertname: BatonGoPodNotReady

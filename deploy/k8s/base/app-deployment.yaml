@@ -88,6 +88,11 @@ spec:
             capabilities:
               drop:
                 - ALL
+          lifecycle:
+            preStop:
+              # 종료 신호와 엔드포인트 제거가 동시에 일어나므로 프록시가 이 Pod를 뺄 시간을 준 뒤 종료를 시작한다.
+              sleep:
+                seconds: 5
           startupProbe:
             httpGet:
               path: /startupz

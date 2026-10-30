@@ -113,6 +113,22 @@ class SmartLinkServiceTest {
     }
 
     @Test
+    @DisplayName("같은 키의 다른 요청 내용은 시각만 달라도 코드 발급과 링크 조회 없이 거부한다")
+    void rejectsDifferentRequestBeforeIssuingCode() {
+        Instant expiresAt = NOW.plusSeconds(300);
+        configureReplay(expiresAt);
+
+        assertThatThrownBy(() -> service.createLink(command(expiresAt.plusSeconds(1))))
+                .isExactlyInstanceOf(IdempotencyKeyConflictException.class);
+        assertThatThrownBy(() -> service.createLink(new CreateLinkCommand(
+                IDEMPOTENCY_KEY, TargetSystem.BATON, BATON_PATH, LinkPurpose.NAVIGATION, NOW, expiresAt
+        ))).isExactlyInstanceOf(IdempotencyKeyConflictException.class);
+
+        verify(linkCodePort, never()).issue(anyString(), anyString());
+        verify(repository, never()).findById(any());
+    }
+
+    @Test
     @DisplayName("현재 키로 만든 코드 해시가 저장값과 다르면 기존 결과를 반환하지 않는다")
     void rejectsReplayWhenCodeDerivationChanges() {
         Instant expiresAt = NOW.plusSeconds(300);
@@ -227,6 +243,20 @@ class SmartLinkServiceTest {
     }
 
     @Test
+    @DisplayName("폐기를 처리한 서버의 시계가 생성 시각보다 늦으면 폐기 시각을 생성 시각으로 맞춘다")
+    void alignsRevocationWithCreationWhenClockLags() {
+        Instant createdAt = NOW.plusSeconds(5);
+        when(repository.findByIdForUpdate(LINK_ID)).thenReturn(Optional.of(
+                storedLink(LINK_ID, "BATON", BATON_PATH, createdAt, null, null)
+        ));
+
+        var result = service.revokeLink(LINK_ID);
+
+        assertThat(result.link().revokedAt()).isEqualTo(createdAt);
+        verify(repository).revoke(LINK_ID, createdAt);
+    }
+
+    @Test
     @DisplayName("계약을 위반한 저장 대상도 최초 폐기 시각을 기록하고 내용 없이 숨김 결과를 반환한다")
     void recordsRevocationOfHiddenStoredTarget() {
         when(repository.findByIdForUpdate(LINK_ID)).thenReturn(Optional.of(
@@ -257,6 +287,17 @@ class SmartLinkServiceTest {
         assertThat(result.createdAt()).isEqualTo(ACTIVE_LINK.createdAt());
         verify(repository, never()).save(any());
         verify(repository, never()).revoke(any(), any());
+    }
+
+    @Test
+    @DisplayName("계약을 위반한 저장 대상의 관리 단건 조회는 없는 링크로 숨긴다")
+    void hidesStoredPolicyViolationFromManagementLookup() {
+        when(repository.findById(LINK_ID)).thenReturn(Optional.of(
+                storedLink(LINK_ID, "UNKNOWN", BATON_PATH, NOW.minusSeconds(60), null, null)
+        ));
+
+        assertThatThrownBy(() -> service.getLink(LINK_ID))
+                .isExactlyInstanceOf(LinkNotFoundException.class);
     }
 
     @Test
@@ -382,6 +423,23 @@ class SmartLinkServiceTest {
     }
 
     @Test
+    @DisplayName("관리 검색은 한도 1과 500을 허용하고 정확히 한도만큼 있으면 다음 페이지를 표시하지 않는다")
+    void acceptsLimitBoundariesAndEndsAtExactPage() {
+        var first = storedLink(1, "BATON", BATON_PATH, NOW, null);
+        var second = storedLink(2, "BATON", BATON_PATH, NOW, null);
+        when(repository.scanAfter(null, 2)).thenReturn(List.of(first));
+        when(repository.scanAfter(null, 501)).thenReturn(List.of(first, second));
+
+        var exact = service.searchLinks(new LinkSearchQuery(null, 1, null, null, null, null, null, null));
+        var largest = service.searchLinks(new LinkSearchQuery(null, 500, null, null, null, null, null, null));
+
+        assertThat(exact.items()).extracting(LinkResult::id).containsExactly(first.id());
+        assertThat(exact.hasMore()).isFalse();
+        assertThat(exact.nextAfterLinkId()).isNull();
+        assertThat(largest.items()).hasSize(2);
+    }
+
+    @Test
     @DisplayName("관리 검색은 잘못된 조회 한도와 생성·만료 기간을 DB 조회 전에 거부한다")
     void rejectsInvalidSearchBeforeDatabaseRead() {
         List<LinkSearchQuery> queries = List.of(
@@ -444,7 +502,8 @@ class SmartLinkServiceTest {
         )).thenReturn(new LinkCreationReservationPort.Reservation(
                 LINK_ID,
                 PUBLIC_ORIGIN.serialized(),
-                "default", null, null,
+                "default", null,
+                LinkCreationFingerprint.of("BATON", "NAVIGATION", BATON_PATH, null, expiresAt),
                 false
         ));
         when(repository.findById(LINK_ID)).thenReturn(Optional.of(

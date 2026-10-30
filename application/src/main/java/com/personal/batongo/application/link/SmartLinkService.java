@@ -81,11 +81,12 @@ public class SmartLinkService implements SmartLinkUseCase {
                 requestHash,
                 now
         );
+        // 코드 발급·링크 조회보다 먼저 판정해 키 묶음이나 링크 상태와 무관하게 다른 내용의 재사용을 409로 거부한다.
+        if (!requestHash.equals(reservation.requestHash())) {
+            throw new IdempotencyKeyConflictException();
+        }
         if (reservation.purgedAt() != null) {
-            // 정리된 예약은 같은 요청이면 삭제 안내, 다른 요청이면 키 재사용 충돌로 구분한다.
-            throw requestHash.equals(reservation.requestHash())
-                    ? new LinkPurgedException()
-                    : new IdempotencyKeyConflictException();
+            throw new LinkPurgedException();
         }
         String rawCode = linkCodePort.issue(command.idempotencyKey().value(), reservation.keyId());
 

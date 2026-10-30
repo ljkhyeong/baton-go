@@ -25,6 +25,8 @@
   `404 LINK_NOT_FOUND`로 응답하며 요청 제한 허용량을 쓰지 않는다. 429 화면 제목은 전체 한도임을 반영해
   "지금은 접속이 많아 링크를 열 수 없습니다."로 안내하고 JSON 메시지는 유지한다. HTTP 방화벽이 거부한
   공개·관리 요청은 Boot 기본 오류 화면 대신 공통 JSON `400 INVALID_REQUEST`로 응답한다.
+  폼·파일 업로드를 쓰지 않아 Boot의 폼 필터와 multipart 파서를 껐다. 인증·요청 제한보다 먼저 본문을 읽던 경로가
+  없어졌다. HTTP 서버가 먼저 거부하는 잘못된 퍼센트 인코딩·긴 헤더는 공통 형식 밖의 서버 기본 `400`이며 PRD-0002에 적었다.
 - 관리 링크 목록에 `expiresFrom`·`expiresBefore`를 추가했다. `status=ACTIVE`와 함께 지정하면
   곧 만료될 링크를 찾을 수 있다. 시작 시각은 포함하고 끝 시각과 무기한 링크는 제외한다.
   기존 생성 기간·대상·상태 필터, 조회 한도와 빈 페이지의 다음 커서는 유지한다.
@@ -33,9 +35,8 @@
   기존 예약 재시도 경로, 기존 DB용 `guard-tool`, 대상 계약 v1 점검·폐기 운영 API·scope·설정이 없다.
   공개 조회·관리 API에서 계약 위반 저장 대상을 404로 숨기는 방어와 재시도 저장값 누락 오류는 유지한다.
 - 폐기를 처리한 서버의 시계가 생성 시각보다 늦으면 500 대신 폐기 시각을 생성 시각으로 맞춘다.
-- Spring Boot 4.1.1이 관리하는 Tomcat·Jackson은 루트 `build.gradle`의 해석 규칙으로 보안 수정본인 Tomcat 11.0.26·
-  Jackson 3.1.7을 쓴다. 이 버전을 포함한 Boot 패치가 나오면 Boot를 올리고 규칙을 지운다. 2026-10-16 기준 최신
-  안정 Boot는 4.1.1이고, GitHub Dependabot 경고 10건은 모두 `fixed`이며 두 고정 버전에 OSV 기준 알려진 취약점이 없다.
+- Spring Boot 4.1.2가 Tomcat 11.0.27·Jackson 3.1.7을 관리해 루트 `build.gradle`의 버전 고정 규칙을 지웠다.
+  2026-10-30 기준 GitHub Dependabot 경고 10건은 모두 `fixed`이고 주요 런타임 의존성에 OSV 기준 알려진 취약점이 없다.
 - 영속성은 JPA 없이 Spring `JdbcClient`로만 처리한다. 첫 운영 배포 전이라 기준선 V1을 다시 만들었고
   `link_code_key_guard` 보호 행과 `version` 열이 없다. V2는 생성 예약 때 `request_hash`를 필수로 저장한다.
   정리 전 예약이 남은 DB에는 V2를 적용할 수 없고 V1까지만 아는 이미지로 되돌리면 새 링크를 만들 수 없다.
@@ -63,8 +64,8 @@
   Java 이미지는 사용하지 않는 빌드 인자를 제거하고 Dockerfile의 `FROM`에 직접 고정했다.
   Java 메이저 업데이트와 MySQL 이미지는 자동 제안에서 제외한다.
   원격 `main`에 반영했으며 실제 채널 연결은 남아 있다. 2026-10-16에 액션 6건(`ljkhyeong/baton-go#6`)과
-  Temurin `21.0.12.1+1`(`ljkhyeong/baton-go#4`) 제안을 검토해 병합했다. MySQL은 같은 8.4.11의 2026-10-12
-  재빌드 digest로 직접 올렸다.
+  Temurin(`ljkhyeong/baton-go#4`) 제안을 검토해 병합했다. 2026-10-30에 Temurin `21.0.13+9`와 MySQL `8.4.13`을
+  직접 올렸다. Dependabot이 보지 않는 MySQL은 태그가 같아도 재빌드될 수 있어 digest를 주기적으로 대조한다.
 - 공개 저장소의 secret scanning·push protection은 2026-10-16 조회 기준 꺼져 있다. 저장소 보안 설정이라
   관리자가 [비밀값 유출 감지](docs/RUNBOOK/external-api-integrations.md#비밀값-유출-감지) 절차로 켠다.
 - GitHub 저장소의 Dependabot alerts를 활성화하고 조회로 확인했다. 자동 수정 PR은 중지 상태다.
@@ -144,10 +145,49 @@
   [구현·검증 기록](docs/HISTORY/2026-09-08-implementation-verification.md),
   [2026-10-05 검증 기록](docs/HISTORY/2026-10-05-verification-history.md),
   [2026-10-06 검증 기록](docs/HISTORY/2026-10-06-verification-history.md),
-  [2026-10-12 검증 기록](docs/HISTORY/2026-10-12-verification-history.md)과
-  [2026-10-14 검증 기록](docs/HISTORY/2026-10-14-verification-history.md)에 보관한다.
+  [2026-10-12 검증 기록](docs/HISTORY/2026-10-12-verification-history.md),
+  [2026-10-14 검증 기록](docs/HISTORY/2026-10-14-verification-history.md)과
+  [2026-10-30 검증 기록](docs/HISTORY/2026-10-30-verification-history.md)에 보관한다.
 
 ## 최근 검증
+
+- 전수검토는 미커밋 변경이 없는 `main`의 `4beb79d`에서 시작해 `e95ed8c`·`1a883c8`·`4949020`·`4e0f962`·`2e324a4`·
+  `2c72c58`·`8b8b1ce`·`b94002f`에 저장했다. 추적 파일을 도메인·애플리케이션, 웹, 영속성·외부·부트스트랩, 배포·CI,
+  문서 대조, 보안 관통, 테스트 공백 7개 구획으로 나눠 모두 읽었고, 후보는 실측·재현으로 확인한 것만 반영했다.
+  - 관리 목록의 `ORDER BY id`가 `BIN_TO_UUID` 별칭을 정렬해 기본 키를 쓰지 못했고, 자동 정리 잠금 쿼리는 종료 링크가
+    많으면 예약 표를 먼저 읽었다. 링크 50만 건·종료 40%의 MySQL `EXPLAIN ANALYZE`에서 목록은 전체 행 정렬 126ms가
+    101행 0.05ms로, 정리는 전체 행 877ms가 100행 0.5ms로 줄었다. `Handler_read` 카운터로 읽은 행 수를 단언하는 테스트를 추가했다.
+  - multipart 헤더만 보낸 공개 GET이 요청 제한 전에 `500`과 ERROR 로그를 만들었고, 잘못된 폼 본문의 PUT은 Boot 기본
+    형식 `500`을 반환했다. 폼 필터는 Spring 코드상 인증 전에 본문을 크기 제한 없이 읽는다. 원시 소켓으로 재현한 뒤 두
+    파서를 껐다. `%2F` 등을 Tomcat이 먼저 거부하는 응답은 서버 버전이 없는 기본 `400`이라 밸브 코드 대신 PRD에 적었다.
+  - 키 묶음에 저장 키가 없거나 예약의 링크가 없을 때 다른 내용의 재사용이 `409` 대신 `500`이 되던 순서를 고쳤다.
+  - Spring Boot 4.1.2로 올리며 Tomcat·Jackson 고정 규칙을 지웠다. 검증 메타데이터를 새로 만들어 Boot 관리 범위의 변경만
+    있는 것을 확인했다. `ljkhyeong/baton-go#8`은 이전 빌드(`21.0.12.1+1`)라 현재 태그의 `21.0.13+9`로 직접 올렸고 Trivy
+    기준 런타임 이미지의 CRITICAL 1건 등 7건이 해소되어 0건이 됐다. MySQL 8.4.13은 HIGH 12건 등 14건이 해소되고 새
+    항목은 없으며, 비호환 변경이 없고 8.4.11 데이터 디렉터리를 그대로 연다. 남은 MySQL CRITICAL은 공식 이미지의 `gosu`다.
+  - 배포·CI는 preStop 5초, main CI 앞선 실행 취소 방지, 종료된 Pod 경보 제외, `.dockerignore` 하위 경로와 `deploy/*.env*`
+    제외, 검증 스크립트 추천을 고쳤다. 문서는 없앤 설정·없는 스키마 검증 전제·대체된 절차, `kubectl diff`에서 멈추던
+    업데이트 스크립트, 준비되지 않은 Pod에 막히던 MySQL 재시작, 초안 Release 재검사 안내를 바로잡았다.
+  - 서비스가 공개 상태 판정을 호출하는지 보는 테스트가 없어 삭제해도 모두 통과했다. 이 공백을 포함해 scope 교차, 동시
+    폐기, 자동 정리 실제 빈 실행, 대상 경로 쿼리·프래그먼트, 응답 시각 매핑, 마이그레이션 시간 제한 등을 추가했다.
+    수정을 되돌리는 변이 14건을 모두 테스트가 잡았다.
+
+  적용하지 않은 후보는 다음과 같다.
+  - 앱 시작 때 스키마 버전 검사: 새 열을 쓰는 코드를 다음 릴리스에 넣는 규칙으로 대신한다. 마이그레이션 때 다시 판단한다.
+  - 시작 검사의 사용 키 조회 인덱스: 50만 건에 105ms라 5초 제한까지 여유가 크다.
+  - 미등록 `kid`의 JWK 재조회: 비공개 경로에서만 도달한다. Lettuce 반개방 연결은 다음 작업 3으로 남겼다.
+  - 재시도 경로의 `FOR SHARE` 변이는 중복 삽입의 공유 잠금이 같은 역할을 해 구분되지 않아 테스트하지 않았다.
+  - `AGENTS.md`의 `adapter-out-external` 설명에 Redis 제한이 빠졌지만 지침 파일은 사용자 확인 없이 바꾸지 않았다.
+
+  Java 21에서 `./gradlew --no-daemon --refresh-dependencies build :adapter-in-web:apiContractDocs :bootstrap:mysqlTest
+  :bootstrap:redisTest`를 통과했다. 도메인 78·애플리케이션 55·웹 135·외부 26·bootstrap 34·MySQL 39·Redis 4개에 실패·
+  제외가 없고 REST Docs 조각은 84개다. MySQL 테스트는 8.4.13 이미지를 썼다. `docker build`, CI의 배포 이미지 다이제스트 계약
+  검증과 운영 이미지 기동 단계의 로컬 실행, promtool 규칙 검사·테스트, `kubectl kustomize` 렌더링, 문서 링크 검사가
+  통과했다. kubeconform은 로컬에 없어 원격 CI에서 확인한다. 로그는 세션 스크래치패드(`f602be4c-…/scratchpad`)의
+  `explain/`·`final-verify-r8.log`·`smoke-r8.log`·`mysql-datadir-check.log`·`mutate-run.log`다. 이전 검증 항목 4개는
+  [2026-10-30 검증 기록](docs/HISTORY/2026-10-30-verification-history.md)으로 옮겼다. 실제 클러스터 적용은 확인하지 않았다.
+  위 커밋과 이 기록 커밋은 사용자 승인으로 push했고, setup-java 6.1.0 제안 `ljkhyeong/baton-go#7`을 병합하고
+  `ljkhyeong/baton-go#8`은 닫았다. 그 CI 결과는 이 기록에 넣지 않았다.
 
 - 남은 항목 재점검은 미커밋 변경이 없는 `main`의 `c5acd71`에서 시작해 `06c8419`·`42b0744`에 저장했다.
   - MySQL 8.4.11 태그가 2026-10-12에 다시 빌드되어 고정 digest(2026-07-27 빌드)와 달라졌다. CI와 같은 Trivy
@@ -199,114 +239,6 @@
   (`f602be4c-…/scratchpad`)의 `docker-build-pr4.log`·`smoke-pr4.log`다. `fc77b43`과 이 기록 커밋은 함께 push했으며
   그 CI 결과는 이 기록에 넣지 않았다. 두 릴리스 워크플로의 액션 변경은 실행 기회가 없어 다음 작업 5로 남겼다.
 
-- 남은 작업 정리는 미커밋 변경이 없는 `main`의 `e887d21`에서 시작해 `4d42a5e`에 저장했다. 다음 작업 중 저장소 안에서
-  할 수 있는 9번의 절차 작성을 진행했다.
-  - 사고 대응이 가리키던 ADR-0004 유출 대응 절은 없앤 단일 비밀값 변수·`guard-tool`과 도입 전 키 묶음을 전제로 해
-    현재 구조와 맞지 않았다. [키 유출 대응 절차](docs/RUNBOOK/link-code-key-compromise.md)에 영향 판단(멱등성 키
-    원문 노출 여부, UUID v4 여부), 차단, 발급 키 전환, 유출 키 링크 조회·폐기·새 키 재발급, 재개, 유출 키 제거
-    조건과 훈련을 정하고 README·키 교체·배포 런북·ADR-0004·0011·프로젝트 스킬에서 연결했다.
-  - 문서의 두 SQL을 `mysql:8.4.11`에 V1·V2만 적용한 스키마와 시험 행(유출 키 미폐기·폐기, 새 키, 정리된 예약)으로
-    실행해 키별 집계와 폐기 대상 한 건만 나오는 것을 확인했다. bash 예시는 `bash -n`으로 문법을 확인했다.
-  - BATON 쪽 2번은 이 세션에서 진행하지 않았다. BATON 저장소에 다른 작업 트리가 여럿 있고 최신 통합 브랜치에
-    GO 연동 브랜치가 병합되지 않아, 이번 GO 계약 변경을 BATON 아웃박스에 반영하는 일은 BATON 저장소에서 따로
-    진행한다. 1·3·4·6·8번은 실제 클러스터·계정, 5번은 원격 `main`과 릴리스 결정, 7번은 운영 트래픽의 재접속 시간
-    분포가 필요하다.
-
-  코드·설정 변경이 없어 Gradle·이미지 검증은 반복하지 않았고 `e887d21`의 결과를 그대로 쓴다. 문서 링크 검사는
-  43개 파일에서 문제 0건이다. 원격 반영은 하지 않았다.
-
-- 기능 보완 3차는 미커밋 변경이 없는 `main`의 `c6ee6f9`에서 시작해 `1a27065`·`7a81ea8`·`eea5ee5`·`52c83b6`에
-  저장했다. 지난 회차의 결정 항목을 권장안대로 처리하고, 세션 전체 변경(`f7459e1..HEAD`)을 별도 검토로 다시 봤다.
-  - DB도 준비 상태에서 빼고 시작 상태(`/startupz`)에서만 확인한다. 준비 상태는 Boot 기본 `readinessState`만
-    본다. 실행 중 DB 장애에도 Pod가 서비스에 남아 GO가 공개 `500` 안내 화면과 공통 오류를 반환한다. 시작 상태를
-    `baton_go_startup_health_up` 게이지(Spring Boot 문서의 상태 확인 지표 연결 방식)로 내보내, `/readyz` 503 비율을
-    보던 `BatonGoReadinessFailed`를 트래픽과 무관한 `BatonGoDependencyUnavailable`로 바꿨다. 웹훅 검증 도구·CI
-    라우팅 검사·런북 예시의 표본 경보 이름도 바꿨다.
-  - 검토에서 확인한 4건을 고쳤다. 숨긴 링크의 폐기가 예외 경로로 끝나 `serviceId`가 담긴 완료 이력 없이
-    커밋되던 것을 일반 폐기와 같은 이력을 남기고 404로 숨기도록 바꿨다(`noRollbackFor` 제거). Docker 상태 확인은
-    `/startupz`로 바꿔 Compose의 `--wait`와 컨테이너 상태에 DB·Redis 연결을 반영한다. 분산 제한 카운터 판별 조건과
-    만료 시각 오류 판정 순서를 문서에 바로잡았다. 검토에서 런타임 코드 결함은 나오지 않았다.
-  - 결정 항목 중 생성 취소 전용 API는 현재의 같은 키 재시도 뒤 폐기 흐름으로 동작하는 데 비해 계약과 ADR이 늘어
-    도입하지 않는다. BATON 아웃박스에서 취소 때 만든 임시 링크가 운영 문제를 일으키면 다시 검토한다. 공개 실패
-    요청별 로그는 링크별 접근 기록이 되어 최소 기록 원칙과 맞지 않아 도입하지 않는다. 지원 요청에서 요청 번호
-    조회가 반복해서 필요해지면 개인정보 검토와 함께 다시 정한다. 일시적 DB 오류의 `503` 분리는 예외 계열이 여러
-    갈래라 오분류 위험에 비해 이득이 작아 하지 않았다.
-
-  운영 코드 6개 파일에서 12줄을 지우고 52줄을 더했다(Dockerfile 포함). 전체로는 22개 파일에서 100줄을 지우고
-  163줄을 더했다. Java 21에서 `./gradlew --no-daemon build :adapter-in-web:apiContractDocs :bootstrap:mysqlTest
-  :bootstrap:redisTest`를 통과했다. 도메인 73·애플리케이션 45·웹 128·외부 21·bootstrap 29·MySQL 30·Redis 3개에
-  실패·제외가 없고 REST Docs 조각은 84개다. `docker build`(상태 확인 `/startupz`)와 CI 운영 이미지 기동 단계의 로컬
-  실행이 통과했다. 같은 이미지에서 MySQL을 멈추면 `/readyz` 200·`/startupz` 503·지표 0·공개 링크 `500` 안내 화면,
-  재시작하면 모두 정상으로 돌아오는 것을 확인했다. promtool 규칙 검사·테스트, 웹훅 전달 검증(외부 전송 없음),
-  `kubectl kustomize` 렌더링, 문서 링크 검사(42개 파일)가 통과했다. kubeconform은 로컬에 없어 원격 CI에서 확인한다.
-  로그는 세션 스크래치패드(`f602be4c-…/scratchpad`)의 `full-verify-r3.log`·`smoke-run-r6.log`·
-  `db-outage-check-r6.log`·`webhook-verify.log`다. 이전 검증 항목 2개는
-  [2026-10-14 검증 기록](docs/HISTORY/2026-10-14-verification-history.md)으로 옮겼다. 실제 클러스터 적용과 원격
-  CI는 확인하지 않았고 원격 반영은 하지 않았다.
-
-- 기능 보완 2차는 미커밋 변경이 없는 `main`의 `3eb9eb4`에서 시작해 `5c9aff1`·`61d9d00`·`075c614`·`949b7d4`에
-  저장했다. 지난 회차에 결정 대상으로 남긴 항목 중 근거가 분명한 것을 적용했다.
-  - 계약을 위반해 숨긴 저장 대상의 폐기 요청이 404만 반환하고 `revoked_at`을 남기지 않아, 정책 강화 뒤 이미지를
-    되돌리면 폐기를 요청한 링크가 다시 열릴 수 있었다. 행 잠금 안에서 최초 폐기 시각을 기록한 뒤 같은 404로 숨기고
-    계약 위반 지표·로그를 남긴다. `noRollbackFor`를 지운 변이에서 MySQL 테스트가 `revoked_at` 누락으로 실패한다.
-  - 2026-09-12 `4beed9d`가 Redis를 준비 상태에 넣어 실행 중 Redis 장애 때 모든 Pod가 서비스에서 빠지고 관리 API까지
-    막혀 ADR-0013과 어긋났다. 준비 상태는 DB만, 새 `startup` 상태 묶음 `/startupz`는 DB·Redis를 확인하고 Kubernetes
-    시작 탐침이 이를 쓴다. 5xx 경보에서 `/startupz`를 제외했고 제외를 지운 변이에서 규칙 테스트가 실패한다.
-  - 공개 조회가 만료·폐기 링크에 410을 반환할 때 종료 후 지난 시간을 1·7·30·90·180·365일 구간의
-    `baton_go_public_resolver_retired_link_age_seconds`에 상태별로 기록한다. 보존 기간별 404 전환 영향을 추정하는
-    `histogram_quantile` 조회를 런북에 적었다. 실제 이미지의 지표 출력에서 180·365일 경계 라벨이 `1.5552E7`처럼
-    과학 표기로 나와 특정 `le` 값을 비교하지 않는 조회를 택했다.
-  - 공개 안내 화면의 `100vw` 가로 넘침과 ARIA 1.2에서 금지된 `aria-label`을 고쳤다. 템플릿은 `String.formatted`로
-    채우므로 CSS의 `%`는 `%%`로 적는다.
-  - 2026-10-14 기준 최신 안정 Spring Boot는 4.1.1이라 Tomcat·Jackson 해석 규칙을 유지한다. Dependabot 경고 10건은
-    모두 `fixed`다.
-
-  적용하지 않은 후보는 지난 회차와 같다. 생성 취소 전용 API와 공개 실패 요청 로그는 다음 작업 11, DB 장애 때의
-  공개 오류 화면은 다음 작업 10으로 남겼다.
-
-  운영 코드 7개 파일에서 16줄을 지우고 65줄을 더했다. 전체로는 31개 파일에서 79줄을 지우고 243줄을 더했다.
-  Java 21에서 `./gradlew --no-daemon build :adapter-in-web:apiContractDocs :bootstrap:mysqlTest :bootstrap:redisTest`를
-  통과했다. 도메인 73·애플리케이션 45·웹 127·외부 21·bootstrap 29·MySQL 30·Redis 3개에 실패·제외가 없고 REST Docs
-  조각은 84개다. `docker build`와 CI 운영 이미지 기동 단계(`/startupz` 확인 포함)의 로컬 실행, promtool 규칙 검사·테스트,
-  `kubectl kustomize` 렌더링과 문서 링크 검사가 통과했다. kubeconform은 로컬에 없어 원격 CI에서 확인한다. 보안 불변식
-  검토에서 위반은 없었다. 로그는 세션 스크래치패드(`f602be4c-…/scratchpad`)의 `full-verify-r2.log`·`smoke-run-r4.log`·
-  `docker-build-r4.log`다. 실제 클러스터 적용과 원격 CI는 확인하지 않았고 원격 반영은 하지 않았다.
-
-- 기능 보완은 미커밋 변경이 없는 `main`의 `f7459e1`에서 시작해 `87ffcd3`·`554826f`·`b92a096`·`724e54a`·`cb6a299`·
-  `a030ea2`·`2f86c74`에 저장했다. 호출 서비스·운영자·최종 사용자 관점의 읽기 전용 검토 세 건으로 후보를 모으고,
-  코드·테스트로 사실을 확인한 항목만 적용했다. 주요 내용은 다음과 같다.
-  - 생성 예약이 없는 요청의 이미 지난 `expiresAt`을 `INVALID_LINK`에서 분리해 `400 EXPIRES_AT_ALREADY_PASSED`로
-    응답한다. 대상 계약 검사는 예약 조회보다 먼저 실행돼 배포 사이 정책 차이로도 `INVALID_LINK`가 날 수 있어,
-    `CREATE_UNKNOWN` 중 만료 시각이 지난 호출자가 링크 없음을 확정할 방법이 없었다. MySQL 테스트로 예약이 남지
-    않는 것을 확인했다.
-  - PRD-0003 호출자 결과 분류에 `403`, 경로·형식 오류, `410 LINK_PURGED`(`PURGED`), 자동 재시도하지 않는
-    `LINK_CREATION_REPLAY_UNAVAILABLE`·`PUBLIC_LINK_ORIGIN_REPLAY_UNAVAILABLE`과 폐기 응답의 완료·재시도 기준을 추가했다.
-  - `/l`·`/l/`·끝 슬래시·추가 경로 구간 요청이 브라우저에 JSON `RESOURCE_NOT_FOUND`를 보이던 것을 없는 링크 화면과
-    `404 LINK_NOT_FOUND`로 바꿨다. 대체 매핑을 지운 변이에서 새 테스트 4건이 모두 실패하는 것을 확인했다.
-  - 429 화면 제목을 "지금은 접속이 많아 링크를 열 수 없습니다."로 바꿨다. JSON 메시지는 유지한다.
-  - HTTP 방화벽 거부(세미콜론 등)가 Boot 기본 오류 화면이나 경로를 되풀이하는 JSON으로 나가던 것을 공통 JSON
-    `400 INVALID_REQUEST`로 바꿨다. 수정 전 같은 테스트가 `text/html` 응답으로 실패하는 것을 확인했다.
-  - 계약 위반 경보가 삭제된 정리 절차를 안내하던 문구를 정책 회귀·개별 데이터 대응으로 바꾸고, CI 운영 이미지
-    검증에 분산 제한 장애 카운터 확인을 추가했다. 분산 제한 카운터 키 이상의 복구 절차와 ADR-0012 지표 설명도 고쳤다.
-  - HTML 계약 테스트는 실제 Chromium 계열 `Accept`로 품질 값 협상을 확인한다.
-
-  적용하지 않은 후보는 다음과 같다.
-  - 복구 오류 로그의 `linkId`·키 ID 보강: 예외 세 곳과 코드 발급 어댑터 경로를 함께 바꿔야 해 진단 이점보다 복잡도가 크다.
-  - 429의 로컬·분산 제한 구분 지표: 분산 제한이 기본 중지라 활성화를 검증할 때 함께 정한다.
-  - 공개 실패 요청별 로그: 요청 번호 추적에는 도움이 되지만 링크별 접근 기록이 되어 최소 기록 원칙과 함께 결정해야 한다.
-  - 종료 링크 재접속 시간 분포 지표: 보존 기간 결정(다음 작업 7)과 함께 정한다.
-  - 생성 취소 전용 API, 숨긴 링크의 폐기 시각 기록, 일시적 DB 오류의 `503` 분리: 계약·ADR 변경이 필요하다.
-  - 로봇 차단 헤더, 시작 시각 소수초 생략: 효과가 작거나 PRD의 정밀도 요구와 다르다.
-
-  운영 코드 6개 파일에서 4줄을 지우고 41줄을 더했다. 전체로는 22개 파일에서 23줄을 지우고 180줄을 더했다.
-  Java 21에서 `./gradlew --no-daemon build :adapter-in-web:apiContractDocs :bootstrap:mysqlTest :bootstrap:redisTest`를
-  통과했다. 도메인 72·애플리케이션 44·웹 127·외부 21·bootstrap 29·MySQL 29·Redis 3개에 실패·제외가 없고 REST Docs
-  조각은 84개다. `docker build`와 CI 운영 이미지 기동 단계의 로컬 실행, promtool 규칙 검사·테스트가 통과했다. 문서 링크
-  검사는 41개 파일에서 문제 0건이고 보안 불변식 검토에서 위반은 없었다. 로그는 세션 스크래치패드
-  (`f602be4c-…/scratchpad`)의 `full-verify.log`·`smoke-run.log`·`docker-build.log`다. 이전 검증 항목 4개는
-  [2026-10-12 검증 기록](docs/HISTORY/2026-10-12-verification-history.md)으로 옮겼다. 실제 클러스터 적용과 원격 CI는
-  확인하지 않았고 원격 반영은 하지 않았다.
-
 ## 다음 작업
 
 1. 실제 릴리스 이미지에서 BATON·ROUND 인증, 공개 HTTPS와 외부 coturn을 연결한다.
@@ -328,6 +260,8 @@
    카카오 앱의 무료 사용 설정·실제 메시지 전송과 실기기 QR 스캔을 확인한다.
 3. 외부 프록시에서 공개 `/l`과 비공개 `/api/v1` 라우팅을 분리하고, 분산 요청률 제한과
    `/l/{code}` 접근 로그 마스킹을 적용한다. 분산 제한 구현은 준비되었으며 실제 Redis·Ingress 검증은 남아 있다.
+   Redis 노드가 연결 종료 없이 사라졌을 때 공개 링크가 `503`에서 복구되는 시간도 이때 확인한다. Lettuce에 TCP
+   keepalive를 따로 설정하지 않아 운영체제가 연결을 끊을 때까지 이어질 수 있다.
 4. 실제 비공개 클러스터에서 DNS·TLS·CNI·NetworkPolicy·startup/liveness/readiness probe와
    PVC·Secret의 생성·교체·복구·삭제를 검증한다. 현재 ingress 전용 NetworkPolicy에 더해 환경별 DNS·MySQL
    egress 허용 목록과 기본 차단 정책을 정하고 실제 CNI의 허용·차단 결과를 기록한다.
@@ -338,9 +272,9 @@
    다이제스트만 배포되는지 검증하고 결과를 배포 기록에 남긴다. 두 릴리스 워크플로는 PR·push CI에서 실행되지
    않으므로 `ljkhyeong/baton-go#6`에서 올린 checkout v7.0.1·upload-artifact v7.0.2도 이때 함께 확인한다.
 6. Prometheus 수집, 경보 규칙, 알림 경로와 담당자를 연결하고 마이그레이션 실패,
-   Pod 비정상, 5xx·429, DB 준비 상태, 저장 대상 계약 위반, PVC 용량과 백업 실패 경보의
+   Pod 비정상, 5xx·429, 시작 상태(DB·Redis 연결), 저장 대상 계약 위반, PVC 용량과 백업 실패 경보의
    시험 결과를 기록한다.
-7. 재시도 시 기존 URL 반환 보장 기간과 만료·폐기 링크 보존 기간, 자동 정리 뒤 HTTP 의미, 백업·감사
+7. 재시도 시 기존 URL 반환 보장 기간과 만료·폐기 링크 보존 기간, 백업·감사
    보존과 PVC 경보·증설 기준을 함께 결정한다. 정리 구현은 준비되어 있으며 이 결정 전에는
    자동 정리를 활성화하지 않는다. 운영 트래픽의 종료 링크 재접속 시간 분포를
    [보존 기간 결정 자료](docs/RUNBOOK/link-retention.md#보존-기간-결정-자료)의 조회로 확인해 근거로 쓴다.

@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7@sha256:a57df69d0ea827fb7266491f2813635de6f17269be881f696fbfdf2d83dda33e
 
-FROM eclipse-temurin:21-jdk-alpine@sha256:b78a1d385da875588e21207f07dddf9a1418849971ae857fb24c8f3a7d441a72 AS build
+FROM eclipse-temurin:21-jdk-alpine@sha256:82801f9dcdcbad5a05082aba8c86d1da5b72ccb498e71318b1f91b5a477887b3 AS build
 WORKDIR /workspace
 
 COPY gradlew settings.gradle build.gradle ./
@@ -15,7 +15,7 @@ COPY bootstrap bootstrap
 RUN --mount=type=cache,target=/root/.gradle \
     ./gradlew --no-daemon :bootstrap:bootJar
 
-FROM eclipse-temurin:21-jre-alpine@sha256:82cf3d9ccbe1ed46252008d51b2f2329e6b9e8a2f4394c4bebefc3ea7f4b1372 AS runtime
+FROM eclipse-temurin:21-jre-alpine@sha256:ac05c3c42b7c2f1a52c9bd52f01041fa1958231b15ebeae7420429cbc5baf474 AS runtime
 
 RUN addgroup -S -g 10001 batongo \
     && adduser -S -D -H -u 10001 -G batongo batongo
